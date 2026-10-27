@@ -18,6 +18,8 @@ spec.loader.exec_module(mod)
 GOOD_BINARY = {
     'present': True,
     'approved_path': True,
+    'lookup_path_approved': True,
+    'safe_parent_dirs': True,
     'regular_file': True,
     'root_owned': True,
     'approved_mode': True,
@@ -121,17 +123,51 @@ class PreflightTests(unittest.TestCase):
         approved = Path('/usr/bin/cloudflared')
         st = SimpleNamespace(st_uid=0, st_mode=stat.S_IFREG | 0o755)
         with (mock.patch.object(mod.Path, 'resolve', return_value=approved),
-              mock.patch.object(mod.Path, 'stat', return_value=st)):
-            metadata = mod.cloudflared_metadata('/tmp/mock-path')
+              mock.patch.object(mod.Path, 'stat', return_value=st),
+              mock.patch.object(mod, 'safe_binary_parent_dirs', return_value=True)):
+            metadata = mod.cloudflared_metadata('/usr/bin/cloudflared')
         self.assertEqual(metadata, GOOD_BINARY)
 
     def test_unsafe_binary_mode_rejected(self):
         approved = Path('/usr/bin/cloudflared')
         st = SimpleNamespace(st_uid=0, st_mode=stat.S_IFREG | 0o777)
         with (mock.patch.object(mod.Path, 'resolve', return_value=approved),
-              mock.patch.object(mod.Path, 'stat', return_value=st)):
-            metadata = mod.cloudflared_metadata('/tmp/mock-path')
+              mock.patch.object(mod.Path, 'stat', return_value=st),
+              mock.patch.object(mod, 'safe_binary_parent_dirs', return_value=True)):
+            metadata = mod.cloudflared_metadata('/usr/bin/cloudflared')
         self.assertFalse(metadata['approved_mode'])
+
+    def test_approved_binary_cannot_be_spoofed_by_untrusted_lookup_path(self):
+        """Symlink in a caller-supplied PATH to an approved inode is not readiness."""
+        approved = Path('/usr/bin/cloudflared')
+        st = SimpleNamespace(st_uid=0, st_mode=stat.S_IFREG | 0o755)
+        with (mock.patch.object(mod.Path, 'resolve', return_value=approved),
+              mock.patch.object(mod.Path, 'stat', return_value=st),
+              mock.patch.object(mod, 'safe_binary_parent_dirs', return_value=True)):
+            meta = mod.cloudflared_metadata('/tmp/hostile/cloudflared')
+        self.assertTrue(meta['approved_path'])
+        self.assertFalse(meta['lookup_path_approved'])
+        token = {'present': True, 'regular_file': True,
+                 'mode_0600': True, 'root_owned': True, 'safe_parent_dirs': True}
+        result = mod.evaluate('marina-a1-4c24g', 'marina-a1-4c24g',
+                              0, False, True, True, meta, 'inactive', token)
+        self.assertFalse(result['local_stage_prerequisites'])
+
+    def test_untrusted_binary_parent_mode_fails_closed(self):
+        """A group-writable /usr/bin cannot pass even for a trusted binary leaf."""
+        def fake_stat(path):
+            mode = 0o777 if str(path) == '/usr/bin' else 0o755
+            return SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | mode)
+        with mock.patch.object(mod.Path, 'stat', autospec=True, side_effect=fake_stat):
+            self.assertFalse(mod.safe_binary_parent_dirs(Path('/usr/bin/cloudflared')))
+
+    def test_lookup_does_not_use_caller_path(self):
+        """Binary lookup contract must match the fixed root staging locations."""
+        self.assertEqual(mod.APPROVED_BINARY_PATHS,
+                         ('/usr/bin/cloudflared', '/usr/local/bin/cloudflared'))
+        source = p.read_text()
+        self.assertNotIn("shutil.which('cloudflared')", source)
+        self.assertIn("cloudflared_metadata(approved_binary_candidate())", source)
 
     def test_untrusted_token_parent_mode_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
