@@ -59,10 +59,14 @@ try {
             exit;
 
         case 'precos':
-            $erpSku = svoei_first_text([$data['codigo'] ?? '', $data['sku'] ?? '', $data['skuMapeamento'] ?? '']);
-            $product = svoei_refresh_product_from_v3($root, '', $erpSku);
-            svoei_log($root, 'price_synced', ['tipo' => $tipo, 'sku' => (string)($product['sku'] ?? $erpSku)]);
-            svoei_response(200, ['ok' => true, 'tipo' => $tipo, 'sku' => (string)($product['sku'] ?? $erpSku)]);
+            $ref = svoei_price_event_reference($data);
+            $price = svoei_refresh_price_from_v3($root, $ref['product_id'], $ref['sku']);
+            svoei_log($root, 'price_synced', [
+                'tipo' => $tipo,
+                'sku' => $price['sku'],
+                'product_id' => $ref['product_id'],
+            ]);
+            svoei_response(200, ['ok' => true, 'tipo' => $tipo, 'sku' => $price['sku']]);
 
         case 'estoque':
             $productId = svoei_first_text([$data['idProduto'] ?? '', $data['id'] ?? '']);
