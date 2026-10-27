@@ -32,6 +32,21 @@ refuse_writable() {
   (( (8#$mode & 8#22) == 0 )) || refuse group_or_other_writable
 }
 refuse_writable "$source_root"
+# A root-owned checkout beneath an untrusted parent can be swapped after validation.
+# Require root ownership and no group/other write on every source ancestor.
+trusted_source_ancestors() {
+  local parent="${1%/*}"
+  [[ -n "$parent" ]] || parent=/
+  while :; do
+    [[ -d "$parent" && ! -L "$parent" ]] || refuse source_parent_unsafe
+    [[ "$(stat -c '%u' "$parent")" == 0 ]] || refuse source_parent_not_root_owned
+    refuse_writable "$parent"
+    [[ "$parent" == / ]] && break
+    parent="${parent%/*}"
+    [[ -n "$parent" ]] || parent=/
+  done
+}
+trusted_source_ancestors "$source_root"
 [[ ! -L "$source_dir" && -d "$source_dir" ]] || refuse source_dir_unsafe
 [[ "$(stat -c '%u' "$source_dir")" == '0' ]] || refuse source_not_root_owned
 refuse_writable "$source_dir"
