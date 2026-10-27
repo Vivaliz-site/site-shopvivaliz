@@ -30,13 +30,26 @@ source_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 source_dir="$source_root/marina-direct-mcp"
 expected_sha="${SHOPVIVALIZ_MARINA_APPROVED_SHA:-}"
 [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]] || refuse approved_release_sha_required
-[[ "$(stat -c '%u' "$source_root")" == '0' ]] || refuse source_not_root_owned
 refuse_writable() {
   local mode
   mode="$(stat -c '%a' "$1")" || refuse unsafe_mode
   [[ "$mode" =~ ^[0-7]{3,4}$ ]] || refuse unsafe_mode
   (( (8#$mode & 8#22) == 0 )) || refuse group_or_other_writable
 }
+# The lock must cover all source, unit and target preflight checks, not only
+# the final writes. Otherwise concurrent official staging calls could both
+# validate stale target state before either acquired the lock.
+[[ -d /run && ! -L /run ]] || refuse unsafe_lock_parent
+[[ "$(stat -c '%u' /run)" == '0' ]] || refuse unsafe_lock_parent
+refuse_writable /run
+lock_file=/run/shopvivaliz-marina-mcp-stage.lock
+[[ ! -L "$lock_file" ]] || refuse unsafe_lock_symlink
+if [[ -e "$lock_file" ]]; then
+  [[ -f "$lock_file" && "$(stat -c '%u' "$lock_file")" == '0' && "$(stat -c '%a' "$lock_file")" == '600' ]] || refuse unsafe_lock_file
+fi
+exec 9>"$lock_file"
+flock -n 9 || refuse concurrent_operator_stage
+[[ "$(stat -c '%u' "$source_root")" == '0' ]] || refuse source_not_root_owned
 refuse_writable "$source_root"
 # A root-owned checkout beneath an untrusted parent can be swapped after validation.
 # Require root ownership and no group/other write on every source ancestor.
@@ -183,15 +196,6 @@ for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service
   check_target "$source_dir/systemd/$unit" "/etc/systemd/system/$unit" 644
 done
 
-[[ "$(stat -c '%u' /run)" == '0' ]] || refuse unsafe_lock_parent
-refuse_writable /run
-lock_file=/run/shopvivaliz-marina-mcp-stage.lock
-[[ ! -L "$lock_file" ]] || refuse unsafe_lock_symlink
-if [[ -e "$lock_file" ]]; then
-  [[ -f "$lock_file" && "$(stat -c '%u' "$lock_file")" == '0' && "$(stat -c '%a' "$lock_file")" == '600' ]] || refuse unsafe_lock_file
-fi
-exec 9>"$lock_file"
-flock -n 9 || refuse concurrent_operator_stage
 if ! getent passwd shopvivaliz-marina-mcp >/dev/null; then
   /usr/sbin/useradd --system --user-group --create-home --home-dir /var/lib/shopvivaliz-marina-mcp --shell /usr/sbin/nologin shopvivaliz-marina-mcp
 fi
