@@ -29,6 +29,16 @@ class PostDeployPriceParityContract(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, workflow)
 
+    def test_failed_ssh_or_missing_evidence_is_never_green(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn("set +e", workflow)
+        self.assertNotIn("if-no-files-found: warn", workflow)
+        self.assertNotIn("::warning::Real audit report unavailable", workflow)
+        self.assertIn("if-no-files-found: error", workflow)
+        self.assertIn("if ssh ", workflow)
+        self.assertIn("status=$?", workflow)
+        self.assertIn('scp "${ssh_opts[@]}"', workflow)
+
     def test_live_source_is_verifiably_erp_v3_and_read_only(self):
         code = SCRIPT.read_text(encoding="utf-8")
         for marker in (
