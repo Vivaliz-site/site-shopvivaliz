@@ -221,6 +221,19 @@ def main() -> int:
         if index % 25 == 0 or index == len(active):
             print(f"ERP_DETAILS_CHECKED={index}/{len(active)} API_ERRORS={len(errors)}", flush=True)
     result = evaluate(active, details, cache_rows, site_rows)
+    # A deploy that moves under this lengthy full-catalog audit invalidates its
+    # snapshot; do not certify an earlier release as the current storefront.
+    current_live_sha = (ROOT / ".release-sha").read_text().strip()
+    try:
+        current_public_sha = str(read_json(PUBLIC_ROOT + "/api/health/version.php").get("release_sha") or "")
+    except Exception:
+        current_public_sha = ""
+    if current_live_sha != live_sha or current_public_sha != served_sha:
+        result["issues"].append({"code": "release_changed_during_price_audit",
+            "start_sha": live_sha, "end_local_sha": current_live_sha,
+            "end_public_sha": current_public_sha})
+        result["counts"]["errors"] = len(result["issues"])
+        result["status"] = "FAIL"
     if errors:
         result["issues"].extend(errors)
         result["counts"]["errors"] = len(result["issues"])
