@@ -17,27 +17,32 @@ class StagingTests(unittest.TestCase):
         self.assertEqual(subprocess.run(["bash", "-n", str(SCRIPT)], check=False).returncode, 0)
 
     def test_unknown_host_rejected_without_mutation(self):
+        """A hostile PATH must not spoof Marina's identity or execute as root."""
+        import socket
+        if socket.gethostname().split('.')[0] == 'marina-a1-4c24g':
+            self.skipTest('requires a non-Marina CI runner')
         with tempfile.TemporaryDirectory() as tmp:
-            fake_hostname = Path(tmp) / "hostname"
-            fake_hostname.write_text("#!/bin/sh\necho not-marina\n")
+            marker = Path(tmp) / 'host-probe-executed'
+            fake_hostname = Path(tmp) / 'hostname'
+            fake_hostname.write_text(
+                '#!/bin/sh\n: > "' + str(marker) +
+                '"\nprintf "marina-a1-4c24g\n"\n'
+            )
             fake_hostname.chmod(0o755)
-            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"])
-            result = subprocess.run(["bash", str(SCRIPT), "--stage"], env=env,
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ['PATH'])
+            result = subprocess.run(['/bin/bash', str(SCRIPT), '--stage'], env=env,
                                     text=True, capture_output=True, timeout=8, check=False)
-        self.assertEqual(result.returncode, 3)
-        self.assertIn("host_identity_mismatch", result.stderr)
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn('host_identity_mismatch', result.stderr)
+            self.assertFalse(marker.exists(), 'untrusted hostname executed')
 
     def test_inspect_does_not_provision_or_claim_ready(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            fake_hostname = Path(tmp) / "hostname"
-            fake_hostname.write_text("#!/bin/sh\necho marina-a1-4c24g\n")
-            fake_hostname.chmod(0o755)
-            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"])
-            result = subprocess.run(["bash", str(SCRIPT), "--inspect"], env=env,
-                                    text=True, capture_output=True, timeout=8, check=False)
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("MARINA_MCP_STAGE=INSPECT_ONLY", result.stdout)
-        self.assertIn("MIGRATION_STATUS=NO_CUT_NAO_APTO", result.stdout)
+        """Inspect result is only a negative preflight, never an installation."""
+        function = self._bash_function('inspect_only')
+        result = self._run_guard(function, dict(os.environ), 'inspect_only')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('MARINA_MCP_STAGE=INSPECT_ONLY', result.stdout)
+        self.assertIn('MIGRATION_STATUS=NO_CUT_NAO_APTO', result.stdout)
 
     def test_required_operator_gates_and_no_autostart(self):
         source = SCRIPT.read_text()
