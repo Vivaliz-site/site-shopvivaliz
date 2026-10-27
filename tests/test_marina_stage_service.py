@@ -47,6 +47,7 @@ class StagingTests(unittest.TestCase):
             'active_unit_mutation_denied', 'concurrent_operator_stage',
             'different_release_active', 'NoNewPrivileges=yes',
             'source_systemd_dir_not_root_owned', 'unsafe_lock_symlink',
+            'existing_target_wrong_mode', 'service_group_missing',
             'MIGRATION_STATUS=NO_CUT_NAO_APTO',
         ):
             self.assertIn(required, source)
