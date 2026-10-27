@@ -88,7 +88,10 @@ changes DNS, or modifies workers. It does not provide shell or sudo tools.
 This is **not** permission to bypass a refused `NoNewPrivileges` or RBAC action.
 An independently authorized Marina host administrator must first obtain the
 legitimate privileged maintenance capability, then use a **root-owned clean
-checkout of a reviewed SHA**. Do not launch it via RDC, SSH, OCI Run Command,
+checkout of a reviewed SHA**, placed beneath an entirely root-owned, non-writable
+ancestor chain (for example a protected root-owned staging tree). A checkout
+under an ubuntu-owned `/home/ubuntu` parent is not safe for privileged staging
+because that parent can rename the checked directory between verification and copy. Do not launch it via RDC, SSH, OCI Run Command,
 GitHub Actions or another MCP to evade an express privilege denial.
 
 On the *actual Marina* through that officially authorized operator context:
