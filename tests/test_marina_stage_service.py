@@ -80,6 +80,23 @@ class StagingTests(unittest.TestCase):
         return subprocess.run(["bash", "-c", snippet], env=env,
                               text=True, capture_output=True, timeout=8, check=False)
 
+    def test_stage_lock_precedes_all_mutable_preflight(self):
+        """Two official stage calls must not both validate stale unit/target state."""
+        source = SCRIPT.read_text()
+        lock = source.index('flock -n 9 || refuse concurrent_operator_stage')
+        self.assertEqual(source.count('exec 9>"$lock_file"'), 1)
+        self.assertIn('[[ -d /run && ! -L /run ]]', source)
+        for gate in (
+            'source_not_root_owned',
+            'trusted_source_ancestors "$source_root"',
+            'assert_unit_not_autostart "$unit"',
+            'check_target "$source_dir/server.py"',
+            'assert_existing_service_home /var/lib/shopvivaliz-marina-mcp',
+        ):
+            with self.subTest(gate=gate):
+                self.assertLess(lock, source.index(gate),
+                                'preflight must execute under the stage lock')
+
     def test_privileged_git_status_cannot_execute_fsmonitor_hook(self):
         """RED: Git status runs a configured fsmonitor. GREEN: safe_git suppresses it."""
         function = self._bash_function("safe_git")
