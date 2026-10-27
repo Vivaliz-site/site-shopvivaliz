@@ -201,11 +201,30 @@ function svoei_upsert_catalog_product(string $root, array $product): void
     $id = trim((string)($product['id'] ?? ''));
     if ($sku === '' && $id === '') throw new InvalidArgumentException('product_identifier_missing');
     svoei_catalog_mutate($root, static function (array &$items) use ($product, $sku, $id): void {
+        $idMatches = [];
+        $skuMatches = [];
+        $legacySkuMatches = [];
         foreach ($items as $index => $item) {
-            if (svoei_item_matches($item, $sku, $id)) {
-                $items[$index] = array_replace($item, $product);
-                return;
+            $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
+            $existingSku = trim((string)($item['sku'] ?? $item['codigo'] ?? ''));
+            if ($id !== '' && $existingId === $id) $idMatches[] = $index;
+            if ($sku === '' || strcasecmp($existingSku, $sku) !== 0) continue;
+            $skuMatches[] = $index;
+            // A reused SKU may NOT overwrite a different ERP product ID.
+            if ($id !== '' && $existingId !== '' && $existingId !== $id) {
+                throw new RuntimeException('catalog_sku_identity_conflict');
             }
+            if ($existingId === '') $legacySkuMatches[] = $index;
+        }
+
+        $matches = $id !== ''
+            ? ($idMatches !== [] ? $idMatches : $legacySkuMatches)
+            : $skuMatches;
+        if (count($matches) > 1) throw new RuntimeException('catalog_product_ambiguous');
+        if ($matches !== []) {
+            $index = $matches[0];
+            $items[$index] = array_replace($items[$index], $product);
+            return;
         }
         $items[] = $product;
     });
