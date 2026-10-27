@@ -56,6 +56,23 @@ def descendant(ancestor_sha: str, descendant_sha: str) -> bool:
     return result.returncode == 0
 
 
+def expected_revision_covered(
+    expected_sha: str, main_sha: str, deployed_sha: str, deploy_needed: bool,
+) -> bool:
+    """Accept an expected main commit when it is live or only docs/tests are ahead."""
+    if not expected_sha:
+        return True
+    expected = valid_sha(expected_sha)
+    if not descendant(expected, main_sha):
+        return False
+    if descendant(expected, deployed_sha):
+        return True
+    # A docs/tests-only commit cannot be present in an intentionally older release.
+    # Permit that explicit exception only when the official classifier found no
+    # deployable files since the deployed SHA and the target is on that ancestry.
+    return not deploy_needed and descendant(deployed_sha, expected)
+
+
 def evaluate(
     main_sha: str, evidence: dict[str, Any], public_sha: str,
     deploy_needed: bool, expected_sha: str = "", expected_is_live: bool = True,
@@ -123,7 +140,7 @@ def observe(repository: str, expected_sha: str = "") -> dict[str, Any]:
         raise GuardError("public_version_unavailable") from exc
     if not isinstance(public, dict):
         raise GuardError("public_version_invalid")
-    expected_live = not expected_sha or descendant(valid_sha(expected_sha), deployed)
+    expected_live = expected_revision_covered(expected_sha, main, deployed, needs_deploy)
     return evaluate(
         main, evidence, public.get("release_sha"), needs_deploy, expected_sha, expected_live,
     )
