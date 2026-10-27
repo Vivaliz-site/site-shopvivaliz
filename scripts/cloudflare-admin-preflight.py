@@ -45,18 +45,33 @@ def run_readonly(*argv):
         return ''
 
 
+def secret_parent_dirs_safe(path):
+    """Match the stage helper's root ownership and non-writable directory gates."""
+    for directory in (path.parent.parent, path.parent):
+        try:
+            if directory.is_symlink():
+                return False
+            st = directory.stat()
+        except OSError:
+            return False
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            return False
+    return True
+
+
 def token_metadata(path):
     try:
         if path.is_symlink():
-            return {'present': True, 'regular_file': False, 'mode_0600': False, 'root_owned': False}
+            return {'present': True, 'regular_file': False, 'mode_0600': False, 'root_owned': False, 'safe_parent_dirs': False}
         st = path.stat()
     except OSError:
-        return {'present': False, 'regular_file': False, 'mode_0600': False, 'root_owned': False}
+        return {'present': False, 'regular_file': False, 'mode_0600': False, 'root_owned': False, 'safe_parent_dirs': False}
     return {
         'present': True,
         'regular_file': stat.S_ISREG(st.st_mode),
         'mode_0600': stat.S_IMODE(st.st_mode) == 0o600,
         'root_owned': st.st_uid == 0,
+        'safe_parent_dirs': secret_parent_dirs_safe(path),
     }
 
 
@@ -90,7 +105,8 @@ def evaluate(target, current_host, euid, nnp, ssh_active, ssh_listen,
              binary_meta, unit_state, token):
     host_match = target == current_host
     privileged_installer = euid == 0 and nnp is False
-    token_safe = all(token.values())
+    token_safe = all(token.get(k) is True for k in (
+        'present', 'regular_file', 'mode_0600', 'root_owned', 'safe_parent_dirs'))
     binary_safe = all(binary_meta.get(key) is True for key in (
         'present', 'approved_path', 'regular_file', 'root_owned', 'approved_mode'))
     return {
