@@ -88,9 +88,23 @@ def evaluate(
 ) -> dict[str, Any]:
     active = {str(x.get("id")): x for x in active_rows if x.get("id") is not None}
     cached = {str(x.get("id")): x for x in cache_rows if x.get("id") is not None}
-    public = {str(x.get("olist_product_id") or x.get("id")): x for x in storefront_rows
-              if x.get("olist_product_id") or x.get("id")}
     issues: list[dict[str, Any]] = []
+    public: dict[str, dict[str, Any]] = {}
+    for row in storefront_rows:
+        if not isinstance(row, dict):
+            issues.append({"code": "public_catalog_row_invalid"})
+            continue
+        raw_id = row.get("olist_product_id") or row.get("id")
+        if raw_id is None or not str(raw_id).strip():
+            issues.append({"code": "published_product_missing_product_id",
+                           "sku": str(row.get("sku") or "")})
+            continue
+        pid = str(raw_id).strip()
+        if pid in public:
+            issues.append({"code": "duplicate_storefront_product_id", "id": pid,
+                           "sku": str(row.get("sku") or "")})
+            continue
+        public[pid] = row
     excluded: list[dict[str, Any]] = []
     verified = 0
     verified_published = 0
@@ -137,6 +151,10 @@ def evaluate(
             else:
                 issues.append({"code": "active_priced_erp_product_not_published", "id": pid, "sku": sku})
         else:
+            published_sku = str(page.get("sku") or page.get("codigo") or "").strip()
+            if not published_sku or (sku and published_sku.casefold() != sku.casefold()):
+                issues.append({"code": "storefront_sku_differs_from_erp", "id": pid,
+                               "erp_sku": sku, "published_sku": published_sku})
             published_price = cents(page.get("price"))
             if published_price != effective:
                 issues.append({"code": "storefront_price_differs_from_erp", "id": pid, "sku": sku,
