@@ -129,13 +129,14 @@ jobs:
           ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes
                     -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
           report="/home/ubuntu/shopvivaliz-deploy/shared/logs/price-parity-${DEPLOY_SHA}.json"
-          set +e
-          ssh "${ssh_opts[@]}" ubuntu@127.0.0.1 \
-            "cd /home/ubuntu/shopvivaliz-deploy/current && test \"\$(cat .release-sha)\" = '$DEPLOY_SHA' && python3 -u scripts/quality/audit-storefront-erp-prices.py --expected-sha '$DEPLOY_SHA' --output '$report'"
-          status=$?
-          set -e
-          scp "${ssh_opts[@]}" "ubuntu@127.0.0.1:$report" "$RUNNER_TEMP/price-parity.json" || \
-            echo '::warning::Real audit report unavailable for artifact download'
+          if ssh "${ssh_opts[@]}" ubuntu@127.0.0.1 \
+            "cd /home/ubuntu/shopvivaliz-deploy/current && test \"\$(cat .release-sha)\" = '$DEPLOY_SHA' && python3 -u scripts/quality/audit-storefront-erp-prices.py --expected-sha '$DEPLOY_SHA' --output '$report'"; then
+            status=0
+          else
+            status=$?
+          fi
+          # A missing report is itself a failed evidence gate: never suppress scp.
+          scp "${ssh_opts[@]}" "ubuntu@127.0.0.1:$report" "$RUNNER_TEMP/price-parity.json"
           if [ "$status" -ne 0 ]; then
             echo '::error::Post-deploy price parity failed; production cannot be certified as fully price-synchronized'
             exit "$status"
@@ -147,4 +148,4 @@ jobs:
         with:
           name: price-parity-${{ needs.select_release.outputs.release_sha }}
           path: ${{ runner.temp }}/price-parity.json
-          if-no-files-found: warn
+          if-no-files-found: error
