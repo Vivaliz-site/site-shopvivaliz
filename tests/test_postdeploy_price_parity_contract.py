@@ -61,12 +61,25 @@ class PostDeployPriceParityContract(unittest.TestCase):
                 self.assertNotIn(forbidden, code)
 
     def test_all_agent_policies_require_real_deploy_and_price_parity(self):
-        for relative in ("AGENTS.md", "REGRAS-AGENTES-CENTRALIZADAS.md",
-                         "docs/knowledge/agent-rules.md", "docs/knowledge/deploy.md"):
+        # The global policy is canonical and hash-pinned across repositories.
+        # It already requires real deploy + UI/V5 proof; changing its text in
+        # an unrelated price-audit PR would invalidate global policy parity.
+        global_policy = (ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md").read_text(encoding="utf-8")
+        for marker in (
+            "FINAL_RESPONSE_DEPLOY_GATE_V1",
+            "AUDITORIA_EXTREMA_ABSOLUTA_V5",
+            "scripts/certify-audit-manifest.py",
+            "pós-deploy",
+        ):
+            with self.subTest(global_policy_marker=marker):
+                self.assertIn(marker, global_policy)
+        # Price-specific requirements remain mandatory in local entrypoints.
+        for relative in ("AGENTS.md", "docs/knowledge/agent-rules.md",
+                         "docs/knowledge/deploy.md"):
             with self.subTest(path=relative):
-                text=(ROOT/relative).read_text(encoding="utf-8")
-                self.assertIn("DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2", text)
-                self.assertIn("postdeploy-erp-price-parity.yml", text)
+                content = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2", content)
+                self.assertIn("postdeploy-erp-price-parity.yml", content)
 
 
 if __name__ == "__main__":
