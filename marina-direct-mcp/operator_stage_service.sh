@@ -39,7 +39,8 @@ refuse_writable "$source_dir"
 [[ "$(stat -c '%u' "$source_dir/systemd")" == '0' ]] || refuse source_systemd_dir_not_root_owned
 refuse_writable "$source_dir/systemd"
 [[ "$(git -C "$source_root" rev-parse HEAD 2>/dev/null)" == "$expected_sha" ]] || refuse unapproved_checkout
-[[ -z "$(git -C "$source_root" status --porcelain -- marina-direct-mcp)" ]] || refuse unclean_checkout
+checkout_status="$(git -C "$source_root" status --porcelain -- marina-direct-mcp)" || refuse checkout_status_unavailable
+[[ -z "$checkout_status" ]] || refuse unclean_checkout
 
 for file in server.py operator_preflight.py systemd/shopvivaliz-marina-mcp.service systemd/shopvivaliz-marina-mcp-tunnel.service; do
   [[ -f "$source_dir/$file" && ! -L "$source_dir/$file" ]] || refuse source_file_missing_or_symlink
@@ -50,7 +51,8 @@ done
 for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service; do
   grep -Fqx 'User=shopvivaliz-marina-mcp' "$source_dir/systemd/$unit" || refuse unit_identity_invalid
   grep -Fqx 'NoNewPrivileges=yes' "$source_dir/systemd/$unit" || refuse unit_privilege_invalid
-  if systemctl is-active --quiet "$unit"; then refuse active_unit_mutation_denied; fi
+  unit_state="$(systemctl show "$unit" --property=ActiveState --value --no-pager 2>/dev/null)" || refuse service_state_unavailable
+  [[ "$unit_state" == inactive ]] || refuse active_unit_mutation_denied
 done
 
 # Do not replace, reconfigure or restart an existing installation.
@@ -101,8 +103,14 @@ for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service
   check_target "$source_dir/systemd/$unit" "/etc/systemd/system/$unit" 644
 done
 
-[[ ! -L /run/shopvivaliz-marina-mcp-stage.lock ]] || refuse unsafe_lock_symlink
-exec 9>/run/shopvivaliz-marina-mcp-stage.lock
+[[ "$(stat -c '%u' /run)" == '0' ]] || refuse unsafe_lock_parent
+refuse_writable /run
+lock_file=/run/shopvivaliz-marina-mcp-stage.lock
+[[ ! -L "$lock_file" ]] || refuse unsafe_lock_symlink
+if [[ -e "$lock_file" ]]; then
+  [[ -f "$lock_file" && "$(stat -c '%u' "$lock_file")" == '0' && "$(stat -c '%a' "$lock_file")" == '600' ]] || refuse unsafe_lock_file
+fi
+exec 9>"$lock_file"
 flock -n 9 || refuse concurrent_operator_stage
 if ! getent passwd shopvivaliz-marina-mcp >/dev/null; then
   /usr/sbin/useradd --system --user-group --create-home --home-dir /var/lib/shopvivaliz-marina-mcp --shell /usr/sbin/nologin shopvivaliz-marina-mcp
