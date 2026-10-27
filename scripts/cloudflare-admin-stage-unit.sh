@@ -1,7 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Root-only, operator-gated staging. DOES NOT enable or start the tunnel.
 # The tunnel runtime token is not printed, parsed or inserted in process args.
 set -Eeuo pipefail
+# Never trust the caller's executable search path during privileged staging.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 readonly TARGET="${1:-}"
 case "$TARGET" in
   always-free-arm-1787907847-26|shopvivaliz-free-a1|marina-a1-4c24g) ;;
@@ -16,8 +19,27 @@ if ! systemctl is-active --quiet ssh.service && ! systemctl is-active --quiet ss
   echo 'ERROR: ssh server inactive' >&2; exit 3
 fi
 # The local root operator must install an official cloudflared version >=2025.4.0.
-CF_BIN="$(command -v cloudflared || true)"
+# Resolve only from reviewed locations, independent of the caller's PATH.
+CF_BIN=""
+for candidate in /usr/bin/cloudflared /usr/local/bin/cloudflared; do
+  if [[ -e "$candidate" || -L "$candidate" ]]; then
+    CF_BIN="$candidate"
+    break
+  fi
+done
 [[ -n "$CF_BIN" ]] || { echo 'ERROR: cloudflared missing' >&2; exit 3; }
+for parent in /usr /usr/bin; do
+  [[ -d "$parent" && ! -L "$parent" && "$(stat -c '%u' "$parent")" == 0 ]] || { echo 'ERROR: untrusted binary parent' >&2; exit 3; }
+  parent_mode="$(stat -c '%a' "$parent")"
+  (( (8#$parent_mode & 8#022) == 0 )) || { echo 'ERROR: writable binary parent' >&2; exit 3; }
+done
+if [[ "$CF_BIN" == /usr/local/bin/cloudflared ]]; then
+  for parent in /usr/local /usr/local/bin; do
+    [[ -d "$parent" && ! -L "$parent" && "$(stat -c '%u' "$parent")" == 0 ]] || { echo 'ERROR: untrusted binary parent' >&2; exit 3; }
+    parent_mode="$(stat -c '%a' "$parent")"
+    (( (8#$parent_mode & 8#022) == 0 )) || { echo 'ERROR: writable binary parent' >&2; exit 3; }
+  done
+fi
 CF_BIN="$(readlink -f "$CF_BIN")"
 [[ -f "$CF_BIN" && -x "$CF_BIN" ]] || { echo 'ERROR: cloudflared binary invalid' >&2; exit 3; }
 case "$CF_BIN" in /usr/bin/cloudflared|/usr/local/bin/cloudflared) ;;
