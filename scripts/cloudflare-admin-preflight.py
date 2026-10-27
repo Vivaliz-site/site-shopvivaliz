@@ -14,7 +14,7 @@ import stat
 import subprocess
 import sys
 
-APPROVED_BINARY_PATHS = ('/usr/bin/cloudflared', '/usr/local/bin/cloudflared')
+APPROVED_BINARY_PATHS = ('/opt/shopvivaliz-cloudflared-admin/releases/2026.10.4/cloudflared',)
 
 HOSTS = {
     'always-free-arm-1787907847-26',
@@ -63,14 +63,14 @@ def secret_parent_dirs_safe(path):
 def token_metadata(path):
     try:
         if path.is_symlink():
-            return {'present': True, 'regular_file': False, 'mode_0600': False, 'root_owned': False, 'safe_parent_dirs': False}
+            return {'present': True, 'regular_file': False, 'mode_private': False, 'root_owned': False, 'safe_parent_dirs': False}
         st = path.stat()
     except OSError:
-        return {'present': False, 'regular_file': False, 'mode_0600': False, 'root_owned': False, 'safe_parent_dirs': False}
+        return {'present': False, 'regular_file': False, 'mode_private': False, 'root_owned': False, 'safe_parent_dirs': False}
     return {
         'present': True,
         'regular_file': stat.S_ISREG(st.st_mode),
-        'mode_0600': stat.S_IMODE(st.st_mode) == 0o600,
+        'mode_private': stat.S_IMODE(st.st_mode) in (0o600, 0o400),
         'root_owned': st.st_uid == 0,
         'safe_parent_dirs': secret_parent_dirs_safe(path),
     }
@@ -86,13 +86,12 @@ def approved_binary_candidate():
 
 
 def safe_binary_parent_dirs(path):
-    """All ancestors mutable by an unprivileged actor invalidate readiness."""
-    if str(path) == '/usr/bin/cloudflared':
-        parents = ('/usr', '/usr/bin')
-    elif str(path) == '/usr/local/bin/cloudflared':
-        parents = ('/usr', '/usr/local', '/usr/local/bin')
-    else:
+    """Attest the pinned release path and all of its mutable ancestors."""
+    if str(path) not in APPROVED_BINARY_PATHS:
         return False
+    parents = ('/opt', '/opt/shopvivaliz-cloudflared-admin',
+               '/opt/shopvivaliz-cloudflared-admin/releases',
+               '/opt/shopvivaliz-cloudflared-admin/releases/2026.10.4')
     for name in parents:
         parent = Path(name)
         try:
@@ -105,7 +104,6 @@ def safe_binary_parent_dirs(path):
                 or metadata.st_mode & 0o022):
             return False
     return True
-
 
 def cloudflared_metadata(candidate):
     """Verify the same root-owned executable constraints as the stage helper."""
@@ -142,7 +140,7 @@ def evaluate(target, current_host, euid, nnp, ssh_active, ssh_listen,
     host_match = target == current_host
     privileged_installer = euid == 0 and nnp is False
     token_safe = all(token.get(k) is True for k in (
-        'present', 'regular_file', 'mode_0600', 'root_owned', 'safe_parent_dirs'))
+        'present', 'regular_file', 'mode_private', 'root_owned', 'safe_parent_dirs'))
     binary_safe = all(binary_meta.get(key) is True for key in (
         'present', 'approved_path', 'lookup_path_approved', 'safe_parent_dirs',
         'regular_file', 'root_owned', 'approved_mode'))
@@ -184,8 +182,8 @@ def main(argv=None):
     ssh_active = (run_readonly('systemctl', 'is-active', 'ssh.service').strip() == 'active'
                   or run_readonly('systemctl', 'is-active', 'sshd.service').strip() == 'active')
     ssh_listen = ssh_listener(run_readonly('ss', '-H', '-ltn'))
-    unit_state = run_readonly('systemctl', 'is-active', 'shopvivaliz-cloudflare-admin.service').strip() or 'inactive'
-    token = token_metadata(Path('/etc/shopvivaliz/cloudflare-admin') / (args.target + '.token'))
+    unit_state = run_readonly('systemctl', 'is-active', 'shopvivaliz-cloudflared-admin.service').strip() or 'inactive'
+    token = token_metadata(Path('/etc/shopvivaliz/cloudflare-admin/token'))
     result = evaluate(args.target, current_host, os.geteuid(), no_new_privileges(status_text),
                       ssh_active, ssh_listen, cloudflared_metadata(approved_binary_candidate()), unit_state, token)
     print(json.dumps(result, sort_keys=True, separators=(',', ':')))
