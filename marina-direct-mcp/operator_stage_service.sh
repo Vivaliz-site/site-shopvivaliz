@@ -70,6 +70,7 @@ release_dir="$stage_root/releases/$expected_sha"
 if [[ -e "$release_dir" ]]; then
   [[ -d "$release_dir" && "$(stat -c '%u' "$release_dir")" == '0' ]] || refuse unsafe_existing_release
   refuse_writable "$release_dir"
+  [[ "$(stat -c '%a' "$release_dir")" == '755' ]] || refuse unsafe_existing_release_mode
 fi
 [[ ! -e "$stage_root/current" || -L "$stage_root/current" ]] || refuse existing_current_not_symlink
 if [[ -L "$stage_root/current" ]]; then
@@ -85,26 +86,28 @@ fi
 
 # A repeated stage may only accept identical, root-owned files.
 check_target() {
-  local from="$1" target="$2"
+  local from="$1" target="$2" expected_mode="$3"
   if [[ -e "$target" || -L "$target" ]]; then
     [[ -f "$target" && ! -L "$target" ]] || refuse existing_target_unsafe
     [[ "$(stat -c '%u' "$target")" == '0' ]] || refuse target_not_root_owned
     refuse_writable "$target"
+    [[ "$(stat -c '%a' "$target")" == "$expected_mode" ]] || refuse existing_target_wrong_mode
     cmp -s "$from" "$target" || refuse existing_target_differs
   fi
 }
-check_target "$source_dir/server.py" "$release_dir/server.py"
-check_target "$source_dir/operator_preflight.py" "$release_dir/operator_preflight.py"
+check_target "$source_dir/server.py" "$release_dir/server.py" 444
+check_target "$source_dir/operator_preflight.py" "$release_dir/operator_preflight.py" 444
 for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service; do
-  check_target "$source_dir/systemd/$unit" "/etc/systemd/system/$unit"
+  check_target "$source_dir/systemd/$unit" "/etc/systemd/system/$unit" 644
 done
 
 [[ ! -L /run/shopvivaliz-marina-mcp-stage.lock ]] || refuse unsafe_lock_symlink
 exec 9>/run/shopvivaliz-marina-mcp-stage.lock
 flock -n 9 || refuse concurrent_operator_stage
 if ! getent passwd shopvivaliz-marina-mcp >/dev/null; then
-  /usr/sbin/useradd --system --create-home --home-dir /var/lib/shopvivaliz-marina-mcp --shell /usr/sbin/nologin shopvivaliz-marina-mcp
+  /usr/sbin/useradd --system --user-group --create-home --home-dir /var/lib/shopvivaliz-marina-mcp --shell /usr/sbin/nologin shopvivaliz-marina-mcp
 fi
+getent group shopvivaliz-marina-mcp >/dev/null || refuse service_group_missing
 install -d -o root -g root -m 0755 "$stage_root" "$stage_root/releases" "$stage_root/bin" "$release_dir"
 install -d -o shopvivaliz-marina-mcp -g shopvivaliz-marina-mcp -m 0700 /var/lib/shopvivaliz-marina-mcp
 stage_file() {
