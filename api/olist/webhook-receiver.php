@@ -126,30 +126,26 @@ switch ($event) {
 }
 
 /**
- * Invalida o cache ativo (renomeia com backup timestampado, se existir) e
- * dispara daemon-sync-products.py em background para repopular na hora,
- * em vez de esperar o proximo ciclo agendado do daemon (ate 5 min).
+ * Webhook legado: sincronizacao integral e PDV precisam ser atomicas.
+ * NUNCA retirar/renomear o cache publicado antes de ter recebido, validado
+ * e persistido a lista PDV autenticada para 100% do catalogo. Em especial,
+ * SKU duplicado ou API Olist indisponivel deve preservar o catalogo ativo
+ * em vez de provocar uma vitrine vazia.
  *
- * Usado pelos 3 eventos (price/stock/product). Antes, so handle_price_update
- * disparava o daemon -- handle_stock_update/handle_product_update so
- * invalidavam o cache e ficavam esperando o proximo ciclo, o que e
- * inconsistente e faz produto/estoque novo demorar mais que preco pra
- * aparecer no site.
+ * O daemon usa escrita temporaria seguida de replace atomico e falha fechado.
+ * O receptor canonico de eventos de preco continua sendo /api/olist/webhook.php.
  */
 function trigger_cache_resync(): void {
     $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        $backup = $cache_file . '.webhook-' . (string)((int)floor(microtime(true) * 1000));
-        if (rename($cache_file, $backup)) {
-            log_event("  ✓ Cache invalidado (backup: " . basename($backup) . ")");
-        }
+    if (is_file($cache_file)) {
+        log_event('Cache ativo preservado ate validacao completa PDV');
     }
 
     $daemon = __DIR__ . '/../../daemon-sync-products.py';
     if (is_file($daemon)) {
         $cmd = "cd " . escapeshellarg(__DIR__ . '/../../') . " && /usr/bin/python3 daemon-sync-products.py --once >> " . escapeshellarg(__DIR__ . '/../../logs/sync-products.log') . " 2>&1 &";
         exec($cmd, $output, $code);
-        log_event("  ✓ Sincronização disparada (código: {$code})");
+        log_event("  Sincronizacao solicitada (codigo: {$code}); nao comprova preco atualizado");
     }
 }
 
