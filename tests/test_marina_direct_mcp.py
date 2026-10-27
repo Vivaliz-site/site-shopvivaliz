@@ -168,7 +168,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
             try:
                 for _ in range(2):
                     conn = socket.create_connection(("127.0.0.1", gated.server_port), timeout=2)
-                    conn.sendall(b"GET /health HTTP/1.1\\r\\nHost: localhost\\r\\n")
+                    conn.sendall(b"GET /health HTTP/1.1\r\nHost: localhost\r\n")
                     holders.append(conn)
                 deadline = time.monotonic() + 1.0
                 while gated._open_connections._value != 0 and time.monotonic() < deadline:
@@ -177,7 +177,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
                 excess = socket.create_connection(("127.0.0.1", gated.server_port), timeout=2)
                 try:
                     excess.settimeout(2)
-                    excess.sendall(b"GET /health HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n")
+                    excess.sendall(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
                     try:
                         rejected = excess.recv(4096)
                     except ConnectionResetError:
