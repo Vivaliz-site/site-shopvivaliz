@@ -1,0 +1,159 @@
+name: OCI principal controller A1 downsize (6c32g to 4c24g)
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply the restricted 6 OCPU / 32 GB to 4 OCPU / 24 GB change"
+        required: true
+        type: boolean
+        default: false
+      confirmation:
+        description: "Type ROLLBACK_CONTROLLER_TO_4C24G"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: oci-principal-a1-controller-downsize
+  cancel-in-progress: false
+jobs:
+  resize:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 30
+    env:
+      APPLY: ${{ inputs.apply }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      P_USER: ${{ secrets.OCI_PRINCIPAL_USER }}
+      P_TENANCY: ${{ secrets.OCI_PRINCIPAL_TENANCY }}
+      P_FINGERPRINT: ${{ secrets.OCI_PRINCIPAL_FINGERPRINT }}
+      P_REGION: ${{ secrets.OCI_PRINCIPAL_REGION }}
+    steps:
+      - name: Install official OCI SDK on independent hosted runner
+        run: python3 -m pip install --disable-pip-version-check --quiet 'oci>=2.120,<3'
+      - name: Preflight and optionally undo the exact overprovisioned A1 shape
+        shell: bash
+        env:
+          P_PRIVATE_KEY: ${{ secrets.OCI_PRINCIPAL_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          python3 - <<'PY'
+          import os
+          import sys
+          import time
+          import tempfile
+          from pathlib import Path
+          import oci
+
+          TARGET = "always-free-arm-1787907847-26"
+          OTHER = "shopvivaliz-free-a1"
+          CONFIRM = "ROLLBACK_CONTROLLER_TO_4C24G"
+
+          def stop(reason):
+              print("DOWNSIZE_BLOCKED=" + reason, flush=True)
+              raise SystemExit(2)
+
+          if os.environ.get("CONFIRMATION") != CONFIRM:
+              stop("INVALID_CONFIRMATION")
+          apply = os.environ.get("APPLY", "").lower() == "true"
+          vals = {k: os.environ.get("P_" + k, "") for k in (
+              "USER", "TENANCY", "FINGERPRINT", "REGION", "PRIVATE_KEY")}
+          if not all(vals.values()):
+              stop("OCI_PRINCIPAL_SECRET_MISSING")
+
+          with tempfile.TemporaryDirectory(prefix="oci-principal-downsize-") as tmp:
+              path = Path(tmp) / "private.pem"
+              path.write_text(vals["PRIVATE_KEY"].rstrip() + "\n")
+              path.chmod(0o600)
+              cfg = {
+                  "user": vals["USER"],
+                  "tenancy": vals["TENANCY"],
+                  "fingerprint": vals["FINGERPRINT"],
+                  "region": vals["REGION"],
+                  "key_file": str(path),
+              }
+              oci.config.validate_config(cfg)
+              compute = oci.core.ComputeClient(cfg)
+              rows = oci.pagination.list_call_get_all_results(
+                  compute.list_instances, compartment_id=vals["TENANCY"]
+              ).data
+              targets = [x for x in rows if x.display_name == TARGET]
+              others = [x for x in rows if x.display_name == OTHER]
+              if len(targets) != 1 or len(others) != 1:
+                  stop("EXPECTED_TWO_UNIQUE_INSTANCES_NOT_FOUND")
+              source = others[0]
+              if (source.lifecycle_state != "STOPPED"
+                  or source.shape != "VM.Standard.A1.Flex"
+                  or source.shape_config.ocpus != 2
+                  or source.shape_config.memory_in_gbs != 8):
+                  stop("OLD_VM_CHANGED_OR_NOT_STOPPED")
+              response = compute.get_instance(targets[0].id)
+              inst = response.data
+              cpu = inst.shape_config.ocpus
+              ram = inst.shape_config.memory_in_gbs
+              if (inst.compartment_id != vals["TENANCY"]
+                  or inst.display_name != TARGET
+                  or inst.shape != "VM.Standard.A1.Flex"):
+                  stop("TARGET_IDENTITY_MISMATCH")
+              if inst.lifecycle_state != "RUNNING":
+                  stop("TARGET_NOT_RUNNING")
+              if cpu == 4 and ram == 24:
+                  print("DOWNSIZE_ALREADY_APPLIED=PASS", flush=True)
+                  raise SystemExit(0)
+              if cpu != 6 or ram != 32:
+                  stop("TARGET_NO_LONGER_6C32G")
+
+              vnics = oci.pagination.list_call_get_all_results(
+                  compute.list_vnic_attachments, compartment_id=vals["TENANCY"],
+                  instance_id=inst.id
+              ).data
+              active_vnics = [v for v in vnics if v.lifecycle_state == "ATTACHED"]
+              if len(active_vnics) != 1:
+                  stop("VNIC_TOPOLOGY_CHANGED")
+              volumes = oci.pagination.list_call_get_all_results(
+                  compute.list_volume_attachments, compartment_id=vals["TENANCY"],
+                  instance_id=inst.id
+              ).data
+              attached_volumes = [v for v in volumes if v.lifecycle_state == "ATTACHED"]
+              if len(attached_volumes) > 1:
+                  stop("MULTIPLE_DATA_VOLUMES_REQUIRE_OFFICIAL_REVIEW")
+              etag = response.headers.get("etag")
+              if not etag:
+                  stop("ETAG_ABSENT")
+              print("DOWNSIZE_PREFLIGHT=PASS from=6c32g to=4c24g old_vm_stopped=yes vnic_count=1 data_volume_count=" + str(len(attached_volumes)), flush=True)
+              if not apply:
+                  print("DOWNSIZE_DRY_RUN=PASS no_mutation", flush=True)
+                  raise SystemExit(0)
+
+              req = oci.core.models.UpdateInstanceDetails(
+                  shape="VM.Standard.A1.Flex",
+                  shape_config=oci.core.models.UpdateInstanceShapeConfigDetails(
+                      ocpus=4.0, memory_in_gbs=24.0
+                  ),
+              )
+              try:
+                  compute.update_instance(inst.id, req, if_match=etag)
+                  print("DOWNSIZE_UPDATE_ACCEPTED=PASS", flush=True)
+              except oci.exceptions.ServiceError as exc:
+                  print("DOWNSIZE_UPDATE_FAILED HTTP=" + str(exc.status) + " CODE=" + str(exc.code), flush=True)
+                  raise SystemExit(3)
+
+              for attempt in range(100):
+                  time.sleep(12)
+                  try:
+                      updated = compute.get_instance(inst.id).data
+                  except oci.exceptions.ServiceError as exc:
+                      print("DOWNSIZE_READ_RETRY HTTP=" + str(exc.status), flush=True)
+                      continue
+                  current = (updated.shape_config.ocpus, updated.shape_config.memory_in_gbs)
+                  if attempt % 5 == 0:
+                      print("DOWNSIZE_POLL state=" + updated.lifecycle_state + " shape=" + str(current), flush=True)
+                  if updated.lifecycle_state == "RUNNING" and current == (4.0, 24.0):
+                      print("DOWNSIZE_OCI_VERIFIED=PASS", flush=True)
+                      raise SystemExit(0)
+                  if updated.lifecycle_state == "TERMINATED":
+                      stop("UNEXPECTED_TERMINATED")
+              stop("TIMED_OUT_VERIFY_IN_OCI_REQUIRES_OPERATOR_REVIEW")
+          PY
