@@ -1,5 +1,6 @@
 """Tests for the read-only Cloudflare admin tunnel host preflight."""
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -47,6 +48,35 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
         self.assertIn("present_root_owned_pinned", source)
         self.assertIn("600:0|400:0", source)
         self.assertIn("private_root_owned_regular_file", source)
+
+    def test_pinned_binary_and_token_parent_directories_fail_closed(self):
+        """Exercise the actual shell guard, not just string assertions."""
+        source = SCRIPT.read_text(encoding="utf-8")
+        match = re.search(r"(?ms)^safe_root_directory\\(\\) \\{\\n.*?^\\}", source)
+        self.assertIsNotNone(match)
+        self.assertIn('[[ "$binary_parents_safe" == true', source)
+        self.assertIn('if [[ "$token_parents_safe" != true ]]; then', source)
+        guard = match.group(0)
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "safe-leaf"
+            directory.mkdir()
+            shell = 'stat() { printf "%s\\n" "$FAKE_METADATA"; }\\n' + guard + '\\nsafe_root_directory "$1"\\n'
+            for metadata, allowed in (("0:755", True), ("0:700", True),
+                                      ("0:777", False), ("0:775", False),
+                                      ("1001:755", False), ("invalid", False)):
+                with self.subTest(metadata=metadata):
+                    env = {**os.environ, "FAKE_METADATA": metadata}
+                    proc = subprocess.run(["bash", "-c", shell, "bash", str(directory)],
+                                          text=True, capture_output=True, env=env,
+                                          timeout=5)
+                    self.assertEqual(proc.returncode, 0 if allowed else 1, proc.stderr)
+            linked = Path(tmp) / "linked-leaf"
+            linked.symlink_to(directory, target_is_directory=True)
+            proc = subprocess.run(["bash", "-c", shell, "bash", str(linked)],
+                                  text=True, capture_output=True,
+                                  env={**os.environ, "FAKE_METADATA": "0:755"},
+                                  timeout=5)
+            self.assertNotEqual(proc.returncode, 0)
 
     def test_origin_does_not_boot_or_claim_apt(self):
         p = self.run_for("shopvivaliz-free-a1")
