@@ -653,3 +653,11 @@ Esta politica vale para todos os agentes e prevalece sobre qualquer instrucao an
 - Toda sessao invisivel/headless transitoria deve ter ownership rastreavel e TTL padrao de 2 horas renovavel por heartbeat; limpar recursos da tarefa ao concluir e nunca usar kill global por nome de processo.
 
 Regra principal: **browser/navegacao sempre na VM backend; Windows nunca e fallback.**
+
+<!-- VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+## REGRA EXECUTAVEL: SEM DEPLOY COMPROVADO, SEM CONCLUSAO
+
+Em qualquer repositorio ShopVivaliz com alvo implantavel: qualquer alteracao versionada de runtime exige CI e protecoes verdes, merge no branch canonico, deploy pela pipeline oficial, artefato de deploy com SHA e resultados `validate=deploy=smoke_test=success`, verificacao da revisao publica e E2E real aplicavel. Nao vale PR, commit, label, ACK de ferramenta, parecer de agente nem apenas HTTP 200. O executor **deve** rodar o guard de conclusao do projeto (`scripts/quality/deployment_closure_guard.py --expected-sha <SHA_MAIN>` no `site-shopvivaliz`) e manter checkpoint RUNNING enquanto exit for diferente de zero. Em mudanca apenas documental sem payload deployavel, usar classifier oficial e provar a dispensa, jamais autodeclarar.
+
+A verificacao automatica independente `.github/workflows/production-deployment-closure-guard.yml` roda apos o pipeline e periodicamente, detecta divergencia entre main/evidencia/release publica, e rastreia uma unica pendencia ate corrigir. A monitoria **nao substitui** deploy pelo executor; jamais contornar protecoes de branch, revisao humana obrigatoria, RBAC, ownership/lease/fencing ou riscos de dados comerciais. Para precos: verificar cada SKU publico contra a API oficial ERP, incluindo promocional e endpoint individual, depois do deploy.
+<!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
