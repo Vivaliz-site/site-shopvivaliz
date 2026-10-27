@@ -119,6 +119,35 @@ $collisionAfter = t_items($collisionRoot . '/storage/products-cache-ativos.json'
 t_assert((float)($collisionAfter[0]['precos']['preco'] ?? 0) === 9.99, 'recycled SKU must not mutate another ERP product');
 t_assert((float)($collisionAfter[1]['precos']['preco'] ?? 0) === 301.10, 'canonical product ID must win over a colliding SKU');
 
+// The new-product fallback in the price handler calls the shared upsert.
+// It must not undo the ID guard by overwriting a different product by SKU.
+$upsertConflictRejected = false;
+try {
+    svoei_upsert_catalog_product($collisionRoot, [
+        'id' => '350339',
+        'sku' => '35039',
+        'precos' => ['preco' => 999.00],
+    ]);
+} catch (RuntimeException $e) {
+    $upsertConflictRejected = $e->getMessage() === 'catalog_sku_identity_conflict';
+}
+t_assert($upsertConflictRejected, 'upsert must reject a recycled SKU owned by another ERP ID');
+$afterRejectedUpsert = t_items($collisionRoot . '/storage/products-cache-ativos.json');
+t_assert((float)($afterRejectedUpsert[0]['precos']['preco'] ?? 0) === 9.99, 'rejected upsert must preserve competing product');
+t_assert((float)($afterRejectedUpsert[1]['precos']['preco'] ?? 0) === 301.10, 'rejected upsert must preserve canonical product');
+
+// Updating the same canonical ID with a unique new SKU remains supported.
+svoei_upsert_catalog_product($collisionRoot, [
+    'id' => '350339',
+    'sku' => 'NEW-35039',
+    'precos' => ['preco' => 301.20],
+]);
+$afterRename = t_items($collisionRoot . '/storage/products-cache-ativos.json');
+t_assert(($afterRename[0]['sku'] ?? '') === '35039', 'unrelated product SKU must not be rewritten');
+t_assert(($afterRename[1]['sku'] ?? '') === 'NEW-35039', 'canonical ERP ID should permit a nonconflicting SKU change');
+t_assert(count($afterRename) === 2, 'upsert by authoritative ID must not duplicate products');
+
+
 // An ID mismatch with a matching SKU must fail closed, not corrupt the cache.
 $unmatchedRoot = $tmp . '/price-id-mismatch';
 mkdir($unmatchedRoot . '/storage', 0775, true);
