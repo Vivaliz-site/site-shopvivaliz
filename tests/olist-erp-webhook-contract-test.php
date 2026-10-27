@@ -85,6 +85,26 @@ $updated = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35039'
 t_assert((float)($updated['precos']['preco'] ?? 0) === 209.90, 'preco nao atualizado');
 t_assert((float)($updated['precos']['precoPromocional'] ?? 0) === 189.90, 'preco promocional nao atualizado');
 
+
+$priceRef = svoei_price_event_reference(['idProduto' => '350339']);
+t_assert($priceRef['product_id'] === '350339' && $priceRef['sku'] === '', 'id-only price webhook must resolve');
+$priceRefBySku = svoei_price_event_reference(['codigo' => '35039']);
+t_assert($priceRefBySku['product_id'] === '' && $priceRefBySku['sku'] === '35039', 'sku-only price webhook must resolve');
+$priceRefCombined = svoei_price_event_reference(['idProduto' => '350339', 'codigo' => '35039']);
+t_assert($priceRefCombined['product_id'] === '350339' && $priceRefCombined['sku'] === '35039', 'combined price webhook references');
+$invalidReferenceRejected = false;
+try {
+    svoei_price_event_reference(['idMapeamento' => '9999']);
+} catch (InvalidArgumentException $e) {
+    $invalidReferenceRejected = $e->getMessage() === 'product_identifier_missing';
+}
+t_assert($invalidReferenceRejected, 'mapping id must not be mistaken for an ERP product id');
+
+svoei_update_catalog_price($tmp, 'OLD-ERP-SKU', 211.90, 0.0, '350339');
+$updatedById = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35039');
+t_assert((float)($updatedById['precos']['preco'] ?? 0) === 211.90, 'valid ERP id must update price even with changed SKU');
+t_assert((float)($updatedById['precos']['precoPromocional'] ?? -1) === 0.0, 'removed promotion must be reflected');
+
 svoei_update_catalog_stock($tmp, '35039', 11);
 $updated = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35039');
 t_assert((int)($updated['estoque_disponivel'] ?? -1) === 11, 'estoque disponivel nao atualizado');
