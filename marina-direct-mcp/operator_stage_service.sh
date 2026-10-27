@@ -5,7 +5,7 @@ set -Eeuo pipefail
 umask 077
 
 refuse() { printf 'MARINA_MCP_STAGE_REFUSED=%s\n' "$1" >&2; exit 3; }
-mode="\${1:---inspect}"
+mode="${1:---inspect}"
 [[ $# -eq 1 || $# -eq 0 ]] || refuse invalid_arguments
 [[ "$mode" == '--inspect' || "$mode" == '--stage' ]] || refuse invalid_mode
 [[ "$(hostname -s)" == 'marina-a1-4c24g' ]] || refuse host_identity_mismatch
@@ -20,9 +20,9 @@ fi
 [[ -r /proc/self/status ]] || refuse privilege_state_unavailable
 grep -Eq '^NoNewPrivs:[[:space:]]*0[[:space:]]*$' /proc/self/status || refuse no_new_privileges_denied
 
-source_root="$(CDPATH= cd -- "$(dirname -- "\${BASH_SOURCE[0]}")/.." && pwd -P)"
+source_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 source_dir="$source_root/marina-direct-mcp"
-expected_sha="\${SHOPVIVALIZ_MARINA_APPROVED_SHA:-}"
+expected_sha="${SHOPVIVALIZ_MARINA_APPROVED_SHA:-}"
 [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]] || refuse approved_release_sha_required
 [[ "$(stat -c '%u' "$source_root")" == '0' ]] || refuse source_not_root_owned
 refuse_writable() {
