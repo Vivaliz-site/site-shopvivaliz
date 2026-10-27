@@ -129,6 +129,9 @@ public static class ShopVivalizDesktopInput {
             try {
                 [System.Windows.Forms.Clipboard]::SetText($text)
                 [System.Windows.Forms.SendKeys]::SendWait('^v')
+                # Paste delivery can be asynchronous in Chromium. Keep the clipboard
+                # available briefly after SendWait; do not print or persist its data.
+                Start-Sleep -Milliseconds 300
                 if ([bool]$request.press_enter) {
                     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
                 }
@@ -177,6 +180,7 @@ function Invoke-Dispatch {
             '-NoLogo',
             '-NoProfile',
             '-NonInteractive',
+            '-WindowStyle', 'Hidden',
             '-ExecutionPolicy', 'Bypass',
             '-Sta',
             '-File', ('"' + $scriptPath + '"'),
