@@ -350,4 +350,12 @@ try { svoei_normalize_v3_product($detail, ['disponivel'=>7]); }
 catch (RuntimeException $e) { $normalizerRejected = $e->getMessage() === 'pdv_prices_required'; }
 t_assert($normalizerRejected, 'product import without verified PDV must be refused');
 
+// Even the legacy webhook receiver must never remove the active catalog
+// before the authenticated PDV full-sync has completed successfully.
+$legacyReceiver = (string)file_get_contents($root . '/api/olist/webhook-receiver.php');
+t_assert($legacyReceiver !== '', 'legacy webhook contract must be readable');
+t_assert(!str_contains($legacyReceiver, 'rename($cache_file'), 'legacy webhook must not rename active cache pre-sync');
+t_assert(!str_contains($legacyReceiver, 'unlink($cache_file'), 'legacy webhook must not delete active cache pre-sync');
+t_assert(str_contains($legacyReceiver, 'Cache ativo preservado'), 'legacy webhook must preserve live cache until PDV valid');
+
 echo "olist-erp-webhook-contract: ok\n";
