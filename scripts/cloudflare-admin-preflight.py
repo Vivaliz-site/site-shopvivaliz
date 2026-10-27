@@ -63,7 +63,7 @@ def token_metadata(path):
 def evaluate(target, current_host, euid, nnp, ssh_active, ssh_listen,
              binary, unit_state, token):
     host_match = target == current_host
-    privileged_installer = euid == 0 and nnp is not True
+    privileged_installer = euid == 0 and nnp is False
     token_safe = all(token.values())
     return {
         'schema_version': 1,
