@@ -128,10 +128,10 @@ jobs:
                   raise SystemExit(0)
 
               req = oci.core.models.UpdateInstanceDetails(
+                  shape="VM.Standard.A1.Flex",
                   shape_config=oci.core.models.UpdateInstanceShapeConfigDetails(
                       ocpus=4.0, memory_in_gbs=24.0
                   ),
-                  update_operation_constraint="ALLOW_DOWNTIME",
               )
               try:
                   compute.update_instance(inst.id, req, if_match=etag)
