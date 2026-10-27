@@ -48,11 +48,21 @@ for file in server.py operator_preflight.py systemd/shopvivaliz-marina-mcp.servi
   refuse_writable "$source_dir/$file"
 done
 
+# An inactive but enabled unit would start on the next boot. Never stage over it.
+assert_unit_not_autostart() {
+  local unit="$1" unit_state unit_file_state
+  unit_state="$(systemctl show "$unit" --property=ActiveState --value --no-pager 2>/dev/null)" || refuse service_state_unavailable
+  [[ "$unit_state" == inactive ]] || refuse active_unit_mutation_denied
+  unit_file_state="$(systemctl is-enabled "$unit" 2>/dev/null)" || :
+  case "$unit_file_state" in
+    disabled|not-found) ;;
+    *) refuse unit_may_start_on_boot ;;
+  esac
+}
 for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service; do
   grep -Fqx 'User=shopvivaliz-marina-mcp' "$source_dir/systemd/$unit" || refuse unit_identity_invalid
   grep -Fqx 'NoNewPrivileges=yes' "$source_dir/systemd/$unit" || refuse unit_privilege_invalid
-  unit_state="$(systemctl show "$unit" --property=ActiveState --value --no-pager 2>/dev/null)" || refuse service_state_unavailable
-  [[ "$unit_state" == inactive ]] || refuse active_unit_mutation_denied
+  assert_unit_not_autostart "$unit"
 done
 
 # Do not replace, reconfigure or restart an existing installation.
@@ -79,12 +89,26 @@ if [[ -L "$stage_root/current" ]]; then
   [[ "$(readlink "$stage_root/current")" == "releases/$expected_sha" ]] || refuse different_release_active
 fi
 
-# Inspect before creating the service identity. An existing identity must be exact.
+# Inspect before creating the service identity. Never re-own an existing home.
 if getent passwd shopvivaliz-marina-mcp >/dev/null; then
   record="$(getent passwd shopvivaliz-marina-mcp)"
   IFS=: read -r _ _ uid _ _ home shell <<< "$record"
   [[ "$uid" != '0' && "$home" == /var/lib/shopvivaliz-marina-mcp && "$shell" == /usr/sbin/nologin ]] || refuse service_identity_conflict
+  [[ "$(id -gn shopvivaliz-marina-mcp)" == shopvivaliz-marina-mcp ]] || refuse service_primary_group_conflict
 fi
+assert_existing_service_home() {
+  local home="$1" existing_uid existing_gid
+  if [[ -e "$home" || -L "$home" ]]; then
+    getent passwd shopvivaliz-marina-mcp >/dev/null || refuse orphaned_service_home
+    [[ -d "$home" && ! -L "$home" ]] || refuse unsafe_existing_service_home
+    existing_uid="$(id -u shopvivaliz-marina-mcp)" || refuse service_identity_unavailable
+    existing_gid="$(id -g shopvivaliz-marina-mcp)" || refuse service_identity_unavailable
+    [[ "$(stat -c '%u:%g:%a' "$home")" == "$existing_uid:$existing_gid:700" ]] || refuse existing_home_owner_mode_mismatch
+  elif ! getent passwd shopvivaliz-marina-mcp >/dev/null; then
+    ! getent group shopvivaliz-marina-mcp >/dev/null || refuse stray_service_group
+  fi
+}
+assert_existing_service_home /var/lib/shopvivaliz-marina-mcp
 
 # A repeated stage may only accept identical, root-owned files.
 check_target() {
