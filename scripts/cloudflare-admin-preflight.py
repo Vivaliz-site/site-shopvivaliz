@@ -62,7 +62,7 @@ def run_readonly(*argv):
 
 def secret_parent_dirs_safe(path):
     """Match the stage helper's root ownership and non-writable directory gates."""
-    for directory in (path.parent.parent, path.parent):
+    for directory in (path.parent.parent.parent, path.parent.parent, path.parent):
         try:
             if directory.is_symlink():
                 return False
