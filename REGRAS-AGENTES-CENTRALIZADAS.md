@@ -653,3 +653,11 @@ Esta politica vale para todos os agentes e prevalece sobre qualquer instrucao an
 - Toda sessao invisivel/headless transitoria deve ter ownership rastreavel e TTL padrao de 2 horas renovavel por heartbeat; limpar recursos da tarefa ao concluir e nunca usar kill global por nome de processo.
 
 Regra principal: **browser/navegacao sempre na VM backend; Windows nunca e fallback.**
+
+<!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
+## Regra global: alteração só termina após deploy comprovado + validação pós-deploy
+
+Para todos os agentes, projetos e repositórios ShopVivaliz: código, configuração, serviço e integração implantáveis exigem execução completa **corrigir -> testar -> revisar -> PR/CI -> merge permitido -> deploy real -> SHA ativo -> verificação funcional/UI -> evidência -> conclusão**. Não parar em PR, merge, workflow iniciado ou diagnóstico. Sem todas as provas, continuar `RUNNING/NAO_APTO` com `next_action` recuperável; bloqueio externo legítimo deve conter evidência, tentativas e condição de retomada, sem falso sucesso.
+
+Em `Vivaliz-site/site-shopvivaliz`, a prova de release é o mesmo SHA aprovado e publicado em `current/.release-sha`, `/api/health/version.php` e `deployment-evidence/deployment/latest.json`, com gates e smoke_test bem-sucedidos. A auditoria integral de preço Olist/Tiny é executada por `.github/workflows/postdeploy-erp-price-parity.yml` após deploy e diariamente; `PRICE_PARITY_VERDICT=FAIL`, ausência de notificação real do ERP, divergências e SKUs duplicados exigem reparação e revalidação. Auditoria numérica de preços não substitui E2E pela interface real onde existir. Nunca alterar preços comerciais no ERP, aprovar próprio rótulo humano ou transpor controles para forçar verde.
+<!-- /DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
