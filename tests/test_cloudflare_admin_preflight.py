@@ -94,16 +94,16 @@ class PreflightTests(unittest.TestCase):
     def test_approved_root_owned_binary_metadata(self):
         approved = Path('/usr/bin/cloudflared')
         st = SimpleNamespace(st_uid=0, st_mode=stat.S_IFREG | 0o755)
-        with mock.patch.object(mod.Path, 'resolve', return_value=approved), \\
-             mock.patch.object(mod.Path, 'stat', return_value=st):
+        with (mock.patch.object(mod.Path, 'resolve', return_value=approved),
+              mock.patch.object(mod.Path, 'stat', return_value=st)):
             metadata = mod.cloudflared_metadata('/tmp/mock-path')
         self.assertEqual(metadata, GOOD_BINARY)
 
     def test_unsafe_binary_mode_rejected(self):
         approved = Path('/usr/bin/cloudflared')
         st = SimpleNamespace(st_uid=0, st_mode=stat.S_IFREG | 0o777)
-        with mock.patch.object(mod.Path, 'resolve', return_value=approved), \\
-             mock.patch.object(mod.Path, 'stat', return_value=st):
+        with (mock.patch.object(mod.Path, 'resolve', return_value=approved),
+              mock.patch.object(mod.Path, 'stat', return_value=st)):
             metadata = mod.cloudflared_metadata('/tmp/mock-path')
         self.assertFalse(metadata['approved_mode'])
 
