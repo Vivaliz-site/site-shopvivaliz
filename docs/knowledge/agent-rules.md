@@ -347,6 +347,12 @@ Para diagnosticos de login/GUI na backend, obrigatorio ler `docs/knowledge/shopv
   ignora paid fallback=1 e bridges pagos negam acesso por padrao.
 <!-- /FREE_PROVIDER_FALLBACK_V2 -->
 
+<!-- VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+## Fechamento automatico impedido sem deploy validado
+
+Antes de marcar `CONCLUIDO` para qualquer mudanca de codigo/configuracao implantavel, pin o SHA **mergeado em main** e execute `python3 scripts/quality/deployment_closure_guard.py --expected-sha <SHA_MAIN>`; sem `ok=true`/exit 0, manter `RUNNING` com proxima acao, reparar CI/pipeline e revalidar. O guard verifica a evidencia oficial do deploy e a revisao publica; nao aceita PR/CI/merge como substituto. Para alteracoes so de docs/testes, usar o classificador oficial `scripts/should-deploy-production.sh`. Independente do chat, `.github/workflows/production-deployment-closure-guard.yml` detecta desvio e mantem issue unico ate correcao. Nunca contornar gates humanos de precos/estoque ou protecoes de branch. Em auditoria de precos apos deploy, comparar **todos os produtos efetivamente publicados**, o preco base e promo API v3, e cada endpoint individual; registrar os que nao puderam ser verificados.
+<!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+
 <!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
 ## Encerramento com deploy provado, nunca com PR
 

@@ -887,6 +887,14 @@ retomada automática e use a rota operacional auditável que consiga registrar o
 Referencia de acompanhamento: issue #2934. Enquanto houver PSI extremo recorrente, tarefas de continuidade sem vinculacao comprovada ou E2E real faltante, nao declarar `AUDIT_VERDICT=APTO`.
 <!-- /BACKEND_IO_PRESSURE_ADMISSION_V1 -->
 
+<!-- VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+## Gate executavel de conclusao apos merge e deploy
+
+Para toda alteracao implantavel de codigo, configuracao, servico ou integracao, **nao encerre a tarefa em PR aberto, CI verde ou merge**. Registre o SHA de `main` apos o merge e execute `python3 scripts/quality/deployment_closure_guard.py --expected-sha <SHA_DE_MAIN>`: o guard confronta o `origin/main`, a evidencia assinada do workflow oficial e a revisao publicada em `/api/health/version.php`. Somente exit 0 com a revisao esperada inclusa permite prosseguir aos testes E2E/GUI e ao encerramento; uma versao anterior, URL bloqueada, evidencia ausente ou workflow falho **mantem RUNNING/NAO_APTO**. Nunca usar SHA de branch squash como se fosse main. Excecao: alteracoes comprovadamente so de docs/testes sem payload deployavel, classificadas pelo script `scripts/should-deploy-production.sh`.
+
+O workflow `.github/workflows/production-deployment-closure-guard.yml` verifica novamente a producao apos o pipeline e quando acionado manualmente, e abre/atualiza um unico issue de deriva de deploy ate que a evidencia real seja reconciliada. Este guard NAO faz deploy e nao contorna CI, labels humanos, RBAC, leases ou revisoes; o executor da tarefa continua responsavel por corrigir, implantar pela rota oficial e validar no runtime. Quando a tarefa e de catalogo/preco, confrontar **todos** os SKUs publicados com a API Olist/Tiny v3 e a API individual por SKU apos a implantacao; nao basta uma amostra ou apenas o cache.
+<!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+
 <!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
 ## Gate obrigatório de deploy, pós-deploy e conferência integral de preços (V2)
 
