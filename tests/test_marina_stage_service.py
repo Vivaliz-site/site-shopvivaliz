@@ -174,6 +174,59 @@ esac
                     if not allowed:
                         self.assertIn(reason, result.stderr)
 
+    def test_unreloaded_disk_dropin_and_vendor_unit_fail_closed(self):
+        """Reject on-disk overrides even if systemctl still caches no drop-ins."""
+        original_guard = self._bash_function("assert_unit_not_autostart")
+        systemctl_stub = """systemctl() {
+  case "$1" in
+    show)
+      case "$*" in
+        *--property=ActiveState*) echo inactive ;;
+        *--property=FragmentPath*|*--property=DropInPaths*) echo ;;
+        *) return 4 ;;
+      esac ;;
+    is-enabled) echo disabled; return 1 ;;
+    *) return 4 ;;
+  esac
+}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dirs = (
+                "etc/systemd/system", "run/systemd/system",
+                "lib/systemd/system", "usr/lib/systemd/system",
+            )
+            for rel in dirs:
+                (root / rel).mkdir(parents=True)
+            guard = original_guard
+            for rel in sorted(dirs, key=len, reverse=True):
+                guard = guard.replace('"/' + rel + '/$unit',
+                                      '"' + str(root / rel) + '/$unit')
+            fixture = systemctl_stub + guard
+            cmd = "assert_unit_not_autostart test.service"
+            result = self._run_guard(fixture, dict(os.environ), cmd)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            vendor = root / "usr/lib/systemd/system/test.service"
+            vendor.write_text("[Service]\\nExecStart=/bin/false\\n")
+            result = self._run_guard(fixture, dict(os.environ), cmd)
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("foreign_unit_file_on_disk", result.stderr)
+            vendor.unlink()
+
+            dropin = root / "etc/systemd/system/test.service.d"
+            dropin.mkdir()
+            result = self._run_guard(fixture, dict(os.environ), cmd)
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("unit_dropin_dir_on_disk", result.stderr)
+            dropin.rmdir()
+
+            # A symlink at the drop-in directory is equally unsafe.
+            dropin.symlink_to(root, target_is_directory=True)
+            result = self._run_guard(fixture, dict(os.environ), cmd)
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("unit_dropin_dir_on_disk", result.stderr)
+
     def test_existing_home_guard_prevents_implicit_chown(self):
         """A foreign/preexisting service home must fail before install -d can chown."""
         function = self._bash_function("assert_existing_service_home")
