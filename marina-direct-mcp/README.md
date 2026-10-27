@@ -76,3 +76,42 @@ Do **not** claim successful installation or ChatGPT connectivity from passing
 the unit tests or from the working RDC connection. Pricing/SAFE-T ownership,
 database volumes, backups, security groups and certificates remain independent
 migration gates.
+
+
+## Official operator-only staging helper (not deployment)
+
+A fail-closed helper, `operator_stage_service.sh`, stages reviewed source and systemd unit files
+only. It never downloads/installs the tunnel-client, generates or reads
+credentials, registers a ChatGPT plugin, runs a tunnel, enables/starts a unit,
+changes DNS, or modifies workers. It does not provide shell or sudo tools.
+
+This is **not** permission to bypass a refused `NoNewPrivileges` or RBAC action.
+An independently authorized Marina host administrator must first obtain the
+legitimate privileged maintenance capability, then use a **root-owned clean
+checkout of a reviewed SHA**. Do not launch it via RDC, SSH, OCI Run Command,
+GitHub Actions or another MCP to evade an express privilege denial.
+
+On the *actual Marina* through that officially authorized operator context:
+
+```sh
+# Inspect is non-mutating and requires the Marina hostname.
+bash marina-direct-mcp/operator_stage_service.sh --inspect
+
+# Stage only from an approved, clean, root-owned checkout. No activation.
+export SHOPVIVALIZ_MARINA_APPROVED_SHA=<reviewed-40-character-main-commit>
+bash marina-direct-mcp/operator_stage_service.sh --stage
+```
+
+Staging refuses wrong host, wrong UID, `NoNewPrivs: 1`, unknown commit,
+dirty/non-root-owned sources, unexpected symlinks, conflicting units or
+another active release. It holds a host-local stage lock and fails closed
+instead of restarting any running daemon. A successful output is
+`MARINA_MCP_STAGE=CODE_AND_UNITS_ONLY`, **not** `APTO`.
+
+The approved operator must still provision a separate service identity's
+secrets and a verified official ARM64 tunnel-client; use
+[the independent Secure MCP Tunnel runbook](../docs/ops/marina-independent-secure-mcp-tunnel.md)
+for permissions, workspace association, protected runtime key, authentication
+tests and actual ChatGPT connector verification. An admin-capable mutation
+surface additionally requires RBAC, maintenance leases, fencing, CAS,
+idempotency and real E2E validation. No `sudo` is granted by a tunnel.
