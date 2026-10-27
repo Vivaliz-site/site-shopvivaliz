@@ -178,6 +178,10 @@ jobs:
           node --check public/assets/liz-assistant/liz-assistant.js
       - name: Regressao de resolucao de credenciais Tiny/Olist (incidente #747)
         run: php tests/integration-health-credentials-test.php
+      - name: Contrato real de identidade e preco dos webhooks Olist
+        run: |
+          set -Eeuo pipefail
+          php tests/olist-erp-webhook-contract-test.php
       - name: Amazon Returns e SAFE-T recovery
         run: |
           set -Eeuo pipefail
