@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/catalog-runtime.php';
 require_once __DIR__ . '/tiny-order-push.php';
+require_once __DIR__ . '/olist-pdv-price.php';
 require_once __DIR__ . '/melhorenvio-oauth.php';
 
 /** @return list<string> */
@@ -39,9 +40,11 @@ function svoei_attachments(array $item): array
 }
 
 /** @return array<string,mixed> */
-function svoei_normalize_v3_product(array $item, array $stockDetail = []): array
+function svoei_normalize_v3_product(array $item, array $stockDetail = [], ?array $pdvPrices = null): array
 {
-    $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
+    if (!is_array($pdvPrices) || ($pdvPrices['price_source'] ?? '') !== 'olist_pdv' || (int)($pdvPrices['pdv_list_id'] ?? 0) < 1) {
+        throw new RuntimeException('pdv_prices_required');
+    }
     $stock = is_array($item['estoque'] ?? null) ? $item['estoque'] : [];
     $category = is_array($item['categoria'] ?? null) ? $item['categoria'] : [];
     $dimensions = is_array($item['dimensoes'] ?? null) ? $item['dimensoes'] : [];
@@ -67,9 +70,11 @@ function svoei_normalize_v3_product(array $item, array $stockDetail = []): array
         'unidade' => (string)($item['unidade'] ?? ''),
         'gtin' => (string)($item['gtin'] ?? ''),
         'precos' => [
-            'preco' => svoei_number($prices['preco'] ?? $prices['preco_venda'] ?? $item['preco'] ?? 0),
-            'precoPromocional' => svoei_number($prices['precoPromocional'] ?? $prices['preco_promocional'] ?? $item['precoPromocional'] ?? 0),
+            'preco' => $pdvPrices['preco'],
+            'precoPromocional' => $pdvPrices['precoPromocional'],
         ],
+        'price_source' => 'olist_pdv',
+        'pdv_list_id' => (int)$pdvPrices['pdv_list_id'],
         'estoque' => ['quantidade' => (int)floor(svoei_number($available))],
         'estoque_disponivel' => (int)floor(svoei_number($available)),
         'categoria' => [
@@ -237,12 +242,13 @@ function svoei_upsert_catalog_product(string $root, array $product): void
     });
 }
 
-function svoei_update_catalog_price(string $root, string $sku, float $price, float $promotional = 0.0, string $productId = ''): void
+function svoei_update_catalog_price(string $root, string $sku, float $price, float $promotional = 0.0, string $productId = '', int $pdvListId = 0): void
 {
+    if ($pdvListId < 1) throw new RuntimeException('pdv_list_id_required');
     $sku = trim($sku);
     $productId = trim($productId);
     if ($sku === '' && $productId === '') throw new InvalidArgumentException('product_identifier_missing');
-    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $price, $promotional, $productId): void {
+    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $price, $promotional, $productId, $pdvListId): void {
         // ERP product ID is authoritative. A SKU may be reused by a different
         // product, or changed while the cache still contains its old value.
         $matches = [];
@@ -273,6 +279,8 @@ function svoei_update_catalog_price(string $root, string $sku, float $price, flo
         $prices['preco'] = max(0.0, $price);
         $prices['precoPromocional'] = max(0.0, $promotional);
         $items[$index]['precos'] = $prices;
+        $items[$index]['price_source'] = 'olist_pdv';
+        $items[$index]['pdv_list_id'] = $pdvListId;
         $items[$index]['sync_source'] = 'tiny_v3';
         $items[$index]['_detail_synced_at'] = gmdate(DATE_ATOM);
     });
@@ -395,7 +403,9 @@ function svoei_refresh_product_from_v3(string $root, string $productId = '', str
     if ((int)($stockResponse['status'] ?? 0) !== 200) throw new RuntimeException('erp_stock_read_failed');
     $stock = is_array($stockResponse['json'] ?? null) ? $stockResponse['json'] : [];
     if (is_array($stock['estoque'] ?? null)) $stock = $stock['estoque'];
-    $product = svoei_normalize_v3_product($detail, $stock);
+    $pdvList = svpdv_lookup_list($token);
+    $pdv = svpdv_product_prices($token, $productId, $detail, $pdvList);
+    $product = svoei_normalize_v3_product($detail, $stock, $pdv);
     svoei_upsert_catalog_product($root, $product);
     return $product;
 }
@@ -443,14 +453,13 @@ function svoei_refresh_price_from_v3(string $root, string $productId = '', strin
     $resolvedSku = svoei_first_text([$detail['sku'] ?? '', $detail['codigo'] ?? '']);
     if ($resolvedSku === '') throw new RuntimeException('erp_product_sku_missing');
 
-    $prices = is_array($detail['precos'] ?? null) ? $detail['precos'] : [];
-    $rawPrice = $prices['preco'] ?? $prices['preco_venda'] ?? $detail['preco'] ?? null;
-    if (!is_numeric($rawPrice) || (float)$rawPrice <= 0) throw new RuntimeException('erp_price_invalid');
-    $price = svoei_number($rawPrice);
-    $promotional = svoei_number($prices['precoPromocional'] ?? $prices['preco_promocional'] ?? 0);
+    $pdvList = svpdv_lookup_list($token);
+    $pdv = svpdv_product_prices($token, $productId, $detail, $pdvList);
+    $price = $pdv['preco'];
+    $promotional = $pdv['precoPromocional'];
 
     try {
-        svoei_update_catalog_price($root, $resolvedSku, $price, $promotional, $productId);
+        svoei_update_catalog_price($root, $resolvedSku, $price, $promotional, $productId, $pdv['pdv_list_id']);
     } catch (RuntimeException $e) {
         if ($e->getMessage() !== 'catalog_product_not_found') throw $e;
         // For a newly-created item, first import its authoritative v3 detail.
@@ -561,7 +570,7 @@ function svoei_quote_freight(array $data): array
     if ($token === '') throw new RuntimeException('shipping_access_token_missing');
     $payload = ['from' => ['postal_code' => $from], 'to' => ['postal_code' => $to], 'products' => $products, 'options' => ['receipt' => false, 'own_hand' => false, 'collect' => false]];
     $ch = curl_init(me_api_base() . '/api/v2/me/shipment/calculate');
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'Authorization: Bearer ' . $token, 'User-Agent: ShopVivaliz/Olist-Freight']]);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'Authorization: Bearer [REDACTED] . $token, 'User-Agent: ShopVivaliz/Olist-Freight']]);
     $raw = curl_exec($ch); $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE); curl_close($ch);
     if ($status < 200 || $status >= 300 || !is_string($raw)) throw new RuntimeException('shipping_provider_failed');
     $decoded = json_decode($raw, true);

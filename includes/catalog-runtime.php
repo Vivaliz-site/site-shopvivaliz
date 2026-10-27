@@ -259,9 +259,17 @@ function svcr_select_catalog_products(array $products, array $fallbackProducts):
 {
     $selected = [];
     $seen = [];
+    $skuCounts = [];
     foreach ($products as $product) {
         if (!is_array($product)) continue;
         $sku = svcr_content_key($product['sku'] ?? '');
+        if ($sku !== '') $skuCounts[$sku] = ($skuCounts[$sku] ?? 0) + 1;
+    }
+    foreach ($products as $product) {
+        if (!is_array($product)) continue;
+        $sku = svcr_content_key($product['sku'] ?? '');
+        // Never choose a commercial price arbitrarily from colliding IDs.
+        if ($sku !== '' && ($skuCounts[$sku] ?? 0) > 1) continue;
         $id = svcr_content_key($product['id'] ?? $product['olist_product_id'] ?? '');
         $key = $sku !== '' ? 'sku:' . $sku : 'id:' . $id;
         if ($key !== 'id:' && isset($seen[$key])) continue;
@@ -374,6 +382,9 @@ function svcr_products(): array
     $products = [];
     foreach ($items as $item) {
         if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
+        // Unverified legacy snapshots or registration prices must never reach
+        // the public catalog even if the numeric amount looks plausible.
+        if (($item['price_source'] ?? '') !== 'olist_pdv' || (int)($item['pdv_list_id'] ?? 0) < 1) continue;
         $content = svcr_content_for_item($item, $contentIndex);
         $imagesList = array_slice(svcr_collect_image_urls($item), 0, 12);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
@@ -405,6 +416,9 @@ function svcr_products(): array
         $products[] = [
             'id'=>(string)($item['id'] ?? $sku), 'sku'=>$sku, 'olist_product_id'=>(string)($item['id'] ?? $item['olist_product_id'] ?? ''),
             'name'=>$name, 'slug'=>svcr_slug($name,$sku), 'description'=>svcr_clean_description($description), 'price'=>$price,
+            'regular_price'=>svcr_parse_price($item['precos']['preco'] ?? null),
+            'promotional_price'=>svcr_parse_price($item['precos']['precoPromocional'] ?? null),
+            'price_source'=>'olist_pdv', 'pdv_list_id'=>(int)$item['pdv_list_id'],
             'stock'=>max(0,(int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url'=>$image, 'images'=>$imagesList, 'images_count'=>count($imagesList), 'category'=>$categoryName, 'brand'=>$brand,
             'bullet_points'=>$bulletPoints, 'seo_keywords'=>$seoKeywords, 'marketing_hooks'=>$marketingHooks,

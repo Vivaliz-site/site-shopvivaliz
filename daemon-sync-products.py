@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from scripts.olist_pdv import discover_pdv, pdv_product_prices
+
 API_BASE = "https://api.tiny.com.br/public-api/v3"
 CACHE_PATH = Path("storage/products-cache-ativos.json")
 VIDEO_SOURCES_PATH = Path("storage/product-video-sources.json")
@@ -26,7 +28,11 @@ DETAIL_CACHE_MAX_AGE_SECONDS = 2 * 60 * 60
 
 def public_product(item: dict[str, Any]) -> dict[str, Any]:
     """Keep only fields required by the public storefront cache."""
+    if item.get("price_source") != "olist_pdv" or int(item.get("pdv_list_id") or 0) < 1:
+        raise ValueError("pdv_prices_required")
     prices = item.get("precos") if isinstance(item.get("precos"), dict) else {}
+    if float(prices.get("preco") or 0) <= 0:
+        raise ValueError("pdv_price_invalid")
     stock = item.get("estoque") if isinstance(item.get("estoque"), dict) else {}
     category = item.get("categoria") if isinstance(item.get("categoria"), dict) else {}
     brand = item.get("marca") if isinstance(item.get("marca"), dict) else {}
@@ -82,6 +88,10 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "slug": str(seo.get("slug") or item.get("slug") or ""),
         "video_url": str(seo.get("linkVideo") or item.get("video_url") or "").strip(),
         "sync_source": "tiny_v3",
+        "price_source": "olist_pdv",
+        "pdv_list_id": int(item["pdv_list_id"]),
+        "_pdv_erp_price": item.get("_pdv_erp_price"),
+        "_pdv_erp_promo": item.get("_pdv_erp_promo"),
         "_olist_updated_at": str(item.get("_olist_updated_at") or "").strip(),
         "_detail_synced_at": str(item.get("_detail_synced_at") or datetime.now(timezone.utc).isoformat()),
     }
@@ -235,6 +245,8 @@ def detail_cache_is_fresh(cached: dict[str, Any], current_marker: str, now: date
 
 
 def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 4) -> tuple[list[dict[str, Any]], int]:
+    # This is a LIVE authenticated discovery; never infer a saved/historical ID.
+    pdv_list = discover_pdv(api_get, token)
     previous = load_previous_cache()
     enriched: dict[str, dict[str, Any]] = {}
     failures = 0
@@ -247,8 +259,27 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
             continue
         cached = previous.get(product_id)
         current_marker = str(summary.get("dataAlteracao") or "").strip()
-        if isinstance(cached, dict) and detail_cache_is_fresh(cached, current_marker):
-            enriched[product_id] = dict(cached)
+        if (isinstance(cached, dict)
+                and cached.get("price_source") == "olist_pdv"
+                and cached.get("_pdv_erp_price") is not None
+                and detail_cache_is_fresh(cached, current_marker)):
+            try:
+                current_prices = pdv_product_prices(
+                    api_get, token, int(product_id),
+                    {"preco": cached["_pdv_erp_price"], "precoPromocional": cached.get("_pdv_erp_promo", 0)},
+                    pdv_list,
+                )
+                refreshed = dict(cached)
+                refreshed["precos"] = {
+                    "preco": current_prices["preco"],
+                    "precoPromocional": current_prices["precoPromocional"],
+                }
+                refreshed["pdv_list_id"] = current_prices["pdv_list_id"]
+                refreshed["price_source"] = "olist_pdv"
+                enriched[product_id] = refreshed
+            except (TypeError, ValueError, RuntimeError) as exc:
+                failures += 1
+                print(f"[!] PDV indisponivel para ID {product_id}: {type(exc).__name__}; cache nao sera publicado")
             continue
         pending.append(summary)
 
@@ -272,6 +303,16 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
         except RuntimeError:
             pass
 
+        raw_prices = detail.get("precos") if isinstance(detail.get("precos"), dict) else {}
+        pdv = pdv_product_prices(api_get, token, int(product_id), raw_prices, pdv_list)
+        merged["_pdv_erp_price"] = raw_prices.get("preco", raw_prices.get("preco_venda"))
+        merged["_pdv_erp_promo"] = raw_prices.get("precoPromocional", raw_prices.get("preco_promocional", 0))
+        merged["precos"] = {
+            "preco": pdv["preco"],
+            "precoPromocional": pdv["precoPromocional"],
+        }
+        merged["price_source"] = "olist_pdv"
+        merged["pdv_list_id"] = pdv["pdv_list_id"]
         merged["estoque_disponivel"] = quantity
         marker = str(summary.get("dataAlteracao") or merged.get("dataAlteracao") or "").strip()
         if marker:
@@ -290,12 +331,7 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
                     enriched[key] = product
                 except Exception as exc:
                     failures += 1
-                    cached = previous.get(product_id)
-                    if isinstance(cached, dict):
-                        enriched[product_id] = dict(cached)
-                        print(f"[!] Detalhe {product_id} falhou; cache anterior preservado ({type(exc).__name__})")
-                    else:
-                        print(f"[!] Produto novo {product_id} adiado apos falha de detalhe ({type(exc).__name__})")
+                    print(f"[!] Detalhe/PDV {product_id} falhou; cache inteiro anterior preservado ({type(exc).__name__})")
                 if index % 25 == 0 or index == len(pending):
                     print(f"[+] Detalhes processados: {index}/{len(pending)}; falhas={failures}")
 
@@ -354,9 +390,19 @@ def sync_once(workers: int) -> bool:
     if not summaries:
         print("[!] A API não retornou produtos ativos; cache existente preservado")
         return False
+    # Duplicate public SKUs are commercially ambiguous (issue #3271).
+    skus = [str(item.get("sku") or "").strip().casefold() for item in summaries]
+    product_ids = [str(item.get("id") or "").strip() for item in summaries]
+    if (not all(skus) or len(set(skus)) != len(skus)
+            or not all(product_ids) or len(set(product_ids)) != len(product_ids)):
+        print("[!] SKU/ERP ID ausente ou duplicado; cache anterior preservado")
+        return False
     products, failures = enrich_products(summaries, token, workers)
-    if not products:
-        print("[!] Nenhum detalhe utilizável; cache existente preservado")
+    if failures or len(products) != len(summaries):
+        print(f"[!] PDV integral nao comprovada; {failures} falhas; {len(products)}/{len(summaries)} produtos; cache anterior preservado")
+        return False
+    if any(item.get("price_source") != "olist_pdv" or int(item.get("pdv_list_id") or 0) < 1 for item in products):
+        print("[!] Algum preco nao proveio de PDV; cache anterior preservado")
         return False
     kits_updated = apply_kit_stock(products)
     if kits_updated:

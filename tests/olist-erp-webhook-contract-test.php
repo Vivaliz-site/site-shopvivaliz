@@ -69,7 +69,12 @@ $detail = [
     'anexos' => [['url' => 'https://example.test/35039.jpg']],
     'seo' => ['titulo' => 'Nivel Laser MTX', 'descricao' => 'Nivel laser MTX', 'slug' => 'nivel-laser-mtx-35039'],
 ];
-$product = svoei_normalize_v3_product($detail, ['disponivel' => 7]);
+$product = svoei_normalize_v3_product($detail, ['disponivel' => 7], [
+    'preco' => 199.90,
+    'precoPromocional' => 179.90,
+    'pdv_list_id' => 12345,
+    'price_source' => 'olist_pdv',
+]);
 t_assert(($product['sku'] ?? '') === '35039', 'SKU v3 nao normalizado');
 t_assert(($product['estoque_disponivel'] ?? -1) === 7, 'estoque v3 nao normalizado');
 t_assert((float)($product['precos']['preco'] ?? 0) === 199.90, 'preco v3 nao normalizado');
@@ -80,7 +85,7 @@ $active = t_items($tmp . '/storage/products-cache-ativos.json');
 t_assert(count($active) === 2, 'upsert deve preservar catalogo ativo existente');
 t_assert(t_find($active, '35039') !== [], 'novo produto nao gravado no cache ativo');
 
-svoei_update_catalog_price($tmp, '35039', 209.90, 189.90);
+svoei_update_catalog_price($tmp, '35039', 209.90, 189.90, '', 12345);
 $updated = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35039');
 t_assert((float)($updated['precos']['preco'] ?? 0) === 209.90, 'preco nao atualizado');
 t_assert((float)($updated['precos']['precoPromocional'] ?? 0) === 189.90, 'preco promocional nao atualizado');
@@ -100,7 +105,7 @@ try {
 }
 t_assert($invalidReferenceRejected, 'mapping id must not be mistaken for an ERP product id');
 
-svoei_update_catalog_price($tmp, 'OLD-ERP-SKU', 211.90, 0.0, '350339');
+svoei_update_catalog_price($tmp, 'OLD-ERP-SKU', 211.90, 0.0, '350339', 12345);
 $updatedById = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35039');
 t_assert((float)($updatedById['precos']['preco'] ?? 0) === 211.90, 'valid ERP id must update price even with changed SKU');
 t_assert((float)($updatedById['precos']['precoPromocional'] ?? -1) === 0.0, 'removed promotion must be reflected');
@@ -114,7 +119,7 @@ $collisionRows = [
     ['id' => '350339', 'sku' => 'OLD-35039', 'precos' => ['preco' => 11.00]],
 ];
 file_put_contents($collisionRoot . '/storage/products-cache-ativos.json', json_encode($collisionRows));
-svoei_update_catalog_price($collisionRoot, '35039', 301.10, 0.0, '350339');
+svoei_update_catalog_price($collisionRoot, '35039', 301.10, 0.0, '350339', 12345);
 $collisionAfter = t_items($collisionRoot . '/storage/products-cache-ativos.json');
 t_assert((float)($collisionAfter[0]['precos']['preco'] ?? 0) === 9.99, 'recycled SKU must not mutate another ERP product');
 t_assert((float)($collisionAfter[1]['precos']['preco'] ?? 0) === 301.10, 'canonical product ID must win over a colliding SKU');
@@ -222,7 +227,7 @@ mkdir($unmatchedRoot . '/storage', 0775, true);
 file_put_contents($unmatchedRoot . '/storage/products-cache-ativos.json', json_encode([$collisionRows[0]]));
 $idMismatchRejected = false;
 try {
-    svoei_update_catalog_price($unmatchedRoot, '35039', 450.00, 0.0, '350339');
+    svoei_update_catalog_price($unmatchedRoot, '35039', 450.00, 0.0, '350339', 12345);
 } catch (RuntimeException $e) {
     $idMismatchRejected = $e->getMessage() === 'catalog_product_not_found';
 }
@@ -236,7 +241,7 @@ mkdir($legacyRoot . '/storage', 0775, true);
 file_put_contents($legacyRoot . '/storage/products-cache-ativos.json', json_encode([
     ['sku' => '35039', 'precos' => ['preco' => 8.88]],
 ]));
-svoei_update_catalog_price($legacyRoot, '35039', 199.00, 0.0, '350339');
+svoei_update_catalog_price($legacyRoot, '35039', 199.00, 0.0, '350339', 12345);
 $legacyAfter = t_items($legacyRoot . '/storage/products-cache-ativos.json');
 t_assert((float)($legacyAfter[0]['precos']['preco'] ?? 0) === 199.00, 'ID-less legacy row should retain SKU fallback');
 
@@ -308,5 +313,41 @@ foreach ($iterator as $entry) {
     else unlink($entry->getPathname());
 }
 rmdir($tmp);
+
+
+
+// PDV pricing must be derived from the real price-list identity and percent,
+// with explicit individual overrides and fail-closed cases. No network calls.
+$pdvList = ['id' => 12345, 'descricao' => 'PDV', 'acrescimoDesconto' => 15.0];
+$pdvDetail = ['id' => 12345, 'descricao' => 'PDV', 'acrescimoDesconto' => 15.0, 'excecoes' => null];
+$pdvBase = ['id' => 350339, 'precos' => ['preco' => 100, 'precoPromocional' => 80]];
+$pdvDefault = svpdv_calculate_product_prices('350339', $pdvBase, $pdvList, $pdvDetail);
+t_assert($pdvDefault['preco'] === 115.0, 'PDV percentage must apply to base');
+t_assert($pdvDefault['precoPromocional'] === 92.0, 'PDV percentage must apply to promo');
+t_assert($pdvDefault['price_source'] === 'olist_pdv', 'PDV provenance missing');
+$pdvOverride = $pdvDetail;
+$pdvOverride['excecoes'] = ['idProduto' => 350339, 'codigo' => '35039', 'preco' => 105.0, 'precoPromocional' => 90.0];
+$pdvFixed = svpdv_calculate_product_prices('350339', $pdvBase, $pdvList, $pdvOverride);
+t_assert($pdvFixed['preco'] === 105.0 && $pdvFixed['precoPromocional'] === 90.0, 'PDV fixed exception must override percentage');
+$pdvRemovedPromo = $pdvOverride;
+$pdvRemovedPromo['excecoes']['precoPromocional'] = null;
+$pdvRemoved = svpdv_calculate_product_prices('350339', $pdvBase, $pdvList, $pdvRemovedPromo);
+t_assert($pdvRemoved['precoPromocional'] === 0.0, 'PDV promo removal must be respected');
+$pdvDiscount = ['id' => 12345, 'descricao' => 'PDV', 'acrescimoDesconto' => -10.0, 'excecoes' => null];
+$pdvTen = svpdv_calculate_product_prices('350339', $pdvBase, ['id'=>12345,'descricao'=>'PDV','acrescimoDesconto'=>-10.0], $pdvDiscount);
+t_assert($pdvTen['preco'] === 90.0, 'PDV discount percent incorrect');
+$pdvFail = static function (array $detail, array $source) use ($pdvBase, $pdvList): bool {
+    try { svpdv_calculate_product_prices('350339', $pdvBase, $source, $detail); }
+    catch (RuntimeException) { return true; }
+    return false;
+};
+t_assert($pdvFail(['id'=>12345,'descricao'=>'PDV','acrescimoDesconto'=>null,'excecoes'=>null], ['id'=>12345,'descricao'=>'PDV','acrescimoDesconto'=>null]), 'missing percentage must fail closed');
+t_assert($pdvFail(['id'=>12345,'descricao'=>'OUTRA','acrescimoDesconto'=>15.0], $pdvList), 'wrong list must fail closed');
+t_assert($pdvFail(['id'=>12345,'descricao'=>'PDV','acrescimoDesconto'=>20.0], $pdvList), 'changed percentage must fail closed');
+t_assert($pdvFail(['id'=>12345,'descricao'=>'PDV','acrescimoDesconto'=>15.0,'excecoes'=>['idProduto'=>387064728,'preco'=>10]], $pdvList), 'duplicate SKU must not accept other ERP product exception');
+$normalizerRejected = false;
+try { svoei_normalize_v3_product($detail, ['disponivel'=>7]); }
+catch (RuntimeException $e) { $normalizerRejected = $e->getMessage() === 'pdv_prices_required'; }
+t_assert($normalizerRejected, 'product import without verified PDV must be refused');
 
 echo "olist-erp-webhook-contract: ok\n";

@@ -26,12 +26,12 @@ svclf_assert(count($tinyV3Rows) === count($decoded), 'snapshot alternativo so po
 require_once $root . '/includes/catalog-runtime.php';
 svclf_assert(svcr_fallback_products($root) === [], 'fallback legado nao pode publicar produtos');
 $products = svcr_products();
-svclf_assert(count($products) > 0, 'snapshot ERP Tiny V3 autorizado deve manter o catalogo disponivel sem cache runtime');
+svclf_assert(count($products) === 0, 'snapshot antigo sem lista PDV comprovada nao pode expor precos no site');
 
 ob_start();
 require $root . '/google-merchant-feed.php';
 $feed = (string)ob_get_clean();
 $itemCount = substr_count($feed, '<item>');
-svclf_assert($itemCount > 0, 'Merchant feed deve usar o snapshot ERP Tiny V3 autorizado quando o cache runtime estiver ausente');
+svclf_assert($itemCount === 0, 'Merchant feed nao pode publicar precos de snapshot sem identidade PDV comprovada');
 
-printf("catalog-live-tiny-v3-authority: ok products=%d merchant_items=%d erp_rows=%d\n", count($products), $itemCount, count($decoded));
+printf("catalog-live-pdv-fail-closed: ok products=%d merchant_items=%d erp_rows=%d\n", count($products), $itemCount, count($decoded));
