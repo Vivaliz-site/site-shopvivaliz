@@ -472,6 +472,13 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("$scriptPath = $ScriptPath", script)
         self.assertNotIn("$scriptPath = $MyInvocation.MyCommand.Path", script)
 
+    def test_native_desktop_worker_is_hidden_and_paste_has_clipboard_grace(self):
+        script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
+        self.assertIn("'-WindowStyle', 'Hidden'", script)
+        self.assertIn("[System.Windows.Forms.SendKeys]::SendWait('^v')", script)
+        self.assertIn("Start-Sleep -Milliseconds 300", script)
+        self.assertIn("[System.Windows.Forms.Clipboard]::Clear()", script)
+
     def test_native_desktop_bridge_acl_uses_language_neutral_sids(self):
         script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
         self.assertIn("S-1-5-18", script)
