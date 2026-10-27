@@ -2,6 +2,14 @@
 
 **Status: STAGED ONLY / NOT DEPLOYED / NO_CUT.** This document prepares a deployment. It is not authorization to create Cloudflare resources, escalate Linux privilege or cut over production.
 
+## Verified backend provisioning after owner authorization (2026-10-26)
+
+- Backend `always-free-arm-1787907847-26`, UID 0: installed official `cloudflared` release **2026.10.4** into `/opt/shopvivaliz-cloudflared-admin/releases/2026.10.4/cloudflared`; binary is root-owned 0755. SHA256 **2b7203b4fb0ba28a0c1e12f8855ce2c25f76d266a8d5edafac5540b6812acff6**, compared against the official GitHub Cloudflare release at https://github.com/cloudflare/cloudflared/releases/tag/2026.10.4. `cloudflared version` returned 2026.10.4. This is a verified **binary installation**, NOT a connected tunnel.
+- Created `/etc/systemd/system/shopvivaliz-cloudflared-admin.service` in the backend, using the reviewed template at `ops/cloudflare-admin/shopvivaliz-cloudflared-admin.service`. Uses `DynamicUser=yes`, `NoNewPrivileges=yes`, `LoadCredential` and `--token-file %d/tunnel-token`; does not put tokens on the command line. `systemd-analyze verify` exited 0; `systemd-analyze security` reported **3.2 OK**. The service is **loaded, disabled and inactive** by design.
+- **Two real missing gates:** `/etc/shopvivaliz/cloudflare-admin/token` and `/etc/shopvivaliz/cloudflare-admin/access-approved` are ABSENT. The service must stay disabled/inactive until an approved operator authenticates to Cloudflare, configures a restrictive Access policy and safely provisions that host's unique token. Do NOT create the approval marker before this is confirmed. No external hostname, Access app, tunnel, or route has been created.
+- Latest backend root filesystem check: **97% used / about 2.9 GiB free**. The pinned binary was installed successfully, but disk headroom needs to be monitored before enabling persistent logging. No cleanup was attempted.
+- Both existing MCP transport and existing Cloudflare/Solange workloads remained untouched. Marina's express privileged maintenance refusal remains binding; no attempt was made to bypass it.
+
 ## Objective and identity separation
 
 Each active VM should run its **own** Cloudflare Tunnel connector with a distinct remotely managed tunnel ID, distinct token, and separate Cloudflare Access policy/application. Marina must not depend on the backend for SSH forwarding, command execution, heartbeats or tasks. Do not reuse credentials from existing Cloudflare Returns/Solange or OpenAI Secure MCP tunnels.
