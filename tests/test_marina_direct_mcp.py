@@ -5,9 +5,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import socket
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -151,6 +153,55 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
 
         handler.wfile = PeerDisconnected()
         handler.send_json(200, {"ok": True})
+
+    def test_slow_clients_have_socket_timeout_and_connection_cap(self):
+        """RED: partial headers previously consumed unlimited unbounded threads."""
+        with patch.object(m, "MAX_OPEN_CONNECTIONS", 2), patch.object(
+            m, "REQUEST_TIMEOUT_SECONDS", 1.25
+        ):
+            gated = m.create_server(m.load_token(self.token_file), port=0)
+            worker = threading.Thread(
+                target=gated.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True
+            )
+            worker.start()
+            holders = []
+            try:
+                for _ in range(2):
+                    conn = socket.create_connection(("127.0.0.1", gated.server_port), timeout=2)
+                    conn.sendall(b"GET /health HTTP/1.1\\r\\nHost: localhost\\r\\n")
+                    holders.append(conn)
+                deadline = time.monotonic() + 1.0
+                while gated._open_connections._value != 0 and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertEqual(gated._open_connections._value, 0)
+                excess = socket.create_connection(("127.0.0.1", gated.server_port), timeout=2)
+                try:
+                    excess.settimeout(2)
+                    excess.sendall(b"GET /health HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n")
+                    try:
+                        rejected = excess.recv(4096)
+                    except ConnectionResetError:
+                        rejected = b""
+                    self.assertEqual(rejected, b"", "over-limit connection was processed")
+                finally:
+                    excess.close()
+                # Partial requests must time out, release their slots, and permit health probes.
+                deadline = time.monotonic() + 3.0
+                while gated._open_connections._value != 2 and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertEqual(gated._open_connections._value, 2)
+                req = Request(
+                    f"http://127.0.0.1:{gated.server_port}/health",
+                    headers={"Authorization": "Bearer " + AUTH_VALUE},
+                )
+                with urlopen(req, timeout=2) as response:
+                    self.assertEqual(response.status, 200)
+            finally:
+                for conn in holders:
+                    conn.close()
+                gated.shutdown()
+                worker.join(2)
+                gated.server_close()
 
     def test_token_is_read_from_one_open_file_descriptor(self):
         # Deny pathname reopening after metadata validation (TOCTOU guard).
