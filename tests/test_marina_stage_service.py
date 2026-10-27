@@ -149,5 +149,37 @@ esac
             self.assertEqual(result.returncode, 3, result.stderr)
             self.assertIn("orphaned_service_home", result.stderr)
 
+
+    def test_untrusted_source_parent_rejected(self):
+        """No root stage from a checkout under a renameable ancestor."""
+        source = SCRIPT.read_text()
+        self.assertIn('trusted_source_ancestors "$source_root"', source)
+        guard = self._bash_function("trusted_source_ancestors")
+        stubs = (
+            "refuse_writable() { :; }\n"
+            'stat() { if [[ "$3" == "$BLOCKED_PARENT" ]]; then echo 1001; else echo 0; fi; }\n'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "trusted"
+            root.mkdir()
+            checkout = root / "checkout"
+            checkout.mkdir()
+            env = dict(os.environ, BLOCKED_PARENT="/does-not-exist")
+            result = self._run_guard(stubs + guard, env,
+                                     "trusted_source_ancestors " + str(checkout))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            env["BLOCKED_PARENT"] = str(root)
+            result = self._run_guard(stubs + guard, env,
+                                     "trusted_source_ancestors " + str(checkout))
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("source_parent_not_root_owned", result.stderr)
+            linked = Path(tmp) / "linked"
+            linked.symlink_to(root, target_is_directory=True)
+            env["BLOCKED_PARENT"] = "/does-not-exist"
+            result = self._run_guard(stubs + guard, env,
+                                     "trusted_source_ancestors " + str(linked / "checkout"))
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("source_parent_unsafe", result.stderr)
+
 if __name__ == '__main__':
     unittest.main()
