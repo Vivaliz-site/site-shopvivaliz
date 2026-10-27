@@ -67,8 +67,8 @@ class PreflightTests(unittest.TestCase):
             marker = Path(tmp) / 'subprocess-executed'
             for executable in ('systemctl', 'ss'):
                 shadow = Path(tmp) / executable
-                shadow.write_text('#!/bin/sh\\n: > "' + str(marker) +
-                                  '"\\nprintf "active\\n"\\n')
+                shadow.write_text('#!/bin/sh\n: > "' + str(marker) +
+                                  '"\nprintf "active\n"\n')
                 shadow.chmod(0o755)
             with mock.patch.dict(os.environ, {'PATH': tmp + os.pathsep + os.environ.get('PATH', '')}):
                 mod.run_readonly('systemctl', 'is-active', 'ssh.service')
