@@ -11,13 +11,19 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ops" / "cloudflare-a
 
 class TestCloudflareAdminPreflight(unittest.TestCase):
     def run_for(self, hostname):
+        """Isolate host-role fixture without weakening the production hostname lookup."""
+        self.assertRegex(hostname, r"^[A-Za-z0-9-]+$")
+        source = SCRIPT.read_text(encoding="utf-8")
+        host_probe = 'host="$(/usr/bin/hostname -s)"'
+        self.assertIn(host_probe, source)
+        source = source.replace(host_probe, 'host="' + hostname + '"', 1)
         with tempfile.TemporaryDirectory() as tmp:
-            fake_hostname = Path(tmp) / "hostname"
-            fake_hostname.write_text("#!/bin/sh\nprintf '" + hostname + "\\n'\n")
-            fake_hostname.chmod(0o755)
-            env = {**os.environ, "PATH": tmp + ":" + os.environ.get("PATH", "")}
+            fixture = Path(tmp) / "preflight-fixture.sh"
+            fixture.write_text(source, encoding="utf-8")
             return subprocess.run(
-                ["bash", str(SCRIPT)], env=env, text=True, capture_output=True, timeout=5
+                ["/bin/bash", str(fixture)],
+                env={**os.environ, "PATH": tmp + ":" + os.environ.get("PATH", "")},
+                text=True, capture_output=True, timeout=5
             )
 
     def test_unknown_host_denied_without_credentials(self):
@@ -39,6 +45,25 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertIn("ROLE=marina", p.stdout)
         self.assertIn("SUDO_PERMISSION=NOT_TESTED", p.stdout)
+
+    def test_inherited_path_cannot_spoof_host_identity(self):
+        """The production script may not run a hostile hostname/systemctl/stat."""
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / "hostile-command-executed"
+            for executable in ("hostname", "systemctl", "stat"):
+                fake = Path(tmp) / executable
+                fake.write_text(
+                    '#!/bin/sh\n: > "' + str(marker) +
+                    '"\nprintf "marina-a1-4c24g\\n"\n',
+                    encoding="utf-8"
+                )
+                fake.chmod(0o755)
+            env = {**os.environ, "PATH": tmp + ":" + os.environ.get("PATH", "")}
+            result = subprocess.run(["/bin/bash", str(SCRIPT)], env=env, text=True,
+                                    capture_output=True, timeout=5)
+            self.assertFalse(marker.exists(), "untrusted caller command executed")
+            self.assertIn("SUDO_PERMISSION=NOT_TESTED", result.stdout
+                          if result.returncode == 0 else "SUDO_PERMISSION=NOT_TESTED")
 
     def test_pinned_binary_and_root_token_metadata(self):
         """Readiness cannot rely on an arbitrary PATH executable or non-root token."""
