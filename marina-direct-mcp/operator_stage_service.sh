@@ -86,13 +86,23 @@ done
 
 # An inactive but enabled unit would start on the next boot. Never stage over it.
 assert_unit_not_autostart() {
-  local unit="$1" unit_state unit_file_state
+  local unit="$1" unit_state unit_file_state fragment_path dropin_paths
   unit_state="$(systemctl show "$unit" --property=ActiveState --value --no-pager 2>/dev/null)" || refuse service_state_unavailable
   [[ "$unit_state" == inactive ]] || refuse active_unit_mutation_denied
   unit_file_state="$(systemctl is-enabled "$unit" 2>/dev/null)" || :
   case "$unit_file_state" in
     disabled|not-found) ;;
     *) refuse unit_may_start_on_boot ;;
+  esac
+  # A disabled vendor/runtime unit could be silently shadowed by an /etc unit.
+  # A drop-in could change the effective service after daemon-reload or reboot.
+  # Accept only no prior fragment or the exact /etc path checked for byte identity below.
+  fragment_path="$(systemctl show "$unit" --property=FragmentPath --value --no-pager 2>/dev/null)" || refuse unit_fragment_unavailable
+  dropin_paths="$(systemctl show "$unit" --property=DropInPaths --value --no-pager 2>/dev/null)" || refuse unit_dropins_unavailable
+  [[ -z "$dropin_paths" ]] || refuse unit_dropins_present
+  case "$fragment_path" in
+    ""|"/etc/systemd/system/$unit") ;;
+    *) refuse foreign_unit_fragment_present ;;
   esac
 }
 for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service; do
