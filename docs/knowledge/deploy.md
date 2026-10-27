@@ -108,4 +108,4 @@ O `.env` de produção é persistente em `shared/.env`. Nunca o imprima. Atualiz
 
 ## Gate verificavel de conclusao de deploy
 
-Depois do merge, obtenha o commit de `main`, rode `python3 scripts/quality/deployment_closure_guard.py --expected-sha <SHA_MAIN>` e exija exit 0 com evidencia de deploy, revisao publica igual e smoke test aprovado. Se o retorno for diferente de zero, a tarefa permanece `RUNNING`; corrigir pipeline e revalidar. `.github/workflows/production-deployment-closure-guard.yml` reaudita apos o pipeline e periodicamente com alerta rastreavel em issue unico. Nao substituir isso por PR, testes green ou apenas health 200.
+Depois do merge, obtenha o commit de `main`, rode `python3 scripts/quality/deployment_closure_guard.py --expected-sha <SHA_MAIN>` e exija exit 0 com evidencia de deploy, revisao publica igual e smoke test aprovado. Se o retorno for diferente de zero, a tarefa permanece `RUNNING`; corrigir pipeline e revalidar. `.github/workflows/production-deployment-closure-guard.yml` reaudita apos o pipeline e quando acionado manualmente com alerta rastreavel em issue unico. Nao substituir isso por PR, testes green ou apenas health 200.

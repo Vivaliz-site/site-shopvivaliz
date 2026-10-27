@@ -4,8 +4,6 @@ on:
   workflow_run:
     workflows: [Master Production Pipeline 24/7]
     types: [completed]
-  schedule:
-    - cron: '17 * * * *'
   workflow_dispatch:
 
 concurrency:

@@ -55,6 +55,12 @@ class DeployClosureTests(unittest.TestCase):
             # A commit not in main must not be accepted as the expected SHA.
             self.assertFalse(guard.expected_revision_covered("c" * 40, NEW, OLD, False))
 
+    def test_no_duplicate_hourly_paid_monitor(self):
+        workflow = (ROOT / ".github/workflows/production-deployment-closure-guard.yml").read_text()
+        self.assertIn("  workflow_run:", workflow)
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertNotIn("\n  schedule:\n", workflow)
+
     def test_bad_evidence_rejected(self):
         report = guard.evaluate(NEW, {**EVIDENCE, "status": "FAILED"}, NEW, False)
         self.assertFalse(report["ok"])
