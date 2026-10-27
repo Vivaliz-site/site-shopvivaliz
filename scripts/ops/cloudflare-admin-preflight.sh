@@ -2,8 +2,11 @@
 # Non-mutating local preflight for one ShopVivaliz Cloudflare admin tunnel.
 # This script never reads tokens, creates tunnels, invokes sudo or starts services.
 set -Eeuo pipefail
+# Host readiness must not use executable names from a caller-controlled PATH.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 
-host="$(hostname -s)"
+host="$(/usr/bin/hostname -s)"
 case "$host" in
   always-free-arm-1787907847-26) role=backend ;;
   shopvivaliz-free-a1) role=origin ;;
