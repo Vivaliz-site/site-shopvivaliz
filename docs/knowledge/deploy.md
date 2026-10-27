@@ -105,3 +105,15 @@ Não deve ser necessário abrir URLs manuais para concluir SQL, migration ou rep
 Arquivos persistentes, uploads, logs, relatórios e credenciais devem permanecer em `shared/` ou em outro storage persistente previsto pelo deploy; não devem ser gravados dentro de releases imutáveis. Confirme o workflow, os scripts de deploy e os symlinks de persistência antes de concluir que um arquivo deveria estar dentro da release.
 
 O `.env` de produção é persistente em `shared/.env`. Nunca o imprima. Atualizações devem preservar permissões/ownership e remover somente linhas malformadas que não sejam comentário, linha vazia ou atribuição `KEY=VALUE` válida.
+
+<!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
+## Gate de conclusão verificável e preços de ponta a ponta
+
+Todo deploy implantável exige a mesma revisão comprovada por `main`, `current/.release-sha`, `/api/health/version.php` e `deployment-evidence/deployment/latest.json`; `validate`, `deploy` e `smoke_test` devem estar em `success`. Depois do deploy executar as jornadas reais da UI aplicáveis, incluindo catálogo, produto e carrinho (sem compra real). Sem prova, estado `RUNNING/NAO_APTO`.
+
+A auditoria integral do ERP Olist/Tiny é implementada em `scripts/quality/audit-storefront-erp-prices.py`. Ela consulta todos os produtos ativos pelo OAuth v3 protegido, compara preços normal/promocional com o cache derivado, compara preço efetivo de todos os produtos do catálogo público e acusa duplicidade de SKU mesmo se a página mostrar o preço de um dos registros. NUNCA altera preços no ERP. O resultado `PRICE_PARITY_VERDICT=FAIL` permanece pendência operacional, não permite afirmar catálogo integralmente validado.
+
+Execução controlada após publicação: `.github/workflows/postdeploy-erp-price-parity.yml`, ativado pelo sucesso do `Master Production Pipeline 24/7` com SHA de deploy confirmado, também com agenda diária e execução manual. Só executa o comparativo completo se o SHA da evidência imutável corresponder ao da release ativa. Um relatório é armazenado em `/home/ubuntu/shopvivaliz-deploy/shared/logs/price-parity-<SHA>.json` e anexado como artefato de workflow quando possível. Falhas devem ser analisadas e corrigidas, não ignoradas nem mascaradas com preços locais.
+
+A política `human-approved-price-stock` e os controles de deploy/ownership continuam intactos. Sem aprovação obrigatória ou webhook real, não marcar `CONCLUIDO`.
+<!-- /DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
