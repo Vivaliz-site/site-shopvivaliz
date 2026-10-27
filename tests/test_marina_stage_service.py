@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -56,6 +57,97 @@ class StagingTests(unittest.TestCase):
                           'systemctl reboot', 'cloudflared tunnel', 'curl -H'):
             self.assertNotIn(forbidden, source)
 
+
+    @staticmethod
+    def _bash_function(name):
+        source = SCRIPT.read_text()
+        match = re.search(r"(?ms)^" + re.escape(name) + r"\(\) \{\n.*?^\}", source)
+        if match is None:
+            raise AssertionError(f"Missing guard function: {name}")
+        return match.group(0)
+
+    @staticmethod
+    def _run_guard(function, env, argument):
+        snippet = (
+            'refuse() { echo "MARINA_MCP_STAGE_REFUSED=$1" >&2; exit 3; }\n'
+            + function + '\n' + argument + '\n'
+        )
+        return subprocess.run(["bash", "-c", snippet], env=env,
+                              text=True, capture_output=True, timeout=8, check=False)
+
+    def test_unit_boot_autostart_fail_closed(self):
+        """Exercise the real shell guard with systemctl states, not text matching."""
+        function = self._bash_function("assert_unit_not_autostart")
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / "systemctl"
+            fake.write_text("""#!/bin/sh
+case "$1" in
+  show) printf '%s\\n' "$UNIT_ACTIVE"; exit 0 ;;
+  is-enabled) printf '%s\\n' "$UNIT_ENABLED"
+    case "$UNIT_ENABLED" in enabled|static|linked) exit 0 ;; *) exit 1 ;; esac ;;
+esac
+exit 4
+""")
+            fake.chmod(0o755)
+            for active, enabled, allowed in (
+                ("inactive", "enabled", False),
+                ("inactive", "enabled-runtime", False),
+                ("inactive", "static", False),
+                ("inactive", "linked", False),
+                ("inactive", "disabled", True),
+                ("inactive", "not-found", True),
+                ("active", "disabled", False),
+            ):
+                with self.subTest(active=active, enabled=enabled):
+                    env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"],
+                               UNIT_ACTIVE=active, UNIT_ENABLED=enabled)
+                    result = self._run_guard(function, env,
+                                             "assert_unit_not_autostart test.service")
+                    self.assertEqual(result.returncode, 0 if allowed else 3, result.stderr)
+                    if active == "inactive" and not allowed:
+                        self.assertIn("unit_may_start_on_boot", result.stderr)
+
+    def test_existing_home_guard_prevents_implicit_chown(self):
+        """A foreign/preexisting service home must fail before install -d can chown."""
+        function = self._bash_function("assert_existing_service_home")
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            home = base / "existing-home"
+            home.mkdir()
+            home.chmod(0o755)
+            (base / "getent").write_text("""#!/bin/sh
+[ "$1" = passwd ] && [ "$ACCOUNT_PRESENT" = 1 ] && exit 0
+[ "$1" = group ] && [ "$GROUP_PRESENT" = 1 ] && exit 0
+exit 2
+""")
+            (base / "id").write_text("""#!/bin/sh
+case "$1" in
+  -u) echo "$EXPECTED_UID" ;;
+  -g) echo "$EXPECTED_GID" ;;
+  -gn) echo shopvivaliz-marina-mcp ;;
+  *) exit 2 ;;
+esac
+""")
+            (base / "getent").chmod(0o755)
+            (base / "id").chmod(0o755)
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"],
+                       ACCOUNT_PRESENT="1", GROUP_PRESENT="1",
+                       EXPECTED_UID=str(os.getuid()), EXPECTED_GID=str(os.getgid()))
+            call = "assert_existing_service_home " + str(home)
+            before = home.stat()
+            result = self._run_guard(function, env, call)
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("existing_home_owner_mode_mismatch", result.stderr)
+            after = home.stat()
+            self.assertEqual((before.st_uid, before.st_gid, before.st_mode),
+                             (after.st_uid, after.st_gid, after.st_mode))
+            home.chmod(0o700)
+            result = self._run_guard(function, env, call)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            env["ACCOUNT_PRESENT"] = "0"
+            result = self._run_guard(function, env, call)
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("orphaned_service_home", result.stderr)
 
 if __name__ == '__main__':
     unittest.main()
