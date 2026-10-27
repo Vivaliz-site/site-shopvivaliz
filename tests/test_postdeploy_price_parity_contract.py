@@ -23,8 +23,8 @@ class PostDeployPriceParityContract(unittest.TestCase):
             "jobs.get(k)=='success'",
             "if: ${{ needs.select_release.outputs.audit_required == 'true' }}",
             "--expected-sha '$DEPLOY_SHA'",
-            "PRICE_PARITY_VERDICT",
-            "PRICE_PARITY_REPORT",
+            "scripts/quality/audit-storefront-erp-prices.py",
+            "Upload immutable read-only price parity evidence",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, workflow)
