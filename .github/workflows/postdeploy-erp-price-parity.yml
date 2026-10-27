@@ -3,6 +3,13 @@ name: Postdeploy Olist/Tiny Price Parity
 # Deployment is not certified on the strength of a PR/merge alone.
 # This read-only gate checks the exact activated release against ERP API v3.
 on:
+  pull_request:
+    paths:
+      - 'scripts/quality/audit-storefront-erp-prices.py'
+      - 'tests/test_storefront_erp_price_parity.py'
+      - 'tests/test_postdeploy_price_parity_contract.py'
+      - '.github/workflows/postdeploy-erp-price-parity.yml'
+      - 'docs/knowledge/deploy.md'
   workflow_run:
     workflows: [Master Production Pipeline 24/7]
     types: [completed]
@@ -18,9 +25,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  contract:
+    name: Validate price audit policy and regression fixtures
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Test the full-price audit fails closed
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/quality/audit-storefront-erp-prices.py
+          python3 tests/test_storefront_erp_price_parity.py
+          python3 tests/test_postdeploy_price_parity_contract.py
+
   select_release:
     name: Verify immutable deployment evidence
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
