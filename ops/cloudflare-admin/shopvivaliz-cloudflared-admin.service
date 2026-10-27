@@ -1,0 +1,37 @@
+[Unit]
+Description=ShopVivaliz independent Cloudflare admin tunnel (per-VM, operator-gated)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/shopvivaliz/cloudflare-admin/token
+ConditionPathExists=/etc/shopvivaliz/cloudflare-admin/access-approved
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=shopvivaliz-cloudflared-admin
+Environment=HOME=/var/lib/shopvivaliz-cloudflared-admin
+LoadCredential=tunnel-token:/etc/shopvivaliz/cloudflare-admin/token
+ExecStart=/opt/shopvivaliz-cloudflared-admin/releases/2026.10.4/cloudflared tunnel --no-autoupdate run --token-file %d/tunnel-token
+Restart=on-failure
+RestartSec=10s
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
