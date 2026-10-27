@@ -28,6 +28,7 @@ for candidate in /usr/bin/cloudflared /usr/local/bin/cloudflared; do
   fi
 done
 [[ -n "$CF_BIN" ]] || { echo 'ERROR: cloudflared missing' >&2; exit 3; }
+CF_BIN="$(readlink -f "$CF_BIN")"
 for parent in /usr /usr/bin; do
   [[ -d "$parent" && ! -L "$parent" && "$(stat -c '%u' "$parent")" == 0 ]] || { echo 'ERROR: untrusted binary parent' >&2; exit 3; }
   parent_mode="$(stat -c '%a' "$parent")"
@@ -40,7 +41,6 @@ if [[ "$CF_BIN" == /usr/local/bin/cloudflared ]]; then
     (( (8#$parent_mode & 8#022) == 0 )) || { echo 'ERROR: writable binary parent' >&2; exit 3; }
   done
 fi
-CF_BIN="$(readlink -f "$CF_BIN")"
 [[ -f "$CF_BIN" && -x "$CF_BIN" ]] || { echo 'ERROR: cloudflared binary invalid' >&2; exit 3; }
 case "$CF_BIN" in /usr/bin/cloudflared|/usr/local/bin/cloudflared) ;;
   *) echo 'ERROR: unapproved executable path' >&2; exit 3;;
