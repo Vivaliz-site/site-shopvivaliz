@@ -61,6 +61,23 @@ class PreflightTests(unittest.TestCase):
                   / 'cloudflare-admin-stage-unit.sh').read_text()
         self.assertIn('!= 0', script.split('NoNewPrivs:/ {print $2}', 1)[1][:40])
 
+    def test_python_preflight_refuses_hostile_path_commands(self):
+        """RED: inherited PATH could execute arbitrary stubs in a root preflight."""
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = Path(tmp) / 'subprocess-executed'
+            for executable in ('systemctl', 'ss'):
+                shadow = Path(tmp) / executable
+                shadow.write_text('#!/bin/sh\\n: > "' + str(marker) +
+                                  '"\\nprintf "active\\n"\\n')
+                shadow.chmod(0o755)
+            with mock.patch.dict(os.environ, {'PATH': tmp + os.pathsep + os.environ.get('PATH', '')}):
+                mod.run_readonly('systemctl', 'is-active', 'ssh.service')
+                mod.run_readonly('ss', '-H', '-ltn')
+            self.assertFalse(marker.exists(), 'a caller-controlled command executed')
+            self.assertEqual(mod.run_readonly('sh', '-c', 'echo unsafe'), '')
+            self.assertEqual(mod.READONLY_EXECUTABLES['systemctl'], '/usr/bin/systemctl')
+            self.assertEqual(mod.READONLY_EXECUTABLES['ss'], '/usr/bin/ss')
+
     def test_privileged_stager_ignores_inherited_path(self):
         """A PATH-supplied hostname must never run before the host gate."""
         if socket.gethostname().split('.')[0] == 'marina-a1-4c24g':
