@@ -32,7 +32,7 @@ $tipo = strtolower(trim((string)($payload['tipo'] ?? '')));
 if (!in_array($tipo, svoei_supported_types(), true)) {
     svoei_response(422, ['ok' => false, 'error' => 'unsupported_webhook_type']);
 }
-if (!sv_webhook_secret_gate('olist', false)) {
+if (!sv_webhook_secret_valid('olist')) {
     svoei_response(401, ['ok' => false, 'error' => 'unauthorized']);
 }
 
