@@ -213,12 +213,16 @@ jobs:
           ssh-keygen -q -t rsa -b 3072 -N '' -f "$bastion_key" >/dev/null
 
           "${OCI[@]}" bastion bastion get --bastion-id "$MARINA_BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$original_cidrs"
+          bastion_json="$("${OCI[@]}" bastion bastion get --bastion-id "$MARINA_BASTION_ID")"
+          bastion_private_ip="$(jq -r '.data."private-endpoint-ip-address" // empty' <<<"$bastion_json")"
+          test -n "$bastion_private_ip"
+          bastion_source_cidr="$bastion_private_ip/32"
           subnet_json="$("${OCI[@]}" network subnet get --subnet-id "$MARINA_SUBNET_ID")"
           security_list_id="$(jq -r '.data."security-list-ids"[0] // empty' <<<"$subnet_json")"
           subnet_cidr="$(jq -r '.data."cidr-block" // empty' <<<"$subnet_json")"
           test -n "$security_list_id" && test -n "$subnet_cidr"
           "${OCI[@]}" network security-list get --security-list-id "$security_list_id" --query 'data."ingress-security-rules"' --output json > "$security_list_original"
-          security_rule_state="$(python3 - "$subnet_cidr" "$security_list_original" "$security_list_expanded" <<'PY'
+          security_rule_state="$(python3 - "$bastion_source_cidr" "$security_list_original" "$security_list_expanded" <<'PY'
           import ipaddress, json, sys
           cidr = str(ipaddress.ip_network(sys.argv[1], strict=False))
           rules = json.load(open(sys.argv[2], encoding="utf-8"))
@@ -241,12 +245,12 @@ jobs:
           )"
           if [ "$security_rule_state" = ADDED ]; then
             "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_expanded" --force >/dev/null
-            echo "MARINA_BOOTSTRAP_NETWORK_RULE=APPLIED source=$subnet_cidr"
+            echo "MARINA_BOOTSTRAP_NETWORK_RULE=APPLIED source=$bastion_source_cidr"
             # OCI security-list changes are eventually consistent before a Bastion
             # session can reach the private target. Give propagation a bounded window.
             sleep 45
           else
-            echo "MARINA_BOOTSTRAP_NETWORK_RULE=ALREADY_PRESENT source=$subnet_cidr"
+            echo "MARINA_BOOTSTRAP_NETWORK_RULE=ALREADY_PRESENT source=$bastion_source_cidr"
           fi
           runner_ip="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
           python3 - "$runner_ip" "$original_cidrs" "$expanded_cidrs" <<'PY'

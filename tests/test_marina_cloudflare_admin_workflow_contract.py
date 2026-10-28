@@ -80,6 +80,8 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "MARINA_PRIVATE_SSH_RETRY=$attempt" in text
     assert "bounded Bastion retries" in text
     assert "sleep 45" in text
+    assert "private-endpoint-ip-address" in text
+    assert "bastion_source_cidr=\"$bastion_private_ip/32\"" in text
     assert "MARINA_REMOTE_STEP=$remote_step" in text
     assert "timeout 90s systemctl enable --now" in text
     assert "MARINA_REMOTE_UNIT=PASS" in text
