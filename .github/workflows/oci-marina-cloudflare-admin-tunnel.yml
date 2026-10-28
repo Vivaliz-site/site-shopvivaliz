@@ -95,7 +95,7 @@ jobs:
           subnet_id="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."subnet-id"' --raw-output)"
           bastion_json="$RUNNER_TEMP/marina-bastions.json"
           "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$bastion_json"
-          bastion_count="$(jq '[.data[] | select(."lifecycle-state" == "ACTIVE")] | length' "$bastion_json")"
+          bastion_count="$(jq -r '[(.data // [])[] | select(."lifecycle-state" == "ACTIVE")] | length' "$bastion_json")"
           bastion_id=""
           if [ "$bastion_count" = 1 ]; then
             bastion_id="$(jq -r '.data[] | select(."lifecycle-state" == "ACTIVE") | .id' "$bastion_json")"
