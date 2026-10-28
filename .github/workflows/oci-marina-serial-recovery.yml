@@ -553,6 +553,11 @@ jobs:
                   except pexpect.EOF:
                       break
 
+          def uid_zero(value):
+              normalized = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
+              normalized = normalized.replace("\r", "")
+              return bool(re.search(r"(?:^|\n)\s*0\s*(?:\n|$)", normalized))
+
           for reconnect_attempt in (1, 2, 3):
               if reconnect_attempt != 1:
                   if child.isalive():
@@ -654,7 +659,7 @@ jobs:
                       f"kernel={str('Linux version' in command_shell or 'Loading Linux' in command_shell).lower()} "
                       f"shell={str(bool(re.search(r'(bash[- ]|cannot access tty|job control)', command_shell))).lower()}"
                   )
-                  if re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
+                  if uid_zero(identity):
                       print("MARINA_ROOT_SHELL=PASS_COMMAND_LINE attempt=1")
                       print("MARINA_ROOT_ID=0 attempt=1")
                       root_confirmed = True
@@ -732,7 +737,7 @@ jobs:
                       pass
                   except pexpect.EOF:
                       break
-              if re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
+              if uid_zero(identity):
                   print(f"MARINA_ROOT_ID=0 attempt={reconnect_attempt}")
                   if not prompt_observed:
                       print("MARINA_ROOT_SHELL=PASS_BY_UID")
