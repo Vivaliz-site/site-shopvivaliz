@@ -184,6 +184,7 @@ jobs:
           security_list_id=""
           security_list_original="$RUNNER_TEMP/marina-marina-security-list-ingress.json"
           security_list_expanded="$RUNNER_TEMP/marina-marina-security-list-ingress-expanded.json"
+          bastion_ssh_config="$RUNNER_TEMP/marina-bastion-ssh-config"
           bastion_key="$RUNNER_TEMP/marina-bastion-key"
           vm_key="$RUNNER_TEMP/marina-vm-key"
           vm_known_hosts="$RUNNER_TEMP/marina-vm-known-hosts"
@@ -201,7 +202,7 @@ jobs:
                 return 1
               fi
             fi
-            rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs" "$security_list_original" "$security_list_expanded"
+            rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs" "$security_list_original" "$security_list_expanded" "$bastion_ssh_config"
             rm -f "$OCI_KEY_FILE" "$OCI_CONFIG_FILE"
           }
           trap cleanup EXIT
@@ -273,10 +274,20 @@ jobs:
           test "$state" = ACTIVE || { echo "::error::Bastion session did not become ACTIVE"; exit 2; }
           metadata="$("${OCI[@]}" bastion session get --session-id "$session_id" --query 'data."ssh-metadata".command' --raw-output)"
           test -n "$metadata"
+          cat > "$bastion_ssh_config" <<EOF
+          Host *
+            BatchMode yes
+            IdentitiesOnly yes
+            HostKeyAlgorithms +ssh-rsa
+            PubkeyAcceptedAlgorithms +ssh-rsa
+            PubkeyAcceptedKeyTypes +ssh-rsa
+            StrictHostKeyChecking accept-new
+            UserKnownHostsFile $RUNNER_TEMP/marina-bastion-known-hosts
+          EOF
           tunnel_command="${metadata//<privateKey>/$bastion_key}"
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
-          tunnel_command="${tunnel_command//ssh /ssh -o BatchMode=yes -o IdentitiesOnly=yes -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa }"
-          tunnel_command="${tunnel_command/ssh -o BatchMode=yes -o IdentitiesOnly=yes -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa /ssh -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$RUNNER_TEMP/marina-bastion-known-hosts }"
+          tunnel_command="${tunnel_command//ssh /ssh -F $bastion_ssh_config }"
+          tunnel_command="${tunnel_command/ssh -F $bastion_ssh_config /ssh -F $bastion_ssh_config -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 }"
           bash -lc "$tunnel_command"
           sleep 2
           forwarded_host_key="$RUNNER_TEMP/marina-forwarded-host-key"
