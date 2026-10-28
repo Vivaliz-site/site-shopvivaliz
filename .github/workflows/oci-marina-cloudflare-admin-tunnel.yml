@@ -36,6 +36,7 @@ jobs:
       OCI_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
       OCI_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_MARINA_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_MARINA_TUNNEL_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 0afb7d99f708b9455598df9fa1035164
       OCI_INSTANCE_NAME: marina-a1-4c24g
       OCI_PROFILE: DEFAULT
@@ -91,6 +92,7 @@ jobs:
           private_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."private-ip"' --raw-output)"
           public_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."public-ip"' --raw-output)"
           vnic_nsg_count="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'length(data."nsg-ids")' --raw-output)"
+          subnet_id="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."subnet-id"' --raw-output)"
           bastion_json="$RUNNER_TEMP/marina-bastions.json"
           "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$bastion_json"
           bastion_count="$(jq '[.data[] | select(."lifecycle-state" == "ACTIVE")] | length' "$bastion_json")"
@@ -98,11 +100,31 @@ jobs:
           if [ "$bastion_count" = 1 ]; then
             bastion_id="$(jq -r '.data[] | select(."lifecycle-state" == "ACTIVE") | .id' "$bastion_json")"
           fi
+          if [ "$ACTION" = provision ] && [ "$CONFIRMATION" = PROVISION_MARINA_ADMIN_TUNNEL ] && [ -z "$bastion_id" ] && [ "$bastion_count" = 0 ]; then
+            runner_ip="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+            create_bastion="$("${OCI[@]}" bastion bastion create \
+              --bastion-type STANDARD \
+              --compartment-id "$compartment_id" \
+              --target-subnet-id "$subnet_id" \
+              --client-cidr-list "[\"$runner_ip/32\"]" \
+              --name shopvivaliz-marina-admin-bastion)"
+            bastion_id="$(jq -r '.data.id // empty' <<<"$create_bastion")"
+            test -n "$bastion_id"
+            for _ in $(seq 1 36); do
+              bastion_state="$("${OCI[@]}" bastion bastion get --bastion-id "$bastion_id" --query 'data."lifecycle-state"' --raw-output)"
+              [ "$bastion_state" = ACTIVE ] && break
+              case "$bastion_state" in FAILED|DELETED) echo "::error::Created Marina Bastion entered $bastion_state"; exit 2;; esac
+              sleep 5
+            done
+            test "$bastion_state" = ACTIVE || { echo "::error::Created Marina Bastion did not become ACTIVE"; exit 2; }
+            echo "MARINA_BASTION=CREATED_NO_QUOTA"
+          fi
           {
             echo "MARINA_INSTANCE_ID=$instance_id"
             echo "MARINA_COMPARTMENT_ID=$compartment_id"
             echo "MARINA_PRIVATE_IP=$private_ip"
             echo "MARINA_PUBLIC_IP=$public_ip"
+            echo "MARINA_SUBNET_ID=$subnet_id"
             echo "MARINA_BASTION_ID=$bastion_id"
           } >> "$GITHUB_ENV"
           echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle public_ip=$public_ip private_ip=$private_ip nsg_count=$vnic_nsg_count"
@@ -221,6 +243,10 @@ jobs:
           }
           echo "INSTANCE_AGENT_SAFE_PROBE_AVAILABLE=$(create_instance_agent_command | sed 's/ /_/g')"
 
+          cf_secret="${CLOUDFLARE_MARINA_TUNNEL_TOKEN:-}"
+          if [ -n "$cf_secret" ]; then
+            echo "MARINA_CLOUDFLARE_PRECONFIGURED=PASS"
+          else
           cf_api() {
             local method="$1" path="$2" body="${3:-}"
             if [ -n "$body" ]; then
@@ -296,6 +322,7 @@ jobs:
           token_json="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$tunnel_id/token")"
           cf_secret="$(jq -r '.result' <<<"$token_json")"
           test -n "$cf_secret" && test "$cf_secret" != null
+          fi
           printf '%s' "$cf_secret" | "${VM_SSH[@]}" "sudo -n sh -c 'install -d -o root -g root -m 700 /etc/shopvivaliz/cloudflare-admin; cat > /etc/shopvivaliz/cloudflare-admin/token; chown root:root /etc/shopvivaliz/cloudflare-admin/token; chmod 600 /etc/shopvivaliz/cloudflare-admin/token'"
           unset cf_secret token_json
 
