@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - .github/oci-marina-plugin-recovery.trigger
+      - .github/oci-marina-plugin-inspect.trigger
   workflow_dispatch:
     inputs:
       action:
@@ -50,8 +51,8 @@ jobs:
       MARINA_HOSTNAME: admin-marina.shopvivaliz.com.br
       MARINA_ACCESS_POLICY_NAME: ShopVivaliz OCI Marina Admin Owner Only
       MARINA_ADMIN_EMAIL: fredmourao@gmail.com
-      ACTION: ${{ inputs.action || (github.event_name == 'push' && 'restart_plugin') || '' }}
-      CONFIRMATION: ${{ inputs.confirmation || (github.event_name == 'push' && 'RESTART_MARINA_AGENT_PLUGIN') || '' }}
+      ACTION: ${{ inputs.action || (github.event_name == 'push' && contains(github.event.head_commit.message, '[MARINA_INSPECT]') && 'inspect_vm') || (github.event_name == 'push' && 'restart_plugin') || '' }}
+      CONFIRMATION: ${{ inputs.confirmation || (github.event_name == 'push' && contains(github.event.head_commit.message, '[MARINA_INSPECT]') && 'INSPECT_MARINA_VM') || (github.event_name == 'push' && 'RESTART_MARINA_AGENT_PLUGIN') || '' }}
     steps:
       - name: Install OCI CLI and JSON tools
         shell: bash
