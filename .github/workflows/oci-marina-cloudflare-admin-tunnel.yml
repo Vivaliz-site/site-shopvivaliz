@@ -454,7 +454,9 @@ jobs:
           set -Eeuo pipefail
           IFS= read -r cloudflared_source
           case "$cloudflared_source" in
-            /home/ubuntu/*|/usr/local/bin/cloudflared|/tmp/shopvivaliz-cloudflared-arm64-*) ;;
+            /home/ubuntu/*) : ;;
+            /usr/local/bin/cloudflared) : ;;
+            /tmp/shopvivaliz-cloudflared-arm64-*) : ;;
             *) exit 1 ;;
           esac
           install -o root -g root -m 0755 "$cloudflared_source" /usr/local/bin/cloudflared
