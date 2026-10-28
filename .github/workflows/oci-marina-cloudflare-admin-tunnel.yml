@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: oci-marina-cloudflare-admin-tunnel
+  group: oci-marina-cloudflare-admin-tunnel-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
