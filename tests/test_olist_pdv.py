@@ -230,5 +230,72 @@ class CatalogQuarantineContractTest(unittest.TestCase):
                 sync.VIDEO_SOURCES_PATH = original_video
 
 
+class PdvReleaseCutoverContractTest(unittest.TestCase):
+    @staticmethod
+    def module():
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pdv_release_cache", Path(__file__).resolve().parents[1] / "scripts/pdv_release_cache.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def payload(self):
+        from datetime import datetime, timezone
+        products = [
+            {"id": idx, "sku": f"SKU-{idx:03d}", "price_source": "olist_pdv",
+             "pdv_list_id": 982, "precos": {"preco": 45.0, "precoPromocional": 36.0}}
+            for idx in range(1, 21)
+        ]
+        return {"itens": products, "total": len(products), "source_active_count": 22,
+                "quarantined_skus": [{"sku": "DUP", "olist_product_ids": ["100", "101"], "reason": "duplicate_active_sku"}],
+                "quarantined_product_count": 2, "timestamp": datetime.now(timezone.utc).isoformat()}
+
+    def test_valid_quarantined_pdv_snapshot(self):
+        check = self.module().verify_snapshot(self.payload())
+        self.assertEqual(check["published_products"], 20)
+        self.assertEqual(check["quarantined_products"], 2)
+        self.assertEqual(check["pdv_list_id"], 982)
+
+    def test_unverified_stale_and_duplicate_prices_are_rejected(self):
+        mod = self.module()
+        for change in ("source", "collision", "count", "promo"):
+            payload = self.payload()
+            if change == "source":
+                payload["itens"][0]["price_source"] = "erp_product_registration"
+            elif change == "collision":
+                payload["itens"][1]["sku"] = payload["itens"][0]["sku"]
+            elif change == "count":
+                payload["source_active_count"] = 999
+            else:
+                payload["itens"][0]["precos"]["precoPromocional"] = 99
+            with self.assertRaises(ValueError):
+                mod.verify_snapshot(payload)
+
+    def test_stage_validation_never_mutates_production_cache(self):
+        import json
+        import tempfile
+        mod = self.module()
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            old_stage, old_cache = mod.STAGE_ROOT, mod.CACHE
+            try:
+                mod.STAGE_ROOT = Path(tmp) / "isolated"
+                mod.CACHE = Path(tmp) / "storage" / "products-cache-ativos.json"
+                mod.STAGE_ROOT.mkdir()
+                mod.CACHE.parent.mkdir()
+                mod.CACHE.write_text("legacy-cache")
+                staged = mod.stage_path_for(sha)
+                staged.write_text(json.dumps(self.payload()))
+                result = mod.run(sha, promote=False)
+                self.assertEqual(result["status"], "validated_not_published")
+                self.assertEqual(mod.CACHE.read_text(), "legacy-cache")
+                promoted = mod.run(sha, promote=True)
+                self.assertEqual(promoted["status"], "pdv_catalog_promoted_under_lock")
+                self.assertEqual(json.loads(mod.CACHE.read_text())["total"], 20)
+                self.assertEqual((mod.STAGE_ROOT / f".pdv-backup-{sha}.json").read_text(), "legacy-cache")
+            finally:
+                mod.STAGE_ROOT, mod.CACHE = old_stage, old_cache
+
+
 if __name__ == "__main__":
     unittest.main()
