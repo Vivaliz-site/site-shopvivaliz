@@ -200,7 +200,7 @@ jobs:
           trap restore_enabled EXIT
           "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_disabled" --force >/dev/null
           plugin_status=''
-          for _ in $(seq 1 30); do
+          for _ in $(seq 1 60); do
             plugin_status="$("${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
             [ "$plugin_status" = STOPPED ] && break
             sleep 10
@@ -209,7 +209,7 @@ jobs:
           echo "MARINA_AGENT_PLUGIN_RESTART=DISABLED"
           "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_enabled" --force >/dev/null
           plugin_status=''
-          for _ in $(seq 1 30); do
+          for _ in $(seq 1 60); do
             plugin_status="$("${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
             [ "$plugin_status" = RUNNING ] && break
             sleep 10
