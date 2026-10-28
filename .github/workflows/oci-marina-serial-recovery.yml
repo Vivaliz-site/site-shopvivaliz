@@ -236,8 +236,12 @@ jobs:
               "-o ConnectTimeout=15"
           )
           command = command.replace("ssh ", f"ssh {ssh_options} ")
-          child = pexpect.spawn("/bin/bash", ["-lc", command], encoding="utf-8", timeout=5)
-          child.sendline("")
+          def spawn_console():
+              session = pexpect.spawn("/bin/bash", ["-lc", command], encoding="utf-8", timeout=5)
+              session.sendline("")
+              return session
+
+          child = spawn_console()
           output = ""
           deadline = time.time() + 15
           while time.time() < deadline:
@@ -265,6 +269,12 @@ jobs:
           root_confirmed = False
           prompt_observed = False
           for down_count in (5, 10, 15):
+              if down_count != 5:
+                  if child.isalive():
+                      child.close(force=True)
+                  child = spawn_console()
+                  time.sleep(1)
+                  print(f"MARINA_SERIAL_RECONNECT=attempt_{down_count}")
               reboot = subprocess.run(
                   [
                       "oci",
@@ -295,8 +305,10 @@ jobs:
                   child.send("\x1b")
                   try:
                       grub += child.read_nonblocking(size=4096, timeout=0.2)
-                  except (pexpect.TIMEOUT, pexpect.EOF):
+                  except pexpect.TIMEOUT:
                       pass
+                  except pexpect.EOF:
+                      break
                   if "GNU GRUB" in grub or "Advanced options" in grub:
                       break
               grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
@@ -314,8 +326,10 @@ jobs:
               while time.time() < deadline:
                   try:
                       shell += child.read_nonblocking(size=4096, timeout=0.3)
-                  except (pexpect.TIMEOUT, pexpect.EOF):
+                  except pexpect.TIMEOUT:
                       pass
+                  except pexpect.EOF:
+                      break
                   if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
                       break
               print(
@@ -334,8 +348,10 @@ jobs:
               while time.time() < deadline:
                   try:
                       identity += child.read_nonblocking(size=4096, timeout=0.3)
-                  except (pexpect.TIMEOUT, pexpect.EOF):
+                  except pexpect.TIMEOUT:
                       pass
+                  except pexpect.EOF:
+                      break
               if re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
                   print(f"MARINA_ROOT_ID=0 attempt={down_count}")
                   if not prompt_observed:
