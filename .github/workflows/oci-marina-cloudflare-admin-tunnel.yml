@@ -278,6 +278,8 @@ jobs:
           Host *
             BatchMode yes
             IdentitiesOnly yes
+            IdentityFile $bastion_key
+            ConnectTimeout 30
             HostKeyAlgorithms +ssh-rsa
             PubkeyAcceptedAlgorithms +ssh-rsa
             PubkeyAcceptedKeyTypes +ssh-rsa
@@ -288,7 +290,16 @@ jobs:
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
           tunnel_command="${tunnel_command//ssh /ssh -F $bastion_ssh_config }"
           tunnel_command="${tunnel_command/ssh -F $bastion_ssh_config /ssh -F $bastion_ssh_config -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 }"
-          bash -lc "$tunnel_command"
+          tunnel_ready=0
+          for attempt in 1 2 3; do
+            if bash -lc "$tunnel_command"; then
+              tunnel_ready=1
+              break
+            fi
+            echo "MARINA_BASTION_TUNNEL_RETRY=$attempt"
+            sleep 5
+          done
+          test "$tunnel_ready" = 1 || { echo "::error::OCI Bastion port-forward did not authenticate after bounded retries"; exit 255; }
           sleep 2
           forwarded_host_key="$RUNNER_TEMP/marina-forwarded-host-key"
           ssh-keyscan -T 15 -p "$local_port" -t ed25519 127.0.0.1 > "$forwarded_host_key" 2>/dev/null || true
