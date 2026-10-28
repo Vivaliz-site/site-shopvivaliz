@@ -146,7 +146,7 @@ jobs:
           fi
 
       - name: Inspect Cloudflare objects without changing state
-        if: inputs.action == 'inspect'
+        if: env.ACTION == 'inspect'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -173,7 +173,7 @@ jobs:
           echo "OCI_MARINA_CLOUDFLARE_ADMIN=INSPECT_ONLY"
 
       - name: Restart Marina Run Command plugin through OCI control plane
-        if: inputs.action == 'restart_plugin' && inputs.confirmation == 'RESTART_MARINA_AGENT_PLUGIN'
+        if: env.ACTION == 'restart_plugin' && env.CONFIRMATION == 'RESTART_MARINA_AGENT_PLUGIN'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -224,7 +224,7 @@ jobs:
           restore_required=false
 
       - name: Ensure Marina Run Command plugin is enabled through OCI control plane
-        if: inputs.action == 'enable_plugin' && inputs.confirmation == 'ENABLE_MARINA_AGENT_PLUGIN'
+        if: env.ACTION == 'enable_plugin' && env.CONFIRMATION == 'ENABLE_MARINA_AGENT_PLUGIN'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -254,7 +254,7 @@ jobs:
           echo "OCI_MARINA_AGENT_PLUGIN_ENABLE=PASS"
 
       - name: Inspect Marina SSH runtime through OCI Agent without changing state
-        if: inputs.action == 'inspect_vm'
+        if: env.ACTION == 'inspect_vm'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -310,7 +310,7 @@ jobs:
           echo OCI_MARINA_AGENT_INSPECT=PASS
 
       - name: Provision the independent tunnel, Access policy, DNS and VM connector
-        if: inputs.action == 'provision'
+        if: env.ACTION == 'provision'
         env:
           OCI_VM_KEY_MATERIAL: ${{ secrets.ORACLE_VM_SSH_KEY }}
           OCI_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
