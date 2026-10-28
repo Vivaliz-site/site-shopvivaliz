@@ -321,6 +321,16 @@ jobs:
           # Linux command, so init=/bin/bash was not applied.  Keep the
           # proven Linux-line offset fixed and vary only the transport retry.
           linux_line_offset = 5
+          def drain_console(seconds=2):
+              deadline = time.time() + seconds
+              while time.time() < deadline:
+                  try:
+                      child.read_nonblocking(size=4096, timeout=0.3)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+
           for reconnect_attempt in (1, 2, 3):
               if reconnect_attempt != 1:
                   if child.isalive():
@@ -328,6 +338,10 @@ jobs:
                   child = spawn_console()
                   time.sleep(1)
                   print(f"MARINA_SERIAL_RECONNECT=attempt_{reconnect_attempt}")
+              # Discard buffered console output from the previous boot before
+              # requesting another reset; otherwise stale GRUB text can make
+              # the next interaction edit the wrong screen.
+              drain_console()
               reboot = subprocess.run(
                   [
                       "oci",
@@ -351,6 +365,7 @@ jobs:
                   print(f"MARINA_REBOOT=REQUEST_FAILED attempt={reconnect_attempt}")
                   raise SystemExit(1)
               print(f"MARINA_REBOOT=REQUESTED attempt={reconnect_attempt}")
+              time.sleep(8)
 
               grub = ""
               deadline = time.time() + 45
