@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import threading
@@ -413,9 +414,17 @@ def save_products(products: list[dict[str, Any]], quarantined: list[dict[str, An
         "itens": products,
     }
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temporary = CACHE_PATH.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(CACHE_PATH)
+    lock_path = CACHE_PATH.parent / "olist-erp-webhook.lock"
+    # PHP webhook mutations and the full reconciler must share one writer lock.
+    with lock_path.open("a+") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        temporary = CACHE_PATH.with_suffix(".json.tmp")
+        try:
+            temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            temporary.replace(CACHE_PATH)
+        finally:
+            temporary.unlink(missing_ok=True)
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
     return CACHE_PATH
 
 
