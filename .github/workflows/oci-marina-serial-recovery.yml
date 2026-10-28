@@ -168,17 +168,18 @@ jobs:
           if not hosts:
               print("MARINA_SERIAL_TRANSPORT=NO_ENDPOINT")
               raise SystemExit(1)
-          scan = subprocess.run(
-              ["ssh-keyscan", "-T", "15", "-p", "443", hosts[-1]],
-              check=False,
-              capture_output=True,
-              text=True,
-          )
-          if scan.returncode != 0 or not scan.stdout.strip():
-              print("MARINA_SERIAL_HOSTKEY=SCAN_FAILED")
-              raise SystemExit(1)
           with open(known_hosts, "w", encoding="utf-8") as handle:
-              handle.write(scan.stdout)
+              for host in hosts:
+                  scan = subprocess.run(
+                      ["ssh-keyscan", "-T", "15", "-p", "443", host],
+                      check=False,
+                      capture_output=True,
+                      text=True,
+                  )
+                  if scan.returncode != 0 or not scan.stdout.strip():
+                      print("MARINA_SERIAL_HOSTKEY=SCAN_FAILED")
+                      raise SystemExit(1)
+                  handle.write(scan.stdout)
           fingerprint = subprocess.run(
               ["ssh-keygen", "-lf", known_hosts, "-E", "sha256"],
               check=False,
@@ -215,7 +216,18 @@ jobs:
                   if not child.isalive():
                       break
           if not child.isalive():
-              print("MARINA_SERIAL_TRANSPORT=CLOSED")
+              reason = "UNKNOWN"
+              for token, label in (
+                  ("Permission denied", "PERMISSION"),
+                  ("Host key verification failed", "HOSTKEY"),
+                  ("Could not resolve", "DNS"),
+                  ("Connection refused", "REFUSED"),
+                  ("Connection timed out", "TIMEOUT"),
+              ):
+                  if token in output:
+                      reason = label
+                      break
+              print(f"MARINA_SERIAL_TRANSPORT=CLOSED reason={reason}")
               raise SystemExit(1)
           print("MARINA_SERIAL_TRANSPORT=CONNECTED")
 
