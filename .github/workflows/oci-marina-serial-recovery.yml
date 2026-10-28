@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Create and verify an ephemeral serial console connection"
+        description: "Probe, sanitize console history, or repair through an ephemeral serial console connection"
         required: true
         type: choice
         options:
           - probe
+          - history
           - repair
           - cleanup
         default: probe
@@ -114,6 +115,62 @@ jobs:
           test -n "$compartment_id" && test "$compartment_id" != null
           test "$lifecycle" = RUNNING
           echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle"
+
+          if [ "$ACTION" = history ]; then
+            history_out="$RUNNER_TEMP/marina-console-history.json"
+            history_content="$RUNNER_TEMP/marina-console-history.txt"
+            history_id=""
+            cleanup_history() {
+              if [ -n "$history_id" ]; then
+                "${OCI[@]}" compute console-history delete \
+                  --instance-console-history-id "$history_id" --force >/dev/null 2>&1 || true
+              fi
+            }
+            trap cleanup_history EXIT
+            capture_code=0
+            "${OCI[@]}" compute console-history capture \
+              --instance-id "$instance_id" \
+              --display-name "shopvivaliz-marina-console-history" >"$history_out" 2>"$RUNNER_TEMP/marina-console-history.err" || capture_code=$?
+            if [ "$capture_code" -ne 0 ]; then
+              echo "MARINA_SERIAL_HISTORY_CAPTURE=FAIL exit=$capture_code"
+              sed -E \
+                -e 's/ocid1\.[^[:space:]]+/OCID/g' \
+                -e 's/[0-9a-f]{8}-[0-9a-f-]{27,}/UUID/g' \
+                "$RUNNER_TEMP/marina-console-history.err" | head -n 12
+              exit "$capture_code"
+            fi
+            history_id="$(jq -r '.data.id // empty' <"$history_out")"
+            test -n "$history_id"
+            history_state=""
+            for _ in $(seq 1 36); do
+              history_json="$("${OCI[@]}" compute console-history get --instance-console-history-id "$history_id")"
+              history_state="$(jq -r '.data."lifecycle-state" // empty' <<<"$history_json")"
+              if [ "$history_state" = SUCCEEDED ]; then
+                break
+              fi
+              if [ "$history_state" = FAILED ] || [ "$history_state" = TERMINATED ]; then
+                echo "MARINA_SERIAL_HISTORY_STATE=$history_state"
+                exit 1
+              fi
+              sleep 5
+            done
+            echo "MARINA_SERIAL_HISTORY_STATE=$history_state"
+            test "$history_state" = SUCCEEDED
+            "${OCI[@]}" compute console-history get-content \
+              --instance-console-history-id "$history_id" \
+              --file "$history_content" >/dev/null
+            history_bytes="$(wc -c <"$history_content" | tr -d '[:space:]')"
+            history_has_grub=false
+            history_has_kernel=false
+            history_has_login=false
+            history_has_sshd=false
+            grep -Eiq 'GNU GRUB|grub>' "$history_content" && history_has_grub=true || true
+            grep -Eiq 'Linux version|Loading Linux|vmlinuz|systemd' "$history_content" && history_has_kernel=true || true
+            grep -Eiq 'login:|cloud-init|ubuntu' "$history_content" && history_has_login=true || true
+            grep -Eiq 'sshd|OpenSSH' "$history_content" && history_has_sshd=true || true
+            echo "MARINA_SERIAL_HISTORY=PASS bytes=$history_bytes grub=$history_has_grub kernel=$history_has_kernel login=$history_has_login sshd=$history_has_sshd"
+            exit 0
+          fi
 
           if [ "$ACTION" = cleanup ]; then
             connection_list="$("${OCI[@]}" compute instance-console-connection list \
