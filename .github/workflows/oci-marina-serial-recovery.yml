@@ -220,6 +220,25 @@ jobs:
                   )
                   raise SystemExit(1)
               print("MARINA_VNC_TUNNEL=CONNECTED")
+              try:
+                  with socket.create_connection(("127.0.0.1", 5900), timeout=15) as probe:
+                      probe.settimeout(15)
+                      header = b""
+                      while len(header) < 12:
+                          chunk = probe.recv(12 - len(header))
+                          if not chunk:
+                              break
+                          header += chunk
+                  if not header.startswith(b"RFB "):
+                      print(f"MARINA_VNC_RFB=FAIL bytes={len(header)}")
+                      raise SystemExit(1)
+                  version = header[4:11].decode("ascii", "replace")
+                  print(f"MARINA_VNC_RFB=PASS version={version}")
+              except Exception as error:
+                  if isinstance(error, SystemExit):
+                      raise
+                  print(f"MARINA_VNC_RFB=FAIL error_type={type(error).__name__}")
+                  raise SystemExit(1)
               screenshot = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "marina-vnc.png")
               try:
                   with api.connect("127.0.0.1::5900", timeout=30) as client:
