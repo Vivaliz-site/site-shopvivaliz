@@ -181,6 +181,9 @@ jobs:
           session_id=""
           original_cidrs="$RUNNER_TEMP/marina-bastion-cidrs.json"
           expanded_cidrs="$RUNNER_TEMP/marina-bastion-cidrs-expanded.json"
+          security_list_id=""
+          security_list_original="$RUNNER_TEMP/marina-marina-security-list-ingress.json"
+          security_list_expanded="$RUNNER_TEMP/marina-marina-security-list-ingress-expanded.json"
           bastion_key="$RUNNER_TEMP/marina-bastion-key"
           vm_key="$RUNNER_TEMP/marina-vm-key"
           vm_known_hosts="$RUNNER_TEMP/marina-vm-known-hosts"
@@ -192,7 +195,13 @@ jobs:
             if [ -s "$original_cidrs" ] && [ -n "$MARINA_BASTION_ID" ]; then
               "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$original_cidrs" --force >/dev/null
             fi
-            rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs"
+            if [ -n "$security_list_id" ] && [ -s "$security_list_original" ]; then
+              if ! "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_original" >/dev/null; then
+                echo "::error::Failed to restore Marina security-list ingress rules"
+                return 1
+              fi
+            fi
+            rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs" "$security_list_original" "$security_list_expanded"
             rm -f "$OCI_KEY_FILE" "$OCI_CONFIG_FILE"
           }
           trap cleanup EXIT
@@ -203,6 +212,38 @@ jobs:
           ssh-keygen -q -t ed25519 -N '' -f "$bastion_key" >/dev/null
 
           "${OCI[@]}" bastion bastion get --bastion-id "$MARINA_BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$original_cidrs"
+          subnet_json="$("${OCI[@]}" network subnet get --subnet-id "$MARINA_SUBNET_ID")"
+          security_list_id="$(jq -r '.data."security-list-ids"[0] // empty' <<<"$subnet_json")"
+          subnet_cidr="$(jq -r '.data."cidr-block" // empty' <<<"$subnet_json")"
+          test -n "$security_list_id" && test -n "$subnet_cidr"
+          "${OCI[@]}" network security-list get --security-list-id "$security_list_id" --query 'data."ingress-security-rules"' --output json > "$security_list_original"
+          security_rule_state="$(python3 - "$subnet_cidr" "$security_list_original" "$security_list_expanded" <<'PY'
+          import ipaddress, json, sys
+          cidr = str(ipaddress.ip_network(sys.argv[1], strict=False))
+          rules = json.load(open(sys.argv[2], encoding="utf-8"))
+          if not isinstance(rules, list):
+              raise SystemExit("Marina security-list ingress rules are not a JSON list")
+          marker = "shopvivaliz-temporary-bastion-bootstrap"
+          present = any(str(rule.get("description", "")) == marker for rule in rules)
+          if not present:
+              rules.append({
+                  "description": marker,
+                  "isStateless": False,
+                  "protocol": "6",
+                  "source": cidr,
+                  "sourceType": "CIDR_BLOCK",
+                  "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}},
+              })
+          json.dump(rules, open(sys.argv[3], "w", encoding="utf-8"))
+          print("PRESENT" if present else "ADDED")
+          PY
+          )"
+          if [ "$security_rule_state" = ADDED ]; then
+            "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_expanded" >/dev/null
+            echo "MARINA_BOOTSTRAP_NETWORK_RULE=APPLIED source=$subnet_cidr"
+          else
+            echo "MARINA_BOOTSTRAP_NETWORK_RULE=ALREADY_PRESENT source=$subnet_cidr"
+          fi
           runner_ip="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
           python3 - "$runner_ip" "$original_cidrs" "$expanded_cidrs" <<'PY'
           import ipaddress, json, sys
