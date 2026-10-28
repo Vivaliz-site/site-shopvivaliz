@@ -465,7 +465,7 @@ jobs:
             exit 2
           fi
           REMOTE
-          "${VM_SSH[@]}" 'sudo -n sh -s' < "$unit"
+          "${VM_SSH[@]}" 'sudo -n bash -s' < "$unit"
           rm -f "$unit"
           echo "MARINA_CONNECTOR=PASS"
           echo "OCI_MARINA_CLOUDFLARE_ADMIN=PROVISIONED"
