@@ -193,6 +193,15 @@ jobs:
           REMOTE
           jq -n --rawfile text "$agent_script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$agent_content"
           jq -n --arg instanceId "$MARINA_INSTANCE_ID" '{instanceId:$instanceId}' > "$agent_target"
+          plugin_json="$RUNNER_TEMP/marina-agent-plugins.json"
+          "${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all > "$plugin_json"
+          plugin_status="$(jq -r '.data[] | select(.name == "Compute Instance Run Command") | .status // empty' "$plugin_json")"
+          plugin_message="$(jq -r '.data[] | select(.name == "Compute Instance Run Command") | .message // empty' "$plugin_json" | tr '\n' ' ' | cut -c1-160)"
+          instance_agent_config="$("${OCI[@]}" compute instance get --instance-id "$MARINA_INSTANCE_ID" --query 'data."agent-config"')"
+          desired_state="$(jq -r '."plugins-config"[]? | select(.name == "Compute Instance Run Command") | ."desired-state" // empty' <<<"$instance_agent_config")"
+          echo "MARINA_AGENT_PLUGIN_STATUS=$plugin_status"
+          echo "MARINA_AGENT_PLUGIN_MESSAGE=$plugin_message"
+          echo "MARINA_AGENT_PLUGIN_DESIRED_STATE=$desired_state"
           command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$MARINA_COMPARTMENT_ID" --display-name "Inspect Marina SSH runtime" --content "file://$agent_content" --target "file://$agent_target" --timeout-in-seconds 120 --query 'data.id' --raw-output)"
           execution=''
           for _ in $(seq 1 36); do
