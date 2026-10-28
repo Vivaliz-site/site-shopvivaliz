@@ -56,3 +56,4 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "ssh-keygen -q -t rsa -b 3072" in text
     assert "HostKeyAlgorithms=+ssh-rsa" in text
     assert "PubkeyAcceptedAlgorithms=+ssh-rsa" in text
+    assert 'sed -E "s/^\\\\[127\\\\.0\\\\.0\\\\.1\\\\]:${local_port} /127.0.0.1 /"' in text
