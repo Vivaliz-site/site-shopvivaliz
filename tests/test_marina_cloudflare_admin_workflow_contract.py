@@ -46,3 +46,5 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "--session-ttl 1800" in text
     assert "shopvivaliz-temporary-bastion-bootstrap" in text
     assert "Failed to restore Marina security-list ingress rules" in text
+    assert text.count("network security-list update") >= 2
+    assert text.count("--force") >= 3
