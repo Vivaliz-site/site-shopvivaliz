@@ -174,7 +174,12 @@ jobs:
           )
           target = tokens[-1]
           proxy_tokens = shlex.split(proxy_value)
-          proxy_command = [proxy_tokens[0], "-i", console_key, *proxy_tokens[1:]]
+          proxy_command = [
+              proxy_tokens[0], "-i", console_key,
+              "-o", "StrictHostKeyChecking=accept-new",
+              "-o", "UserKnownHostsFile=/tmp/marina-vnc-known-hosts",
+              *proxy_tokens[1:],
+          ]
           outer = [
               "ssh", "-i", console_key,
               "-o", "ProxyCommand=" + " ".join(shlex.quote(item) for item in proxy_command),
