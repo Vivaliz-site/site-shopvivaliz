@@ -9,6 +9,12 @@ on:
         type: choice
         options:
           - probe
+          - repair
+        default: probe
+      confirmation:
+        description: "For repair, enter REPAIR_MARINA_SERIAL"
+        required: true
+        type: string
         default: probe
 
 permissions:
@@ -23,7 +29,7 @@ jobs:
     if: github.repository == 'Vivaliz-site/site-shopvivaliz'
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       OCI_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
       OCI_USER: ${{ secrets.OCI_ESPOSA_USER }}
@@ -32,19 +38,23 @@ jobs:
       OCI_INSTANCE_NAME: marina-a1-4c24g
       OCI_PROFILE: DEFAULT
       ACTION: ${{ inputs.action }}
+      CONFIRMATION: ${{ inputs.confirmation }}
     steps:
       - name: Install OCI CLI and JSON tools
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          python3 -m pip install --disable-pip-version-check --quiet pexpect
           command -v oci >/dev/null
           command -v jq >/dev/null
           command -v ssh-keygen >/dev/null
+          command -v ssh-keyscan >/dev/null
 
       - name: Create and verify an ephemeral serial console connection
         env:
           OCI_KEY_MATERIAL: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+          OCI_VM_KEY_MATERIAL: ${{ secrets.ORACLE_VM_SSH_KEY }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -126,3 +136,165 @@ jobs:
           echo "MARINA_SERIAL_STRING_PRESENT=true"
           echo "MARINA_SERIAL_HOST_FINGERPRINT_PRESENT=true"
           echo "MARINA_SERIAL_PROBE=PASS"
+
+          if [ "$ACTION" = repair ]; then
+            test "$CONFIRMATION" = REPAIR_MARINA_SERIAL
+            test -n "$OCI_VM_KEY_MATERIAL"
+            vm_key="$RUNNER_TEMP/marina-authorized-key"
+            printf '%s\n' "$OCI_VM_KEY_MATERIAL" > "$vm_key"
+            chmod 600 "$vm_key"
+            vm_public_key="$(ssh-keygen -y -f "$vm_key")"
+            rm -f "$vm_key"
+            export CONSOLE_CONNECTION_STRING="$connection_string"
+            export CONSOLE_HOST_FINGERPRINT="$service_host_fingerprint"
+            export CONSOLE_PRIVATE_KEY="$console_key"
+            export MARINA_INSTANCE_ID="$instance_id"
+            export OCI_CONFIG="$config"
+            export MARINA_VM_PUBLIC_KEY="$vm_public_key"
+            python3 - <<'PY'
+          import os
+          import re
+          import shlex
+          import subprocess
+          import time
+
+          import pexpect
+
+          connection = os.environ["CONSOLE_CONNECTION_STRING"]
+          expected_fingerprint = os.environ["CONSOLE_HOST_FINGERPRINT"]
+          console_key = os.environ["CONSOLE_PRIVATE_KEY"]
+          known_hosts = os.path.join(os.environ["RUNNER_TEMP"], "marina-console-known-hosts")
+          hosts = sorted(set(re.findall(r"[A-Za-z0-9.-]+\.oci\.oraclecloud\.com", connection)))
+          if not hosts:
+              print("MARINA_SERIAL_TRANSPORT=NO_ENDPOINT")
+              raise SystemExit(1)
+          scan = subprocess.run(
+              ["ssh-keyscan", "-T", "15", "-p", "443", hosts[-1]],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          if scan.returncode != 0 or not scan.stdout.strip():
+              print("MARINA_SERIAL_HOSTKEY=SCAN_FAILED")
+              raise SystemExit(1)
+          with open(known_hosts, "w", encoding="utf-8") as handle:
+              handle.write(scan.stdout)
+          fingerprint = subprocess.run(
+              ["ssh-keygen", "-lf", known_hosts, "-E", "sha256"],
+              check=False,
+              capture_output=True,
+              text=True,
+          ).stdout
+          if expected_fingerprint not in fingerprint:
+              print("MARINA_SERIAL_HOSTKEY=MISMATCH")
+              raise SystemExit(1)
+          print("MARINA_SERIAL_HOSTKEY=PASS")
+
+          def replace_identity(match):
+              return match.group("prefix") + shlex.quote(console_key)
+
+          command = re.sub(
+              r"(?P<prefix>-i\s+)(?:'[^']*'|\"[^\"]*\"|\S+)",
+              replace_identity,
+              connection,
+          )
+          ssh_options = (
+              "-o StrictHostKeyChecking=yes "
+              f"-o UserKnownHostsFile={shlex.quote(known_hosts)} "
+              "-o ConnectTimeout=15"
+          )
+          command = command.replace("ssh ", f"ssh {ssh_options} ")
+          child = pexpect.spawn("/bin/bash", ["-lc", command], encoding="utf-8", timeout=5)
+          child.sendline("")
+          output = ""
+          deadline = time.time() + 15
+          while time.time() < deadline:
+              try:
+                  output += child.read_nonblocking(size=4096, timeout=0.4)
+              except (pexpect.TIMEOUT, pexpect.EOF):
+                  if not child.isalive():
+                      break
+          if not child.isalive():
+              print("MARINA_SERIAL_TRANSPORT=CLOSED")
+              raise SystemExit(1)
+          print("MARINA_SERIAL_TRANSPORT=CONNECTED")
+
+          reboot = subprocess.run(
+              [
+                  "oci",
+                  "--config-file",
+                  os.environ["OCI_CONFIG"],
+                  "--profile",
+                  os.environ["OCI_PROFILE"],
+                  "compute",
+                  "instance",
+                  "action",
+                  "--instance-id",
+                  os.environ["MARINA_INSTANCE_ID"],
+                  "--action",
+                  "SOFTRESET",
+              ],
+              check=False,
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL,
+          )
+          if reboot.returncode != 0:
+              print("MARINA_REBOOT=REQUEST_FAILED")
+              raise SystemExit(1)
+          print("MARINA_REBOOT=REQUESTED")
+
+          grub = ""
+          deadline = time.time() + 30
+          while time.time() < deadline:
+              child.send("\x1b")
+              try:
+                  grub += child.read_nonblocking(size=4096, timeout=0.2)
+              except (pexpect.TIMEOUT, pexpect.EOF):
+                  pass
+              if "GNU GRUB" in grub or "Advanced options" in grub:
+                  break
+          if "GNU GRUB" not in grub and "Advanced options" not in grub:
+              print("MARINA_GRUB=NOT_OBSERVED")
+              raise SystemExit(1)
+          child.send("e")
+          time.sleep(2)
+          child.send("\x1b[B" * 5)
+          child.send("\x05")
+          child.send(" init=/bin/bash")
+          child.send("\x18")
+          shell = ""
+          deadline = time.time() + 30
+          while time.time() < deadline:
+              try:
+                  shell += child.read_nonblocking(size=4096, timeout=0.3)
+              except (pexpect.TIMEOUT, pexpect.EOF):
+                  pass
+              if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
+                  break
+          if not re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
+              print("MARINA_ROOT_SHELL=NOT_OBSERVED")
+              raise SystemExit(1)
+          print("MARINA_ROOT_SHELL=PASS")
+
+          public_key = os.environ["MARINA_VM_PUBLIC_KEY"]
+          quoted_key = shlex.quote(public_key)
+          commands = [
+              "mount -o remount,rw /",
+              "mkdir -p /home/ubuntu/.ssh",
+              f"touch /home/ubuntu/.ssh/authorized_keys && grep -qxF {quoted_key} /home/ubuntu/.ssh/authorized_keys || printf '%s\\n' {quoted_key} >> /home/ubuntu/.ssh/authorized_keys",
+              "chown -R ubuntu:ubuntu /home/ubuntu/.ssh",
+              "chmod 700 /home/ubuntu/.ssh",
+              "chmod 600 /home/ubuntu/.ssh/authorized_keys",
+              "if [ -e /lib/systemd/system/ssh.service ]; then mkdir -p /etc/systemd/system/multi-user.target.wants; ln -sf /lib/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service; fi",
+              "sync",
+          ]
+          for command_line in commands:
+              child.sendline(command_line)
+              time.sleep(0.8)
+          print("MARINA_SSH_AUTHORIZED_KEY=RESTORED")
+          child.sendline("/sbin/reboot -f")
+          print("MARINA_REBOOT=NORMAL_REQUESTED")
+          time.sleep(8)
+          child.close(force=True)
+          PY
+          fi
