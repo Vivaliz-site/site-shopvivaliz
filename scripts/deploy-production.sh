@@ -1017,6 +1017,35 @@ if ! reconcile_runtime_secrets "$NEW_RELEASE_PATH"; then
   exit 1
 fi
 
+# First PDV release: build and attest a complete, non-public candidate before
+# switching the immutable current symlink. Without this step the new storefront
+# would reject every legacy registration-priced row and appear empty.
+if [ -f "$NEW_RELEASE_PATH/includes/olist-pdv-price.php" ] \
+  && { [ ! -e "$CURRENT_LINK/includes/olist-pdv-price.php" ] || [ ! -f "$CURRENT_LINK/includes/olist-pdv-price.php" ]; }; then
+  log INFO "PDV first-cutover: preparing validated catalog while old release stays active"
+  pdv_stage_dir="$SHARED_DIR/deployment-pdv"
+  pdv_candidate="$pdv_stage_dir/.pdv-stage-$REMOTE_SHA.json"
+  install -d -m 0700 "$pdv_stage_dir"
+  if ! (cd "$NEW_RELEASE_PATH" && python3 daemon-sync-products.py --once --stage-cache "$pdv_candidate") >> "$LOG_FILE" 2>&1; then
+    log ERROR "PDV stage failed; keeping existing release and live cache untouched"
+    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV snapshot unavailable"
+    exit 1
+  fi
+  if ! python3 "$NEW_RELEASE_PATH/scripts/pdv_release_cache.py" --expected-sha "$REMOTE_SHA" >> "$LOG_FILE" 2>&1; then
+    log ERROR "PDV preflight failed; keeping existing release and live cache untouched"
+    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV verification failed"
+    exit 1
+  fi
+  # A fully authenticated PDV snapshot is safe for the old and new code. The
+  # replace is serialized against webhook writers; a protected backup remains.
+  if ! python3 "$NEW_RELEASE_PATH/scripts/pdv_release_cache.py" --expected-sha "$REMOTE_SHA" --promote >> "$LOG_FILE" 2>&1; then
+    log ERROR "PDV promotion failed; immutable current release not switched"
+    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV promotion failed"
+    exit 1
+  fi
+  log INFO "PDV cache verified, collision quarantine preserved, ready for release swap"
+fi
+
 if [ -f "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" ]; then
   php "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" >> "$LOG_FILE" 2>&1
 fi
