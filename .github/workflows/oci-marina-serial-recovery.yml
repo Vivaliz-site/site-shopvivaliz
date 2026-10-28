@@ -391,7 +391,6 @@ jobs:
               child.send("\x05")
               child.send(" init=/bin/bash")
               child.send("\x18")
-              child.send("\x1b[21~")
               shell = ""
               deadline = time.time() + 60
               while time.time() < deadline:
