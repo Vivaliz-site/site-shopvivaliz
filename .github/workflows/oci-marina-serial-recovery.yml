@@ -96,11 +96,22 @@ jobs:
               --compartment-id "$compartment_id" --instance-id "$instance_id" \
               --all --query 'data[].id' --raw-output)
             echo "MARINA_SERIAL_CLEANUP_COUNT=${#connection_ids[@]}"
+            deleted_count=0
+            failed_count=0
             for existing_connection_id in "${connection_ids[@]}"; do
               [ -n "$existing_connection_id" ] || continue
+              delete_code=0
               "${OCI[@]}" compute instance-console-connection delete \
-                --instance-console-connection-id "$existing_connection_id" --force >/dev/null
+                --instance-console-connection-id "$existing_connection_id" --force >/dev/null 2>"$RUNNER_TEMP/marina-serial-delete.err" || delete_code=$?
+              if [ "$delete_code" -eq 0 ]; then
+                deleted_count=$((deleted_count + 1))
+              else
+                failed_count=$((failed_count + 1))
+              fi
             done
+            echo "MARINA_SERIAL_DELETED_COUNT=$deleted_count"
+            echo "MARINA_SERIAL_DELETE_FAILURES=$failed_count"
+            test "$failed_count" = 0
             echo "MARINA_SERIAL_CLEANUP=PASS"
             exit 0
           fi
