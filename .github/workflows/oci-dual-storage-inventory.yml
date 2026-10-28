@@ -1,0 +1,84 @@
+name: OCI dual-account storage inventory
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      MARINA_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
+      MARINA_USER: ${{ secrets.OCI_ESPOSA_USER }}
+      MARINA_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
+      MARINA_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
+      MARINA_KEY: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+      BACKEND_REGION: ${{ secrets.OCI_PRINCIPAL_REGION }}
+      BACKEND_USER: ${{ secrets.OCI_PRINCIPAL_USER }}
+      BACKEND_TENANCY: ${{ secrets.OCI_PRINCIPAL_TENANCY }}
+      BACKEND_FINGERPRINT: ${{ secrets.OCI_PRINCIPAL_FINGERPRINT }}
+      BACKEND_KEY: ${{ secrets.OCI_PRINCIPAL_PRIVATE_KEY }}
+    steps:
+      - name: Install OCI CLI and JSON tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          command -v oci >/dev/null
+          command -v jq >/dev/null
+
+      - name: Inventory Marina and backend storage without mutation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+
+          write_config() {
+            local path="$1" user="$2" fingerprint="$3" tenancy="$4" region="$5" key="$6"
+            printf '%s\n' "$key" > "$path.key"
+            chmod 600 "$path.key"
+            cat > "$path" <<EOF
+          [DEFAULT]
+          user=$user
+          fingerprint=$fingerprint
+          tenancy=$tenancy
+          region=$region
+          key_file=$path.key
+          EOF
+            chmod 600 "$path"
+          }
+
+          inspect_instance() {
+            local label="$1" config="$2" name="$3"
+            local -a OCI=(oci --config-file "$config" --profile DEFAULT)
+            local query search_json count instance_id instance_json lifecycle ad compartment attachments boot_count
+            query="query instance resources where displayName = '$name'"
+            search_json="$("${OCI[@]}" search resource structured-search --query-text "$query" --all)"
+            count="$(jq -r '([.data.items[]? | select(.resourceType == "instance")] | length)' <<<"$search_json")"
+            test "$count" = 1
+            instance_id="$(jq -r '.data.items[] | select(.resourceType == "instance") | .identifier' <<<"$search_json")"
+            instance_json="$("${OCI[@]}" compute instance get --instance-id "$instance_id")"
+            lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json")"
+            ad="$(jq -r '.data."availability-domain" // empty' <<<"$instance_json")"
+            compartment="$(jq -r '.data."compartment-id" // empty' <<<"$instance_json")"
+            test -n "$lifecycle" && test -n "$ad" && test -n "$compartment"
+            attachments="$("${OCI[@]}" compute boot-volume-attachment list \
+              --availability-domain "$ad" --compartment-id "$compartment" \
+              --instance-id "$instance_id" --all)"
+            boot_count="$(jq -r '[.data[]? | select((."lifecycle-state" // "") != "TERMINATED")] | length' <<<"$attachments")"
+            echo "${label}_IDENTITY=PASS lifecycle=$lifecycle availability_domain_present=true compartment_present=true"
+            echo "${label}_BOOT_VOLUME_ATTACHMENTS=$boot_count"
+          }
+
+          marina_config="$RUNNER_TEMP/marina-oci-config"
+          backend_config="$RUNNER_TEMP/backend-oci-config"
+          write_config "$marina_config" "$MARINA_USER" "$MARINA_FINGERPRINT" "$MARINA_TENANCY" "$MARINA_REGION" "$MARINA_KEY"
+          write_config "$backend_config" "$BACKEND_USER" "$BACKEND_FINGERPRINT" "$BACKEND_TENANCY" "$BACKEND_REGION" "$BACKEND_KEY"
+          inspect_instance MARINA "$marina_config" marina-a1-4c24g
+          inspect_instance BACKEND "$backend_config" always-free-arm-1787907847-26
+          echo "OCI_DUAL_STORAGE_INVENTORY=PASS"
