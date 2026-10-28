@@ -46,6 +46,17 @@ class PdvPricesContractTest(unittest.TestCase):
         value = pdv_product_prices(self.fetch(detail), "fixture-token", 350339, self.product, self.pdv)
         self.assertEqual((value["preco"], value["precoPromocional"]), (102, 84))
 
+    def test_equal_pdv_promo_is_not_a_discount(self):
+        detail = dict(self.detail, excecoes={"idProduto": 350339, "preco": 1499, "precoPromocional": 1499})
+        value = pdv_product_prices(self.fetch(detail), "fixture-token", 350339, self.product, self.pdv)
+        self.assertEqual(value["preco"], 1499.0)
+        self.assertEqual(value["precoPromocional"], 0.0)
+
+    def test_pdv_promo_above_base_fails(self):
+        detail = dict(self.detail, excecoes={"idProduto": 350339, "preco": 100, "precoPromocional": 101})
+        with self.assertRaisesRegex(ValueError, "pdv_commercial_amount_invalid"):
+            pdv_product_prices(self.fetch(detail), "fixture-token", 350339, self.product, self.pdv)
+
     def test_promo_removed(self):
         detail = dict(self.detail, excecoes={"idProduto": 350339, "preco": 102, "precoPromocional": None})
         value = pdv_product_prices(self.fetch(detail), "fixture-token", 350339, self.product, self.pdv)
