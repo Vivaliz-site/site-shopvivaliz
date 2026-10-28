@@ -171,6 +171,44 @@ class CatalogQuarantineContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "erp_missing_or_duplicate_identity"):
                 sync.partition_ambiguous_skus([row])
 
+    def test_missing_summary_sku_is_recovered_only_from_verified_erp_id(self):
+        sync = self.module()
+        original = sync.api_get
+        calls = []
+        try:
+            def provider(path, token):
+                calls.append(path)
+                return {"id": 42, "sku": "CANONICAL-42"}
+            sync.api_get = provider
+            rows, blocked = sync.recover_missing_skus([{"id": 42, "sku": ""}], "fixture-token")
+            self.assertEqual([x["sku"] for x in rows], ["CANONICAL-42"])
+            self.assertEqual(blocked, [])
+            self.assertEqual(calls, ["produtos/42"])
+        finally:
+            sync.api_get = original
+
+    def test_unrecoverable_sku_is_explicitly_quarantined(self):
+        sync = self.module()
+        original = sync.api_get
+        try:
+            sync.api_get = lambda path, token: {"id": 42, "sku": ""}
+            rows, blocked = sync.recover_missing_skus([{"id": 42, "sku": ""}], "fixture-token")
+            self.assertEqual(rows, [])
+            self.assertEqual(blocked[0]["olist_product_ids"], ["42"])
+            self.assertEqual(blocked[0]["reason"], "missing_erp_sku")
+        finally:
+            sync.api_get = original
+
+    def test_missing_sku_id_mismatch_fails_closed(self):
+        sync = self.module()
+        original = sync.api_get
+        try:
+            sync.api_get = lambda path, token: {"id": 41, "sku": "WRONG"}
+            with self.assertRaisesRegex(ValueError, "erp_product_id_mismatch"):
+                sync.recover_missing_skus([{"id": 42, "sku": ""}], "fixture-token")
+        finally:
+            sync.api_get = original
+
     def test_quarantine_is_stored_in_same_atomic_snapshot(self):
         import tempfile
         sync = self.module()
