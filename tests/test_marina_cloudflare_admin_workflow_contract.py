@@ -60,4 +60,5 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "bastion_ssh_config" in text
     assert "Host *" in text
     assert "-F $bastion_ssh_config" in text
+    assert "sudo -n bash -s" in text
     assert 'sed -E "s/^\\\\[127\\\\.0\\\\.0\\\\.1\\\\]:${local_port} /127.0.0.1 /"' in text
