@@ -199,7 +199,15 @@ jobs:
                   except OSError:
                       time.sleep(1)
               if not connected:
-                  print("MARINA_VNC_TUNNEL=NOT_CONNECTED")
+                  stderr = tunnel.stderr.read().decode("utf-8", "replace") if tunnel.stderr else ""
+                  print(
+                      "MARINA_VNC_TUNNEL=NOT_CONNECTED "
+                      f"exit={tunnel.poll()} "
+                      f"auth={str('Permission denied' in stderr or 'publickey' in stderr).lower()} "
+                      f"hostkey={str('Host key verification failed' in stderr).lower()} "
+                      f"proxy={str('ProxyCommand' in stderr or 'Could not resolve' in stderr).lower()} "
+                      f"negotiation={str('no matching' in stderr or 'handshake' in stderr).lower()}"
+                  )
                   raise SystemExit(1)
               print("MARINA_VNC_TUNNEL=CONNECTED")
               screenshot = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "marina-vnc.png")
