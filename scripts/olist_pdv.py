@@ -122,8 +122,11 @@ def pdv_product_prices(api_get: ApiGet, token: str, product_id: int, product_pri
         actual_promo = original_promo * (factor or Decimal("1"))
     price_rounded = _money(actual_price)
     promo_rounded = _money(actual_promo)
-    if price_rounded <= 0 or promo_rounded < 0 or (promo_rounded > 0 and promo_rounded >= price_rounded):
+    if price_rounded <= 0 or promo_rounded < 0 or (promo_rounded > 0 and promo_rounded > price_rounded):
         raise ValueError("pdv_commercial_amount_invalid")
+    # The authenticated PDV may return equal base/promo: there is no discount to display.
+    if promo_rounded > 0 and promo_rounded == price_rounded:
+        promo_rounded = 0.0
     return {
         "preco": price_rounded,
         "precoPromocional": promo_rounded,
