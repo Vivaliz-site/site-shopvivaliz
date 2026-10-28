@@ -2,7 +2,7 @@
 set -euo pipefail
 host="$(hostname -s)"
 case "$host" in
-  always-free-arm-1787907847-26|shopvivaliz-free-a1) ;;
+  always-free-arm-1787907847-26|shopvivaliz-free-a1|marina-a1-4c24g) ;;
   *) echo "UNSUPPORTED_HOST=$host" >&2; exit 6 ;;
 esac
 if [ "$(id -u)" -ne 0 ]; then
