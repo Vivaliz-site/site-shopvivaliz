@@ -275,7 +275,7 @@ jobs:
                   "--instance-id",
                   os.environ["MARINA_INSTANCE_ID"],
                   "--action",
-                  "SOFTRESET",
+                  "RESET",
               ],
               check=False,
               stdout=subprocess.DEVNULL,
@@ -286,26 +286,18 @@ jobs:
               raise SystemExit(1)
           print("MARINA_REBOOT=REQUESTED")
 
-          grub = ""
-          deadline = time.time() + 30
-          while time.time() < deadline:
-              child.send("\x1b")
-              try:
-                  grub += child.read_nonblocking(size=4096, timeout=0.2)
-              except (pexpect.TIMEOUT, pexpect.EOF):
-                  pass
-              if "GNU GRUB" in grub or "Advanced options" in grub:
-                  break
-          if "GNU GRUB" not in grub and "Advanced options" not in grub:
-              print("MARINA_GRUB=NOT_OBSERVED_BLIND_EDIT")
+          time.sleep(3)
+          child.send("\x1b")
+          time.sleep(1)
           child.send("e")
-          time.sleep(2)
-          child.send("\x1b[B" * 5)
+          time.sleep(1)
+          child.send("\x1b[B" * 7)
           child.send("\x05")
           child.send(" init=/bin/bash")
           child.send("\x18")
+          print("MARINA_GRUB=BLIND_EDIT_SENT")
           shell = ""
-          deadline = time.time() + 30
+          deadline = time.time() + 45
           while time.time() < deadline:
               try:
                   shell += child.read_nonblocking(size=4096, timeout=0.3)
