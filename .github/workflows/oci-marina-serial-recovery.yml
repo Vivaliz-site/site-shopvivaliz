@@ -619,10 +619,12 @@ jobs:
                   if "GNU GRUB" in grub or "Advanced options" in grub:
                       break
               grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
-              if reconnect_attempt == 1:
-                  # Prefer GRUB's command prompt on the first bounded
-                  # attempt.  It avoids depending on the number of generated
+              if reconnect_attempt in (1, 2, 3):
+                  # Prefer GRUB's command prompt on every bounded attempt.
+                  # It avoids depending on the number of generated
                   # menu-editor lines in an ARM cloud image.
+                  child.send("\x1b")
+                  time.sleep(2)
                   child.send("c")
                   time.sleep(1)
                   for grub_command in (
