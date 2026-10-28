@@ -93,7 +93,8 @@ jobs:
 
           if [ "$ACTION" = cleanup ]; then
             mapfile -t connection_ids < <("${OCI[@]}" compute instance-console-connection list \
-              --instance-id "$instance_id" --all --query 'data[].id' --raw-output)
+              --compartment-id "$compartment_id" --instance-id "$instance_id" \
+              --all --query 'data[].id' --raw-output)
             echo "MARINA_SERIAL_CLEANUP_COUNT=${#connection_ids[@]}"
             for existing_connection_id in "${connection_ids[@]}"; do
               [ -n "$existing_connection_id" ] || continue
