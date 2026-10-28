@@ -430,6 +430,26 @@ jobs:
           echo "MARINA_TOKEN_INSTALL=PASS"
           unset cf_secret token_json
 
+          cloudflared_source="$("${VM_SSH[@]}" 'set -eu; p="$(command -v cloudflared 2>/dev/null || true)"; if [ -z "$p" ]; then p="$(find "$HOME" -maxdepth 4 -type f -name cloudflared -perm -111 -print -quit)"; fi; test -n "$p"; printf "%s" "$p"')"
+          case "$cloudflared_source" in
+            /home/ubuntu/*|/usr/local/bin/cloudflared) ;;
+            *) echo "::error::Unexpected Marina cloudflared source path"; exit 1 ;;
+          esac
+          {
+            cat <<'REMOTE_INSTALL'
+          set -Eeuo pipefail
+          IFS= read -r cloudflared_source
+          case "$cloudflared_source" in
+            /home/ubuntu/*|/usr/local/bin/cloudflared) ;;
+            *) exit 1 ;;
+          esac
+          install -o root -g root -m 0755 "$cloudflared_source" /usr/local/bin/cloudflared
+          test -x /usr/local/bin/cloudflared
+          REMOTE_INSTALL
+            printf '%s\n' "$cloudflared_source"
+          } | "${VM_SSH[@]}" 'sudo -n bash -s'
+          echo "MARINA_CLOUDFLARED_INSTALL=PASS"
+
           unit="$RUNNER_TEMP/marina-cloudflared-admin-unit.sh"
           cat > "$unit" <<'REMOTE'
           set -Eeuo pipefail
@@ -440,7 +460,7 @@ jobs:
           touch /etc/shopvivaliz/cloudflare-admin/access-approved
           chown root:root /etc/shopvivaliz/cloudflare-admin/access-approved
           chmod 600 /etc/shopvivaliz/cloudflare-admin/access-approved
-          cloudflared_bin="$(command -v cloudflared)"
+          cloudflared_bin=/usr/local/bin/cloudflared
           test -x "$cloudflared_bin"
           remote_step=firewall
           public_iface="$(ip -4 route get 1.1.1.1 | awk 'NR==1 {for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}')"
