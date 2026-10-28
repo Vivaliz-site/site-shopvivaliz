@@ -297,6 +297,9 @@ jobs:
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
           tunnel_command="${tunnel_command//ssh /ssh -F $bastion_ssh_config }"
           tunnel_command="${tunnel_command/ssh -F $bastion_ssh_config /ssh -F $bastion_ssh_config -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 }"
+          tunnel_command="${tunnel_command//ssh /ssh -v -o IdentitiesOnly=yes -o PreferredAuthentications=publickey }"
+          debug_tunnel_command="${tunnel_command//$bastion_key/<private-key>}"
+          echo "MARINA_BASTION_TUNNEL_COMMAND=$debug_tunnel_command"
           tunnel_ready=0
           for attempt in 1 2 3; do
             if bash -lc "$tunnel_command"; then
