@@ -1,0 +1,36 @@
+from pathlib import Path
+
+
+WORKFLOW = Path(__file__).parents[1] / ".github" / "workflows" / "oci-marina-cloudflare-admin-tunnel.yml"
+
+
+def test_marina_cloudflare_workflow_exists_and_is_explicitly_gated() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "OCI_ESPOSA_PRIVATE_KEY" in text
+    assert "CLOUDFLARE_API_TOKEN" in text
+    assert "PROVISION_MARINA_ADMIN_TUNNEL" in text
+    assert "environment: Production" in text
+    assert "shopvivaliz-oci-marina-admin" in text
+    assert "admin-marina.shopvivaliz.com.br" in text
+
+
+def test_marina_cloudflare_workflow_does_not_log_or_embed_secrets() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    forbidden = (
+        "echo \"$CLOUDFLARE_API_TOKEN\"",
+        "printf '%s\\n' \"$CLOUDFLARE_API_TOKEN\"",
+        "tunnel_token=",
+        "token=eyJ",
+        "StrictHostKeyChecking=no",
+    )
+    for needle in forbidden:
+        assert needle not in text
+
+
+def test_marina_cloudflare_workflow_uses_instance_agent_and_removes_ssh_gate() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "create_instance_agent_command" in text
+    assert "shopvivaliz-cloudflared-admin.service" in text
+    assert "iptables" in text
+    assert "ip6tables" in text
+    assert "access-approved" in text

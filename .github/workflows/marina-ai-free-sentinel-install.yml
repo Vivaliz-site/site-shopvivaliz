@@ -1,0 +1,60 @@
+name: Marina Passive AI Free Sentinel Install
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type INSTALL_FREE_SENTINEL to approve read-only monitor installation on Marina'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marina-passive-ai-free-sentinel-install
+  cancel-in-progress: false
+
+jobs:
+  install:
+    if: inputs.confirmation == 'INSTALL_FREE_SENTINEL'
+    environment: production
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify approved host and approved immutable source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname -s)" = marina-a1-4c24g
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          grep -q 'marina-a1-4c24g' scripts/install-ai-free-provider-sentinel.sh
+          grep -q 'if host == "marina-a1-4c24g"' scripts/ai-free-provider-sentinel.py
+          python3 -m py_compile scripts/ai-free-provider-sentinel.py
+          bash -n scripts/install-ai-free-provider-sentinel.sh
+      - name: Install read-only sentinel without touching model bridges
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo -n bash scripts/install-ai-free-provider-sentinel.sh
+          sudo -n systemctl is-enabled --quiet shopvivaliz-ai-free-guard.timer
+          sudo -n systemctl is-active --quiet shopvivaliz-ai-free-guard.timer
+          sudo -n systemctl start shopvivaliz-ai-free-guard.service
+          sudo -n python3 - <<'PY'
+          import json,time
+          from pathlib import Path
+          p=Path('/var/lib/shopvivaliz-ai-free-guard/state.json')
+          d=json.loads(p.read_text())
+          assert d['host']=='marina-a1-4c24g'
+          assert d['last_status'] in ('HEALTHY','ALERT'),d
+          assert time.time()-d['last_checked_epoch'] < 90
+          print('PASSIVE_SENTINEL_MONITOR',d['last_status'],d['last_issue_codes'])
+          PY
+      - name: Confirm no paid generation requests were made
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -q 'read_only_monitor=true' scripts/ai-free-provider-sentinel.py
+          sudo -n systemctl show shopvivaliz-ai-free-guard.service -p Result -p ExecMainStatus --no-pager
