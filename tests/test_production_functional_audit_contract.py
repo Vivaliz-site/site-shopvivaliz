@@ -95,6 +95,9 @@ def test_only_marina_owns_hourly_production_audit_schedule() -> None:
               "production-functional-audit-marina.yml").read_text(encoding="utf-8")
     assert "  schedule:" not in source, "stopped source must not own scheduled production audits"
     assert "  schedule:" in marina, "Marina must have a scheduled production audit"
+    assert "  push:" in marina and "    branches: [main]" in marina, "changed audit code on main must trigger real Marina audit"
+    assert "      - 'scripts/production-functional-audit.sh'" in marina, "audit code changes must be covered"
+    assert "      - '.github/workflows/production-functional-audit-marina.yml'" in marina, "audit workflow changes must be covered"
     assert "    - cron: '7 * * * *'" in marina, "retain the hourly production audit cadence"
     assert "AUDIT_TARGET_IP: 127.0.0.1" in marina, "audit must pin localhost on Marina"
     assert 'test "$(hostname -s)" = "marina-a1-4c24g"' in marina, "wrong runner must fail closed"
