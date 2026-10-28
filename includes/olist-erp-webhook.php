@@ -179,7 +179,9 @@ function svoei_assert_not_quarantined(string $root, string $sku, string $product
     $path = $root . '/storage/products-cache-ativos.json';
     $payload = is_file($path) ? json_decode((string)file_get_contents($path), true) : null;
     if (!is_array($payload)) throw new RuntimeException('catalog_cache_invalid');
-    foreach (is_array($payload['quarantined_skus'] ?? null) ? $payload['quarantined_skus'] : [] as $blocked) {
+    $quarantine = $payload['quarantined_skus'] ?? [];
+    if (!is_array($quarantine)) throw new RuntimeException('catalog_quarantine_invalid');
+    foreach ($quarantine as $blocked) {
         if (!is_array($blocked)) throw new RuntimeException('catalog_quarantine_invalid');
         $blockedSku = trim((string)($blocked['sku'] ?? ''));
         $ids = $blocked['olist_product_ids'] ?? [];
