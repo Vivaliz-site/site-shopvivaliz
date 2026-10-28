@@ -10,6 +10,7 @@ on:
         options:
           - probe
           - repair
+          - cleanup
         default: probe
       confirmation:
         description: "For repair, enter REPAIR_MARINA_SERIAL"
@@ -89,6 +90,19 @@ jobs:
           lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json")"
           test "$lifecycle" = RUNNING
           echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle"
+
+          if [ "$ACTION" = cleanup ]; then
+            mapfile -t connection_ids < <("${OCI[@]}" compute instance-console-connection list \
+              --instance-id "$instance_id" --all --query 'data[].id' --raw-output)
+            echo "MARINA_SERIAL_CLEANUP_COUNT=${#connection_ids[@]}"
+            for existing_connection_id in "${connection_ids[@]}"; do
+              [ -n "$existing_connection_id" ] || continue
+              "${OCI[@]}" compute instance-console-connection delete \
+                --instance-console-connection-id "$existing_connection_id" --force >/dev/null
+            done
+            echo "MARINA_SERIAL_CLEANUP=PASS"
+            exit 0
+          fi
 
           ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
           chmod 600 "$console_key"
