@@ -143,6 +143,29 @@ jobs:
             exit 0
           fi
 
+          if [ "$ACTION" = repair ]; then
+            # OCI may keep a deleted serial connection in a terminating
+            # state for a short period. Creating the next connection before
+            # the resource disappears returns IncorrectState (409). Drain
+            # all residual connections and wait for the service-side count to
+            # reach zero before creating a new one.
+            stale_list="$("${OCI[@]}" compute instance-console-connection list --compartment-id "$compartment_id" --instance-id "$instance_id" --all)"
+            mapfile -t stale_ids < <(jq -r '.data[]? | select((."lifecycle-state" // "") != "TERMINATED") | .id' <<<"$stale_list")
+            for stale_id in "${stale_ids[@]}"; do
+              [ -n "$stale_id" ] || continue
+              "${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$stale_id" --force >/dev/null 2>&1 || true
+            done
+            remaining=0
+            for _ in $(seq 1 24); do
+              stale_list="$("${OCI[@]}" compute instance-console-connection list --compartment-id "$compartment_id" --instance-id "$instance_id" --all)"
+              remaining="$(jq -r '[.data[]? | select((."lifecycle-state" // "") != "TERMINATED")] | length' <<<"$stale_list")"
+              [ "$remaining" = 0 ] && break
+              sleep 5
+            done
+            echo "MARINA_SERIAL_PRECREATE_ACTIVE=$remaining"
+            test "$remaining" = 0
+          fi
+
           ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
           chmod 600 "$console_key"
           create_err="$RUNNER_TEMP/marina-serial-create.err"
