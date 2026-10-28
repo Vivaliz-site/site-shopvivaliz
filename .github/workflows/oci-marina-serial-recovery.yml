@@ -191,15 +191,13 @@ jobs:
               raise SystemExit(1)
           print("MARINA_SERIAL_HOSTKEY=PASS")
 
-          def replace_identity(match):
-              return match.group("prefix") + shlex.quote(console_key)
-
           command = re.sub(
-              r"(?P<prefix>-i\s+)(?:'[^']*'|\"[^\"]*\"|\S+)",
-              replace_identity,
+              r"-i\s+(?:'[^']*'|\"[^\"]*\"|\S+)",
+              "",
               connection,
           )
           ssh_options = (
+              f"-i {shlex.quote(console_key)} "
               "-o StrictHostKeyChecking=yes "
               f"-o UserKnownHostsFile={shlex.quote(known_hosts)} "
               "-o ConnectTimeout=15"
