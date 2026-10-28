@@ -283,16 +283,17 @@ class PdvReleaseCutoverContractTest(unittest.TestCase):
                 mod.CACHE = Path(tmp) / "storage" / "products-cache-ativos.json"
                 mod.STAGE_ROOT.mkdir()
                 mod.CACHE.parent.mkdir()
-                mod.CACHE.write_text("legacy-cache")
+                old_cache = json.dumps({"itens": [{"id": i, "sku": f"OLD-{i}"} for i in range(20)]})
+                mod.CACHE.write_text(old_cache)
                 staged = mod.stage_path_for(sha)
                 staged.write_text(json.dumps(self.payload()))
                 result = mod.run(sha, promote=False)
                 self.assertEqual(result["status"], "validated_not_published")
-                self.assertEqual(mod.CACHE.read_text(), "legacy-cache")
+                self.assertEqual(mod.CACHE.read_text(), old_cache)
                 promoted = mod.run(sha, promote=True)
                 self.assertEqual(promoted["status"], "pdv_catalog_promoted_under_lock")
                 self.assertEqual(json.loads(mod.CACHE.read_text())["total"], 20)
-                self.assertEqual((mod.STAGE_ROOT / f".pdv-backup-{sha}.json").read_text(), "legacy-cache")
+                self.assertEqual((mod.STAGE_ROOT / f".pdv-backup-{sha}.json").read_text(), old_cache)
             finally:
                 mod.STAGE_ROOT, mod.CACHE = old_stage, old_cache
 
