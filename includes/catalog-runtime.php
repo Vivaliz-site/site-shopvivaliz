@@ -279,6 +279,24 @@ function svcr_select_catalog_products(array $products, array $fallbackProducts):
     return $selected;
 }
 
+/** Preserve explicit duplicate-SKU blocks across public price endpoints. */
+function svcr_is_quarantined_identifier(array $payload, string $sku = '', string $productId = ''): bool
+{
+    $entries = $payload['quarantined_skus'] ?? [];
+    if (!is_array($entries)) return true; // malformed manifest: fail closed
+    foreach ($entries as $blocked) {
+        if (!is_array($blocked)) return true;
+        $blockedSku = trim((string)($blocked['sku'] ?? ''));
+        $ids = $blocked['olist_product_ids'] ?? [];
+        if (!is_array($ids)) return true;
+        if (($sku !== '' && $blockedSku !== '' && strcasecmp(trim($sku), $blockedSku) === 0)
+            || ($productId !== '' && in_array(trim($productId), array_map('strval', $ids), true))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function svcr_content_key(mixed $value): string
 {
     return svcr_lower(trim((string)$value));
