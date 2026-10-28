@@ -56,7 +56,7 @@ jobs:
           inspect_instance() {
             local label="$1" config="$2" name="$3"
             local -a OCI=(oci --config-file "$config" --profile DEFAULT)
-            local query search_json count instance_id instance_json lifecycle ad compartment attachments boot_count status error_file error_lines output_bytes output_lines output_head
+            local query search_json count instance_total instance_id instance_json lifecycle ad compartment attachments boot_count status error_file error_lines output_bytes output_lines output_head
             query="query instance resources"
             error_file="$RUNNER_TEMP/${label,,}-oci-error.txt"
             if search_json="$("${OCI[@]}" search resource structured-search --query-text "$query" 2>"$error_file")"; then
@@ -76,6 +76,8 @@ jobs:
               echo "${label}_SEARCH_STDOUT_BYTES=$output_bytes lines=$output_lines preview=$output_head"
               return "$status"
             fi
+            instance_total="$(jq -r '([.data.items[]? | select(.resourceType == "instance")] | length)' <<<"$search_json")"
+            echo "${label}_INSTANCE_TOTAL=$instance_total"
             count="$(jq -r --arg name "$name" '([.data.items[]? | select(.resourceType == "instance" and .displayName == $name)] | length)' <<<"$search_json")"
             echo "${label}_SEARCH_COUNT=$count"
             test "$count" = 1
