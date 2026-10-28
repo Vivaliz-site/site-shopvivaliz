@@ -56,10 +56,10 @@ jobs:
           inspect_instance() {
             local label="$1" config="$2" name="$3"
             local -a OCI=(oci --config-file "$config" --profile DEFAULT)
-            local query search_json count instance_total instance_id instance_json lifecycle ad compartment attachments boot_count status error_file error_lines output_bytes output_lines output_head
-            query="query instance resources"
+            local query search_count instance_id instance_json lifecycle ad compartment attachments boot_count status error_file error_lines
+            query="query instance resources where displayName = '$name'"
             error_file="$RUNNER_TEMP/${label,,}-oci-error.txt"
-            if search_json="$("${OCI[@]}" search resource structured-search --query-text "$query" 2>"$error_file")"; then
+            if search_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output 2>"$error_file")"; then
               status=0
             else
               status=$?
@@ -68,20 +68,13 @@ jobs:
               else
                 error_lines=0
               fi
-              output_bytes="${#search_json}"
-              output_lines="$(printf '%s\n' "$search_json" | wc -l)"
-              output_head="$(printf '%s\n' "$search_json" | head -c 240 | tr '\n' ' ' | sed -E 's/[A-Za-z0-9._=:+\/@-]{8,}/[REDACTED]/g')"
               echo "${label}_SEARCH=FAIL phase=structured_search exit=$status"
               echo "${label}_SEARCH_ERROR_LINES=$error_lines"
-              echo "${label}_SEARCH_STDOUT_BYTES=$output_bytes lines=$output_lines preview=$output_head"
               return "$status"
             fi
-            instance_total="$(jq -r '([.data.items[]? | select(.resourceType == "instance")] | length)' <<<"$search_json")"
-            echo "${label}_INSTANCE_TOTAL=$instance_total"
-            count="$(jq -r --arg name "$name" '([.data.items[]? | select(.resourceType == "instance" and .displayName == $name)] | length)' <<<"$search_json")"
-            echo "${label}_SEARCH_COUNT=$count"
-            test "$count" = 1
-            instance_id="$(jq -r --arg name "$name" '.data.items[] | select(.resourceType == "instance" and .displayName == $name) | .identifier' <<<"$search_json")"
+            echo "${label}_SEARCH_COUNT=$search_count"
+            test "$search_count" = 1
+            instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
             instance_json="$("${OCI[@]}" compute instance get --instance-id "$instance_id")"
             lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json")"
             ad="$(jq -r '.data."availability-domain" // empty' <<<"$instance_json")"
