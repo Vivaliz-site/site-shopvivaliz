@@ -143,7 +143,12 @@ jobs:
             done
             echo "MARINA_VNC_CONNECTION=$vnc_state"
             test "$vnc_state" = ACTIVE
-            export MARINA_VNC_CONNECTION_STRING="$(jq -r '.data."connection-string" // empty' <<<"$vnc_connection_json")"
+            # OCI exposes separate serial and VNC connection strings.  The
+            # generic connection-string is the serial-console endpoint; using
+            # it for port 5900 can create an SSH tunnel that accepts TCP while
+            # never speaking RFB, which looks like a VNC handshake timeout.
+            export MARINA_VNC_CONNECTION_STRING="$(jq -r '.data."vnc-connection-string" // empty' <<<"$vnc_connection_json")"
+            test -n "$MARINA_VNC_CONNECTION_STRING"
             export MARINA_VNC_CONNECTION_ID="$vnc_connection_id"
             export MARINA_VNC_INSTANCE_ID="$instance_id"
             export MARINA_VNC_PRIVATE_KEY="$console_key"
