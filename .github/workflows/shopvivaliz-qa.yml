@@ -19,6 +19,8 @@ on:
       - 'scripts/*.php'
       - 'scripts/*.js'
       - 'scripts/olist_pdv.py'
+      - 'scripts/pdv_release_cache.py'
+      - 'scripts/deploy-production.sh'
       - 'daemon-sync-products.py'
       - 'tests/*.php'
       - 'tests/*.js'
