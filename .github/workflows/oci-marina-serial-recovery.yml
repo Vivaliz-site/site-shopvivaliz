@@ -278,6 +278,7 @@ jobs:
           )
           ssh_options = (
               f"-i {shlex.quote(console_key)} "
+              "-tt "
               "-o StrictHostKeyChecking=accept-new "
               f"-o UserKnownHostsFile={shlex.quote(known_hosts)} "
               "-o ConnectTimeout=15"
@@ -288,8 +289,8 @@ jobs:
               session.sendline("")
               return session
 
-          def reconnect_console(wait_seconds=120):
-              """Wait for the serial SSH endpoint to return after a guest reset."""
+          def connect_console(wait_seconds=120):
+              """Wait for an activated serial terminal, including after a reset."""
               deadline = time.time() + wait_seconds
               connection_errors = (
                   "Permission denied",
@@ -299,6 +300,7 @@ jobs:
                   "Connection timed out",
                   "Connection reset by peer",
               )
+              ready_marker = "IMPORTANT: Use a console connection"
               while time.time() < deadline:
                   session = spawn_console()
                   output = ""
@@ -312,37 +314,17 @@ jobs:
                           break
                       if any(error in output for error in connection_errors):
                           break
-                  if session.isalive() and not any(error in output for error in connection_errors):
+                      if ready_marker in output:
+                          return session
+                  if session.isalive() and ready_marker in output:
                       return session
                   if session.isalive():
                       session.close(force=True)
                   time.sleep(3)
-              print("MARINA_SERIAL_RECONNECT=TIMEOUT")
+              print("MARINA_SERIAL_TRANSPORT=NOT_READY")
               raise SystemExit(1)
 
-          child = spawn_console()
-          output = ""
-          deadline = time.time() + 15
-          while time.time() < deadline:
-              try:
-                  output += child.read_nonblocking(size=4096, timeout=0.4)
-              except (pexpect.TIMEOUT, pexpect.EOF):
-                  if not child.isalive():
-                      break
-          if not child.isalive():
-              reason = "UNKNOWN"
-              for token, label in (
-                  ("Permission denied", "PERMISSION"),
-                  ("Host key verification failed", "HOSTKEY"),
-                  ("Could not resolve", "DNS"),
-                  ("Connection refused", "REFUSED"),
-                  ("Connection timed out", "TIMEOUT"),
-              ):
-                  if token in output:
-                      reason = label
-                      break
-              print(f"MARINA_SERIAL_TRANSPORT=CLOSED reason={reason}")
-              raise SystemExit(1)
+          child = connect_console()
           print("MARINA_SERIAL_TRANSPORT=CONNECTED")
 
           root_confirmed = False
@@ -407,7 +389,7 @@ jobs:
               # the new boot rather than the pre-reset channel buffer.
               if child.isalive():
                   child.close(force=True)
-              child = reconnect_console()
+              child = connect_console()
               print(f"MARINA_SERIAL_RECONNECT=READY attempt={reconnect_attempt}")
 
               grub = ""
