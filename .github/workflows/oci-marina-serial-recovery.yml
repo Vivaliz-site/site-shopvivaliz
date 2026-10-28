@@ -613,6 +613,55 @@ jobs:
                   if "GNU GRUB" in grub or "Advanced options" in grub:
                       break
               grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
+              if reconnect_attempt == 1:
+                  # Prefer GRUB's command prompt on the first bounded
+                  # attempt.  It avoids depending on the number of generated
+                  # menu-editor lines in an ARM cloud image.
+                  child.send("c")
+                  time.sleep(1)
+                  for grub_command in (
+                      "set pager=0",
+                      "search --no-floppy --file --set=root /vmlinuz",
+                      "linux /vmlinuz root=LABEL=cloudimg-rootfs rw init=/bin/bash console=ttyAMA0,115200n8",
+                      "initrd /initrd.img",
+                      "boot",
+                  ):
+                      child.sendline(grub_command)
+                      time.sleep(0.5)
+                  command_shell = ""
+                  deadline = time.time() + 60
+                  while time.time() < deadline:
+                      try:
+                          command_shell += child.read_nonblocking(size=4096, timeout=0.3)
+                      except pexpect.TIMEOUT:
+                          pass
+                      except pexpect.EOF:
+                          break
+                      if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", command_shell):
+                          break
+                  child.sendline("id -u")
+                  identity = ""
+                  deadline = time.time() + 8
+                  while time.time() < deadline:
+                      try:
+                          identity += child.read_nonblocking(size=4096, timeout=0.3)
+                      except pexpect.TIMEOUT:
+                          pass
+                      except pexpect.EOF:
+                          break
+                  print(
+                      "MARINA_GRUB_COMMAND=ATTEMPTED "
+                      f"kernel={str('Linux version' in command_shell or 'Loading Linux' in command_shell).lower()} "
+                      f"shell={str(bool(re.search(r'(bash[- ]|cannot access tty|job control)', command_shell))).lower()}"
+                  )
+                  if re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
+                      print("MARINA_ROOT_SHELL=PASS_COMMAND_LINE attempt=1")
+                      print("MARINA_ROOT_ID=0 attempt=1")
+                      root_confirmed = True
+                      break
+                  print("MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED attempt=1")
+                  print("MARINA_ROOT_ID=NOT_CONFIRMED attempt=1")
+                  continue
               child.send("e")
               # GRUB may have rendered its menu text before the serial
               # terminal is ready to accept the editor transition.
