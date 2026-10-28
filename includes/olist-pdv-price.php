@@ -143,8 +143,11 @@ function svpdv_calculate_product_prices(string $productId, array $erpDetail, arr
     }
     $price = round($price, 2, PHP_ROUND_HALF_UP);
     $promo = round($promo, 2, PHP_ROUND_HALF_UP);
-    if ($price <= 0 || $promo < 0 || ($promo > 0 && $promo >= $price)) {
+    if ($price <= 0 || $promo < 0 || ($promo > 0 && $promo > $price)) {
         throw new RuntimeException('pdv_commercial_amount_invalid');
     }
+    // A PDV pode devolver promocional igual ao preco: desconto inexistente,
+    // nao uma promocao a exibir. Ambas as quantias vieram da PDV autenticada.
+    if ($promo > 0 && $promo === $price) $promo = 0.0;
     return ['preco' => $price, 'precoPromocional' => $promo, 'pdv_list_id' => $listId, 'price_source' => 'olist_pdv'];
 }
