@@ -292,13 +292,19 @@ jobs:
 
           root_confirmed = False
           prompt_observed = False
-          for down_count in (5, 10, 15):
-              if down_count != 5:
+          # The previous implementation reused the reconnect number as the
+          # number of editor lines to move through.  That is unsafe: on the
+          # second reconnect GRUB was observed, but ten arrows moved past the
+          # Linux command, so init=/bin/bash was not applied.  Keep the
+          # proven Linux-line offset fixed and vary only the transport retry.
+          linux_line_offset = 5
+          for reconnect_attempt in (1, 2, 3):
+              if reconnect_attempt != 1:
                   if child.isalive():
                       child.close(force=True)
                   child = spawn_console()
                   time.sleep(1)
-                  print(f"MARINA_SERIAL_RECONNECT=attempt_{down_count}")
+                  print(f"MARINA_SERIAL_RECONNECT=attempt_{reconnect_attempt}")
               reboot = subprocess.run(
                   [
                       "oci",
@@ -319,12 +325,12 @@ jobs:
                   stderr=subprocess.DEVNULL,
               )
               if reboot.returncode != 0:
-                  print(f"MARINA_REBOOT=REQUEST_FAILED attempt={down_count}")
+                  print(f"MARINA_REBOOT=REQUEST_FAILED attempt={reconnect_attempt}")
                   raise SystemExit(1)
-              print(f"MARINA_REBOOT=REQUESTED attempt={down_count}")
+              print(f"MARINA_REBOOT=REQUESTED attempt={reconnect_attempt}")
 
               grub = ""
-              deadline = time.time() + 30
+              deadline = time.time() + 45
               while time.time() < deadline:
                   child.send("\x1b")
                   try:
@@ -338,15 +344,33 @@ jobs:
               grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
               child.send("e")
               time.sleep(2)
-              for _ in range(down_count):
-                  child.send("\x1b[B")
-                  time.sleep(0.15)
+              editor = ""
+              editor_deadline = time.time() + 4
+              while time.time() < editor_deadline:
+                  try:
+                      editor += child.read_nonblocking(size=4096, timeout=0.3)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+              editor_has_linux = bool(re.search(r"\blinux\s+", editor))
+              editor_has_initrd = bool(re.search(r"\binitrd\s+", editor))
+              print(
+                  "MARINA_GRUB_EDITOR="
+                  f"linux={str(editor_has_linux).lower()} "
+                  f"initrd={str(editor_has_initrd).lower()}"
+              )
+              # The GRUB console accepts the same compact sequence that
+              # previously produced a root shell on this image.  Sending it
+              # as one burst avoids dropping cursor events on a slow serial
+              # console while keeping the kernel-line offset fixed.
+              child.send("\x1b[B" * linux_line_offset)
               child.send("\x05")
               child.send(" init=/bin/bash")
               child.send("\x18")
               child.send("\x1b[21~")
               shell = ""
-              deadline = time.time() + 30
+              deadline = time.time() + 60
               while time.time() < deadline:
                   try:
                       shell += child.read_nonblocking(size=4096, timeout=0.3)
@@ -357,13 +381,20 @@ jobs:
                   if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
                       break
               print(
-                  f"MARINA_GRUB={'OBSERVED_EDIT' if grub_observed else 'BLIND_EDIT'} attempt={down_count}"
+                  f"MARINA_GRUB={'OBSERVED_EDIT' if grub_observed else 'BLIND_EDIT'} attempt={reconnect_attempt}"
               )
               prompt_observed = bool(re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell))
               print(
-                  "MARINA_ROOT_SHELL=PASS attempt=" + str(down_count)
+                  "MARINA_ROOT_SHELL=PASS attempt=" + str(reconnect_attempt)
                   if prompt_observed
-                  else "MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED attempt=" + str(down_count)
+                  else "MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED attempt=" + str(reconnect_attempt)
+              )
+              print(
+                  "MARINA_BOOT_SCREEN="
+                  f"bytes={len(shell)} "
+                  f"kernel={str(bool(re.search(r'Linux version|Loading Linux|vmlinuz', shell))).lower()} "
+                  f"bash={str(bool(re.search(r'bash[- ]|cannot access tty|job control', shell))).lower()} "
+                  f"login={str(bool(re.search(r'login:', shell))).lower()}"
               )
               child.sendline("")
               child.sendline("id -u")
@@ -377,12 +408,12 @@ jobs:
                   except pexpect.EOF:
                       break
               if re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
-                  print(f"MARINA_ROOT_ID=0 attempt={down_count}")
+                  print(f"MARINA_ROOT_ID=0 attempt={reconnect_attempt}")
                   if not prompt_observed:
                       print("MARINA_ROOT_SHELL=PASS_BY_UID")
                   root_confirmed = True
                   break
-              print(f"MARINA_ROOT_ID=NOT_CONFIRMED attempt={down_count}")
+              print(f"MARINA_ROOT_ID=NOT_CONFIRMED attempt={reconnect_attempt}")
               time.sleep(3)
           if not root_confirmed:
               raise SystemExit(1)
