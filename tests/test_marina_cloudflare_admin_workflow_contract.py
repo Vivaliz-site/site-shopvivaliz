@@ -52,8 +52,9 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "does not match approved OCI host-key material" in text
     assert "HostKeyAlias=127.0.0.1" in text
     assert 'python3 - "$vm_known_hosts" "$forwarded_host_key"' in text
-    assert "tunnel_command=\"${tunnel_command//ssh /ssh -o BatchMode=yes -o IdentitiesOnly=yes -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa }\"" in text
+    assert "tunnel_command=\"${tunnel_command//ssh /ssh -o BatchMode=yes -o IdentitiesOnly=yes -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa }\"" in text
     assert "ssh-keygen -q -t rsa -b 3072" in text
     assert "HostKeyAlgorithms=+ssh-rsa" in text
     assert "PubkeyAcceptedAlgorithms=+ssh-rsa" in text
+    assert "PubkeyAcceptedKeyTypes=+ssh-rsa" in text
     assert 'sed -E "s/^\\\\[127\\\\.0\\\\.0\\\\.1\\\\]:${local_port} /127.0.0.1 /"' in text
