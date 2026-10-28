@@ -344,9 +344,27 @@ jobs:
               grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
               child.send("e")
               time.sleep(2)
-              for _ in range(linux_line_offset):
-                  child.send("\x1b[B")
-                  time.sleep(0.15)
+              editor = ""
+              editor_deadline = time.time() + 4
+              while time.time() < editor_deadline:
+                  try:
+                      editor += child.read_nonblocking(size=4096, timeout=0.3)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+              editor_has_linux = bool(re.search(r"\blinux\s+", editor))
+              editor_has_initrd = bool(re.search(r"\binitrd\s+", editor))
+              print(
+                  "MARINA_GRUB_EDITOR="
+                  f"linux={str(editor_has_linux).lower()} "
+                  f"initrd={str(editor_has_initrd).lower()}"
+              )
+              # The GRUB console accepts the same compact sequence that
+              # previously produced a root shell on this image.  Sending it
+              # as one burst avoids dropping cursor events on a slow serial
+              # console while keeping the kernel-line offset fixed.
+              child.send("\x1b[B" * linux_line_offset)
               child.send("\x05")
               child.send(" init=/bin/bash")
               child.send("\x18")
@@ -370,6 +388,13 @@ jobs:
                   "MARINA_ROOT_SHELL=PASS attempt=" + str(reconnect_attempt)
                   if prompt_observed
                   else "MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED attempt=" + str(reconnect_attempt)
+              )
+              print(
+                  "MARINA_BOOT_SCREEN="
+                  f"bytes={len(shell)} "
+                  f"kernel={str(bool(re.search(r'Linux version|Loading Linux|vmlinuz', shell))).lower()} "
+                  f"bash={str(bool(re.search(r'bash[- ]|cannot access tty|job control', shell))).lower()} "
+                  f"login={str(bool(re.search(r'login:', shell))).lower()}"
               )
               child.sendline("")
               child.sendline("id -u")
