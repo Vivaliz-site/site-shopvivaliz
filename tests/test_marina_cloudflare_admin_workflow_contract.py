@@ -8,6 +8,7 @@ def test_marina_cloudflare_workflow_exists_and_is_explicitly_gated() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "OCI_ESPOSA_PRIVATE_KEY" in text
     assert "CLOUDFLARE_API_TOKEN" in text
+    assert "CLOUDFLARE_MARINA_TUNNEL_TOKEN" in text
     assert "PROVISION_MARINA_ADMIN_TUNNEL" in text
     assert "environment: Production" in text
     assert "shopvivaliz-oci-marina-admin" in text
@@ -34,3 +35,11 @@ def test_marina_cloudflare_workflow_uses_instance_agent_and_removes_ssh_gate() -
     assert "iptables" in text
     assert "ip6tables" in text
     assert "access-approved" in text
+
+
+def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "MARINA_CLOUDFLARE_PRECONFIGURED=PASS" in text
+    assert "bastion bastion create" in text
+    assert "CREATED_NO_QUOTA" in text
+    assert "client-cidr-list" in text
