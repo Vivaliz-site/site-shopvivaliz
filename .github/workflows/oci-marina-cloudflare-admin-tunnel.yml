@@ -320,8 +320,8 @@ jobs:
               raise SystemExit("Marina SSH host key does not match approved OCI host-key material")
           PY
           sed -E "s/^\\[127\\.0\\.0\\.1\\]:${local_port} /127.0.0.1 /" "$forwarded_host_key" > "$vm_known_hosts"
-          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$vm_known_hosts" -o ConnectTimeout=15 -i "$vm_key" -o HostKeyAlias=127.0.0.1)
-          VM_SSH=(ssh "${SSH_COMMON[@]}" -p "$local_port" ubuntu@127.0.0.1)
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$vm_known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$vm_key" -o HostKeyAlias=127.0.0.1)
+          VM_SSH=(timeout --signal=TERM --kill-after=10s 180s ssh "${SSH_COMMON[@]}" -p "$local_port" ubuntu@127.0.0.1)
           "${VM_SSH[@]}" 'test "$(hostname)" = "marina-a1-4c24g"; id -u; sudo -n true'
           echo "MARINA_PRIVATE_SSH=PASS"
 
@@ -487,14 +487,16 @@ jobs:
           cloudflared_bin=/usr/local/bin/cloudflared
           test -x "$cloudflared_bin"
           remote_step=firewall
+          echo "MARINA_REMOTE_STEP=$remote_step"
           public_iface="$(ip -4 route get 1.1.1.1 | awk 'NR==1 {for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}')"
           test -n "$public_iface"
           iptables -C INPUT -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP 2>/dev/null || \
             iptables -I INPUT 1 -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP
           ip6tables -C INPUT -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP 2>/dev/null || \
             ip6tables -I INPUT 1 -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP
-          if command -v netfilter-persistent >/dev/null 2>&1; then netfilter-persistent save >/dev/null; fi
+          if command -v netfilter-persistent >/dev/null 2>&1; then timeout 20s netfilter-persistent save >/dev/null; fi
           remote_step=systemd_unit
+          echo "MARINA_REMOTE_STEP=$remote_step"
           cat > /etc/systemd/system/shopvivaliz-cloudflared-admin.service <<UNIT
           [Unit]
           Description=ShopVivaliz independent Cloudflare admin tunnel for Marina OCI
@@ -519,24 +521,26 @@ jobs:
           WantedBy=multi-user.target
           UNIT
           remote_step=systemd_start
-          systemctl daemon-reload
-          systemctl enable --now shopvivaliz-cloudflared-admin.service
-          systemctl is-enabled --quiet shopvivaliz-cloudflared-admin.service || {
-            systemctl status --no-pager shopvivaliz-cloudflared-admin.service || true
+          echo "MARINA_REMOTE_STEP=$remote_step"
+          timeout 30s systemctl daemon-reload
+          timeout 90s systemctl enable --now shopvivaliz-cloudflared-admin.service
+          timeout 15s systemctl is-enabled --quiet shopvivaliz-cloudflared-admin.service || {
+            timeout 15s systemctl status --no-pager shopvivaliz-cloudflared-admin.service || true
             exit 1
           }
-          systemctl is-active --quiet shopvivaliz-cloudflared-admin.service || {
-            systemctl status --no-pager shopvivaliz-cloudflared-admin.service || true
-            journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 40 || true
+          timeout 15s systemctl is-active --quiet shopvivaliz-cloudflared-admin.service || {
+            timeout 15s systemctl status --no-pager shopvivaliz-cloudflared-admin.service || true
+            timeout 15s journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 40 || true
             exit 1
           }
           test "$(stat -c '%U:%G:%a' /etc/shopvivaliz/cloudflare-admin/token)" = root:root:600
-          test "$(iptables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
-          test "$(ip6tables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
+          test "$(timeout 15s iptables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
+          test "$(timeout 15s ip6tables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
           remote_step=cloudflared_registration
+          echo "MARINA_REMOTE_STEP=$remote_step"
           registered=0
           for _ in $(seq 1 18); do
-            if journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | grep -q 'Registered tunnel connection'; then
+            if timeout 15s journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | grep -q 'Registered tunnel connection'; then
               registered=1
               break
             fi
@@ -545,7 +549,7 @@ jobs:
           if [ "$registered" = 1 ]; then
             echo CLOUDFLARED_REGISTERED=PASS
           else
-            journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | tail -n 20
+            timeout 15s journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | tail -n 20
             echo '::error::Cloudflare connector did not register'
             exit 2
           fi

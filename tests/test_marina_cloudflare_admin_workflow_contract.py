@@ -76,6 +76,9 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "/usr/local/bin/cloudflared" in text
     assert "Marina token transfer failed after SSH and sudo probe passed" in text
     assert "MARINA_REMOTE_STEP_FAILED" in text
+    assert "VM_SSH=(timeout --signal=TERM --kill-after=10s 180s ssh" in text
+    assert "MARINA_REMOTE_STEP=$remote_step" in text
+    assert "timeout 90s systemctl enable --now" in text
     assert "MARINA_REMOTE_UNIT=PASS" in text
     assert "sudo -n bash -s" in text
     assert 'sed -E "s/^\\\\[127\\\\.0\\\\.0\\\\.1\\\\]:${local_port} /127.0.0.1 /"' in text
