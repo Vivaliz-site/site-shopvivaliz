@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from scripts.olist_pdv import discover_pdv, pdv_product_prices
+from scripts.olist_pdv import discover_pdv, fetch_pdv_snapshot, pdv_product_prices
 
 API_BASE = "https://api.tiny.com.br/public-api/v3"
 CACHE_PATH = Path("storage/products-cache-ativos.json")
@@ -248,6 +248,7 @@ def detail_cache_is_fresh(cached: dict[str, Any], current_marker: str, now: date
 def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 4) -> tuple[list[dict[str, Any]], int]:
     # This is a LIVE authenticated discovery; never infer a saved/historical ID.
     pdv_list = discover_pdv(api_get, token)
+    pdv_snapshot = fetch_pdv_snapshot(api_get, token, pdv_list)
     previous = load_previous_cache()
     enriched: dict[str, dict[str, Any]] = {}
     failures = 0
@@ -269,6 +270,7 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
                     api_get, token, int(product_id),
                     {"preco": cached["_pdv_erp_price"], "precoPromocional": cached.get("_pdv_erp_promo", 0)},
                     pdv_list,
+                    pdv_snapshot,
                 )
                 refreshed = dict(cached)
                 refreshed["precos"] = {
@@ -305,7 +307,7 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
             pass
 
         raw_prices = detail.get("precos") if isinstance(detail.get("precos"), dict) else {}
-        pdv = pdv_product_prices(api_get, token, int(product_id), raw_prices, pdv_list)
+        pdv = pdv_product_prices(api_get, token, int(product_id), raw_prices, pdv_list, pdv_snapshot)
         merged["_pdv_erp_price"] = raw_prices.get("preco", raw_prices.get("preco_venda"))
         merged["_pdv_erp_promo"] = raw_prices.get("precoPromocional", raw_prices.get("preco_promocional", 0))
         merged["precos"] = {
