@@ -92,10 +92,13 @@ jobs:
           echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle"
 
           if [ "$ACTION" = cleanup ]; then
-            mapfile -t connection_ids < <("${OCI[@]}" compute instance-console-connection list \
-              --compartment-id "$compartment_id" --instance-id "$instance_id" \
-              --all --query 'data[].id' --raw-output)
-            echo "MARINA_SERIAL_CLEANUP_COUNT=${#connection_ids[@]}"
+            connection_list="$("${OCI[@]}" compute instance-console-connection list \
+              --compartment-id "$compartment_id" --instance-id "$instance_id" --all)"
+            total_connections="$(jq -r '(.data // []) | length' <<<"$connection_list")"
+            active_connections="$(jq -r '[.data[]? | select((."lifecycle-state" // "") != "TERMINATED")] | length' <<<"$connection_list")"
+            echo "MARINA_SERIAL_CLEANUP_COUNT=$total_connections"
+            echo "MARINA_SERIAL_ACTIVE_COUNT=$active_connections"
+            mapfile -t connection_ids < <(jq -r '.data[]? | select((."lifecycle-state" // "") != "TERMINATED") | .id' <<<"$connection_list")
             deleted_count=0
             failed_count=0
             for existing_connection_id in "${connection_ids[@]}"; do
