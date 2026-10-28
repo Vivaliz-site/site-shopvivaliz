@@ -92,11 +92,26 @@ jobs:
           done
           echo "MARINA_SERIAL_SEARCH_COUNT=$search_count"
           test "$search_count" = 1
-          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
-          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
-
-          instance_json="$("${OCI[@]}" compute instance get --instance-id "$instance_id")"
-          lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json")"
+          instance_id=""
+          compartment_id=""
+          instance_json=""
+          lifecycle=""
+          for resolve_attempt in $(seq 1 5); do
+            instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output 2>/dev/null || true)"
+            if [ -n "$instance_id" ] && [ "$instance_id" != null ]; then
+              compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output 2>/dev/null || true)"
+              instance_json="$("${OCI[@]}" compute instance get --instance-id "$instance_id" 2>/dev/null || true)"
+              lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json" 2>/dev/null || true)"
+              if [ -n "$compartment_id" ] && [ "$compartment_id" != null ] && [ "$lifecycle" = RUNNING ]; then
+                break
+              fi
+            fi
+            echo "MARINA_IDENTITY_RETRY=$resolve_attempt"
+            sleep 5
+          done
+          echo "MARINA_IDENTITY_RESOLUTION=$([ -n "$instance_id" ] && [ -n "$compartment_id" ] && [ "$lifecycle" = RUNNING ] && echo PASS || echo FAIL)"
+          test -n "$instance_id" && test "$instance_id" != null
+          test -n "$compartment_id" && test "$compartment_id" != null
           test "$lifecycle" = RUNNING
           echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle"
 
