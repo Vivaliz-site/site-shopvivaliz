@@ -68,7 +68,21 @@ jobs:
 
           OCI=(oci --config-file "$config")
           query="query instance resources where displayName = '$OCI_INSTANCE_NAME'"
-          search_json="$("${OCI[@]}" search resource structured-search --query-text "$query" --all)"
+          search_out="$RUNNER_TEMP/marina-search.json"
+          search_err="$RUNNER_TEMP/marina-search.err"
+          search_code=0
+          echo "MARINA_SERIAL_SEARCH_START=PASS"
+          "${OCI[@]}" search resource structured-search --query-text "$query" --all >"$search_out" 2>"$search_err" || search_code=$?
+          if [ "$search_code" -ne 0 ]; then
+            echo "MARINA_SERIAL_SEARCH_EXIT=$search_code"
+            sed -E \
+              -e 's/ocid1\.[^[:space:]]+/OCID/g' \
+              -e 's/[0-9a-f]{8}-[0-9a-f-]{27,}/UUID/g' \
+              -e 's#[^[:space:]]+\.pem#KEYFILE#g' \
+              "$search_err" | head -n 12
+            exit "$search_code"
+          fi
+          search_json="$(<"$search_out")"
           instance_id="$(jq -r '.data.items[] | select(.resourceType == "instance") | .identifier' <<<"$search_json" | head -n 1)"
           compartment_id="$(jq -r '.data.items[] | select(.resourceType == "instance") | .compartmentId' <<<"$search_json" | head -n 1)"
           test -n "$instance_id"
