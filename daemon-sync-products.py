@@ -373,6 +373,35 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
     return updated
 
 
+def recover_missing_skus(summaries: list[dict[str, Any]], token: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Verify missing SKU from the authenticated ERP detail, never from stale cache."""
+    resolved: list[dict[str, Any]] = []
+    quarantined: list[dict[str, Any]] = []
+    for row in summaries:
+        product_id = str(row.get("id") or "").strip()
+        if not product_id or not product_id.isdigit():
+            raise ValueError("erp_product_id_missing")
+        sku = str(row.get("sku") or row.get("codigo") or "").strip()
+        if sku:
+            resolved.append(row)
+            continue
+        detail = api_get(f"produtos/{product_id}", token)
+        if str(detail.get("id") or "") != product_id:
+            raise ValueError("erp_product_id_mismatch")
+        verified_sku = str(detail.get("sku") or detail.get("codigo") or "").strip()
+        if not verified_sku:
+            quarantined.append({
+                "sku": "",
+                "olist_product_ids": [product_id],
+                "reason": "missing_erp_sku",
+            })
+            continue
+        updated = dict(row)
+        updated["sku"] = verified_sku
+        resolved.append(updated)
+    return resolved, quarantined
+
+
 def partition_ambiguous_skus(summaries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Keep only unambiguous ERP IDs; quarantine EVERY member of a colliding SKU.
 
@@ -448,9 +477,11 @@ def sync_once(workers: int) -> bool:
     # Block ONLY the ambiguous SKUs, with durable provenance in the same atomic
     # catalog snapshot. Other products may publish only after full PDV proof.
     try:
-        unique_summaries, quarantined = partition_ambiguous_skus(summaries)
-    except ValueError as exc:
-        print(f"[!] Identidade ERP invalida ({exc}); cache anterior preservado")
+        identified_summaries, missing_skus = recover_missing_skus(summaries, token)
+        unique_summaries, duplicate_skus = partition_ambiguous_skus(identified_summaries)
+        quarantined = sorted(missing_skus + duplicate_skus, key=lambda item: (item["sku"].casefold(), item["olist_product_ids"]))
+    except (TypeError, ValueError, RuntimeError) as exc:
+        print(f"[!] Identidade ERP invalida ({type(exc).__name__}); cache anterior preservado")
         return False
     if not unique_summaries:
         print("[!] Nenhum SKU unico verificavel; cache anterior preservado")
