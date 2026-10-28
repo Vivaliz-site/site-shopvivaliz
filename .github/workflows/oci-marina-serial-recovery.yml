@@ -118,5 +118,11 @@ jobs:
           done
 
           test "$state" = ACTIVE
+          connection_string="$(jq -r '.data."connection-string" // empty' <<<"$console_json")"
+          service_host_fingerprint="$(jq -r '.data."service-host-key-fingerprint" // empty' <<<"$console_json")"
+          test -n "$connection_string"
+          test -n "$service_host_fingerprint"
           echo "MARINA_SERIAL_CONNECTION=ACTIVE"
+          echo "MARINA_SERIAL_STRING_PRESENT=true"
+          echo "MARINA_SERIAL_HOST_FINGERPRINT_PRESENT=true"
           echo "MARINA_SERIAL_PROBE=PASS"
