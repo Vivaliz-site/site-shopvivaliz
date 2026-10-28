@@ -170,16 +170,20 @@ jobs:
               raise SystemExit(1)
           with open(known_hosts, "w", encoding="utf-8") as handle:
               for host in hosts:
-                  scan = subprocess.run(
-                      ["ssh-keyscan", "-T", "15", "-p", "443", host],
-                      check=False,
-                      capture_output=True,
-                      text=True,
-                  )
-                  if scan.returncode != 0 or not scan.stdout.strip():
+                  scanned = False
+                  for port in (22, 443):
+                      scan = subprocess.run(
+                          ["ssh-keyscan", "-T", "15", "-p", str(port), host],
+                          check=False,
+                          capture_output=True,
+                          text=True,
+                      )
+                      if scan.returncode == 0 and scan.stdout.strip():
+                          handle.write(scan.stdout)
+                          scanned = True
+                  if not scanned:
                       print("MARINA_SERIAL_HOSTKEY=SCAN_FAILED")
                       raise SystemExit(1)
-                  handle.write(scan.stdout)
           fingerprint = subprocess.run(
               ["ssh-keygen", "-lf", known_hosts, "-E", "sha256"],
               check=False,
