@@ -100,7 +100,11 @@ jobs:
           if [ "$bastion_count" = 1 ]; then
             bastion_id="$(jq -r '.data[] | select(."lifecycle-state" == "ACTIVE") | .id' "$bastion_json")"
           fi
-          if [ "$ACTION" = provision ] && [ "$CONFIRMATION" = PROVISION_MARINA_ADMIN_TUNNEL ] && [ -z "$bastion_id" ] && [ "$bastion_count" = 0 ]; then
+          if [ "$ACTION" = provision ] && [ "$CONFIRMATION" = PROVISION_MARINA_ADMIN_TUNNEL ] && [ -z "$bastion_id" ]; then
+            if [ -n "$bastion_count" ] && [ "$bastion_count" != 0 ]; then
+              echo "::error::Ambiguous active Marina Bastion inventory count=$bastion_count"
+              exit 2
+            fi
             runner_ip="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
             create_bastion="$("${OCI[@]}" bastion bastion create \
               --bastion-type STANDARD \
