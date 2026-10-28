@@ -542,7 +542,7 @@ jobs:
           # second reconnect GRUB was observed, but ten arrows moved past the
           # Linux command, so init=/bin/bash was not applied.  Keep the
           # proven Linux-line offset fixed and vary only the transport retry.
-          linux_line_offset = 5
+          linux_line_offsets = (5, 10, 15)
           def drain_console(seconds=2):
               deadline = time.time() + seconds
               while time.time() < deadline:
@@ -614,7 +614,9 @@ jobs:
                       break
               grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
               child.send("e")
-              time.sleep(2)
+              # GRUB may have rendered its menu text before the serial
+              # terminal is ready to accept the editor transition.
+              time.sleep(3)
               editor = ""
               editor_deadline = time.time() + 4
               while time.time() < editor_deadline:
@@ -634,6 +636,7 @@ jobs:
               # Serial GRUB can drop a burst of cursor/control events while
               # the menu is repainting. Pace the navigation and use one
               # boot key per attempt: Ctrl-X first, F10 alone on attempt 2.
+              linux_line_offset = linux_line_offsets[reconnect_attempt - 1]
               for _ in range(linux_line_offset):
                   child.send("\x1b[B")
                   time.sleep(0.25)
