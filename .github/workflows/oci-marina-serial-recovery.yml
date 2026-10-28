@@ -262,75 +262,90 @@ jobs:
               raise SystemExit(1)
           print("MARINA_SERIAL_TRANSPORT=CONNECTED")
 
-          reboot = subprocess.run(
-              [
-                  "oci",
-                  "--config-file",
-                  os.environ["OCI_CONFIG"],
-                  "--profile",
-                  os.environ["OCI_PROFILE"],
-                  "compute",
-                  "instance",
-                  "action",
-                  "--instance-id",
-                  os.environ["MARINA_INSTANCE_ID"],
-                  "--action",
-                  "SOFTRESET",
-              ],
-              check=False,
-              stdout=subprocess.DEVNULL,
-              stderr=subprocess.DEVNULL,
-          )
-          if reboot.returncode != 0:
-              print("MARINA_REBOOT=REQUEST_FAILED")
-              raise SystemExit(1)
-          print("MARINA_REBOOT=REQUESTED")
+          root_confirmed = False
+          prompt_observed = False
+          for down_count in (5, 10, 15):
+              reboot = subprocess.run(
+                  [
+                      "oci",
+                      "--config-file",
+                      os.environ["OCI_CONFIG"],
+                      "--profile",
+                      os.environ["OCI_PROFILE"],
+                      "compute",
+                      "instance",
+                      "action",
+                      "--instance-id",
+                      os.environ["MARINA_INSTANCE_ID"],
+                      "--action",
+                      "SOFTRESET",
+                  ],
+                  check=False,
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+              )
+              if reboot.returncode != 0:
+                  print(f"MARINA_REBOOT=REQUEST_FAILED attempt={down_count}")
+                  raise SystemExit(1)
+              print(f"MARINA_REBOOT=REQUESTED attempt={down_count}")
 
-          grub = ""
-          deadline = time.time() + 60
-          while time.time() < deadline:
-              child.send("\x1b")
-              try:
-                  grub += child.read_nonblocking(size=4096, timeout=0.2)
-              except (pexpect.TIMEOUT, pexpect.EOF):
-                  pass
-              if "GNU GRUB" in grub or "Advanced options" in grub:
+              grub = ""
+              deadline = time.time() + 30
+              while time.time() < deadline:
+                  child.send("\x1b")
+                  try:
+                      grub += child.read_nonblocking(size=4096, timeout=0.2)
+                  except (pexpect.TIMEOUT, pexpect.EOF):
+                      pass
+                  if "GNU GRUB" in grub or "Advanced options" in grub:
+                      break
+              grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
+              child.send("e")
+              time.sleep(2)
+              for _ in range(down_count):
+                  child.send("\x1b[B")
+                  time.sleep(0.15)
+              child.send("\x05")
+              child.send(" init=/bin/bash")
+              child.send("\x18")
+              child.send("\x1b[21~")
+              shell = ""
+              deadline = time.time() + 30
+              while time.time() < deadline:
+                  try:
+                      shell += child.read_nonblocking(size=4096, timeout=0.3)
+                  except (pexpect.TIMEOUT, pexpect.EOF):
+                      pass
+                  if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
+                      break
+              print(
+                  f"MARINA_GRUB={'OBSERVED_EDIT' if grub_observed else 'BLIND_EDIT'} attempt={down_count}"
+              )
+              prompt_observed = bool(re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell))
+              print(
+                  "MARINA_ROOT_SHELL=PASS attempt=" + str(down_count)
+                  if prompt_observed
+                  else "MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED attempt=" + str(down_count)
+              )
+              child.sendline("")
+              child.sendline("id -u")
+              identity = ""
+              deadline = time.time() + 8
+              while time.time() < deadline:
+                  try:
+                      identity += child.read_nonblocking(size=4096, timeout=0.3)
+                  except (pexpect.TIMEOUT, pexpect.EOF):
+                      pass
+              if re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
+                  print(f"MARINA_ROOT_ID=0 attempt={down_count}")
+                  if not prompt_observed:
+                      print("MARINA_ROOT_SHELL=PASS_BY_UID")
+                  root_confirmed = True
                   break
-          grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
-          child.send("e")
-          time.sleep(3)
-          child.send("\x1b[B" * 5)
-          time.sleep(1)
-          child.send("\x05")
-          child.send(" init=/bin/bash")
-          child.send("\x18")
-          shell = ""
-          deadline = time.time() + 45
-          while time.time() < deadline:
-              try:
-                  shell += child.read_nonblocking(size=4096, timeout=0.3)
-              except (pexpect.TIMEOUT, pexpect.EOF):
-                  pass
-              if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
-                  break
-          print("MARINA_GRUB=OBSERVED_EDIT" if grub_observed else "MARINA_GRUB=BLIND_EDIT")
-          prompt_observed = bool(re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell))
-          print("MARINA_ROOT_SHELL=PASS" if prompt_observed else "MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED")
-          child.sendline("")
-          child.sendline("id -u")
-          identity = ""
-          deadline = time.time() + 10
-          while time.time() < deadline:
-              try:
-                  identity += child.read_nonblocking(size=4096, timeout=0.3)
-              except (pexpect.TIMEOUT, pexpect.EOF):
-                  pass
-          if not re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
-              print("MARINA_ROOT_ID=NOT_CONFIRMED")
+              print(f"MARINA_ROOT_ID=NOT_CONFIRMED attempt={down_count}")
+              time.sleep(3)
+          if not root_confirmed:
               raise SystemExit(1)
-          print("MARINA_ROOT_ID=0")
-          if not prompt_observed:
-              print("MARINA_ROOT_SHELL=PASS_BY_UID")
 
           public_key = os.environ["MARINA_VM_PUBLIC_KEY"]
           quoted_key = shlex.quote(public_key)
