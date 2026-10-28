@@ -422,6 +422,12 @@ def save_products(products: list[dict[str, Any]], quarantined: list[dict[str, An
         try:
             temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
             temporary.replace(CACHE_PATH)
+            # Derived caches must not serve registration prices after a PDV refresh.
+            (CACHE_PATH.parent / "cache" / "products-cache-ativos.json").unlink(missing_ok=True)
+            derived_dir = CACHE_PATH.parent / "cache" / "catalog-api"
+            if derived_dir.is_dir():
+                for old_response in derived_dir.glob("*.json"):
+                    old_response.unlink(missing_ok=True)
         finally:
             temporary.unlink(missing_ok=True)
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
