@@ -410,7 +410,24 @@ jobs:
           cf_secret="$(jq -r '.result' <<<"$token_json")"
           test -n "$cf_secret" && test "$cf_secret" != null
           fi
-          printf '%s' "$cf_secret" | "${VM_SSH[@]}" "sudo -n sh -c 'install -d -o root -g root -m 700 /etc/shopvivaliz/cloudflare-admin; cat > /etc/shopvivaliz/cloudflare-admin/token; chown root:root /etc/shopvivaliz/cloudflare-admin/token; chmod 600 /etc/shopvivaliz/cloudflare-admin/token'"
+          if ! "${VM_SSH[@]}" 'sudo -n true' >/dev/null; then
+            forward_recovered=0
+            for attempt in 1 2 3; do
+              if bash -lc "$tunnel_command" && "${VM_SSH[@]}" 'sudo -n true' >/dev/null; then
+                forward_recovered=1
+                echo "MARINA_FORWARD_RECONNECTED=$attempt"
+                break
+              fi
+              echo "MARINA_FORWARD_RECONNECT_RETRY=$attempt"
+              sleep 5
+            done
+            test "$forward_recovered" = 1 || { echo "::error::Marina SSH forward unavailable before token transfer"; exit 255; }
+          fi
+          if ! printf '%s' "$cf_secret" | "${VM_SSH[@]}" "sudo -n sh -c 'install -d -o root -g root -m 700 /etc/shopvivaliz/cloudflare-admin; cat > /etc/shopvivaliz/cloudflare-admin/token; chown root:root /etc/shopvivaliz/cloudflare-admin/token; chmod 600 /etc/shopvivaliz/cloudflare-admin/token'"; then
+            echo "::error::Marina token transfer failed after SSH and sudo probe passed"
+            exit 1
+          fi
+          echo "MARINA_TOKEN_INSTALL=PASS"
           unset cf_secret token_json
 
           unit="$RUNNER_TEMP/marina-cloudflared-admin-unit.sh"

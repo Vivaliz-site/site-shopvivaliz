@@ -63,5 +63,7 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "ConnectTimeout 30" in text
     assert "-F $bastion_ssh_config" in text
     assert "MARINA_BASTION_TUNNEL_RETRY" in text
+    assert "MARINA_TOKEN_INSTALL=PASS" in text
+    assert "Marina token transfer failed after SSH and sudo probe passed" in text
     assert "sudo -n bash -s" in text
     assert 'sed -E "s/^\\\\[127\\\\.0\\\\.0\\\\.1\\\\]:${local_port} /127.0.0.1 /"' in text
