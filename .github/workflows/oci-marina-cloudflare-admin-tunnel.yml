@@ -275,7 +275,8 @@ jobs:
           test -n "$metadata"
           tunnel_command="${metadata//<privateKey>/$bastion_key}"
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
-          tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$RUNNER_TEMP/marina-bastion-known-hosts }"
+          tunnel_command="${tunnel_command//ssh /ssh -o BatchMode=yes -o IdentitiesOnly=yes }"
+          tunnel_command="${tunnel_command/ssh -o BatchMode=yes -o IdentitiesOnly=yes /ssh -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$RUNNER_TEMP/marina-bastion-known-hosts }"
           bash -lc "$tunnel_command"
           sleep 2
           forwarded_host_key="$RUNNER_TEMP/marina-forwarded-host-key"
