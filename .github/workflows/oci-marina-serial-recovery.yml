@@ -355,7 +355,11 @@ jobs:
                       "--instance-id",
                       os.environ["MARINA_INSTANCE_ID"],
                       "--action",
-                      "SOFTRESET",
+                      # RESET is the OCI immediate reboot action. SOFTRESET
+                      # can remain in STOPPING for up to 15 minutes while it
+                      # waits for the guest OS, which is unsafe for this
+                      # console recovery loop.
+                      "RESET",
                   ],
                   check=False,
                   stdout=subprocess.DEVNULL,
