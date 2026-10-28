@@ -268,8 +268,7 @@ jobs:
               if "GNU GRUB" in grub or "Advanced options" in grub:
                   break
           if "GNU GRUB" not in grub and "Advanced options" not in grub:
-              print("MARINA_GRUB=NOT_OBSERVED")
-              raise SystemExit(1)
+              print("MARINA_GRUB=NOT_OBSERVED_BLIND_EDIT")
           child.send("e")
           time.sleep(2)
           child.send("\x1b[B" * 5)
