@@ -1036,14 +1036,11 @@ if [ -f "$NEW_RELEASE_PATH/includes/olist-pdv-price.php" ] \
     write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV verification failed"
     exit 1
   fi
-  # A fully authenticated PDV snapshot is safe for the old and new code. The
-  # replace is serialized against webhook writers; a protected backup remains.
-  if ! python3 "$NEW_RELEASE_PATH/scripts/pdv_release_cache.py" --expected-sha "$REMOTE_SHA" --promote >> "$LOG_FILE" 2>&1; then
-    log ERROR "PDV promotion failed; immutable current release not switched"
-    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV promotion failed"
-    exit 1
-  fi
-  log INFO "PDV cache verified, collision quarantine preserved, ready for release swap"
+  # Keep the validated candidate isolated until immediately before the
+  # immutable release flip; avoid an old timer overwriting the published PDV
+  # cache during unrelated migration and hardening steps.
+  pdv_first_cutover_ready=1
+  log INFO "PDV candidate verified; live catalog not yet changed"
 fi
 
 if [ -f "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" ]; then
@@ -1068,6 +1065,17 @@ php -l "$NEW_RELEASE_PATH/index.php" > /dev/null
 php -l "$NEW_RELEASE_PATH/api/health/version.php" > /dev/null
 if [ -f "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" ]; then
   php -l "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" > /dev/null
+fi
+
+if [ "${pdv_first_cutover_ready:-0}" = "1" ]; then
+  # Final cutover operation: re-verify and atomically promote the staged
+  # candidate immediately before switching the release symlink.
+  if ! python3 "$NEW_RELEASE_PATH/scripts/pdv_release_cache.py" --expected-sha "$REMOTE_SHA" --promote >> "$LOG_FILE" 2>&1; then
+    log ERROR "PDV promotion failed; immutable current release not switched"
+    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV promotion failed"
+    exit 1
+  fi
+  log INFO "PDV catalog promoted, quarantine preserved; now switching release"
 fi
 
 ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"
