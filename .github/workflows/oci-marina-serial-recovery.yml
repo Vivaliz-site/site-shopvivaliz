@@ -42,6 +42,7 @@ jobs:
       OCI_PROFILE: DEFAULT
       ACTION: ${{ inputs.action }}
       CONFIRMATION: ${{ inputs.confirmation }}
+      CLOUDFLARE_MARINA_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_MARINA_TUNNEL_TOKEN }}
     steps:
       - name: Install OCI CLI and JSON tools
         shell: bash
@@ -750,6 +751,11 @@ jobs:
 
           public_key = os.environ["MARINA_VM_PUBLIC_KEY"]
           quoted_key = shlex.quote(public_key)
+          tunnel_token = os.environ["CLOUDFLARE_MARINA_TUNNEL_TOKEN"]
+          if not tunnel_token:
+              print("MARINA_CLOUDFLARED=TOKEN_MISSING")
+              raise SystemExit(1)
+          quoted_tunnel_token = shlex.quote(tunnel_token)
           commands = [
               "mount -o remount,rw /",
               "mkdir -p /home/ubuntu/.ssh",
@@ -758,12 +764,13 @@ jobs:
               "chmod 700 /home/ubuntu/.ssh",
               "chmod 600 /home/ubuntu/.ssh/authorized_keys",
               "if [ -x /usr/sbin/sshd ]; then mkdir -p /etc/ssh/sshd_config.d /etc/systemd/system/multi-user.target.wants /run/sshd; ssh-keygen -A; [ -f /etc/ssh/sshd_config ] || printf '%s\\n' 'Include /etc/ssh/sshd_config.d/*.conf' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config; printf '%s\\n' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config.d/99-shopvivaliz-admin.conf; printf '%s\\n' '[Unit]' 'Description=OpenSSH server' 'After=network.target' '[Service]' 'Type=simple' 'RuntimeDirectory=sshd' 'ExecStartPre=/usr/sbin/sshd -t' 'ExecStart=/usr/sbin/sshd -D -e' 'ExecReload=/bin/kill -HUP $MAINPID' 'Restart=on-failure' '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/ssh.service; if /usr/sbin/sshd -t; then ln -sf /etc/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service; echo MARINA_SSHD_PRESENT > /root/.shopvivaliz-sshd-state; else echo MARINA_SSHD_CONFIG_INVALID > /root/.shopvivaliz-sshd-state; fi; else echo MARINA_SSHD_MISSING > /root/.shopvivaliz-sshd-state; fi",
+              f"if [ -x /home/ubuntu/.local/bin/cloudflared ]; then CF_BIN=/home/ubuntu/.local/bin/cloudflared; else CF_BIN=$(find /home/ubuntu -type f -name cloudflared -perm -111 -print -quit 2>/dev/null); fi; if [ -n \"$CF_BIN\" ] && install -o root -g root -m 0755 \"$CF_BIN\" /usr/local/bin/cloudflared && /usr/local/bin/cloudflared --version >/dev/null 2>&1; then id cloudflared >/dev/null 2>&1 || useradd --system --home-dir /var/lib/cloudflared --create-home --shell /usr/sbin/nologin cloudflared; install -d -o root -g cloudflared -m 0750 /etc/cloudflared; install -d -o cloudflared -g cloudflared -m 0750 /var/lib/cloudflared; printf '%s\\n' {quoted_tunnel_token} > /etc/cloudflared/marina-admin.token; chown root:cloudflared /etc/cloudflared/marina-admin.token; chmod 0640 /etc/cloudflared/marina-admin.token; printf '%s\\n' '[Unit]' 'Description=ShopVivaliz Marina Cloudflare admin tunnel' 'After=network-online.target' 'Wants=network-online.target' '' '[Service]' 'Type=simple' 'User=cloudflared' 'Group=cloudflared' 'ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate run --token-file /etc/cloudflared/marina-admin.token' 'Restart=on-failure' 'RestartSec=5s' 'NoNewPrivileges=yes' 'PrivateTmp=yes' 'ProtectHome=true' 'ProtectSystem=full' 'ReadWritePaths=/var/lib/cloudflared' '' '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/shopvivaliz-cloudflared-marina-admin.service; mkdir -p /etc/systemd/system/multi-user.target.wants; ln -sf /etc/systemd/system/shopvivaliz-cloudflared-marina-admin.service /etc/systemd/system/multi-user.target.wants/shopvivaliz-cloudflared-marina-admin.service; echo MARINA_CLOUDFLARED_READY > /root/.shopvivaliz-cloudflared-state; else echo MARINA_CLOUDFLARED_BINARY_MISSING > /root/.shopvivaliz-cloudflared-state; fi",
               "sync",
           ]
           for command_line in commands:
               child.sendline(command_line)
               time.sleep(0.8)
-          child.sendline("cat /root/.shopvivaliz-sshd-state 2>/dev/null || true")
+          child.sendline("cat /root/.shopvivaliz-sshd-state /root/.shopvivaliz-cloudflared-state 2>/dev/null || true")
           sshd_state = ""
           deadline = time.time() + 3
           while time.time() < deadline:
@@ -777,6 +784,12 @@ jobs:
               print("MARINA_SSHD=MISSING")
           else:
               print("MARINA_SSHD=UNKNOWN")
+          if "MARINA_CLOUDFLARED_READY" in sshd_state:
+              print("MARINA_CLOUDFLARED=READY")
+          elif "MARINA_CLOUDFLARED_BINARY_MISSING" in sshd_state:
+              print("MARINA_CLOUDFLARED=BINARY_MISSING")
+          else:
+              print("MARINA_CLOUDFLARED=UNKNOWN")
           print("MARINA_SSH_AUTHORIZED_KEY=RESTORED")
           child.sendline("/sbin/reboot -f")
           print("MARINA_REBOOT=NORMAL_REQUESTED")
