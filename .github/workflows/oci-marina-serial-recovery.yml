@@ -82,12 +82,13 @@ jobs:
           ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
           chmod 600 "$console_key"
           create_err="$RUNNER_TEMP/marina-serial-create.err"
-          set +e
-          create_json="$("${OCI[@]}" compute instance-console-connection create \
+          if create_json="$("${OCI[@]}" compute instance-console-connection create \
             --instance-id "$instance_id" \
-            --ssh-public-key-file "$console_pub" 2>"$create_err")"
-          create_code=$?
-          set -e
+            --ssh-public-key-file "$console_pub" 2>"$create_err")"; then
+            create_code=0
+          else
+            create_code=$?
+          fi
           if [ "$create_code" -ne 0 ]; then
             echo "MARINA_SERIAL_CREATE_EXIT=$create_code"
             sed -E \
