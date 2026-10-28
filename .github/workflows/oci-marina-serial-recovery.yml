@@ -286,25 +286,28 @@ jobs:
               raise SystemExit(1)
           print("MARINA_REBOOT=REQUESTED")
 
-          time.sleep(3)
-          child.send("\x1b")
-          time.sleep(1)
-          child.send("e")
-          time.sleep(1)
-          child.send("\x1b[B" * 7)
-          child.send("\x05")
-          child.send(" init=/bin/bash")
-          child.send("\x18")
-          print("MARINA_GRUB=BLIND_EDIT_SENT")
           shell = ""
-          deadline = time.time() + 45
-          while time.time() < deadline:
-              try:
-                  shell += child.read_nonblocking(size=4096, timeout=0.3)
-              except (pexpect.TIMEOUT, pexpect.EOF):
-                  pass
+          for _ in range(5):
+              time.sleep(2)
+              child.send("\x1b")
+              time.sleep(0.5)
+              child.send("e")
+              time.sleep(0.5)
+              child.send("\x1b[B" * 7)
+              child.send("\x05")
+              child.send(" init=/bin/bash")
+              child.send("\x18")
+              deadline = time.time() + 6
+              while time.time() < deadline:
+                  try:
+                      shell += child.read_nonblocking(size=4096, timeout=0.3)
+                  except (pexpect.TIMEOUT, pexpect.EOF):
+                      pass
+                  if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
+                      break
               if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
                   break
+          print("MARINA_GRUB=BLIND_EDIT_ATTEMPTS=5")
           if not re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
               print("MARINA_ROOT_SHELL=NOT_OBSERVED")
               raise SystemExit(1)
