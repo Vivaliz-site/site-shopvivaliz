@@ -281,7 +281,7 @@ jobs:
           forwarded_host_key="$RUNNER_TEMP/marina-forwarded-host-key"
           ssh-keyscan -T 15 -p "$local_port" -t ed25519 127.0.0.1 > "$forwarded_host_key" 2>/dev/null || true
           test -s "$forwarded_host_key"
-          python3 "$vm_known_hosts" "$forwarded_host_key" <<'PY'
+          python3 - "$vm_known_hosts" "$forwarded_host_key" <<'PY'
           import sys
 
           def key_material(line):
