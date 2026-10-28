@@ -218,7 +218,7 @@ jobs:
             --bastion-id "$MARINA_BASTION_ID" \
             --target-private-ip "$MARINA_PRIVATE_IP" \
             --target-port 22 \
-            --session-ttl 900 \
+            --session-ttl 1800 \
             --display-name shopvivaliz-marina-cloudflare-admin \
             --ssh-public-key-file "$bastion_key.pub" \
             --query 'data.id' --raw-output)"

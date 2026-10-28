@@ -43,3 +43,4 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "bastion bastion create" in text
     assert "CREATED_NO_QUOTA" in text
     assert "client-cidr-list" in text
+    assert "--session-ttl 1800" in text
