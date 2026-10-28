@@ -64,6 +64,8 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "-F $bastion_ssh_config" in text
     assert "MARINA_BASTION_TUNNEL_RETRY" in text
     assert "MARINA_TOKEN_INSTALL=PASS" in text
+    assert "MARINA_CLOUDFLARED_INSTALL=PASS" in text
+    assert "/usr/local/bin/cloudflared" in text
     assert "Marina token transfer failed after SSH and sudo probe passed" in text
     assert "MARINA_REMOTE_STEP_FAILED" in text
     assert "MARINA_REMOTE_UNIT=PASS" in text
