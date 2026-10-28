@@ -130,6 +130,14 @@ def run(sha: str, promote: bool = False) -> dict[str, Any]:
             raise ValueError("pdv_stage_changed_during_validation")
         backup = STAGE_ROOT / f".pdv-backup-{sha}.json"
         if CACHE.is_file():
+            existing = json.loads(CACHE.read_text(encoding="utf-8"))
+            old_rows = existing if isinstance(existing, list) else existing.get("itens") if isinstance(existing, dict) else None
+            if not isinstance(old_rows, list):
+                raise ValueError("existing_catalog_unreadable")
+            # First PDV release must not make most of the public catalog vanish.
+            if old_rows and (summary["published_products"] < len(old_rows) * 0.9
+                             or summary["quarantined_products"] > max(3, len(old_rows) * 0.05)):
+                raise ValueError("pdv_cutover_catalog_drop_exceeds_threshold")
             shutil.copy2(CACHE, backup)
             backup.chmod(0o600)
         os.replace(stage, CACHE)
