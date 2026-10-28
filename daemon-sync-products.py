@@ -370,10 +370,48 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
     return updated
 
 
-def save_products(products: list[dict[str, Any]]) -> Path:
+def partition_ambiguous_skus(summaries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Keep only unambiguous ERP IDs; quarantine EVERY member of a colliding SKU.
+
+    Ambiguity is an explicit unresolved ERP incident, not a silent choice of the
+    cheapest/first item. Missing identities or repeated IDs block the full sync.
+    """
+    by_sku: dict[str, list[dict[str, Any]]] = {}
+    seen_ids: set[str] = set()
+    for row in summaries:
+        sku = str(row.get("sku") or row.get("codigo") or "").strip()
+        product_id = str(row.get("id") or "").strip()
+        if not sku or not product_id or product_id in seen_ids:
+            raise ValueError("erp_missing_or_duplicate_identity")
+        seen_ids.add(product_id)
+        by_sku.setdefault(sku.casefold(), []).append(row)
+    quarantined: list[dict[str, Any]] = []
+    ambiguous_keys: set[str] = set()
+    for key, rows in by_sku.items():
+        if len(rows) < 2:
+            continue
+        ambiguous_keys.add(key)
+        quarantined.append({
+            "sku": str(rows[0].get("sku") or rows[0].get("codigo") or "").strip(),
+            "olist_product_ids": sorted(str(row["id"]) for row in rows),
+            "reason": "duplicate_active_sku",
+        })
+    clean = [row for row in summaries if str(row.get("sku") or row.get("codigo") or "").strip().casefold() not in ambiguous_keys]
+    return clean, sorted(quarantined, key=lambda item: item["sku"].casefold())
+
+
+def save_products(products: list[dict[str, Any]], quarantined: list[dict[str, Any]] | None = None, source_count: int | None = None) -> Path:
     registry = load_video_sources()
     products = [merge_video_sources(item, registry) for item in products]
-    payload = {"total": len(products), "timestamp": datetime.now(timezone.utc).isoformat(), "itens": products}
+    blocked = quarantined or []
+    payload = {
+        "total": len(products),
+        "source_active_count": source_count if source_count is not None else len(products),
+        "quarantined_skus": blocked,
+        "quarantined_product_count": sum(len(row["olist_product_ids"]) for row in blocked),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "itens": products,
+    }
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = CACHE_PATH.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -390,16 +428,21 @@ def sync_once(workers: int) -> bool:
     if not summaries:
         print("[!] A API não retornou produtos ativos; cache existente preservado")
         return False
-    # Duplicate public SKUs are commercially ambiguous (issue #3271).
-    skus = [str(item.get("sku") or "").strip().casefold() for item in summaries]
-    product_ids = [str(item.get("id") or "").strip() for item in summaries]
-    if (not all(skus) or len(set(skus)) != len(skus)
-            or not all(product_ids) or len(set(product_ids)) != len(product_ids)):
-        print("[!] SKU/ERP ID ausente ou duplicado; cache anterior preservado")
+    # Block ONLY the ambiguous SKUs, with durable provenance in the same atomic
+    # catalog snapshot. Other products may publish only after full PDV proof.
+    try:
+        unique_summaries, quarantined = partition_ambiguous_skus(summaries)
+    except ValueError as exc:
+        print(f"[!] Identidade ERP invalida ({exc}); cache anterior preservado")
         return False
-    products, failures = enrich_products(summaries, token, workers)
-    if failures or len(products) != len(summaries):
-        print(f"[!] PDV integral nao comprovada; {failures} falhas; {len(products)}/{len(summaries)} produtos; cache anterior preservado")
+    if not unique_summaries:
+        print("[!] Nenhum SKU unico verificavel; cache anterior preservado")
+        return False
+    if quarantined:
+        print(f"[!] QUARENTENA ERP: {len(quarantined)} SKU(s), issue #3271; todos os IDs associados bloqueados")
+    products, failures = enrich_products(unique_summaries, token, workers)
+    if failures or len(products) != len(unique_summaries):
+        print(f"[!] PDV dos SKUs unicos nao comprovada; {failures} falhas; {len(products)}/{len(unique_summaries)} produtos; cache anterior preservado")
         return False
     if any(item.get("price_source") != "olist_pdv" or int(item.get("pdv_list_id") or 0) < 1 for item in products):
         print("[!] Algum preco nao proveio de PDV; cache anterior preservado")
@@ -407,10 +450,10 @@ def sync_once(workers: int) -> bool:
     kits_updated = apply_kit_stock(products)
     if kits_updated:
         print(f"[+] Estoque recalculado pela composicao em {kits_updated} produtos tipo kit")
-    output = save_products(products)
+    output = save_products(products, quarantined, len(summaries))
     with_stock = sum(1 for item in products if int(item.get("estoque_disponivel") or 0) > 0)
     with_images = sum(1 for item in products if isinstance(item.get("anexos"), list) and item["anexos"])
-    print(f"[+] Cache atômico salvo: {len(products)} produtos, {with_stock} com estoque, {with_images} com imagem, {failures} falhas em {output}")
+    print(f"[+] Cache atômico salvo: {len(products)} produtos PDV, {with_stock} com estoque, {with_images} com imagem; {len(quarantined)} SKU(s) em quarentena NAO_APTO; {failures} falhas em {output}")
     return failures < len(summaries)
 
 
