@@ -157,3 +157,15 @@ Validar com testes offline tests.test_ai_free_provider_sentinel_deadline
 (inclusive timeout real, morte inesperada e recuperacao), testes gerais
 e a UI real de status/monitoramento. Confirmar que o estado indica
 HEALTHY apenas apos uma rodada completa e que o timestamp e recente.
+
+
+## Monitor passivo na Marina (2026-10-28)
+
+A VM marina-a1-4c24g hospeda uma release web e workers de negocios,
+mas nao hospeda controlador de geracao IA nem servidor Ollama. O sentinela
+deve ficar instalado para detectar novos processos pagos, contadores Codex,
+atividades Claude e cron/systemd de geracao nao autorizada, sem exigir
+servicos inexistentes ou alterar bridges interativos. A ausencia de Ollama
+na Marina nao autoriza fallback para Codex ou Claude: trabalhos persistentes
+de IA permanecem roteados somente nos hosts que possuem modelo gratuito.
+O monitor e somente leitura e nao executa inferencia.
