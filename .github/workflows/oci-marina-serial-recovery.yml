@@ -383,14 +383,17 @@ jobs:
                   f"linux={str(editor_has_linux).lower()} "
                   f"initrd={str(editor_has_initrd).lower()}"
               )
-              # The GRUB console accepts the same compact sequence that
-              # previously produced a root shell on this image.  Sending it
-              # as one burst avoids dropping cursor events on a slow serial
-              # console while keeping the kernel-line offset fixed.
-              child.send("\x1b[B" * linux_line_offset)
+              # Serial GRUB can drop a burst of cursor/control events while
+              # the menu is repainting. Pace the navigation and use one
+              # boot key per attempt: Ctrl-X first, F10 alone on attempt 2.
+              for _ in range(linux_line_offset):
+                  child.send("\x1b[B")
+                  time.sleep(0.25)
               child.send("\x05")
+              time.sleep(0.5)
               child.send(" init=/bin/bash")
-              child.send("\x18")
+              time.sleep(0.5)
+              child.send("\x18" if reconnect_attempt != 2 else "\x1b[21~")
               shell = ""
               deadline = time.time() + 60
               while time.time() < deadline:
