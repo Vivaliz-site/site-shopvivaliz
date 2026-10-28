@@ -171,6 +171,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
           agent_script="$RUNNER_TEMP/marina-agent-readonly.sh"
           agent_content="$RUNNER_TEMP/marina-agent-readonly-content.json"
           agent_target="$RUNNER_TEMP/marina-agent-readonly-target.json"
