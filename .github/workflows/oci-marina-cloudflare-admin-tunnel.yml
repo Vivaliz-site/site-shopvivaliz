@@ -205,7 +205,7 @@ jobs:
           done
           state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution")"
           body="$(jq -r '.data.content.text // ""' <<<"$execution")"
-          printf '%s\n' "$body" | grep '^MARINA_' || true
+          printf '%s\n' "$body" | awk '/^MARINA_/ {print}'
           test "$state" = SUCCEEDED
           echo OCI_MARINA_AGENT_INSPECT=PASS
 
