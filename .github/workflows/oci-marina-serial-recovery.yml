@@ -591,13 +591,13 @@ jobs:
                   print(f"MARINA_REBOOT=REQUEST_FAILED attempt={reconnect_attempt}")
                   raise SystemExit(1)
               print(f"MARINA_REBOOT=REQUESTED attempt={reconnect_attempt}")
-              time.sleep(8)
-              # OCI may keep the original SSH channel alive while the guest
-              # resets. Reopen it after the reset so GRUB output belongs to
-              # the new boot rather than the pre-reset channel buffer.
-              if child.isalive():
-                  child.close(force=True)
-              child = connect_console()
+              # Keep the existing serial channel across RESET. Reopening it
+              # after a fixed delay can miss the short GRUB window entirely;
+              # this is especially easy on a fast ARM guest. If OCI closes
+              # the channel, reconnect only as a fallback.
+              time.sleep(1)
+              if not child.isalive():
+                  child = connect_console()
               print(f"MARINA_SERIAL_RECONNECT=READY attempt={reconnect_attempt}")
 
               grub = ""
