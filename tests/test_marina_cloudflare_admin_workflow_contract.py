@@ -51,3 +51,4 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "ssh-keyscan -T 15 -p \"$local_port\"" in text
     assert "does not match approved OCI host-key material" in text
     assert "HostKeyAlias=127.0.0.1" in text
+    assert 'python3 - "$vm_known_hosts" "$forwarded_host_key"' in text
