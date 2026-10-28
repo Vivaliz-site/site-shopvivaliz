@@ -65,5 +65,7 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "MARINA_BASTION_TUNNEL_RETRY" in text
     assert "MARINA_TOKEN_INSTALL=PASS" in text
     assert "Marina token transfer failed after SSH and sudo probe passed" in text
+    assert "MARINA_REMOTE_STEP_FAILED" in text
+    assert "MARINA_REMOTE_UNIT=PASS" in text
     assert "sudo -n bash -s" in text
     assert 'sed -E "s/^\\\\[127\\\\.0\\\\.0\\\\.1\\\\]:${local_port} /127.0.0.1 /"' in text
