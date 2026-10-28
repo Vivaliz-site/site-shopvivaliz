@@ -30,6 +30,7 @@ jobs:
       OCI_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
       OCI_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
       OCI_INSTANCE_NAME: marina-a1-4c24g
+      OCI_PROFILE: DEFAULT
       ACTION: ${{ inputs.action }}
     steps:
       - name: Install OCI CLI and JSON tools
@@ -66,27 +67,13 @@ jobs:
           EOF
           chmod 600 "$config"
 
-          OCI=(oci --config-file "$config")
+          OCI=(oci --config-file "$config" --profile "$OCI_PROFILE")
           query="query instance resources where displayName = '$OCI_INSTANCE_NAME'"
-          search_out="$RUNNER_TEMP/marina-search.json"
-          search_err="$RUNNER_TEMP/marina-search.err"
-          search_code=0
           echo "MARINA_SERIAL_SEARCH_START=PASS"
-          "${OCI[@]}" search resource structured-search --query-text "$query" --all >"$search_out" 2>"$search_err" || search_code=$?
-          if [ "$search_code" -ne 0 ]; then
-            echo "MARINA_SERIAL_SEARCH_EXIT=$search_code"
-            sed -E \
-              -e 's/ocid1\.[^[:space:]]+/OCID/g' \
-              -e 's/[0-9a-f]{8}-[0-9a-f-]{27,}/UUID/g' \
-              -e 's#[^[:space:]]+\.pem#KEYFILE#g' \
-              "$search_err" | head -n 12
-            exit "$search_code"
-          fi
-          search_json="$(<"$search_out")"
-          instance_id="$(jq -r '.data.items[] | select(.resourceType == "instance") | .identifier' <<<"$search_json" | head -n 1)"
-          compartment_id="$(jq -r '.data.items[] | select(.resourceType == "instance") | .compartmentId' <<<"$search_json" | head -n 1)"
-          test -n "$instance_id"
-          test -n "$compartment_id"
+          search_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$search_count" = 1
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
 
           instance_json="$("${OCI[@]}" compute instance get --instance-id "$instance_id")"
           lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json")"
