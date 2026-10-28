@@ -322,7 +322,19 @@ jobs:
           sed -E "s/^\\[127\\.0\\.0\\.1\\]:${local_port} /127.0.0.1 /" "$forwarded_host_key" > "$vm_known_hosts"
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$vm_known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$vm_key" -o HostKeyAlias=127.0.0.1)
           VM_SSH=(timeout --signal=TERM --kill-after=10s 180s ssh "${SSH_COMMON[@]}" -p "$local_port" ubuntu@127.0.0.1)
-          "${VM_SSH[@]}" 'test "$(hostname)" = "marina-a1-4c24g"; id -u; sudo -n true'
+          private_ssh_ready=0
+          for attempt in 1 2 3; do
+            if "${VM_SSH[@]}" 'test "$(hostname)" = "marina-a1-4c24g"; id -u; sudo -n true'; then
+              private_ssh_ready=1
+              break
+            fi
+            echo "MARINA_PRIVATE_SSH_RETRY=$attempt"
+            if [ "$attempt" -lt 3 ]; then
+              bash -lc "$tunnel_command" >/dev/null 2>&1 || true
+              sleep 5
+            fi
+          done
+          test "$private_ssh_ready" = 1 || { echo "::error::Marina private SSH did not become available through bounded Bastion retries"; exit 255; }
           echo "MARINA_PRIVATE_SSH=PASS"
 
           create_instance_agent_command() {
