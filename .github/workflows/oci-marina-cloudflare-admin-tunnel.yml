@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - inspect
+          - inspect_vm
           - provision
         default: inspect
       confirmation:
@@ -164,6 +165,49 @@ jobs:
           policy_count="$(jq --arg n "$MARINA_ACCESS_POLICY_NAME" '[.result[] | select(.name == $n)] | length' <<<"$policies")"
           echo "MARINA_ACCESS_POLICY_FOUND=$([ "$policy_count" = 1 ] && echo true || echo false)"
           echo "OCI_MARINA_CLOUDFLARE_ADMIN=INSPECT_ONLY"
+
+      - name: Inspect Marina SSH runtime through OCI Agent without changing state
+        if: inputs.action == 'inspect_vm'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          agent_script="$RUNNER_TEMP/marina-agent-readonly.sh"
+          agent_content="$RUNNER_TEMP/marina-agent-readonly-content.json"
+          agent_target="$RUNNER_TEMP/marina-agent-readonly-target.json"
+          cat > "$agent_script" <<'REMOTE'
+          set -Eeuo pipefail
+          printf 'MARINA_AGENT_UID=%s\n' "$(id -u)"
+          printf 'MARINA_AGENT_HOST=%s\n' "$(hostname)"
+          printf 'MARINA_SSH_UNIT=%s\n' "$(systemctl is-active ssh.service 2>/dev/null || systemctl is-active sshd.service 2>/dev/null || echo unknown)"
+          printf 'MARINA_SSH_LISTEN_COUNT=%s\n' "$(ss -ltnH 2>/dev/null | awk '$4 ~ /(^|:)22$/ {c++} END {print c+0}')"
+          printf 'MARINA_IPTABLES_22_DROP_COUNT=%s\n' "$(iptables-save 2>/dev/null | awk '/(--dport 22|dpt:22)/ && /DROP/ {c++} END {print c+0}')"
+          printf 'MARINA_IPTABLES_22_ACCEPT_COUNT=%s\n' "$(iptables-save 2>/dev/null | awk '/(--dport 22|dpt:22)/ && /ACCEPT/ {c++} END {print c+0}')"
+          printf 'MARINA_NFT_22_DROP_COUNT=%s\n' "$(nft list ruleset 2>/dev/null | awk '/(dport 22|tcp dport 22)/ && /drop/ {c++} END {print c+0}')"
+          if command -v ufw >/dev/null 2>&1; then
+            printf 'MARINA_UFW_ACTIVE=%s\n' "$(ufw status 2>/dev/null | awk 'NR==1 {print $2}' || true)"
+          else
+            printf 'MARINA_UFW_ACTIVE=absent\n'
+          fi
+          echo MARINA_AGENT_READONLY_DIAGNOSTIC=PASS
+          REMOTE
+          jq -n --rawfile text "$agent_script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$agent_content"
+          jq -n --arg instanceId "$MARINA_INSTANCE_ID" '{instanceId:$instanceId}' > "$agent_target"
+          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$MARINA_COMPARTMENT_ID" --display-name "Inspect Marina SSH runtime" --content "file://$agent_content" --target "file://$agent_target" --timeout-in-seconds 120 --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 36); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$MARINA_INSTANCE_ID")"
+            state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS|'') sleep 5 ;;
+              *) exit 31 ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution")"
+          body="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$body" | grep '^MARINA_' || true
+          test "$state" = SUCCEEDED
+          echo OCI_MARINA_AGENT_INSPECT=PASS
 
       - name: Provision the independent tunnel, Access policy, DNS and VM connector
         if: inputs.action == 'provision'
