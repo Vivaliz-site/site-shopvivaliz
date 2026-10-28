@@ -81,10 +81,23 @@ jobs:
 
           ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
           chmod 600 "$console_key"
-          connection_id="$("${OCI[@]}" compute instance-console-connection create \
+          create_err="$RUNNER_TEMP/marina-serial-create.err"
+          set +e
+          create_json="$("${OCI[@]}" compute instance-console-connection create \
             --instance-id "$instance_id" \
-            --ssh-public-key-file "$console_pub" \
-            --query 'data.id' --raw-output)"
+            --ssh-public-key-file "$console_pub" 2>"$create_err")"
+          create_code=$?
+          set -e
+          if [ "$create_code" -ne 0 ]; then
+            echo "MARINA_SERIAL_CREATE_EXIT=$create_code"
+            sed -E \
+              -e 's/ocid1\.[^[:space:]]+/OCID/g' \
+              -e 's/[0-9a-f]{8}-[0-9a-f-]{27,}/UUID/g' \
+              -e 's#[^[:space:]]+\.pem#KEYFILE#g' \
+              "$create_err" | head -n 12
+            exit "$create_code"
+          fi
+          connection_id="$(jq -r '.data.id // empty' <<<"$create_json")"
           test -n "$connection_id"
           trap '"${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$connection_id" --force >/dev/null 2>&1 || true' EXIT
 
