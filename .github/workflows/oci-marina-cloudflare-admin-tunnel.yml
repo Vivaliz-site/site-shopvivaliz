@@ -205,6 +205,9 @@ jobs:
             esac
           done
           state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution")"
+          echo "MARINA_AGENT_EXECUTION_STATE=$state"
+          echo "MARINA_AGENT_DELIVERY_STATE=$(jq -r '.data."delivery-state" // empty' <<<"$execution")"
+          echo "MARINA_AGENT_CONTENT_PRESENT=$([ -n "$(jq -r '.data.content.text // empty' <<<"$execution")" ] && echo true || echo false)"
           body="$(jq -r '.data.content.text // ""' <<<"$execution")"
           printf '%s\n' "$body" | awk '/^MARINA_/ {print}'
           test "$state" = SUCCEEDED
