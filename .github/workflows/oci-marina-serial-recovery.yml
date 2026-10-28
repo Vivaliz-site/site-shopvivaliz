@@ -370,6 +370,13 @@ jobs:
                   raise SystemExit(1)
               print(f"MARINA_REBOOT=REQUESTED attempt={reconnect_attempt}")
               time.sleep(8)
+              # OCI may keep the original SSH channel alive while the guest
+              # resets. Reopen it after the reset so GRUB output belongs to
+              # the new boot rather than the pre-reset channel buffer.
+              if child.isalive():
+                  child.close(force=True)
+              child = spawn_console()
+              time.sleep(3)
 
               grub = ""
               deadline = time.time() + 45
