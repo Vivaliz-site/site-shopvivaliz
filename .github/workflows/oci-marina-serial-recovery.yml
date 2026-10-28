@@ -156,11 +156,11 @@ jobs:
               "${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$stale_id" --force >/dev/null 2>&1 || true
             done
             remaining=0
-            for _ in $(seq 1 24); do
+            for _ in $(seq 1 60); do
               stale_list="$("${OCI[@]}" compute instance-console-connection list --compartment-id "$compartment_id" --instance-id "$instance_id" --all)"
               remaining="$(jq -r '[.data[]? | select((."lifecycle-state" // "") != "TERMINATED")] | length' <<<"$stale_list")"
               [ "$remaining" = 0 ] && break
-              sleep 5
+              sleep 10
             done
             echo "MARINA_SERIAL_PRECREATE_ACTIVE=$remaining"
             test "$remaining" = 0
