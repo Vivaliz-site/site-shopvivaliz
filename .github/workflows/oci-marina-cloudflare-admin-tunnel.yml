@@ -242,6 +242,9 @@ jobs:
           if [ "$security_rule_state" = ADDED ]; then
             "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_expanded" --force >/dev/null
             echo "MARINA_BOOTSTRAP_NETWORK_RULE=APPLIED source=$subnet_cidr"
+            # OCI security-list changes are eventually consistent before a Bastion
+            # session can reach the private target. Give propagation a bounded window.
+            sleep 45
           else
             echo "MARINA_BOOTSTRAP_NETWORK_RULE=ALREADY_PRESENT source=$subnet_cidr"
           fi
