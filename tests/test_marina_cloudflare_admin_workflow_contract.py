@@ -67,6 +67,10 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "MARINA_CLOUDFLARED_INSTALL=PASS" in text
     assert "find -L /home/ubuntu -maxdepth 10" in text
     assert "-print -quit 2>/dev/null || true" in text
+    assert "cloudflared-linux-arm64" in text
+    assert "sha256sum --check --strict" in text
+    assert "MARINA_CLOUDFLARED_SOURCE=OFFICIAL_RELEASE" in text
+    assert "/tmp/shopvivaliz-cloudflared-arm64-*" in text
     assert "/usr/local/bin/cloudflared" in text
     assert "Marina token transfer failed after SSH and sudo probe passed" in text
     assert "MARINA_REMOTE_STEP_FAILED" in text

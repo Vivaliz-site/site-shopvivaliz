@@ -430,17 +430,31 @@ jobs:
           echo "MARINA_TOKEN_INSTALL=PASS"
           unset cf_secret token_json
 
-          cloudflared_source="$("${VM_SSH[@]}" 'set -eu; p="$(command -v cloudflared 2>/dev/null || true)"; if [ -z "$p" ]; then for candidate in "$HOME/cloudflared" "$HOME/bin/cloudflared" "$HOME/.local/bin/cloudflared" "$HOME/.local/lib/shopvivaliz/cloudflared"; do if [ -x "$candidate" ]; then p="$candidate"; break; fi; done; fi; if [ -z "$p" ]; then p="$(find -L /home/ubuntu -maxdepth 10 -type f -name cloudflared -perm -111 -print -quit 2>/dev/null || true)"; fi; test -n "$p"; printf "%s" "$p"')"
-          case "$cloudflared_source" in
-            /home/ubuntu/*|/usr/local/bin/cloudflared) ;;
-            *) echo "::error::Unexpected Marina cloudflared source path"; exit 1 ;;
-          esac
+          cloudflared_source="$("${VM_SSH[@]}" 'set -eu; p="$(command -v cloudflared 2>/dev/null || true)"; if [ -z "$p" ]; then for candidate in "$HOME/cloudflared" "$HOME/bin/cloudflared" "$HOME/.local/bin/cloudflared" "$HOME/.local/lib/shopvivaliz/cloudflared"; do if [ -x "$candidate" ]; then p="$candidate"; break; fi; done; fi; if [ -z "$p" ]; then p="$(find -L /home/ubuntu -maxdepth 10 -type f -name cloudflared -perm -111 -print -quit 2>/dev/null || true)"; fi; printf "%s" "$p"')"
+          cloudflared_download=""
+          if [ -z "$cloudflared_source" ]; then
+            cloudflared_download="$RUNNER_TEMP/cloudflared-linux-arm64"
+            curl --fail-with-body --silent --show-error --location --retry 3 --connect-timeout 20 --max-time 120 \
+              "https://github.com/cloudflare/cloudflared/releases/download/2026.10.4/cloudflared-linux-arm64" \
+              -o "$cloudflared_download"
+            printf '%s  %s\n' '2b7203b4fb0ba28a0c1e12f8855ce2c25f76d266a8d5edafac5540b6812acff6' "$cloudflared_download" | sha256sum --check --strict
+            chmod 0755 "$cloudflared_download"
+            cloudflared_source="/tmp/shopvivaliz-cloudflared-arm64-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            cat "$cloudflared_download" | "${VM_SSH[@]}" "cat > '$cloudflared_source' && chmod 700 '$cloudflared_source'"
+            echo "MARINA_CLOUDFLARED_SOURCE=OFFICIAL_RELEASE"
+          else
+            case "$cloudflared_source" in
+              /home/ubuntu/*|/usr/local/bin/cloudflared) ;;
+              *) echo "::error::Unexpected Marina cloudflared source path"; exit 1 ;;
+            esac
+            echo "MARINA_CLOUDFLARED_SOURCE=EXISTING"
+          fi
           {
             cat <<'REMOTE_INSTALL'
           set -Eeuo pipefail
           IFS= read -r cloudflared_source
           case "$cloudflared_source" in
-            /home/ubuntu/*|/usr/local/bin/cloudflared) ;;
+            /home/ubuntu/*|/usr/local/bin/cloudflared|/tmp/shopvivaliz-cloudflared-arm64-*) ;;
             *) exit 1 ;;
           esac
           install -o root -g root -m 0755 "$cloudflared_source" /usr/local/bin/cloudflared
@@ -448,6 +462,10 @@ jobs:
           REMOTE_INSTALL
             printf '%s\n' "$cloudflared_source"
           } | "${VM_SSH[@]}" 'sudo -n bash -s'
+          if [ -n "$cloudflared_download" ]; then
+            "${VM_SSH[@]}" "rm -f '$cloudflared_source'"
+            rm -f "$cloudflared_download"
+          fi
           echo "MARINA_CLOUDFLARED_INSTALL=PASS"
 
           unit="$RUNNER_TEMP/marina-cloudflared-admin-unit.sh"
