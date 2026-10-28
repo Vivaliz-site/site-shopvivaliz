@@ -216,9 +216,13 @@ jobs:
                   raise SystemExit(1)
               print("MARINA_VNC_TUNNEL=CONNECTED")
               screenshot = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "marina-vnc.png")
-              with api.connect("127.0.0.1::5900") as client:
-                  with open(screenshot, "wb") as output:
-                      client.captureScreen(output, format="png")
+              try:
+                  with api.connect("127.0.0.1::5900", timeout=30) as client:
+                      with open(screenshot, "wb") as output:
+                          client.captureScreen(output, format="png")
+              except Exception as error:
+                  print(f"MARINA_VNC_SCREEN=FAIL error_type={type(error).__name__}")
+                  raise SystemExit(1)
               image = Image.open(screenshot)
               text = pytesseract.image_to_string(image, config="--psm 6")
               normalized = " ".join(text.lower().split())
