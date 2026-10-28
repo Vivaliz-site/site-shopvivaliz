@@ -58,6 +58,41 @@ def discover_pdv(api_get: ApiGet, token: str) -> dict[str, Any]:
     return dict(next(iter(matches.values())))
 
 
+
+def fetch_pdv_snapshot(api_get: ApiGet, token: str, pdv: dict[str, Any]) -> dict[str, Any]:
+    """Read and verify the complete current list detail once.
+
+    This snapshot has no product-price fallback: rows not present here must be
+    verified individually through the official product-specific endpoint.
+    """
+    if not token or str(pdv.get("descricao") or "").strip().casefold() != "pdv":
+        raise ValueError("pdv_list_not_verified")
+    list_id = str(pdv.get("id") or "").strip()
+    if not list_id.isdigit() or int(list_id) < 1:
+        raise ValueError("pdv_list_id_invalid")
+    detail = api_get(f"listas-precos/{list_id}", token)
+    if not isinstance(detail, dict) or str(detail.get("id") or "") != list_id or str(detail.get("descricao") or "").strip().casefold() != "pdv":
+        raise ValueError("pdv_detail_identity_mismatch")
+    if (pdv.get("acrescimoDesconto") is not None and detail.get("acrescimoDesconto") is not None
+            and _number(pdv["acrescimoDesconto"], "pdv_percent_invalid") != _number(detail["acrescimoDesconto"], "pdv_percent_invalid")):
+        raise ValueError("pdv_percent_changed_during_sync")
+    raw_exceptions = detail.get("excecoes")
+    if not isinstance(raw_exceptions, list):
+        raise ValueError("pdv_bulk_exceptions_schema_invalid")
+    index: dict[str, dict[str, Any]] = {}
+    for row in raw_exceptions:
+        if not isinstance(row, dict):
+            raise ValueError("pdv_exception_invalid")
+        product_id = str(row.get("idProduto") or "").strip()
+        if not product_id.isdigit() or int(product_id) < 1:
+            raise ValueError("pdv_exception_identity_missing")
+        if product_id in index:
+            raise ValueError("pdv_exception_ambiguous")
+        index[product_id] = row
+    return {"detail": detail, "by_product_id": index}
+
+
+
 def _exception(raw: Any, product_id: int) -> dict[str, Any] | None:
     if raw is None or raw == [] or raw == {}:
         return None
@@ -77,7 +112,7 @@ def _exception(raw: Any, product_id: int) -> dict[str, Any] | None:
     return row
 
 
-def pdv_product_prices(api_get: ApiGet, token: str, product_id: int, product_prices: dict[str, Any], pdv: dict[str, Any]) -> dict[str, Any]:
+def pdv_product_prices(api_get: ApiGet, token: str, product_id: int, product_prices: dict[str, Any], pdv: dict[str, Any], pdv_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     """Return the only permitted storefront price values, or fail closed."""
     if not token or type(product_id) is not int or product_id < 1:
         raise ValueError("pdv_product_id_missing")
@@ -89,7 +124,18 @@ def pdv_product_prices(api_get: ApiGet, token: str, product_id: int, product_pri
         raise ValueError("pdv_list_id_invalid") from exc
     if list_id < 1:
         raise ValueError("pdv_list_id_invalid")
-    detail = api_get(f"listas-precos/{list_id}?idProduto={product_id}", token)
+    verified_row = None
+    if pdv_snapshot is not None:
+        if not isinstance(pdv_snapshot, dict) or not isinstance(pdv_snapshot.get("detail"), dict) or not isinstance(pdv_snapshot.get("by_product_id"), dict):
+            raise ValueError("pdv_snapshot_invalid")
+        verified_row = pdv_snapshot["by_product_id"].get(str(product_id))
+        if verified_row is not None:
+            detail = dict(pdv_snapshot["detail"], excecoes=[verified_row])
+        else:
+            # Absence in a bulk response is NOT evidence that no exception exists.
+            detail = api_get(f"listas-precos/{list_id}?idProduto={product_id}", token)
+    else:
+        detail = api_get(f"listas-precos/{list_id}?idProduto={product_id}", token)
     if not isinstance(detail, dict) or str(detail.get("id") or "") != str(list_id) or str(detail.get("descricao") or "").strip().casefold() != "pdv":
         raise ValueError("pdv_detail_identity_mismatch")
     listed_percent = pdv.get("acrescimoDesconto")
