@@ -384,4 +384,14 @@ t_assert(!str_contains($legacyReceiver, 'rename($cache_file'), 'legacy webhook m
 t_assert(!str_contains($legacyReceiver, 'unlink($cache_file'), 'legacy webhook must not delete active cache pre-sync');
 t_assert(str_contains($legacyReceiver, 'Cache ativo preservado'), 'legacy webhook must preserve live cache until PDV valid');
 
+$compatPrice = (string)file_get_contents($root . '/api/webhooks/tiny-product-price-sync.php');
+t_assert(str_contains($compatPrice, 'svoei_refresh_price_from_v3'), 'legacy price webhook must re-read PDV from authenticated ERP');
+t_assert(str_contains($compatPrice, "sv_webhook_secret_valid('tiny-product-price')"), 'legacy price webhook must fail closed on missing secret');
+t_assert(!str_contains($compatPrice, 'update_cache_price('), 'legacy price webhook must not apply payload price directly');
+$canonicalHandler = (string)file_get_contents($root . '/api/olist/webhook.php');
+t_assert(str_contains($canonicalHandler, "sv_webhook_secret_valid('olist')"), 'canonical webhook must fail closed on missing secret');
+$unsafeSync = (string)file_get_contents($root . '/api/sync-cache-endpoint.php');
+t_assert(str_contains($unsafeSync, 'legacy_cache_sync_disabled'), 'unsafe registration-price sync must stay disabled');
+t_assert(!str_contains($unsafeSync, 'file_put_contents('), 'legacy cache sync must never overwrite PDV snapshot');
+
 echo "olist-erp-webhook-contract: ok\n";
