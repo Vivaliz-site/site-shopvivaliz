@@ -432,7 +432,7 @@ def partition_ambiguous_skus(summaries: list[dict[str, Any]]) -> tuple[list[dict
     return clean, sorted(quarantined, key=lambda item: item["sku"].casefold())
 
 
-def save_products(products: list[dict[str, Any]], quarantined: list[dict[str, Any]] | None = None, source_count: int | None = None) -> Path:
+def save_products(products: list[dict[str, Any]], quarantined: list[dict[str, Any]] | None = None, source_count: int | None = None, *, publish: bool = True) -> Path:
     registry = load_video_sources()
     products = [merge_video_sources(item, registry) for item in products]
     blocked = quarantined or []
@@ -453,19 +453,20 @@ def save_products(products: list[dict[str, Any]], quarantined: list[dict[str, An
         try:
             temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
             temporary.replace(CACHE_PATH)
-            # Derived caches must not serve registration prices after a PDV refresh.
-            (CACHE_PATH.parent / "cache" / "products-cache-ativos.json").unlink(missing_ok=True)
-            derived_dir = CACHE_PATH.parent / "cache" / "catalog-api"
-            if derived_dir.is_dir():
-                for old_response in derived_dir.glob("*.json"):
-                    old_response.unlink(missing_ok=True)
+            if publish:
+                # Derived caches must not serve registration prices after a PDV refresh.
+                (CACHE_PATH.parent / "cache" / "products-cache-ativos.json").unlink(missing_ok=True)
+                derived_dir = CACHE_PATH.parent / "cache" / "catalog-api"
+                if derived_dir.is_dir():
+                    for old_response in derived_dir.glob("*.json"):
+                        old_response.unlink(missing_ok=True)
         finally:
             temporary.unlink(missing_ok=True)
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
     return CACHE_PATH
 
 
-def sync_once(workers: int) -> bool:
+def sync_once(workers: int, *, stage_only: bool = False) -> bool:
     token = get_token()
     if not token:
         print("[!] OLIST_ACCESS_TOKEN/TINY_ACCESS_TOKEN não configurado")
@@ -498,7 +499,7 @@ def sync_once(workers: int) -> bool:
     kits_updated = apply_kit_stock(products)
     if kits_updated:
         print(f"[+] Estoque recalculado pela composicao em {kits_updated} produtos tipo kit")
-    output = save_products(products, quarantined, len(summaries))
+    output = save_products(products, quarantined, len(summaries), publish=not stage_only)
     with_stock = sum(1 for item in products if int(item.get("estoque_disponivel") or 0) > 0)
     with_images = sum(1 for item in products if isinstance(item.get("anexos"), list) and item["anexos"])
     print(f"[+] Cache atômico salvo: {len(products)} produtos PDV, {with_stock} com estoque, {with_images} com imagem; {len(quarantined)} SKU(s) em quarentena NAO_APTO; {failures} falhas em {output}")
@@ -510,11 +511,21 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="Executa uma sincronização e encerra")
     parser.add_argument("--interval", type=int, default=300, help="Intervalo do daemon em segundos")
     parser.add_argument("--workers", type=int, default=4, help="Concorrência para detalhes (1-8)")
+    parser.add_argument("--stage-cache", type=Path, help="Gravar SOMENTE cache candidato isolado; nunca publicar o resultado")
     args = parser.parse_args()
+    global CACHE_PATH
+    if args.stage_cache is not None:
+        if not args.once or not args.stage_cache.is_absolute() or not args.stage_cache.name.startswith(".pdv-stage-") or args.stage_cache.suffix != ".json":
+            parser.error("--stage-cache exige --once e destino absoluto .pdv-stage-*.json")
+        # The deployment runner creates this non-web-linked staging directory.
+        allowed_stage_root = Path("/home/ubuntu/shopvivaliz-deploy/shared/deployment-pdv").resolve()
+        if args.stage_cache.parent.resolve() != allowed_stage_root:
+            parser.error("--stage-cache deve permanecer no diretorio de staging autorizado")
+        CACHE_PATH = args.stage_cache
     while True:
         started = time.monotonic()
         try:
-            ok = sync_once(args.workers)
+            ok = sync_once(args.workers, stage_only=args.stage_cache is not None)
         except KeyboardInterrupt:
             return 130
         except Exception as exc:
