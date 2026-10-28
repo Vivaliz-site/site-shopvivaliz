@@ -430,7 +430,7 @@ jobs:
           echo "MARINA_TOKEN_INSTALL=PASS"
           unset cf_secret token_json
 
-          cloudflared_source="$("${VM_SSH[@]}" 'set -eu; p="$(command -v cloudflared 2>/dev/null || true)"; if [ -z "$p" ]; then p="$(find "$HOME" -maxdepth 4 -type f -name cloudflared -perm -111 -print -quit 2>/dev/null)"; fi; test -n "$p"; printf "%s" "$p"')"
+          cloudflared_source="$("${VM_SSH[@]}" 'set -eu; p="$(command -v cloudflared 2>/dev/null || true)"; if [ -z "$p" ]; then for candidate in "$HOME/cloudflared" "$HOME/bin/cloudflared" "$HOME/.local/bin/cloudflared" "$HOME/.local/lib/shopvivaliz/cloudflared"; do if [ -x "$candidate" ]; then p="$candidate"; break; fi; done; fi; if [ -z "$p" ]; then p="$(find -L /home/ubuntu -maxdepth 10 -type f -name cloudflared -perm -111 -print -quit 2>/dev/null || true)"; fi; test -n "$p"; printf "%s" "$p"')"
           case "$cloudflared_source" in
             /home/ubuntu/*|/usr/local/bin/cloudflared) ;;
             *) echo "::error::Unexpected Marina cloudflared source path"; exit 1 ;;
