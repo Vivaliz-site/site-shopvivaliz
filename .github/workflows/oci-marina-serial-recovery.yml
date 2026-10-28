@@ -275,7 +275,7 @@ jobs:
                   "--instance-id",
                   os.environ["MARINA_INSTANCE_ID"],
                   "--action",
-                  "RESET",
+                  "SOFTRESET",
               ],
               check=False,
               stdout=subprocess.DEVNULL,
@@ -286,32 +286,49 @@ jobs:
               raise SystemExit(1)
           print("MARINA_REBOOT=REQUESTED")
 
-          shell = ""
-          for delay in (2, 6, 7, 10, 15):
-              time.sleep(delay)
+          grub = ""
+          deadline = time.time() + 30
+          while time.time() < deadline:
               child.send("\x1b")
-              time.sleep(0.5)
-              child.send("e")
-              time.sleep(0.5)
-              child.send("\x1b[B" * 7)
-              child.send("\x05")
-              child.send(" init=/bin/bash")
-              child.send("\x18")
-              deadline = time.time() + 6
-              while time.time() < deadline:
-                  try:
-                      shell += child.read_nonblocking(size=4096, timeout=0.3)
-                  except (pexpect.TIMEOUT, pexpect.EOF):
-                      pass
-                  if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
-                      break
+              try:
+                  grub += child.read_nonblocking(size=4096, timeout=0.2)
+              except (pexpect.TIMEOUT, pexpect.EOF):
+                  pass
+              if "GNU GRUB" in grub or "Advanced options" in grub:
+                  break
+          grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
+          child.send("e")
+          time.sleep(2)
+          child.send("\x1b[B" * 5)
+          child.send("\x05")
+          child.send(" init=/bin/bash")
+          child.send("\x18")
+          shell = ""
+          deadline = time.time() + 30
+          while time.time() < deadline:
+              try:
+                  shell += child.read_nonblocking(size=4096, timeout=0.3)
+              except (pexpect.TIMEOUT, pexpect.EOF):
+                  pass
               if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
                   break
-          print("MARINA_GRUB=BLIND_EDIT_ATTEMPTS=5_TIMED")
+          print("MARINA_GRUB=OBSERVED_EDIT" if grub_observed else "MARINA_GRUB=BLIND_EDIT")
           if not re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
               print("MARINA_ROOT_SHELL=NOT_OBSERVED")
               raise SystemExit(1)
           print("MARINA_ROOT_SHELL=PASS")
+          child.sendline("id -u")
+          identity = ""
+          deadline = time.time() + 5
+          while time.time() < deadline:
+              try:
+                  identity += child.read_nonblocking(size=4096, timeout=0.3)
+              except (pexpect.TIMEOUT, pexpect.EOF):
+                  pass
+          if not re.search(r"(?:^|\r?\n)0(?:\r?\n|\s*$)", identity):
+              print("MARINA_ROOT_ID=NOT_CONFIRMED")
+              raise SystemExit(1)
+          print("MARINA_ROOT_ID=0")
 
           public_key = os.environ["MARINA_VM_PUBLIC_KEY"]
           quoted_key = shlex.quote(public_key)
@@ -322,8 +339,7 @@ jobs:
               "chown -R ubuntu:ubuntu /home/ubuntu/.ssh",
               "chmod 700 /home/ubuntu/.ssh",
               "chmod 600 /home/ubuntu/.ssh/authorized_keys",
-              "if [ -x /usr/sbin/sshd ]; then mkdir -p /etc/ssh/sshd_config.d /etc/systemd/system/multi-user.target.wants; ssh-keygen -A; [ -f /etc/ssh/sshd_config ] || printf '%s\\n' 'Include /etc/ssh/sshd_config.d/*.conf' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config; printf '%s\\n' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config.d/99-shopvivaliz-admin.conf; printf '%s\\n' '[Unit]' 'Description=OpenSSH server' 'After=network.target' '[Service]' 'Type=simple' 'RuntimeDirectory=sshd' 'ExecStartPre=/usr/sbin/sshd -t' 'ExecStart=/usr/sbin/sshd -D -e' 'ExecReload=/bin/kill -HUP $MAINPID' 'Restart=on-failure' '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/ssh.service; ln -sf /etc/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service; fi",
-              "if [ -x /usr/sbin/sshd ]; then echo MARINA_SSHD_PRESENT > /root/.shopvivaliz-sshd-state; else echo MARINA_SSHD_MISSING > /root/.shopvivaliz-sshd-state; fi",
+              "if [ -x /usr/sbin/sshd ]; then mkdir -p /etc/ssh/sshd_config.d /etc/systemd/system/multi-user.target.wants /run/sshd; ssh-keygen -A; [ -f /etc/ssh/sshd_config ] || printf '%s\\n' 'Include /etc/ssh/sshd_config.d/*.conf' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config; printf '%s\\n' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config.d/99-shopvivaliz-admin.conf; printf '%s\\n' '[Unit]' 'Description=OpenSSH server' 'After=network.target' '[Service]' 'Type=simple' 'RuntimeDirectory=sshd' 'ExecStartPre=/usr/sbin/sshd -t' 'ExecStart=/usr/sbin/sshd -D -e' 'ExecReload=/bin/kill -HUP $MAINPID' 'Restart=on-failure' '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/ssh.service; if /usr/sbin/sshd -t; then ln -sf /etc/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service; echo MARINA_SSHD_PRESENT > /root/.shopvivaliz-sshd-state; else echo MARINA_SSHD_CONFIG_INVALID > /root/.shopvivaliz-sshd-state; fi; else echo MARINA_SSHD_MISSING > /root/.shopvivaliz-sshd-state; fi",
               "sync",
           ]
           for command_line in commands:
