@@ -25,6 +25,12 @@ svclf_assert(count($tinyV3Rows) === count($decoded), 'snapshot alternativo so po
 
 require_once $root . '/includes/catalog-runtime.php';
 svclf_assert(svcr_fallback_products($root) === [], 'fallback legado nao pode publicar produtos');
+$blockManifest = ['quarantined_skus' => [
+    ['sku'=>'1C7Q-LKVS-MDOC','olist_product_ids'=>['342902508','387064728']],
+]];
+svclf_assert(svcr_is_quarantined_identifier($blockManifest, '1c7q-lkvs-mdoc'), 'duplicate SKU must fail closed in public price endpoint');
+svclf_assert(svcr_is_quarantined_identifier($blockManifest, '', '387064728'), 'ID-only access to duplicate SKU must also fail closed');
+svclf_assert(!svcr_is_quarantined_identifier($blockManifest, 'SAFE-1'), 'unrelated catalog products must remain accessible');
 $products = svcr_products();
 svclf_assert(count($products) === 0, 'snapshot antigo sem lista PDV comprovada nao pode expor precos no site');
 
