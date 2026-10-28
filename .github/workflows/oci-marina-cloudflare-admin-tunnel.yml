@@ -11,6 +11,7 @@ on:
           - inspect
           - inspect_vm
           - restart_plugin
+          - enable_plugin
           - provision
         default: inspect
       confirmation:
@@ -190,6 +191,13 @@ jobs:
             "$agent_config_raw" > "$agent_config_disabled"
           jq '.pluginsConfig |= map(if .name == "Compute Instance Run Command" then .desiredState = "ENABLED" else . end)' \
             "$agent_config_disabled" > "$agent_config_enabled"
+          restore_enabled() {
+            if [ "${restore_required:-false}" = true ]; then
+              "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_enabled" --force >/dev/null || echo "::error::Failed to restore Marina Run Command plugin enabled state"
+            fi
+          }
+          restore_required=true
+          trap restore_enabled EXIT
           "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_disabled" --force >/dev/null
           plugin_status=''
           for _ in $(seq 1 30); do
@@ -209,6 +217,37 @@ jobs:
           test "$plugin_status" = RUNNING
           echo "MARINA_AGENT_PLUGIN_RESTART=ENABLED"
           echo "OCI_MARINA_AGENT_PLUGIN_RESTART=PASS"
+          restore_required=false
+
+      - name: Ensure Marina Run Command plugin is enabled through OCI control plane
+        if: inputs.action == 'enable_plugin' && inputs.confirmation == 'ENABLE_MARINA_AGENT_PLUGIN'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          agent_config_raw="$RUNNER_TEMP/marina-agent-config-enable-raw.json"
+          agent_config_enabled="$RUNNER_TEMP/marina-agent-config-enable.json"
+          "${OCI[@]}" compute instance get --instance-id "$MARINA_INSTANCE_ID" --query 'data."agent-config"' > "$agent_config_raw"
+          jq '{
+                areAllPluginsDisabled: (."are-all-plugins-disabled" // false),
+                isManagementDisabled: (."is-management-disabled" // false),
+                isMonitoringDisabled: (."is-monitoring-disabled" // false),
+                pluginsConfig: ((."plugins-config" // []) | map({name, desiredState: ."desired-state"}))
+              }
+              | .pluginsConfig = (if any(.pluginsConfig[]; .name == "Compute Instance Run Command")
+                  then .pluginsConfig | map(if .name == "Compute Instance Run Command" then .desiredState = "ENABLED" else . end)
+                  else .pluginsConfig + [{name: "Compute Instance Run Command", desiredState: "ENABLED"}] end)' \
+            "$agent_config_raw" > "$agent_config_enabled"
+          "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_enabled" --force >/dev/null
+          plugin_status=''
+          for _ in $(seq 1 30); do
+            plugin_status="$("${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+            [ "$plugin_status" = RUNNING ] && break
+            sleep 10
+          done
+          test "$plugin_status" = RUNNING
+          echo "MARINA_AGENT_PLUGIN_ENABLED=RUNNING"
+          echo "OCI_MARINA_AGENT_PLUGIN_ENABLE=PASS"
 
       - name: Inspect Marina SSH runtime through OCI Agent without changing state
         if: inputs.action == 'inspect_vm'
