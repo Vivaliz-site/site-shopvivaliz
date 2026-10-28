@@ -1,0 +1,107 @@
+name: OCI Marina serial recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Create and verify an ephemeral serial console connection"
+        required: true
+        type: choice
+        options:
+          - probe
+        default: probe
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-marina-serial-recovery
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+    env:
+      OCI_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
+      OCI_USER: ${{ secrets.OCI_ESPOSA_USER }}
+      OCI_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
+      OCI_INSTANCE_NAME: marina-a1-4c24g
+      ACTION: ${{ inputs.action }}
+    steps:
+      - name: Install OCI CLI and JSON tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          command -v oci >/dev/null
+          command -v jq >/dev/null
+          command -v ssh-keygen >/dev/null
+
+      - name: Create and verify an ephemeral serial console connection
+        env:
+          OCI_KEY_MATERIAL: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+
+          api_key="$RUNNER_TEMP/oci-marina-api.pem"
+          config="$RUNNER_TEMP/oci-marina-config"
+          console_key="$RUNNER_TEMP/marina-console"
+          console_pub="$RUNNER_TEMP/marina-console.pub"
+
+          printf '%s\n' "$OCI_KEY_MATERIAL" > "$api_key"
+          chmod 600 "$api_key"
+          cat > "$config" <<EOF
+          [DEFAULT]
+          user=$OCI_USER
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY
+          region=$OCI_REGION
+          key_file=$api_key
+          EOF
+          chmod 600 "$config"
+
+          OCI=(oci --config-file "$config")
+          query="query instance resources where displayName = '$OCI_INSTANCE_NAME'"
+          search_json="$("${OCI[@]}" search resource structured-search --query-text "$query" --all)"
+          instance_id="$(jq -r '.data.items[] | select(.resourceType == "instance") | .identifier' <<<"$search_json" | head -n 1)"
+          compartment_id="$(jq -r '.data.items[] | select(.resourceType == "instance") | .compartmentId' <<<"$search_json" | head -n 1)"
+          test -n "$instance_id"
+          test -n "$compartment_id"
+
+          instance_json="$("${OCI[@]}" compute instance get --instance-id "$instance_id")"
+          lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json")"
+          test "$lifecycle" = RUNNING
+          echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle"
+
+          ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
+          chmod 600 "$console_key"
+          connection_id="$("${OCI[@]}" compute instance-console-connection create \
+            --instance-id "$instance_id" \
+            --ssh-public-key-file "$console_pub" \
+            --query 'data.id' --raw-output)"
+          test -n "$connection_id"
+          trap '"${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$connection_id" --force >/dev/null 2>&1 || true' EXIT
+
+          state=""
+          for _ in $(seq 1 36); do
+            console_json="$("${OCI[@]}" compute instance-console-connection get --instance-console-connection-id "$connection_id")"
+            state="$(jq -r '.data."lifecycle-state" // empty' <<<"$console_json")"
+            if [ "$state" = ACTIVE ]; then
+              break
+            fi
+            if [ "$state" = FAILED ] || [ "$state" = TERMINATED ]; then
+              echo "MARINA_SERIAL_CONNECTION=$state"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          test "$state" = ACTIVE
+          echo "MARINA_SERIAL_CONNECTION=ACTIVE"
+          echo "MARINA_SERIAL_PROBE=PASS"
