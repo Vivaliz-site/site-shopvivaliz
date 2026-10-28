@@ -288,6 +288,38 @@ jobs:
               session.sendline("")
               return session
 
+          def reconnect_console(wait_seconds=120):
+              """Wait for the serial SSH endpoint to return after a guest reset."""
+              deadline = time.time() + wait_seconds
+              connection_errors = (
+                  "Permission denied",
+                  "Host key verification failed",
+                  "Could not resolve",
+                  "Connection refused",
+                  "Connection timed out",
+                  "Connection reset by peer",
+              )
+              while time.time() < deadline:
+                  session = spawn_console()
+                  output = ""
+                  probe_deadline = min(deadline, time.time() + 20)
+                  while time.time() < probe_deadline:
+                      try:
+                          output += session.read_nonblocking(size=4096, timeout=0.4)
+                      except pexpect.TIMEOUT:
+                          pass
+                      except pexpect.EOF:
+                          break
+                      if any(error in output for error in connection_errors):
+                          break
+                  if session.isalive() and not any(error in output for error in connection_errors):
+                      return session
+                  if session.isalive():
+                      session.close(force=True)
+                  time.sleep(3)
+              print("MARINA_SERIAL_RECONNECT=TIMEOUT")
+              raise SystemExit(1)
+
           child = spawn_console()
           output = ""
           deadline = time.time() + 15
@@ -375,8 +407,8 @@ jobs:
               # the new boot rather than the pre-reset channel buffer.
               if child.isalive():
                   child.close(force=True)
-              child = spawn_console()
-              time.sleep(3)
+              child = reconnect_console()
+              print(f"MARINA_SERIAL_RECONNECT=READY attempt={reconnect_attempt}")
 
               grub = ""
               deadline = time.time() + 45
