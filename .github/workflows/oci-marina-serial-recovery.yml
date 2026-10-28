@@ -287,8 +287,8 @@ jobs:
           print("MARINA_REBOOT=REQUESTED")
 
           shell = ""
-          for _ in range(5):
-              time.sleep(2)
+          for delay in (2, 6, 7, 10, 15):
+              time.sleep(delay)
               child.send("\x1b")
               time.sleep(0.5)
               child.send("e")
@@ -307,7 +307,7 @@ jobs:
                       break
               if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
                   break
-          print("MARINA_GRUB=BLIND_EDIT_ATTEMPTS=5")
+          print("MARINA_GRUB=BLIND_EDIT_ATTEMPTS=5_TIMED")
           if not re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
               print("MARINA_ROOT_SHELL=NOT_OBSERVED")
               raise SystemExit(1)
