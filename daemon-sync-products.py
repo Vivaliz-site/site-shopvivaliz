@@ -64,7 +64,9 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "unidade": str(item.get("unidade") or ""),
         "gtin": str(item.get("gtin") or ""),
         "precos": {
-            "preco": float(prices.get("preco") or prices.get("preco_venda") or item.get("preco") or 0),
+            # Only the explicitly PDV-derived fields are publishable.
+            # Never fall back to registration preco/preco_venda.
+            "preco": float(prices["preco"]),
             "precoPromocional": float(prices.get("precoPromocional") or 0),
         },
         "estoque": {"quantidade": quantity},
