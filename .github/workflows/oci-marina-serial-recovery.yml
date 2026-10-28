@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Probe, sanitize console history, or repair through an ephemeral serial console connection"
+        description: "Probe serial/VNC consoles, sanitize console history, or repair through an ephemeral console connection"
         required: true
         type: choice
         options:
           - probe
           - history
+          - vnc-probe
           - repair
           - cleanup
         default: probe
@@ -115,6 +116,115 @@ jobs:
           test -n "$compartment_id" && test "$compartment_id" != null
           test "$lifecycle" = RUNNING
           echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle"
+
+          if [ "$ACTION" = vnc-probe ]; then
+            ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
+            chmod 600 "$console_key"
+            vnc_create_out="$RUNNER_TEMP/marina-vnc-create.json"
+            vnc_create_code=0
+            "${OCI[@]}" compute instance-console-connection create \
+              --instance-id "$instance_id" \
+              --ssh-public-key-file "$console_pub" >"$vnc_create_out" 2>"$RUNNER_TEMP/marina-vnc-create.err" || vnc_create_code=$?
+            if [ "$vnc_create_code" -ne 0 ]; then
+              echo "MARINA_VNC_CREATE=FAIL exit=$vnc_create_code"
+              exit "$vnc_create_code"
+            fi
+            vnc_connection_id="$(jq -r '.data.id // empty' <"$vnc_create_out")"
+            test -n "$vnc_connection_id"
+            trap '"${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$vnc_connection_id" --force >/dev/null 2>&1 || true' EXIT
+            vnc_state=""
+            vnc_connection_json=""
+            for _ in $(seq 1 36); do
+              vnc_connection_json="$("${OCI[@]}" compute instance-console-connection get --instance-console-connection-id "$vnc_connection_id")"
+              vnc_state="$(jq -r '.data."lifecycle-state" // empty' <<<"$vnc_connection_json")"
+              [ "$vnc_state" = ACTIVE ] && break
+              [ "$vnc_state" = FAILED ] || [ "$vnc_state" = TERMINATED ] && exit 1
+              sleep 5
+            done
+            echo "MARINA_VNC_CONNECTION=$vnc_state"
+            test "$vnc_state" = ACTIVE
+            export MARINA_VNC_CONNECTION_STRING="$(jq -r '.data."connection-string" // empty' <<<"$vnc_connection_json")"
+            export MARINA_VNC_CONNECTION_ID="$vnc_connection_id"
+            export MARINA_VNC_INSTANCE_ID="$instance_id"
+            export MARINA_VNC_PRIVATE_KEY="$console_key"
+            python3 -m pip install --disable-pip-version-check --quiet vncdotool pillow pytesseract service_identity
+            if ! command -v tesseract >/dev/null 2>&1; then
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq tesseract-ocr
+            fi
+            python3 - <<'PY'
+          import os
+          import shlex
+          import socket
+          import subprocess
+          import time
+
+          from PIL import Image
+          import pytesseract
+          from vncdotool import api
+
+          connection = os.environ["MARINA_VNC_CONNECTION_STRING"]
+          console_key = os.environ["MARINA_VNC_PRIVATE_KEY"]
+          instance_id = os.environ["MARINA_VNC_INSTANCE_ID"]
+          tokens = shlex.split(connection)
+          proxy_value = next(
+              value.split("=", 1)[1]
+              for value in tokens
+              if value.startswith("ProxyCommand=")
+          )
+          target = tokens[-1]
+          proxy_tokens = shlex.split(proxy_value)
+          proxy_command = [proxy_tokens[0], "-i", console_key, *proxy_tokens[1:]]
+          outer = [
+              "ssh", "-i", console_key,
+              "-o", "ProxyCommand=" + " ".join(shlex.quote(item) for item in proxy_command),
+              "-o", "HostKeyAlgorithms=+ssh-rsa",
+              "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+              "-o", "StrictHostKeyChecking=accept-new",
+              "-o", "UserKnownHostsFile=/tmp/marina-vnc-known-hosts",
+              "-o", "ConnectTimeout=15",
+              "-N", "-L", f"127.0.0.1:5900:{instance_id}:5900", target,
+          ]
+          tunnel = subprocess.Popen(outer, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+          try:
+              deadline = time.time() + 45
+              connected = False
+              while time.time() < deadline:
+                  if tunnel.poll() is not None:
+                      break
+                  try:
+                      with socket.create_connection(("127.0.0.1", 5900), timeout=1):
+                          connected = True
+                          break
+                  except OSError:
+                      time.sleep(1)
+              if not connected:
+                  print("MARINA_VNC_TUNNEL=NOT_CONNECTED")
+                  raise SystemExit(1)
+              print("MARINA_VNC_TUNNEL=CONNECTED")
+              screenshot = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "marina-vnc.png")
+              with api.connect("127.0.0.1::5900") as client:
+                  with open(screenshot, "wb") as output:
+                      client.captureScreen(output, format="png")
+              image = Image.open(screenshot)
+              text = pytesseract.image_to_string(image, config="--psm 6")
+              normalized = " ".join(text.lower().split())
+              print(
+                  "MARINA_VNC_SCREEN=PASS "
+                  f"width={image.width} height={image.height} "
+                  f"grub={str('gnu grub' in normalized or 'grub' in normalized).lower()} "
+                  f"kernel={str('linux' in normalized or 'ubuntu' in normalized).lower()} "
+                  f"login={str('login' in normalized or 'password' in normalized).lower()}"
+              )
+          finally:
+              tunnel.terminate()
+              try:
+                  tunnel.wait(timeout=5)
+              except subprocess.TimeoutExpired:
+                  tunnel.kill()
+          PY
+            exit 0
+          fi
 
           if [ "$ACTION" = history ]; then
             history_out="$RUNNER_TEMP/marina-console-history.json"
