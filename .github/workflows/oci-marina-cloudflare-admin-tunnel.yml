@@ -160,12 +160,11 @@ jobs:
           vm_known_hosts="$RUNNER_TEMP/marina-vm-known-hosts"
           local_port=42222
           cleanup() {
-            set +e
             if [ -n "${session_id:-}" ]; then
-              "${OCI[@]}" bastion session delete --session-id "$session_id" --force >/dev/null 2>&1 || true
+              "${OCI[@]}" bastion session delete --session-id "$session_id" --force >/dev/null
             fi
             if [ -s "$original_cidrs" ] && [ -n "$MARINA_BASTION_ID" ]; then
-              "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$original_cidrs" --force >/dev/null 2>&1 || true
+              "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$original_cidrs" --force >/dev/null
             fi
             rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs"
             rm -f "$OCI_KEY_FILE" "$OCI_CONFIG_FILE"
@@ -308,7 +307,7 @@ jobs:
           touch /etc/shopvivaliz/cloudflare-admin/access-approved
           chown root:root /etc/shopvivaliz/cloudflare-admin/access-approved
           chmod 600 /etc/shopvivaliz/cloudflare-admin/access-approved
-          cloudflared_bin="$(command -v cloudflared || true)"
+          cloudflared_bin="$(command -v cloudflared)"
           test -x "$cloudflared_bin"
           public_iface="$(ip -4 route get 1.1.1.1 | awk 'NR==1 {for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}')"
           test -n "$public_iface"
@@ -347,16 +346,21 @@ jobs:
           test "$(stat -c '%U:%G:%a' /etc/shopvivaliz/cloudflare-admin/token)" = root:root:600
           test "$(iptables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
           test "$(ip6tables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
+          registered=0
           for _ in $(seq 1 18); do
             if journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | grep -q 'Registered tunnel connection'; then
-              echo CLOUDFLARED_REGISTERED=PASS
-              exit 0
+              registered=1
+              break
             fi
             sleep 5
           done
-          journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | tail -n 20
-          echo '::error::Cloudflare connector did not register'
-          exit 2
+          if [ "$registered" = 1 ]; then
+            echo CLOUDFLARED_REGISTERED=PASS
+          else
+            journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | tail -n 20
+            echo '::error::Cloudflare connector did not register'
+            exit 2
+          fi
           REMOTE
           "${VM_SSH[@]}" 'sudo -n sh -s' < "$unit"
           rm -f "$unit"
