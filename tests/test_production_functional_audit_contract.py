@@ -88,7 +88,20 @@ def test_marina_runner_uses_local_probe_path_without_public_ssh_fallback() -> No
     assert 'rm -rf -- "$REMOTE_STAGE"' in marina
 
 
+def test_only_marina_owns_hourly_production_audit_schedule() -> None:
+    """Retired source can be audited manually; only Marina owns hourly production checks."""
+    source = WORKFLOW.read_text(encoding="utf-8")
+    marina = (ROOT / ".github" / "workflows" /
+              "production-functional-audit-marina.yml").read_text(encoding="utf-8")
+    assert "  schedule:" not in source, "stopped source must not own scheduled production audits"
+    assert "  schedule:" in marina, "Marina must have a scheduled production audit"
+    assert "    - cron: '7 * * * *'" in marina, "retain the hourly production audit cadence"
+    assert "AUDIT_TARGET_IP: 127.0.0.1" in marina, "audit must pin localhost on Marina"
+    assert 'test "$(hostname -s)" = "marina-a1-4c24g"' in marina, "wrong runner must fail closed"
+
+
 if __name__ == "__main__":
     test()
     test_marina_audit_must_probe_the_destination_not_public_origin()
+    test_only_marina_owns_hourly_production_audit_schedule()
     print("production functional audit contract: PASS")
