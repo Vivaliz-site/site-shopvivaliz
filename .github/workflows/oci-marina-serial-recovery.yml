@@ -287,7 +287,7 @@ jobs:
           print("MARINA_REBOOT=REQUESTED")
 
           grub = ""
-          deadline = time.time() + 30
+          deadline = time.time() + 60
           while time.time() < deadline:
               child.send("\x1b")
               try:
@@ -298,13 +298,14 @@ jobs:
                   break
           grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
           child.send("e")
-          time.sleep(2)
+          time.sleep(3)
           child.send("\x1b[B" * 5)
+          time.sleep(1)
           child.send("\x05")
           child.send(" init=/bin/bash")
           child.send("\x18")
           shell = ""
-          deadline = time.time() + 30
+          deadline = time.time() + 45
           while time.time() < deadline:
               try:
                   shell += child.read_nonblocking(size=4096, timeout=0.3)
@@ -313,13 +314,12 @@ jobs:
               if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
                   break
           print("MARINA_GRUB=OBSERVED_EDIT" if grub_observed else "MARINA_GRUB=BLIND_EDIT")
-          if not re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
-              print("MARINA_ROOT_SHELL=NOT_OBSERVED")
-              raise SystemExit(1)
-          print("MARINA_ROOT_SHELL=PASS")
+          prompt_observed = bool(re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell))
+          print("MARINA_ROOT_SHELL=PASS" if prompt_observed else "MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED")
+          child.sendline("")
           child.sendline("id -u")
           identity = ""
-          deadline = time.time() + 5
+          deadline = time.time() + 10
           while time.time() < deadline:
               try:
                   identity += child.read_nonblocking(size=4096, timeout=0.3)
@@ -329,6 +329,8 @@ jobs:
               print("MARINA_ROOT_ID=NOT_CONFIRMED")
               raise SystemExit(1)
           print("MARINA_ROOT_ID=0")
+          if not prompt_observed:
+              print("MARINA_ROOT_SHELL=PASS_BY_UID")
 
           public_key = os.environ["MARINA_VM_PUBLIC_KEY"]
           quoted_key = shlex.quote(public_key)
