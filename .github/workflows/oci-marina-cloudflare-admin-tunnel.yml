@@ -449,10 +449,13 @@ jobs:
             esac
             echo "MARINA_CLOUDFLARED_SOURCE=EXISTING"
           fi
+          cloudflared_source_file="/tmp/shopvivaliz-cloudflared-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "$cloudflared_source" | "${VM_SSH[@]}" "cat > '$cloudflared_source_file' && chmod 600 '$cloudflared_source_file'"
           {
+            printf '%s\n' "cloudflared_source_file=$cloudflared_source_file"
             cat <<'REMOTE_INSTALL'
           set -Eeuo pipefail
-          IFS= read -r cloudflared_source
+          cloudflared_source="$(cat "$cloudflared_source_file")"
           case "$cloudflared_source" in
             /home/ubuntu/*) : ;;
             /usr/local/bin/cloudflared) : ;;
@@ -461,9 +464,10 @@ jobs:
           esac
           install -o root -g root -m 0755 "$cloudflared_source" /usr/local/bin/cloudflared
           test -x /usr/local/bin/cloudflared
+          rm -f "$cloudflared_source_file"
           REMOTE_INSTALL
-            printf '%s\n' "$cloudflared_source"
           } | "${VM_SSH[@]}" 'sudo -n bash -s'
+          "${VM_SSH[@]}" "rm -f '$cloudflared_source_file'"
           if [ -n "$cloudflared_download" ]; then
             "${VM_SSH[@]}" "rm -f '$cloudflared_source'"
             rm -f "$cloudflared_download"
