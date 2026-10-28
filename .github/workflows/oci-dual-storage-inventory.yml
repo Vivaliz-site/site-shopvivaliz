@@ -56,7 +56,7 @@ jobs:
           inspect_instance() {
             local label="$1" config="$2" name="$3"
             local -a OCI=(oci --config-file "$config" --profile DEFAULT)
-            local query search_count instance_id instance_json lifecycle ad compartment attachments boot_count status error_file error_lines
+            local query search_count instance_id instance_json lifecycle ad compartment attachments boot_count boot_volume_id backup_count status error_file error_lines
             query="query instance resources where displayName = '$name'"
             error_file="$RUNNER_TEMP/${label,,}-oci-error.txt"
             if search_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output 2>"$error_file")"; then
@@ -84,8 +84,12 @@ jobs:
               --availability-domain "$ad" --compartment-id "$compartment" \
               --instance-id "$instance_id" --all)"
             boot_count="$(jq -r '[.data[]? | select((."lifecycle-state" // "") != "TERMINATED")] | length' <<<"$attachments")"
+            boot_volume_id="$(jq -r '.data[]? | select((."lifecycle-state" // "") != "TERMINATED") | ."boot-volume-id"' <<<"$attachments")"
+            backup_count="$("${OCI[@]}" bv boot-volume-backup list --compartment-id "$compartment" --boot-volume-id "$boot_volume_id" --all --query 'length(data)' --raw-output)"
+            printf -v "${label}_AD" '%s' "$ad"
             echo "${label}_IDENTITY=PASS lifecycle=$lifecycle availability_domain_present=true compartment_present=true"
             echo "${label}_BOOT_VOLUME_ATTACHMENTS=$boot_count"
+            echo "${label}_BOOT_VOLUME_BACKUPS=$backup_count"
           }
 
           marina_config="$RUNNER_TEMP/marina-oci-config"
@@ -94,4 +98,9 @@ jobs:
           write_config "$backend_config" "$BACKEND_USER" "$BACKEND_FINGERPRINT" "$BACKEND_TENANCY" "$BACKEND_REGION" "$BACKEND_KEY"
           inspect_instance MARINA "$marina_config" marina-a1-4c24g
           inspect_instance BACKEND "$backend_config" always-free-arm-1787907847-26
+          if [ "$MARINA_AD" = "$BACKEND_AD" ]; then
+            echo "MARINA_BACKEND_SAME_AVAILABILITY_DOMAIN=true"
+          else
+            echo "MARINA_BACKEND_SAME_AVAILABILITY_DOMAIN=false"
+          fi
           echo "OCI_DUAL_STORAGE_INVENTORY=PASS"
