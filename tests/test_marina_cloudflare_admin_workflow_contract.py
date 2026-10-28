@@ -13,6 +13,7 @@ def test_marina_cloudflare_workflow_exists_and_is_explicitly_gated() -> None:
     assert "environment: Production" in text
     assert "shopvivaliz-oci-marina-admin" in text
     assert "admin-marina.shopvivaliz.com.br" in text
+    assert "inspect_vm" in text
 
 
 def test_marina_cloudflare_workflow_does_not_log_or_embed_secrets() -> None:
@@ -35,6 +36,8 @@ def test_marina_cloudflare_workflow_uses_instance_agent_and_removes_ssh_gate() -
     assert "iptables" in text
     assert "ip6tables" in text
     assert "access-approved" in text
+    assert "MARINA_AGENT_READONLY_DIAGNOSTIC=PASS" in text
+    assert "OCI_MARINA_AGENT_INSPECT=PASS" in text
 
 
 def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
