@@ -297,7 +297,7 @@ jobs:
           if not scanned or any(key not in known for key in scanned):
               raise SystemExit("Marina SSH host key does not match approved OCI host-key material")
           PY
-          cp "$forwarded_host_key" "$vm_known_hosts"
+          sed -E "s/^\\[127\\.0\\.0\\.1\\]:${local_port} /127.0.0.1 /" "$forwarded_host_key" > "$vm_known_hosts"
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$vm_known_hosts" -o ConnectTimeout=15 -i "$vm_key" -o HostKeyAlias=127.0.0.1)
           VM_SSH=(ssh "${SSH_COMMON[@]}" -p "$local_port" ubuntu@127.0.0.1)
           "${VM_SSH[@]}" 'test "$(hostname)" = "marina-a1-4c24g"; id -u; sudo -n true'
