@@ -196,7 +196,7 @@ jobs:
               "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$original_cidrs" --force >/dev/null
             fi
             if [ -n "$security_list_id" ] && [ -s "$security_list_original" ]; then
-              if ! "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_original" >/dev/null; then
+              if ! "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_original" --force >/dev/null; then
                 echo "::error::Failed to restore Marina security-list ingress rules"
                 return 1
               fi
@@ -239,7 +239,7 @@ jobs:
           PY
           )"
           if [ "$security_rule_state" = ADDED ]; then
-            "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_expanded" >/dev/null
+            "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_expanded" --force >/dev/null
             echo "MARINA_BOOTSTRAP_NETWORK_RULE=APPLIED source=$subnet_cidr"
           else
             echo "MARINA_BOOTSTRAP_NETWORK_RULE=ALREADY_PRESENT source=$subnet_cidr"
