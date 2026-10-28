@@ -11,6 +11,7 @@ on:
           - probe
           - history
           - vnc-probe
+          - validate
           - repair
           - cleanup
         default: probe
@@ -43,6 +44,7 @@ jobs:
       ACTION: ${{ inputs.action }}
       CONFIRMATION: ${{ inputs.confirmation }}
       CLOUDFLARE_MARINA_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_MARINA_TUNNEL_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Install OCI CLI and JSON tools
         shell: bash
@@ -265,6 +267,25 @@ jobs:
               except subprocess.TimeoutExpired:
                   tunnel.kill()
           PY
+            exit 0
+          fi
+
+          if [ "$ACTION" = validate ]; then
+            test -n "${CLOUDFLARE_API_TOKEN:-}"
+            tunnel_json="$RUNNER_TEMP/marina-cloudflare-connections.json"
+            tunnel_code="$(curl -sS -o "$tunnel_json" -w '%{http_code}' \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/0afb7d99f708b9455598df9fa1035164/cfd_tunnel/6e55e29e-7c62-4a00-ac66-8e3f9df1145f/connections")"
+            test "$tunnel_code" = 200
+            test "$(jq -r '.success // false' "$tunnel_json")" = true
+            connection_count="$(jq -r '.result | length' "$tunnel_json")"
+            statuses="$(jq -r '[.result[]?.status] | join(",")' "$tunnel_json")"
+            echo "MARINA_CLOUDFLARE_TUNNEL=PASS connections=$connection_count statuses=$statuses"
+            if timeout 8 bash -c '</dev/tcp/137.131.173.240/22' 2>/dev/null; then
+              echo "MARINA_PUBLIC_SSH=OPEN"
+              exit 1
+            fi
+            echo "MARINA_PUBLIC_SSH=BLOCKED"
             exit 0
           fi
 
