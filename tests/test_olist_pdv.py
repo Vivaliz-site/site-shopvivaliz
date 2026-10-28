@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.olist_pdv import discover_pdv, pdv_product_prices
+from scripts.olist_pdv import discover_pdv, fetch_pdv_snapshot, pdv_product_prices
 
 
 class PdvPricesContractTest(unittest.TestCase):
@@ -101,6 +101,40 @@ class PdvPricesContractTest(unittest.TestCase):
             ], "paginacao": {"total": 2}}
         with self.assertRaisesRegex(ValueError, "pdv_list_not_unique"):
             discover_pdv(listing, "fixture-token")
+
+    def test_bulk_pdv_exception_is_verified_without_individual_request(self):
+        base = self.pdv
+        bulk = {"id": 12345, "descricao": "PDV", "acrescimoDesconto": 15,
+                "excecoes": [{"idProduto": 350339, "preco": 142, "precoPromocional": 119}]}
+        calls = []
+        def get(path, token):
+            calls.append(path)
+            self.assertEqual(path, "listas-precos/12345")
+            return bulk
+        snapshot = fetch_pdv_snapshot(get, "fixture-token", base)
+        result = pdv_product_prices(get, "fixture-token", 350339, self.product, base, snapshot)
+        self.assertEqual((result["preco"], result["precoPromocional"]), (142.0, 119.0))
+        self.assertEqual(calls, ["listas-precos/12345"])
+
+    def test_missing_bulk_exception_requires_live_individual_confirmation(self):
+        bulk = {"id": 12345, "descricao": "PDV", "acrescimoDesconto": 15, "excecoes": []}
+        target = dict(bulk, excecoes=None)
+        calls = []
+        def get(path, token):
+            calls.append(path)
+            return bulk if path == "listas-precos/12345" else target
+        snapshot = fetch_pdv_snapshot(get, "fixture-token", self.pdv)
+        result = pdv_product_prices(get, "fixture-token", 350339, self.product, self.pdv, snapshot)
+        self.assertEqual(result["preco"], 115.0)
+        self.assertEqual(calls, ["listas-precos/12345", "listas-precos/12345?idProduto=350339"])
+
+    def test_ambiguous_bulk_exceptions_fail_closed(self):
+        def get(path, token):
+            return {"id": 12345, "descricao": "PDV", "acrescimoDesconto": 15,
+                    "excecoes": [{"idProduto": 350339, "preco": 50},
+                                 {"idProduto": 350339, "preco": 70}]}
+        with self.assertRaisesRegex(ValueError, "pdv_exception_ambiguous"):
+            fetch_pdv_snapshot(get, "fixture-token", self.pdv)
 
     def test_no_list_is_fail_closed(self):
         with self.assertRaisesRegex(ValueError, "pdv_list_not_unique"):
