@@ -107,5 +107,56 @@ class PdvPricesContractTest(unittest.TestCase):
             discover_pdv(lambda path, token: {"itens": [], "paginacao": {"total": 0}}, "fixture-token")
 
 
+class CatalogQuarantineContractTest(unittest.TestCase):
+    """A collision is blocked for both IDs while other PDV rows stay eligible."""
+
+    @staticmethod
+    def module():
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pdv_catalog_daemon", Path(__file__).resolve().parents[1] / "daemon-sync-products.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_quarantine_all_colliding_ids_and_preserve_other_skus(self):
+        sync = self.module()
+        rows = [
+            {"id": 342902508, "sku": "1C7Q-LKVS-MDOC"},
+            {"id": 1, "sku": "SAFE-1"},
+            {"id": 387064728, "sku": "1c7q-lkvs-mdoc"},
+            {"id": 2, "sku": "SAFE-2"},
+        ]
+        good, quarantined = sync.partition_ambiguous_skus(rows)
+        self.assertEqual([row["id"] for row in good], [1, 2])
+        self.assertEqual(quarantined[0]["olist_product_ids"], ["342902508", "387064728"])
+        self.assertEqual(quarantined[0]["reason"], "duplicate_active_sku")
+
+    def test_missing_id_or_sku_never_publishes(self):
+        sync = self.module()
+        for row in ({"id": 1, "sku": ""}, {"id": None, "sku": "KNOWN"}):
+            with self.assertRaisesRegex(ValueError, "erp_missing_or_duplicate_identity"):
+                sync.partition_ambiguous_skus([row])
+
+    def test_quarantine_is_stored_in_same_atomic_snapshot(self):
+        import tempfile
+        sync = self.module()
+        with tempfile.TemporaryDirectory() as tmp:
+            original_cache, original_video = sync.CACHE_PATH, sync.VIDEO_SOURCES_PATH
+            try:
+                sync.CACHE_PATH = Path(tmp) / "storage" / "products-cache-ativos.json"
+                sync.VIDEO_SOURCES_PATH = Path(tmp) / "storage" / "video-sources.json"
+                quarantine = [{"sku": "DUP-1", "olist_product_ids": ["10", "11"], "reason": "duplicate_active_sku"}]
+                sync.save_products([{"id": 12, "sku": "SAFE-1", "price_source": "olist_pdv", "pdv_list_id": 982}], quarantine, 3)
+                import json
+                snapshot = json.loads(sync.CACHE_PATH.read_text())
+                self.assertEqual(snapshot["source_active_count"], 3)
+                self.assertEqual(snapshot["total"], 1)
+                self.assertEqual(snapshot["quarantined_product_count"], 2)
+                self.assertEqual(snapshot["quarantined_skus"], quarantine)
+            finally:
+                sync.CACHE_PATH = original_cache
+                sync.VIDEO_SOURCES_PATH = original_video
+
+
 if __name__ == "__main__":
     unittest.main()
