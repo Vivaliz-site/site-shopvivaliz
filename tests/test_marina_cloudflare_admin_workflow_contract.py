@@ -48,3 +48,6 @@ def test_marina_bootstrap_can_use_preconfigured_no_quota_tunnel() -> None:
     assert "Failed to restore Marina security-list ingress rules" in text
     assert text.count("network security-list update") >= 2
     assert text.count("--force") >= 3
+    assert "ssh-keyscan -T 15 -p \"$local_port\"" in text
+    assert "does not match approved OCI host-key material" in text
+    assert "HostKeyAlias=127.0.0.1" in text

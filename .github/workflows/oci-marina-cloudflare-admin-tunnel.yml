@@ -278,7 +278,26 @@ jobs:
           tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$RUNNER_TEMP/marina-bastion-known-hosts }"
           bash -lc "$tunnel_command"
           sleep 2
-          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$vm_known_hosts" -o ConnectTimeout=15 -i "$vm_key" -o HostKeyAlias="$MARINA_PRIVATE_IP")
+          forwarded_host_key="$RUNNER_TEMP/marina-forwarded-host-key"
+          ssh-keyscan -T 15 -p "$local_port" -t ed25519 127.0.0.1 > "$forwarded_host_key" 2>/dev/null || true
+          test -s "$forwarded_host_key"
+          python3 "$vm_known_hosts" "$forwarded_host_key" <<'PY'
+          import sys
+
+          def key_material(line):
+              fields = line.split()
+              for index, field in enumerate(fields[:-1]):
+                  if field.startswith(("ssh-", "ecdsa-", "sk-")):
+                      return field, fields[index + 1]
+              return None
+
+          known = {key_material(line) for line in open(sys.argv[1], encoding="utf-8") if key_material(line)}
+          scanned = [key_material(line) for line in open(sys.argv[2], encoding="utf-8") if key_material(line)]
+          if not scanned or any(key not in known for key in scanned):
+              raise SystemExit("Marina SSH host key does not match approved OCI host-key material")
+          PY
+          cp "$forwarded_host_key" "$vm_known_hosts"
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$vm_known_hosts" -o ConnectTimeout=15 -i "$vm_key" -o HostKeyAlias=127.0.0.1)
           VM_SSH=(ssh "${SSH_COMMON[@]}" -p "$local_port" ubuntu@127.0.0.1)
           "${VM_SSH[@]}" 'test "$(hostname)" = "marina-a1-4c24g"; id -u; sudo -n true'
           echo "MARINA_PRIVATE_SSH=PASS"
