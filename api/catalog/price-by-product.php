@@ -14,6 +14,18 @@ if ($sku === '' && $id === '') {
     echo json_encode(['ok' => false, 'error' => 'missing_identifier']);
     exit;
 }
+$cachePath = dirname(__DIR__, 2) . '/storage/products-cache-ativos.json';
+$snapshot = is_file($cachePath) ? json_decode((string)file_get_contents($cachePath), true) : null;
+if (!is_array($snapshot)) {
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'catalog_cache_unavailable']);
+    exit;
+}
+if (svcr_is_quarantined_identifier($snapshot, $sku, $id)) {
+    http_response_code(409);
+    echo json_encode(['ok' => false, 'error' => 'erp_sku_quarantined']);
+    exit;
+}
 $matches = [];
 foreach (svcr_products() as $row) {
     if (!is_array($row)) continue;
