@@ -354,6 +354,28 @@ try { svoei_normalize_v3_product($detail, ['disponivel'=>7]); }
 catch (RuntimeException $e) { $normalizerRejected = $e->getMessage() === 'pdv_prices_required'; }
 t_assert($normalizerRejected, 'product import without verified PDV must be refused');
 
+// Quarantine cannot be bypassed by an ID-only event or a new-product fallback.
+$quarantineRoot = $tmp . '/quarantine';
+mkdir($quarantineRoot . '/storage', 0775, true);
+$blockList = [['sku'=>'1C7Q-LKVS-MDOC','olist_product_ids'=>['342902508','387064728'],'reason'=>'duplicate_active_sku']];
+$validRow = ['id'=>900,'sku'=>'SAFE-1','precos'=>['preco'=>50.0,'precoPromocional'=>0.0]];
+file_put_contents($quarantineRoot . '/storage/products-cache-ativos.json',
+    json_encode(['itens'=>[$validRow], 'quarantined_skus'=>$blockList]));
+foreach ([
+    static fn() => svoei_update_catalog_price($quarantineRoot, '1C7Q-LKVS-MDOC', 52.59, 0.0, '342902508', 982),
+    static fn() => svoei_update_catalog_stock($quarantineRoot, '', 10, '387064728'),
+    static fn() => svoei_upsert_catalog_product($quarantineRoot, ['id'=>387064728,'sku'=>'1C7Q-LKVS-MDOC']),
+] as $attempt) {
+    $blocked = false;
+    try { $attempt(); } catch (RuntimeException $e) { $blocked = $e->getMessage() === 'catalog_sku_quarantined'; }
+    t_assert($blocked, 'quarantined SKU/ID must never re-enter through webhook');
+}
+svoei_update_catalog_price($quarantineRoot, 'SAFE-1', 65.0, 0.0, '900', 982);
+$afterSafeUpdate = json_decode((string)file_get_contents($quarantineRoot . '/storage/products-cache-ativos.json'), true);
+t_assert($afterSafeUpdate['quarantined_skus'] === $blockList, 'webhook must preserve collision manifest');
+t_assert(count($afterSafeUpdate['itens']) === 1, 'webhook must not publish quarantined ID');
+t_assert((float)$afterSafeUpdate['itens'][0]['precos']['preco'] === 65.0, 'unrelated PDV webhook must keep working');
+
 // Even the legacy webhook receiver must never remove the active catalog
 // before the authenticated PDV full-sync has completed successfully.
 $legacyReceiver = (string)file_get_contents($root . '/api/olist/webhook-receiver.php');
