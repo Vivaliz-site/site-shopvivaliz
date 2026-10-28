@@ -209,7 +209,7 @@ jobs:
           printf '%s\n' "$OCI_VM_KEY_MATERIAL" > "$vm_key"
           printf '%s\n' "$OCI_VM_KNOWN_HOSTS" > "$vm_known_hosts"
           chmod 600 "$vm_key" "$vm_known_hosts"
-          ssh-keygen -q -t ed25519 -N '' -f "$bastion_key" >/dev/null
+          ssh-keygen -q -t rsa -b 3072 -N '' -f "$bastion_key" >/dev/null
 
           "${OCI[@]}" bastion bastion get --bastion-id "$MARINA_BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$original_cidrs"
           subnet_json="$("${OCI[@]}" network subnet get --subnet-id "$MARINA_SUBNET_ID")"
@@ -275,8 +275,8 @@ jobs:
           test -n "$metadata"
           tunnel_command="${metadata//<privateKey>/$bastion_key}"
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
-          tunnel_command="${tunnel_command//ssh /ssh -o BatchMode=yes -o IdentitiesOnly=yes }"
-          tunnel_command="${tunnel_command/ssh -o BatchMode=yes -o IdentitiesOnly=yes /ssh -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$RUNNER_TEMP/marina-bastion-known-hosts }"
+          tunnel_command="${tunnel_command//ssh /ssh -o BatchMode=yes -o IdentitiesOnly=yes -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa }"
+          tunnel_command="${tunnel_command/ssh -o BatchMode=yes -o IdentitiesOnly=yes -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa /ssh -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$RUNNER_TEMP/marina-bastion-known-hosts }"
           bash -lc "$tunnel_command"
           sleep 2
           forwarded_host_key="$RUNNER_TEMP/marina-forwarded-host-key"
