@@ -81,7 +81,16 @@ jobs:
           OCI=(oci --config-file "$config" --profile "$OCI_PROFILE")
           query="query instance resources where displayName = '$OCI_INSTANCE_NAME'"
           echo "MARINA_SERIAL_SEARCH_START=PASS"
-          search_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          search_count=""
+          for search_attempt in $(seq 1 5); do
+            search_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output 2>/dev/null || true)"
+            if [ "$search_count" = 1 ]; then
+              break
+            fi
+            echo "MARINA_SERIAL_SEARCH_RETRY=$search_attempt"
+            sleep 5
+          done
+          echo "MARINA_SERIAL_SEARCH_COUNT=$search_count"
           test "$search_count" = 1
           instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
           compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
