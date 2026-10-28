@@ -173,7 +173,25 @@ function svoei_load_active_catalog(string $root): array
     return svoei_cache_items($payload);
 }
 
-function svoei_catalog_mutate(string $root, callable $mutator): mixed
+/** Quarantined ERP IDs and SKUs cannot re-enter the storefront via webhooks. */
+function svoei_assert_not_quarantined(string $root, string $sku, string $productId): void
+{
+    $path = $root . '/storage/products-cache-ativos.json';
+    $payload = is_file($path) ? json_decode((string)file_get_contents($path), true) : null;
+    if (!is_array($payload)) throw new RuntimeException('catalog_cache_invalid');
+    foreach (is_array($payload['quarantined_skus'] ?? null) ? $payload['quarantined_skus'] : [] as $blocked) {
+        if (!is_array($blocked)) throw new RuntimeException('catalog_quarantine_invalid');
+        $blockedSku = trim((string)($blocked['sku'] ?? ''));
+        $ids = $blocked['olist_product_ids'] ?? [];
+        if (!is_array($ids)) throw new RuntimeException('catalog_quarantine_invalid');
+        if (($sku !== '' && $blockedSku !== '' && strcasecmp($sku, $blockedSku) === 0)
+            || ($productId !== '' && in_array($productId, array_map('strval', $ids), true))) {
+            throw new RuntimeException('catalog_sku_quarantined');
+        }
+    }
+}
+
+function svoei_catalog_mutate(string $root, callable $mutator, string $sku = '', string $productId = ''): mixed
 {
     $lockPath = $root . '/storage/olist-erp-webhook.lock';
     $lock = fopen($lockPath, 'c+');
@@ -183,6 +201,7 @@ function svoei_catalog_mutate(string $root, callable $mutator): mixed
         throw new RuntimeException('catalog_lock_failed');
     }
     try {
+        svoei_assert_not_quarantined($root, $sku, $productId);
         $items = svoei_load_active_catalog($root);
         $result = $mutator($items);
         svoei_save_active_catalog($root, $items);
@@ -239,7 +258,7 @@ function svoei_upsert_catalog_product(string $root, array $product): void
             return;
         }
         $items[] = $product;
-    });
+    }, $sku, $id);
 }
 
 function svoei_update_catalog_price(string $root, string $sku, float $price, float $promotional = 0.0, string $productId = '', int $pdvListId = 0): void
@@ -283,7 +302,7 @@ function svoei_update_catalog_price(string $root, string $sku, float $price, flo
         $items[$index]['pdv_list_id'] = $pdvListId;
         $items[$index]['sync_source'] = 'tiny_v3';
         $items[$index]['_detail_synced_at'] = gmdate(DATE_ATOM);
-    });
+    }, $sku, $productId);
 }
 
 function svoei_update_catalog_stock(string $root, string $sku, int $quantity, string $productId = ''): void
@@ -323,7 +342,7 @@ function svoei_update_catalog_stock(string $root, string $sku, int $quantity, st
         $items[$index]['estoque']['quantidade'] = $quantity;
         $items[$index]['sync_source'] = 'tiny_v3';
         $items[$index]['_detail_synced_at'] = gmdate(DATE_ATOM);
-    });
+    }, $sku, $productId);
 }
 
 /** @return list<array<string,string>> */
