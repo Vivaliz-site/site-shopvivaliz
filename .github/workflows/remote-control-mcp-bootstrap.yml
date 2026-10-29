@@ -221,7 +221,11 @@ jobs:
 
   bootstrap:
     needs: scope
-    if: needs.scope.outputs.browser_only != 'true' && needs.scope.outputs.backend_controller_only != 'true'
+    # DECOMMISSIONED_SOURCE_GUARD_20261029: four-host bootstrap still targets
+    # deleted shopvivaliz-free-a1. Fail closed until separately rearchitected
+    # for authorized live hosts; never provision the retired source automatically.
+    if: ${{ false }} # retired four-host path permanently disabled
+
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:
