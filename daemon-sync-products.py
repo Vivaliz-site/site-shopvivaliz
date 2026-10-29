@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -25,6 +26,7 @@ _MIN_REQUEST_INTERVAL = 1.10
 DETAIL_CACHE_MAX_AGE_SECONDS = 2 * 60 * 60
 AMAZON_PRICE_LIST_ID = 991
 CENT = Decimal('0.01')
+_UNCHECKED_CACHE_REVISION = object()
 
 
 def public_product(item: dict[str, Any]) -> dict[str, Any]:
@@ -414,19 +416,48 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
     return updated
 
 
-def save_products(products: list[dict[str, Any]]) -> Path:
+def cache_revision(path: Path) -> tuple[int, int, int] | None:
+    """Identity of the last published atomic cache; inode changes on each replace."""
+    try:
+        st = path.stat()
+    except FileNotFoundError:
+        return None
+    return st.st_ino, st.st_mtime_ns, st.st_size
+
+
+def save_products(
+    products: list[dict[str, Any]],
+    expected_revision: tuple[int, int, int] | None | object = _UNCHECKED_CACHE_REVISION,
+) -> Path:
     registry = load_video_sources()
     products = [merge_video_sources(item, registry) for item in products]
     payload = {"total": len(products), "timestamp": datetime.now(timezone.utc).isoformat(),
                "price_list_id": AMAZON_PRICE_LIST_ID, "price_source": "olist_tiny_amazon", "itens": products}
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temporary = CACHE_PATH.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(CACHE_PATH)
+    # Same cross-language lock used by the authenticated Olist webhook.
+    # Every writer checks the revision INSIDE the lock, preventing a slow
+    # reconciliation from overwriting a newer event or another reconciliation.
+    lock_path = CACHE_PATH.parent / "olist-erp-webhook.lock"
+    with lock_path.open("a+") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            if (expected_revision is not _UNCHECKED_CACHE_REVISION
+                    and cache_revision(CACHE_PATH) != expected_revision):
+                raise RuntimeError("catalog_changed_during_reconcile_retry_later")
+            temporary = CACHE_PATH.with_suffix(".json.tmp")
+            try:
+                temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                os.chmod(temporary, 0o660)
+                temporary.replace(CACHE_PATH)
+            finally:
+                temporary.unlink(missing_ok=True)
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
     return CACHE_PATH
 
 
 def sync_once(workers: int) -> bool:
+    initial_revision = cache_revision(CACHE_PATH)
     token = get_token()
     if not token:
         print("[!] OLIST_ACCESS_TOKEN/TINY_ACCESS_TOKEN não configurado")
@@ -446,7 +477,7 @@ def sync_once(workers: int) -> bool:
     kits_updated = apply_kit_stock(products)
     if kits_updated:
         print(f"[+] Estoque recalculado pela composicao em {kits_updated} produtos tipo kit")
-    output = save_products(products)
+    output = save_products(products, expected_revision=initial_revision)
     with_stock = sum(1 for item in products if int(item.get("estoque_disponivel") or 0) > 0)
     with_images = sum(1 for item in products if isinstance(item.get("anexos"), list) and item["anexos"])
     print(f"[+] Cache atômico salvo: {len(products)} produtos, {with_stock} com estoque, {with_images} com imagem, {failures} falhas em {output}")
