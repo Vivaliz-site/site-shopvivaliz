@@ -1,3 +1,7 @@
+<!-- CURRENT_HOST_ACCESS_POLICY_20261029 -->
+**Topologia de acesso vigente:** `marina-a1-4c24g` (OCI ESPOSA) e producao web/deploy; `always-free-arm-1787907847-26` (OCI PRINCIPAL) opera o backend/browser e o **Remote Control MCP** central. A origem `shopvivaliz-free-a1` foi excluida segundo o proprietario; nunca acessa-la. O MCP central ainda nao inclui Marina; para ela, RDC 1/2 direto tem evidencias de acesso, enquanto o MCP independente permanece inativo. Revalidar `docs/knowledge/current-topology-and-access-2026-10-29.md` antes de operar.
+<!-- /CURRENT_HOST_ACCESS_POLICY_20261029 -->
+
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 ## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
 
@@ -120,7 +124,7 @@ Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
 
 
 - Em projetos ShopVivaliz com autenticação já provisionada, o agente deve primeiro usar as fontes seguras existentes (env/arquivo protegido/systemd/secret/host autenticador) e **não pedir ao usuário novamente usuário, senha ou OTP** sem antes provar que a fonte existente está ausente ou inválida.
-- Para Amazon Returns / Seller Central, o browser/bridge roda em `shopvivaliz-free-a1` e o TOTP é fornecido de forma restrita por `always-free-arm-1787907847-26`. O agente deve usar esse caminho automático e nunca depender de o usuário transcrever OTP rotineiramente.
+- Para Amazon Returns / Seller Central, **a antiga rota browser/bridge em `shopvivaliz-free-a1` foi desativada pela exclusao da origem**. Verificar qual novo browser isolado/bridge foi realmente implantado (backend ou Marina) antes de tentar login ou MFA; nao presumir migracao ou reaproveitar sessao/segredo de outro perfil. TOTP somente por fluxo seguro ja autorizado, sem expor valor ou exigir transcricao rotineira.
 - Antes de reportar `AUTH_REQUIRED`, verificar o runbook do projeto, referências de credencial e canal de MFA já configurados, sem revelar valores secretos.
 - Pedir intervenção humana apenas para credencial realmente revogada/ausente, CAPTCHA, recovery, consentimento novo ou outro desafio que tecnicamente não possa ser resolvido pelo fluxo seguro existente.
 - Nunca registrar em Git, docs, logs ou chat o conteúdo de senhas, tokens, chaves, seeds TOTP, OTPs ou cookies; documentar somente a localização segura e o procedimento.

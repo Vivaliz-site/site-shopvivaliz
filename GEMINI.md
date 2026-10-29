@@ -25,20 +25,17 @@ Para qualquer executor, subagente ou ferramenta neste projeto: carregue `AGENTS.
 <!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
 
 <!-- SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
-## Acesso canônico aos hosts ShopVivaliz
+## Acesso canonico aos hosts ShopVivaliz — revisao 2026-10-29
 
-Antes de qualquer operação em host, VM, runtime, navegador, serviço, deploy, logs ou recuperação, leia `docs/HOST-ACCESS.md`. No repositório principal, a fonte central detalhada permanece `Vivaliz-site/site-shopvivaliz:docs/knowledge/host-access.md`.
+**Antes de operar:** ler `docs/knowledge/host-access.md` e `docs/knowledge/current-topology-and-access-2026-10-29.md`; registrar revisao e confirmar host/identidade/permissoes ao vivo.
 
-Regras obrigatórias:
-- produção web/deploy: `shopvivaliz-free-a1`, privado `10.0.1.112`;
-- backend/controller/browser: `always-free-arm-1787907847-26`, privado `10.0.1.38`;
-- navegador de agente roda somente no backend/controller; não usar navegador operacional em Fred-Win ou KOCEPSV;
-- rota operacional primaria para hosts/servicos/diagnostico: **Remote Control MCP** privado e auditavel;
-- shell Linux direto: usar SSH privado/Tailscale com identidade dedicada somente quando o MCP nao expuser a capacidade necessaria ou estiver comprovadamente indisponivel; SSH público, senha interativa e root público são proibidos;
-- OCI Bastion/GitHub control plane ficam para bootstrap/recovery; RustDesk self-hosted permanece para GUI;
-- Windows via backend: Fred-Win = `127.0.0.1:2222`; KOCEPSV = `127.0.0.1:2223`; os relays legados `5557/5558` são apenas bootstrap/recovery;
-- evidência fresca obrigatória antes de operar: `hostname`, identidade (`whoami`/`id`), diretório e estado Git quando aplicável;
-- nunca registrar em Git, docs, logs ou chat o conteúdo de chaves, senhas, tokens, cookies, OTP/TOTP ou secrets.
+- **Producao web/deploy/servicos do site:** `marina-a1-4c24g` (OCI ESPOSA, privado documentado `10.80.1.116`; Tailscale observado `100.118.170.46`). RDC 1/2 direto para operacoes autorizadas; runner Marina para deploys versionados.
+- **Backend/controller/browser:** `always-free-arm-1787907847-26` (OCI PRINCIPAL, privado `10.0.1.38`; Tailscale observado `100.66.174.74`). MCP central so para hosts presentes e validos em sua allowlist; navegador corporativo Dev/Atendimento permanece no backend.
+- **Origem web `shopvivaliz-free-a1` aposentada/excluida conforme proprietario em 2026-10-29**; `10.0.1.112:22` sem rota. Proibido acionar, publicar ou recriar como fallback. Confirmacao `TERMINATED` na OCI exige inventario de lifecycle.
+- **MCP central DESATUALIZADO:** `hosts_list` ainda inclui origem excluida e omite Marina. Nao renomear o host legado nem pressupor que `admin_command_run` do central opera na Marina.
+- **MCP independente Marina NAO APTO:** `shopvivaliz-marina-mcp.service` e `shopvivaliz-marina-mcp-tunnel.service` inativos; Cloudflare admin `active` nao comprova registro de conector OpenAI. Seguir `marina-direct-mcp/README.md` e `docs/ops/marina-independent-secure-mcp-tunnel.md` antes de anunciar disponibilidade.
+- Usar SSH privado/Tailscale somente apos comprovar autenticacao/host key; OCI/GitHub control plane para bootstrap/recovery autorizado; GUI real quando exigida; Windows sao apoio, nao producao.
+- Identidade de host, `sudo`, RBAC, lease/fencing, CI e releases imutaveis devem ser validados; nunca publicar secrets, copiar perfis ou contornar recusa de privilegio.
 <!-- /SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
 
 <!-- GEMINI_READ_AGENTS_FIRST_V1 -->

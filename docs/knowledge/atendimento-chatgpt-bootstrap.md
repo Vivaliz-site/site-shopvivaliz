@@ -35,15 +35,16 @@ Nesta ordem:
 
 ## Mapa operacional de hosts
 
-- `shopvivaliz-free-a1`: site/web/deploy de produção; origin `137.131.149.55`, privado `10.0.1.112`.
-- `always-free-arm-1787907847-26`: backend, controller do Remote Control MCP, navegador, MEI, M365 e relay; privado `10.0.1.38`.
-- `shopvivaliz-ai` / `137.131.156.17`: DEV legado/e-mail/testes; nunca assumir como produção web.
+- `marina-a1-4c24g` (OCI ESPOSA): **site/web/deploy de produção**, Apache/MySQL/workers/runner; IP privado documentado `10.80.1.116`, Tailscale observado `100.118.170.46`. Acesso direto RDC 1/2 confirmado em 2026-10-29.
+- `always-free-arm-1787907847-26` (OCI PRINCIPAL): backend/controller do MCP central, navegador corporativo, MEI/M365 e relay; privado `10.0.1.38`, Tailscale observado `100.66.174.74`.
+- `shopvivaliz-free-a1`: **origem excluida segundo proprietario** em 2026-10-29, SSH sem rota; proibido usar como destino. `shopvivaliz-ai` e E2 antigas sao historicas.
+- Estado dos MCPs e alternativas: [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md).
 - Produção: `/home/ubuntu/shopvivaliz-deploy/`, com releases imutáveis. Nunca editar `current/` nem a release ativa diretamente.
 
 ## Rota de operação
 
-1. ShopVivaliz Remote Control MCP é a rota primária para host, serviço, browser, arquivos e tarefas duráveis.
-2. SSH privado/Tailscale somente quando a capacidade necessária não existir no MCP ou ele estiver comprovadamente indisponível.
+1. Backend: ShopVivaliz Remote Control MCP para hosts **validos de sua allowlist**; a origem excluida ainda aparece, e Marina **nao** aparece nesse MCP.
+2. Marina: RDC 1/2 direto comprovado em 2026-10-29 (descobrir o ID atual pelo nome), com identidade/privilegios verificados; SSH privado/Tailscale somente apos autenticacao comprovada. O MCP independente Marina permanece inativo/nao conectado. Nunca redirecionar comandos da origem para a Marina implicitamente.
 3. GitHub Actions/OCI Bastion somente para bootstrap/recovery.
 4. Navegador operacional roda na VM de backend; não usar navegador dos hosts Windows nem Opera Connector para tarefas ShopVivaliz.
 5. GitHub é fonte/bootstrap/recovery, não transporte normal de runtime.
@@ -195,7 +196,7 @@ Nunca incluir em formulários, chats ou evidências externas senhas, tokens, cha
 
 Uma configuração só é considerada validada quando, em uma conversa nova da conta `atendimento@shopvivaliz.com.br`, a própria conta consegue:
 
-1. identificar corretamente os papéis de `shopvivaliz-free-a1` e `always-free-arm-1787907847-26`;
+1. identificar corretamente Marina como site/producao, backend como controller/browser, e `shopvivaliz-free-a1` como origem excluida;
 2. localizar e ler este bootstrap e os documentos obrigatórios;
 3. invocar ShopVivaliz Remote Control em uma ação reversível;
 4. localizar o repositório principal pelo GitHub;
@@ -217,8 +218,9 @@ Leia primeiro:
 2. docs/knowledge/host-access.md
 3. docs/knowledge/README.md
 4. docs/knowledge/agent-rules.md
-5. docs/knowledge/project.md
-6. docs/knowledge/browser-sessions.md
+5. docs/knowledge/current-topology-and-access-2026-10-29.md
+6. docs/knowledge/project.md
+7. docs/knowledge/browser-sessions.md
 7. docs/knowledge/chatgpt-account-migration-curated.md
 8. docs/knowledge/dev-agent-briefing.md quando houver trabalho de engenharia.
 

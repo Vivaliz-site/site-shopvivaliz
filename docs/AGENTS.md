@@ -2,7 +2,7 @@
 
 <!-- SHOPVIVALIZ_HOST_BOOTSTRAP_V1 -->
 > 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** a fonte operacional canônica é [`knowledge/host-access.md`](knowledge/host-access.md), junto de [`knowledge/README.md`](knowledge/README.md) e [`knowledge/agent-rules.md`](knowledge/agent-rules.md).
-> Estado atual: `shopvivaliz-free-a1` = produção web/deploy (`137.131.149.55`, privado `10.0.1.112`); `always-free-arm-1787907847-26` = backend/MEI/M365/relay (`10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` = legado DEV/e-mail/testes, nunca produção web. O papel web das antigas E2 está aposentado; referências históricas abaixo não são destinos operacionais atuais. Prefira Remote Desktop Commander por nome do dispositivo.
+> **Estado operacional 2026-10-29:** site/producao web/deploy = `marina-a1-4c24g` (OCI ESPOSA); backend/controller/browser/MEI/M365 = `always-free-arm-1787907847-26` (OCI PRINCIPAL); `shopvivaliz-free-a1` foi excluida segundo proprietario e nao deve ser acessada; MCP central ainda possui inventario antigo, e MCP proprio da Marina nao esta ativo. Leia `knowledge/current-topology-and-access-2026-10-29.md`. As referencias abaixo a VMs antigas sao historicas, nao destinos atuais.
 
 
 > **🔴 LEIA ISTO ANTES DE COMEÇAR**
@@ -38,7 +38,7 @@
 
 ## 🔴 2026-08-29 — Recuperação pós-E2 e arquitetura obrigatória de 2 A1
 
-**Estado vinculante:** produção passa a operar somente nas duas A1 sobreviventes: `always-free-arm-1787907847-26` (backend/dados/serviços) e `shopvivaliz-free-a1` (site/web/deploy). As E2 `shopvivaliz-ai` (`137.131.156.17`) e `shopvivaliz-micro-2` (`136.248.69.116`) foram encerradas e são **alvos aposentados**.
+**REGISTRO HISTORICO (2026-08-29), SUPERADO PELA ARQUITETURA DE 2026-10-29:** a producao operava nas duas A1: `always-free-arm-1787907847-26` (backend/dados/serviços) e `shopvivaliz-free-a1` (site/web/deploy). As E2 `shopvivaliz-ai` (`137.131.156.17`) e `shopvivaliz-micro-2` (`136.248.69.116`) foram encerradas e são **alvos aposentados**.
 
 **Regras para qualquer agente:**
 - Nunca apontar workflow, script, cron, systemd, SSH, MCP, health-check ou deploy para IP/hostname das E2 aposentadas.

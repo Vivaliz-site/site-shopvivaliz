@@ -14,21 +14,26 @@ Leia antes de operar:
 
 ## Arquitetura
 
-- controller: `always-free-arm-1787907847-26`
+- controller central: `always-free-arm-1787907847-26` (OCI PRINCIPAL)
 - endpoint MCP: `127.0.0.1:5580`, privado/loopback
-- produção web/deploy: `shopvivaliz-free-a1`
+- **producao web/deploy atual: `marina-a1-4c24g` (OCI ESPOSA)**; nao esta presente na allowlist do MCP central em 2026-10-29.
+- **origem aposentada:** `shopvivaliz-free-a1`; excluida segundo proprietario, SSH sem rota, jamais acionar via MCP.
 - Fred-Win: alcançado pelo controller pela rota privada documentada
 - KOCEPSV: alcançado pelo controller pela rota privada documentada quando houver evidência viva de disponibilidade
 - GitHub não é queue, heartbeat nem transporte normal do runtime do MCP
 
 ## Ordem operacional
 
-1. **Remote Control MCP** para ações allowlisted, observação, serviços, arquivos e tarefas duráveis.
+1. **Remote Control MCP** para backend e hosts allowlisted **ativos**; `hosts_list` ainda inclui origem excluida e nao inclui Marina. Na Marina, **RDC 1/2 direto** foi verificado em 2026-10-29; o MCP proprio Marina e tunnel-client OpenAI continuam inativos e sem conexao comprovada. `shopvivaliz-cloudflared-admin.service` ativo nao significa MCP pronto.
 2. **SSH privado/Tailscale** com identidade dedicada somente quando a operação necessária não estiver exposta pelo MCP ou quando o controller estiver comprovadamente indisponível.
 3. **GitHub Actions/OCI Bastion** para bootstrap, recovery ou reparo do próprio control plane.
 4. **RustDesk** para GUI/validação visual. Browser de agente continua na backend.
 
 SSH público direto, root público, senha interativa e endpoint MCP público são proibidos.
+
+## Atualizacao obrigatoria da topologia
+
+Consultar `docs/knowledge/current-topology-and-access-2026-10-29.md`, `marina-direct-mcp/README.md` e `docs/ops/marina-independent-secure-mcp-tunnel.md`. Nao anunciar `admin_command_run` na Marina pela controladora: ferramenta nao a aceita como host. Nao reutilizar secrets, hostname ou credenciais da controladora no MCP independente.
 
 ## Evidência obrigatória
 
