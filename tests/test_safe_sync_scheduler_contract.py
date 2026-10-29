@@ -9,7 +9,10 @@ systemd_installer = (ROOT / "scripts/install-safe-sync-service.sh").read_text(en
 safe_sync = (ROOT / "scripts/safe-repo-sync.sh").read_text(encoding="utf-8")
 assert "command -v crontab" in installer
 assert "shopvivaliz-sync-safe.timer" in installer
+assert "SAFE_SYNC_SYSTEMD_CANONICAL=PASS" in installer
+assert "SAFE_SYNC_CRON_DUPLICATE_REMOVED=YES" in installer
 assert "shopvivaliz-sync-safe.timer" in smoke
+assert "FAIL duplicate Oracle cron + systemd safe-sync schedulers" in smoke
 assert "install-safe-sync-service.sh" in workflow
 assert 'SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"' in workflow
 assert "NoNewPrivileges=false" in service
