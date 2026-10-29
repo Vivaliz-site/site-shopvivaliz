@@ -2,13 +2,13 @@
 declare(strict_types=1);
 
 header('Content-Type: application/xml; charset=UTF-8');
-header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
+header('Cache-Control: public, max-age=60, must-revalidate');
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/catalog-image-enrich.php';
 require_once __DIR__ . '/includes/product-seo.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
 require_once __DIR__ . '/includes/feed-cache.php';
-svfc_start('google-merchant', 900, array_merge(svfc_default_catalog_dependencies(), ['google-merchant-feed.php', 'includes/google-shopping-feed-utils.php', 'includes/catalog-image-enrich.php', 'includes/feed-cache.php', 'includes/product-seo.php']));
+svfc_start('google-merchant', 60, array_merge(svfc_default_catalog_dependencies(), ['google-merchant-feed.php', 'includes/google-shopping-feed-utils.php', 'includes/catalog-image-enrich.php', 'includes/feed-cache.php', 'includes/product-seo.php']));
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
