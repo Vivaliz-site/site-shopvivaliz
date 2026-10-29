@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   reauth:
-    if: github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/dc-reauth ')
+    if: ${{ false }} # RETIRED_SOURCE_JOB_GUARD_20261029; legacy four-host authentication
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 25

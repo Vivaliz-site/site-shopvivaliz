@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   recover:
+    # RETIRED_SOURCE_JOB_GUARD_20261029: host deleted; do not execute legacy SSH/OCI/runner route.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 8

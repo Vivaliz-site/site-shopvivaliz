@@ -8,6 +8,8 @@ permissions:
 
 jobs:
   reply:
+    # RETIRED_SOURCE_JOB_GUARD_20261029: old VM deleted, fail closed.
+    if: ${{ false }}
     concurrency:
       group: shopvivaliz-oci-bastion-mutation
       cancel-in-progress: false
