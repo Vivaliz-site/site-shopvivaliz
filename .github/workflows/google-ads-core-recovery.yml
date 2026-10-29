@@ -1,56 +1,21 @@
 name: Google Ads Core Recovery
 
+# Retired: only Vedante at BRL 5 average/day is authorized on 2026-10-29.
+# No push or recurring trigger may replay the old Vasos authorization.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "ops/google-ads-core-recovery.json"
-      - ".github/workflows/google-ads-core-recovery.yml"
-      - "scripts/google_ads_operator_core_recovery.py"
-      - "scripts/google_ads_antique_decore_status.py"
-      - "scripts/google_ads_antique_decore_status_v2.py"
-      - "scripts/google_ads_campaign_live_ready.json"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  EXPECTED_CAMPAIGN_ID: "24144257692"
-
 jobs:
-  recover:
+  blocked-legacy-policy:
     runs-on: ubuntu-latest
-    environment: Production
-    timeout-minutes: 10
-    env:
-      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
-      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
-      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
-      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+    timeout-minutes: 2
     steps:
-      - name: Checkout reviewed code
+      - name: Checkout policy-protected code
         uses: actions/checkout@v4
 
-      - name: Validate recovery request
-        shell: bash
-        run: |
-          set -euo pipefail
-          campaign_id="$(jq -r '.campaign_id // ""' ops/google-ads-core-recovery.json)"
-          action="$(jq -r '.action // ""' ops/google-ads-core-recovery.json)"
-          [[ "$campaign_id" == "$EXPECTED_CAMPAIGN_ID" ]] || { echo 'unexpected campaign_id'; exit 2; }
-          [[ "$action" == "validate-and-recover-core" ]] || { echo 'unexpected action'; exit 2; }
-
-      - name: Install Google Ads client
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 -m pip install --disable-pip-version-check google-ads
-
-      - name: Recover approved Antique and Decore core only
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 scripts/google_ads_operator_core_recovery.py
+      # No Ads secrets, SDK installation or Production environment are needed.
+      - name: Refuse retired campaign mutations
+        run: python3 scripts/google_ads_operator_core_recovery.py

@@ -9,12 +9,12 @@ permissions:
 jobs:
   reply:
     # RETIRED_SOURCE_JOB_GUARD_20261029: old VM deleted, fail closed.
-    if: ${{ false }}
     concurrency:
       group: shopvivaliz-oci-bastion-mutation
       cancel-in-progress: false
     if: >-
       ${{
+        false && (
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
         github.event.issue.number == 1586 &&
         github.event.comment.user.login == 'fredmourao-ai' &&
@@ -22,6 +22,7 @@ jobs:
           github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501' ||
           github.event.comment.body == '/amazon-support-readback case_ids=22153077391,22153259501' ||
           github.event.comment.body == '/amazon-support-chat-reply case_ids=22199842931'
+        )
         )
       }}
     runs-on: ubuntu-latest

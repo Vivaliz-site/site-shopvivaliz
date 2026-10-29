@@ -4,9 +4,28 @@ declare(strict_types=1);
 function svoi_key(array $body, array $items): string {
     $provided = trim((string)($body['idempotency_key'] ?? ''));
     if ($provided !== '') return substr(preg_replace('/[^A-Za-z0-9._:-]/', '', $provided) ?: '', 0, 120);
+    // A payment retry with unchanged terms keeps the same claim. Changes to
+    // the payer, delivery details, coupon or method need a validated new order;
+    // tracking identifiers must never create another order or stock reservation.
+    $customer = [];
+    foreach (['customer_name', 'customer_phone', 'address', 'street_name',
+        'street_number', 'complement', 'neighborhood', 'city', 'state', 'cpf',
+        'document_type', 'company_legal_name', 'company_trade_name', 'customer_id',
+        'customer_registration_date', 'notes'] as $field) {
+        $customer[$field] = trim((string)($body[$field] ?? ''));
+    }
+    foreach (['customer_phone', 'cpf'] as $field) {
+        $customer[$field] = preg_replace('/\D+/', '', $customer[$field]);
+    }
+    $customer['state'] = strtoupper($customer['state']);
+    $customer['document_type'] = strtolower($customer['document_type']);
+    $coupon = is_array($body['coupon'] ?? null) ? $body['coupon'] : [];
     $basis = [
         'email' => strtolower(trim((string)($body['customer_email'] ?? ''))),
         'cep' => preg_replace('/\D+/', '', (string)($body['cep'] ?? '')),
+        'customer' => $customer,
+        'payment_method' => strtolower(trim((string)($body['payment_method'] ?? 'pix'))),
+        'coupon_code' => strtoupper(trim((string)($coupon['code'] ?? $body['coupon_code'] ?? ''))),
         'items' => array_map(static fn(array $item): array => [
             'sku' => (string)($item['sku'] ?? ''),
             'quantity' => (int)($item['quantity'] ?? 0),

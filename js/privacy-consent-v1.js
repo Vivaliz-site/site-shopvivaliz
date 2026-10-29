@@ -63,6 +63,9 @@
   }
 
   function updateConsent(granted) {
+    if (!granted) {
+      try { localStorage.removeItem('sv_funnel_client_v1'); } catch (error) {}
+    }
     if (typeof window.gtag === 'function') {
       window.gtag('consent', 'update', {
         analytics_storage: granted ? 'granted' : 'denied',
@@ -152,6 +155,7 @@
     essentialOnly: function () { choose('essential'); },
     reset: function () {
       try { localStorage.removeItem(STORAGE_KEY); } catch (error) {}
+      try { localStorage.removeItem('sv_funnel_client_v1'); } catch (error) {}
       setCookie('', 0);
       window.location.reload();
     }

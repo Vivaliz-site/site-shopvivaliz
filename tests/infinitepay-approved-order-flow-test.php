@@ -15,6 +15,7 @@ function svip_flow_assert(bool $condition, string $message): void
 $orderNumber = 'SV20260810123456789';
 $payload = svip_link_payload([
     'order_number' => $orderNumber,
+    'total' => 100.0,
     'items' => [[
         'name' => 'Produto teste',
         'sku' => 'TEST-1',

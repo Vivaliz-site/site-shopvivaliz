@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Automation entry point for the Antique/Decore Google Ads live watch.
+"""Retired Antique/Decore entrypoint, blocked by the 2026-10-29 owner policy.
 
-This adapter is read-only by default. It keeps the requested guardrails by:
+This adapter historically called a mutating monitor even without flags. Its
+entrypoint and conversion rename are now blocked before any API access. The
+retained implementation previously handled:
 - not treating unrelated storefront coupon text as a landing-page failure;
 - treating the account's biddable PURCHASE customer goal as the default purchase goal;
 - printing conversion diagnostics without secret values.
 
-The optional conversion-action rename is a real Google Ads mutation and therefore
-requires --apply-conversion-name-fix explicitly.
+The historical --apply-conversion-name-fix flag does not override this block.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import os
 import re
 
 import google_ads_antique_decore_status as monitor
+from google_ads_legacy_budget_policy import refuse_legacy_ads_execution
 
 # The ads make no coupon promise. Keep the required HTTP/redirect/UTM/content
 # landing checks while disabling the unrelated legacy promo-token heuristic.
@@ -42,6 +44,8 @@ def purchase_rows(ga, customer_id: str):
 
 
 def normalize_primary_purchase_name(client, ga, customer_id: str, *, apply_fix: bool) -> None:
+    if apply_fix:
+        refuse_legacy_ads_execution("antique_decore.normalize_primary_purchase_name")
     rows = purchase_rows(ga, customer_id)
     exact_compra = [r for r in rows if r.conversion_action.name.strip().casefold() == "compra"]
     verified_primary = [
@@ -127,6 +131,7 @@ def fetch_default_purchase_goal(ga, customer_id: str):
 
 
 def main() -> int:
+    refuse_legacy_ads_execution("google_ads_antique_decore_automation.py")
     parser = argparse.ArgumentParser(description="Antique/Decore Google Ads live watch adapter.")
     parser.add_argument(
         "--apply-conversion-name-fix",
