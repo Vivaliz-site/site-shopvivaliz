@@ -88,6 +88,12 @@ class RemoteControlMcpTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported_host"):
             m.validate_host("marina-a1-4c24g")
 
+    def test_mcp_startup_filters_legacy_queued_tasks_before_worker(self):
+        source = SERVER_PATH.read_text(encoding="utf-8")
+        main_section = source.split("def main() -> None:", 1)[1]
+        self.assertLess(main_section.index("cancel_retired_queued_tasks()"),
+                        main_section.index("threading.Thread(target=task_worker"))
+
     def test_retired_queued_task_is_cancelled_without_losing_history(self):
         tid = "00000000-0000-4000-8000-000000000001"
         with m.db_conn() as db:
