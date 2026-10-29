@@ -17,6 +17,10 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 **Topologia atual (2026-10-29):** producao web/deploy na `marina-a1-4c24g` (OCI ESPOSA), backend/controller/browser na `always-free-arm-1787907847-26` (OCI PRINCIPAL). A origem `shopvivaliz-free-a1` foi excluida segundo proprietario e nao deve ser usada. Ver `current-topology-and-access-2026-10-29.md` para as rotas e MCPs comprovados.
 
+## Auditoria de divergências e hierarquia documental
+
+- [Auditoria de consistência de instruções de agentes — 2026-10-29](../audits/2026-10-29-agent-documentation-consistency.md) — inventário de 814 arquivos Markdown/TXT, origens históricas, instruções conflitantes, correções e pendências de runtime. Uma varredura automatizada não equivale à validação E2E da produção.
+
 ## Documentos principais
 
 - [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md) — **inventario operacional apos exclusao da VM origem: Marina web/deploy, backend PRINCIPAL, rotas RDC/SSH/OCI, MCP central desatualizado e MCP independente Marina inativo; prova e limites do runtime em 2026-10-29.**

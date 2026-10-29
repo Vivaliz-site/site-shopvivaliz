@@ -2,6 +2,27 @@
 
 > **Leitura obrigatoria para ChatGPT Dev/Atendimento, Claude, Codex, Gemini, Gepeto, subagentes, controladores e automacoes** antes de operar hosts. Este inventario prevalece sobre topologias em relatorios historicos, mas deve ser revalidado no runtime a cada sessao. Fonte de bootstrap: [host-access.md](host-access.md), [agent-rules.md](agent-rules.md) e `AGENTS.md`.
 
+## Contrato de roteamento para todos os agentes (2026-10-29)
+
+**Aplica-se a GPT Dev/Atendimento, Claude, Codex, Gemini, Gepeto, Copilot, Cursor, Windsurf, subagentes, agentes de QA/UI, runners e controladores.** Ler esta página, `host-access.md` e `agent-rules.md` no `main` e registrar SHA antes de cada retomada ou alteração.
+
+| Destino / função | Rota de acesso comprovada | Não presumir |
+|---|---|---|
+| `marina-a1-4c24g` (OCI ESPOSA): produção web, releases, MySQL, workers e runner | RDC direto via `list_devices` pelo nome; validar `hostname -s`, `id -un`, release e permissão | Que o MCP central execute Marina; que RDC 2, SSH ou sudo estejam automaticamente habilitados |
+| `always-free-arm-1787907847-26` (OCI PRINCIPAL): backend, MCP, navegador Dev/Atendimento, MEI/M365 | ShopVivaliz Remote Control central, restrito à allowlist válida, com `hosts_list` e `host_health` | Que o inventário anunciado já tenha sido reconciliado |
+| MCP próprio da Marina | Consultar `marina-direct-mcp/README.md` e `docs/ops/marina-independent-secure-mcp-tunnel.md` | Código read-only em staging não é instalação, túnel OpenAI ou app ChatGPT ativo |
+| SSH/Tailscale/VCN privados | Apenas identidade aprovada, host key e autenticação testadas; usar canal dedicado ao host | Que o IP observado permita SSH e acesso administrativo |
+| OCI, GitHub Actions, Bastion/console | Apenas bootstrap/recovery oficialmente habilitado | Contornar negativas de plataforma ou usá-los como transporte contínuo |
+| Browser/UI de agentes, Seller Central | Perfis corporativos isolados no backend, quando sessão e bridge estiverem comprovadas | Reaproveitar cookies/perfis da VM excluída ou usar Windows como browser do agente |
+
+**Origem definitivamente proibida como destino operacional:** `shopvivaliz-free-a1`, `10.0.1.112`, antigos aliases SSH/RDC e endpoints associados. Embora constem em código, inventários, workflows, sentinelas e relatórios, **não executar** neles healthcheck, deploy, runner recovery, workers, SSH ou qualquer job; não recriar a VM e não redirecionar seu alias para Marina. Preservar apenas histórico e backups disponíveis. A exclusão, informada pelo proprietário, não constitui prova de paridade de dados ou de aceitação dos demais gates.
+
+**Pendência técnica concreta:** `remote-control-mcp/server.py` e `scripts/setup-remote-control-access.sh` ainda incluem a origem; `scripts/desktop-commander-four-host-sentinel.sh`, `scripts/oci-private-access-bootstrap.sh` e parte de `.github/workflows/` mantêm referências executáveis. Não rodar esses caminhos contra a origem. Correção de código/runtime e testes de regressão devem ser separados da atualização documental; substituir o nome da VM sem validar tenancy, IAM, SSH, leases e ownership é proibido.
+
+**Snapshot de evidências deste atendimento:** RDC: Marina e laptop online; `hostname -s=marina-a1-4c24g`, `id -un=ubuntu`; Apache, MySQL, runner canônico e `shopvivaliz-cloudflared-admin.service` ativos. `shopvivaliz-marina-mcp.service` e túnel `shopvivaliz-marina-mcp-tunnel.service` inativos. `current` apontou para `releases/20261029-101846-79307562` no instante da consulta. Backend acessível via MCP e identidade confirmada; `hosts_list` ainda retornou a origem e não Marina. Controlador 24x7 ativo, porém com `degraded=true` e SHA de release anterior ao remoto. Isso não certifica migração, privilégios ou app MCP Marina.
+
+**Aceite para agentes:** nenhuma rota válida pode apontar para a VM removida; o preflight obrigatório deve incluir esta página e revogar recibos desatualizados; usar Marina apenas por canal e identidade provados; considerar MCP Marina `NOT_CONNECTED` até teste real via ChatGPT; reconciliar código, CI e documentação com testes antes de declarar `APTO`.
+
 ## Hosts operacionais e descomissionamento
 
 | Alvo | Conta OCI / funcao | Endereco documentado / observacao | Estado da evidencia |

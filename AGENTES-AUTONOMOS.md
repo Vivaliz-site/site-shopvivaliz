@@ -1,3 +1,7 @@
+<!-- AGENT_AUTOMATION_FREE_POLICY_20261029 -->
+> **Estado atual (2026-10-29):** os workflows, intervalos, agentes e modelos listados abaixo descrevem configuração histórica. Não presumir que ainda estão ativos. A política vigente exige priorizar ChatGPT normal e provedores gratuitos disponíveis (Gemini/Ollama) e deixar Codex/Claude para último recurso/autorização, **sem disparos automáticos de IA paga em cron/timer**. Produção web = `marina-a1-4c24g` (OCI ESPOSA), backend/MCP = `always-free-arm-1787907847-26` (OCI PRINCIPAL); a origem `shopvivaliz-free-a1` foi excluída. Para qualquer trabalho, ler `docs/knowledge/current-topology-and-access-2026-10-29.md`, verificar workflow/runner real, custo, lease, escopo e evidência de execução antes de afirmar autonomia 24x7.
+<!-- /AGENT_AUTOMATION_FREE_POLICY_20261029 -->
+
 # 🤖 Sistema de Agentes Autônomos 24/7
 
 ## Como Funciona

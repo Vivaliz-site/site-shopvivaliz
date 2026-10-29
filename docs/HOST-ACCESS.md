@@ -1,3 +1,7 @@
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 # Acesso canônico aos hosts ShopVivaliz
 
 Este arquivo é um runbook local e **não contém segredos**. A fonte central mais detalhada é `Vivaliz-site/site-shopvivaliz/docs/knowledge/host-access.md`. Se houver divergência, validar ao vivo e corrigir a documentação; nunca assumir IP/rota histórica como verdadeira.
