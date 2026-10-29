@@ -2999,6 +2999,8 @@ def main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
     reconcile_tasks()
+    # Block all never-started legacy work before the queue worker is spawned.
+    cancel_retired_queued_tasks()
     worker = threading.Thread(target=task_worker, name="task-worker", daemon=True)
     worker.start()
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
