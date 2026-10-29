@@ -31,6 +31,14 @@ on:
       - '.github/workflows/tracking-policy-regression.yml'
       - 'scripts/codex-native-profile-failover.py'
       - 'scripts/google_ads/client.py'
+      - 'scripts/google_ads_legacy_budget_policy.py'
+      - 'scripts/google_ads_antique_decore_*.py'
+      - 'scripts/google_ads_operator_core_recovery.py'
+      - 'scripts/google_ads_sales_round1_delivery.py'
+      - 'tests/test_google_ads_legacy_budget_policy.py'
+      - '.github/workflows/google-ads-antique-decore-status.yml'
+      - '.github/workflows/google-ads-core-recovery.yml'
+      - '.github/workflows/sales-round-01-google-ads-delivery.yml'
       - 'ai_collaboration.py'
       - 'scripts/ai/retired_executor.py'
       - 'daemon-token-renewer.py'
@@ -86,6 +94,14 @@ on:
       - '.github/workflows/tracking-policy-regression.yml'
       - 'scripts/codex-native-profile-failover.py'
       - 'scripts/google_ads/client.py'
+      - 'scripts/google_ads_legacy_budget_policy.py'
+      - 'scripts/google_ads_antique_decore_*.py'
+      - 'scripts/google_ads_operator_core_recovery.py'
+      - 'scripts/google_ads_sales_round1_delivery.py'
+      - 'tests/test_google_ads_legacy_budget_policy.py'
+      - '.github/workflows/google-ads-antique-decore-status.yml'
+      - '.github/workflows/google-ads-core-recovery.yml'
+      - '.github/workflows/sales-round-01-google-ads-delivery.yml'
       - 'ai_collaboration.py'
       - 'scripts/ai/retired_executor.py'
       - 'daemon-token-renewer.py'
@@ -160,6 +176,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install isolated test dependencies
-        run: python -m pip install --disable-pip-version-check pytest requests PyYAML==6.0.3
+        run: python -m pip install --disable-pip-version-check pytest requests PyYAML==6.0.3 "cryptography>=41,<47"
       - name: Full Python regression suite
         run: python -m pytest -q --tb=short
