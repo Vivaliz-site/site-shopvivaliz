@@ -74,16 +74,27 @@ if [ ! -r "$installer" ]; then
 fi
 ROOT="$repo" SHARED_ROOT="$shared" CURRENT_ROOT="$current_root" \
   /usr/bin/bash "$installer"
-if command -v crontab >/dev/null 2>&1; then
-  crontab -l > "$tmpdir/crontab.txt"
-  grep -F "/usr/bin/bash $current_root/scripts/auto-sync-oracle.sh" \
-    "$tmpdir/crontab.txt" >/dev/null
-  echo "OK Oracle repository sync cron installed"
-else
-  systemctl is-enabled --quiet shopvivaliz-sync-safe.timer
-  systemctl is-active --quiet shopvivaliz-sync-safe.timer
+# Exactly one active scheduler. The installer removes old cron entries
+# when the canonical systemd timer is operational.
+if command -v systemctl >/dev/null 2>&1 \
+  && systemctl is-enabled --quiet shopvivaliz-sync-safe.timer \
+  && systemctl is-active --quiet shopvivaliz-sync-safe.timer; then
   systemctl cat shopvivaliz-sync-safe.service | grep -F '/usr/local/lib/shopvivaliz/safe-repo-sync.sh' >/dev/null
-  echo "OK Oracle repository sync systemd timer installed"
+  if command -v crontab >/dev/null 2>&1; then
+    crontab -l > "$tmpdir/crontab.txt" 2>/dev/null || : > "$tmpdir/crontab.txt"
+    if grep -F "/usr/bin/bash $current_root/scripts/auto-sync-oracle.sh" "$tmpdir/crontab.txt" >/dev/null; then
+      echo "FAIL duplicate Oracle cron + systemd safe-sync schedulers" >&2
+      exit 1
+    fi
+  fi
+  echo "OK Oracle repository sync: systemd timer only"
+elif command -v crontab >/dev/null 2>&1; then
+  crontab -l > "$tmpdir/crontab.txt"
+  grep -F "/usr/bin/bash $current_root/scripts/auto-sync-oracle.sh" "$tmpdir/crontab.txt" >/dev/null
+  echo "OK Oracle repository sync: cron fallback only"
+else
+  echo "FAIL no operational Oracle sync scheduler" >&2
+  exit 1
 fi
 
 check_http() {
