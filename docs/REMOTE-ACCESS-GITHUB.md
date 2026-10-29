@@ -1,4 +1,8 @@
-# Acesso remoto operacional sem Desktop Commander
+# Acesso remoto operacional sem Desktop Commander — registro legado
+
+> **ALERTA VINCULANTE 2026-10-29:** o procedimento abaixo descreve rotas **HISTORICAS**. O runner `shopvivaliz-free-a1` e os comandos `/remote target=shopvivaliz-free-a1` referem-se a VM excluida conforme proprietario; o antigo `10.0.1.112:22` nao possui rota. **Nao acionar nem recriar a origem; nao usar comentarios GitHub/Actions como shell ou heartbeat normal do MCP.** O runner ativo verificado esta na `marina-a1-4c24g`; MCP central permanece no backend `always-free-arm-1787907847-26`, e o MCP proprio Marina segue inativo. Rotas atuais e evidencia: `docs/knowledge/current-topology-and-access-2026-10-29.md`. Fluxos abaixo so podem ser reativados apos revisao explicita da allowlist e testes no destino correto.
+
+## Historico anterior — nao executar sem revalidacao
 
 ## Objetivo
 
