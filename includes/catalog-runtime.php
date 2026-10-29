@@ -91,6 +91,25 @@ function svcr_item_price(array $item): float
         : $regular;
 }
 
+
+/**
+ * Google Merchant needs both fields when the authoritative Amazon ERP table
+ * has a promotional value. The storefront price remains the effective
+ * promotional price, while original_price is the regular Amazon 991 value.
+ */
+function svcr_item_original_price(array $item): float
+{
+    $prices = is_array($item['precos'] ?? null)
+        ? $item['precos']
+        : (is_array($item['prices'] ?? null) ? $item['prices'] : []);
+    $regular = svcr_parse_price(
+        $prices['preco'] ?? $prices['preco_venda'] ?? $prices['price']
+        ?? $item['preco'] ?? $item['price'] ?? null
+    );
+    $effective = svcr_item_price($item);
+    return $regular > $effective && $effective > 0 ? $regular : 0.0;
+}
+
 function svcr_clean_description(string $description): string
 {
     $description = trim($description);
@@ -395,6 +414,7 @@ function svcr_products(): array
         $products[] = [
             'id'=>(string)($item['id'] ?? $sku), 'sku'=>$sku, 'olist_product_id'=>(string)($item['id'] ?? $item['olist_product_id'] ?? ''),
             'name'=>$name, 'slug'=>svcr_slug($name,$sku), 'description'=>svcr_clean_description($description), 'price'=>$price,
+            'original_price'=>svcr_item_original_price($item),
             'stock'=>max(0,(int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url'=>$image, 'images'=>$imagesList, 'images_count'=>count($imagesList), 'category'=>$categoryName, 'brand'=>$brand,
             'bullet_points'=>$bulletPoints, 'seo_keywords'=>$seoKeywords, 'marketing_hooks'=>$marketingHooks,
