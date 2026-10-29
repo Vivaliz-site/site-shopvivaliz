@@ -1,240 +1,100 @@
 <?php
-/**
- * Webhook receiver para notificações da Olist/Tiny
- * Processa: product, stock, price, orders
- * GET/POST /api/olist/webhook-receiver.php?event=price
- */
 declare(strict_types=1);
 
-// Este arquivo nao carregava nenhum bootstrap, entao getenv() retornava vazio
-// para tudo — o que fazia a checagem de token responder 503 sempre.
-// Mesmo bootstrap usado por api/webhooks/order-status-update.php.
-require_once __DIR__ . '/../../config/bootstrap-env.php';
-
-header('Content-Type: application/json; charset=UTF-8');
-
-$log_dir = __DIR__ . '/../../logs';
-if (!is_dir($log_dir)) {
-    mkdir($log_dir, 0755, true);
-}
-
-$event = $_GET['event'] ?? $_POST['event'] ?? '';
-$log_file = $log_dir . '/olist-webhook-receiver.log';
-
-function log_event($message) {
-    global $log_file;
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($log_file, "[{$timestamp}] {$message}\n", FILE_APPEND);
-}
-
-// Log inicial
-log_event("Webhook recebido: event={$event} method=" . $_SERVER['REQUEST_METHOD']);
-
 /**
- * Le um header de request de forma confiavel.
- *
- * Apache/PHP-FPM sem CGIPassAuth nao repassa Authorization para $_SERVER —
- * comportamento ja confirmado ao vivo neste servidor em
- * api/webhooks/order-status-update.php, onde a falta deste fallback fazia o
- * endpoint rejeitar TODA chamada real da Tiny com 401.
+ * Compatibility endpoint for older Olist integrations.
+ * Never trust submitted prices/stock and never launch a second daemon:
+ * the authoritative Olist v3 Amazon-list refresh uses the catalog lock.
  */
-function olist_request_header(string $name): string
+header_remove('X-Powered-By');
+header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+
+$root = dirname(__DIR__, 2);
+require_once $root . '/config/bootstrap-env.php';
+require_once $root . '/includes/webhook-secret.php';
+require_once $root . '/includes/olist-erp-webhook.php';
+
+function svlo_response(int $status, array $payload): never
 {
-    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-    $value = trim((string)($_SERVER[$serverKey] ?? ''));
-    if ($value !== '') {
-        return $value;
-    }
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function svlo_header(string $name): string
+{
+    $server = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    $value = trim((string)($_SERVER[$server] ?? ''));
+    if ($value !== '') return $value;
     if (function_exists('getallheaders')) {
-        foreach (getallheaders() as $headerName => $headerValue) {
-            if (strcasecmp($headerName, $name) === 0) {
-                return trim((string)$headerValue);
-            }
+        foreach (getallheaders() as $key => $headerValue) {
+            if (strcasecmp((string)$key, $name) === 0) return trim((string)$headerValue);
         }
     }
     return '';
 }
 
-/**
- * Segredo compartilhado. Sem ele, qualquer um poderia disparar sincronizacoes
- * de preco/estoque/produto neste endpoint.
- *
- * Reusa OLIST_WEBHOOK_TOKEN, que ja esta provisionado no servidor e e o mesmo
- * nome usado por api/webhooks/order-status-update.php — assim nao ha um segundo
- * segredo para gerenciar. ERP_WEBHOOK_TOKEN e mantido como alias pelo mesmo motivo.
- */
-$olistWebhookSecret = trim((string)(getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: ($_ENV['OLIST_WEBHOOK_TOKEN'] ?? '')));
-$providedToken = olist_request_header('X-Webhook-Token');
-if ($providedToken === '') {
-    $auth = olist_request_header('Authorization');
-    $providedToken = stripos($auth, 'Bearer ') === 0 ? trim(substr($auth, 7)) : trim((string)($_GET['token'] ?? ''));
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    svlo_response(405, ['ok' => false, 'error' => 'method_not_allowed']);
 }
 
-if ($olistWebhookSecret === '') {
-    http_response_code(503);
-    log_event('ERRO: OLIST_WEBHOOK_TOKEN nao configurado - webhook rejeitado');
-    echo json_encode(['error' => 'webhook_secret_not_configured']);
-    exit;
+// Preserve the older X-Webhook-Token, but also accept the current official
+// shared-secret URL/header. Never permit missing credentials in production.
+$legacyExpected = trim((string)(getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: ($_ENV['OLIST_WEBHOOK_TOKEN'] ?? '')));
+$legacyProvided = svlo_header('X-Webhook-Token');
+if ($legacyProvided === '') {
+    $authorization = svlo_header('Authorization');
+    $legacyProvided = stripos($authorization, 'Bearer ') === 0
+        ? trim(substr($authorization, 7))
+        : trim((string)($_GET['token'] ?? ''));
 }
-if (!hash_equals($olistWebhookSecret, $providedToken)) {
-    http_response_code(401);
-    log_event('ERRO: token invalido de ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
-    echo json_encode(['error' => 'invalid_token']);
-    exit;
-}
-
-if (!$event) {
-    http_response_code(400);
-    log_event("ERRO: Parametro 'event' nao fornecido");
-    echo json_encode(['error' => 'Missing event parameter']);
-    exit;
+$legacyValid = $legacyExpected !== '' && $legacyProvided !== ''
+    && hash_equals($legacyExpected, $legacyProvided);
+if (!$legacyValid && !sv_webhook_secret_valid('olist')) {
+    svlo_response(401, ['ok' => false, 'error' => 'unauthorized']);
 }
 
-// Ler payload
-$input = file_get_contents('php://input');
-$data = json_decode($input, true);
+$raw = (string)(file_get_contents('php://input') ?: '');
+if ($raw === '' || strlen($raw) > 200000) {
+    svlo_response($raw === '' ? 400 : 413, ['ok' => false, 'error' => 'payload_size_invalid']);
+}
+$data = json_decode($raw, true);
+if (!is_array($data)) svlo_response(400, ['ok' => false, 'error' => 'invalid_json']);
 
-if (!$data) {
-    $data = $_POST;
+$event = strtolower(trim((string)($_GET['event'] ?? $data['event'] ?? $data['tipo'] ?? '')));
+if ($event === 'order') {
+    // This legacy path never applied order state; canonical order-status
+    // processing stays on /api/olist/webhook.php.
+    svlo_response(200, ['ok' => true, 'status' => 'ignored', 'event' => 'order']);
+}
+if (!in_array($event, ['price', 'stock', 'product'], true)) {
+    svlo_response(422, ['ok' => false, 'error' => 'unsupported_event']);
 }
 
-log_event("Event: {$event} | Payload size: " . strlen($input) . " bytes");
+$item = is_array($data['produto'] ?? null) ? $data['produto']
+    : (is_array($data['dados'] ?? null) ? $data['dados'] : $data);
+$sku = trim((string)($item['sku'] ?? $item['produto_sku'] ?? $item['codigo'] ?? $item['skuMapeamento'] ?? ''));
+if ($sku === '') svlo_response(422, ['ok' => false, 'error' => 'sku_missing']);
+if (strlen($sku) > 160) svlo_response(422, ['ok' => false, 'error' => 'sku_invalid']);
 
-// Processar por tipo de evento
-switch ($event) {
-    case 'price':
-        handle_price_update($data, $log_file);
-        break;
-
-    case 'stock':
-        handle_stock_update($data, $log_file);
-        break;
-
-    case 'product':
-        handle_product_update($data, $log_file);
-        break;
-
-    case 'order':
-        handle_order_update($data, $log_file);
-        break;
-
-    default:
-        http_response_code(400);
-        log_event("Evento desconhecido: {$event}");
-        echo json_encode(['error' => 'Unknown event type']);
-        exit;
+try {
+    // The source of truth is always the Olist ERP Amazon price list, not
+    // the webhook payload. This function writes under olist-erp-webhook.lock.
+    $product = svoei_refresh_product_from_v3($root, '', $sku);
+    svoei_log($root, 'legacy_webhook_catalog_synced', [
+        'tipo' => $event, 'sku' => (string)($product['sku'] ?? $sku),
+    ]);
+    svlo_response(200, [
+        'ok' => true,
+        'status' => 'synced',
+        'event' => $event,
+        'sku' => (string)($product['sku'] ?? $sku),
+        'price_source' => 'olist_tiny_amazon',
+        'price_list_id' => SV_AMAZON_PRICE_LIST_ID,
+    ]);
+} catch (Throwable $e) {
+    error_log('[legacy-olist-webhook] ERP v3 refresh failed: ' . get_class($e));
+    svlo_response(503, ['ok' => false, 'error' => 'erp_catalog_refresh_failed']);
 }
-
-/**
- * Invalida o cache ativo (renomeia com backup timestampado, se existir) e
- * dispara daemon-sync-products.py em background para repopular na hora,
- * em vez de esperar o proximo ciclo agendado do daemon (ate 5 min).
- *
- * Usado pelos 3 eventos (price/stock/product). Antes, so handle_price_update
- * disparava o daemon -- handle_stock_update/handle_product_update so
- * invalidavam o cache e ficavam esperando o proximo ciclo, o que e
- * inconsistente e faz produto/estoque novo demorar mais que preco pra
- * aparecer no site.
- */
-function trigger_cache_resync(): void {
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        $backup = $cache_file . '.webhook-' . (string)((int)floor(microtime(true) * 1000));
-        if (rename($cache_file, $backup)) {
-            log_event("  ✓ Cache invalidado (backup: " . basename($backup) . ")");
-        }
-    }
-
-    $daemon = __DIR__ . '/../../daemon-sync-products.py';
-    if (is_file($daemon)) {
-        $cmd = "cd " . escapeshellarg(__DIR__ . '/../../') . " && /usr/bin/python3 daemon-sync-products.py --once >> " . escapeshellarg(__DIR__ . '/../../logs/sync-products.log') . " 2>&1 &";
-        exec($cmd, $output, $code);
-        log_event("  ✓ Sincronização disparada (código: {$code})");
-    }
-}
-
-function handle_price_update($data, $log_file) {
-    log_event("PRICE UPDATE");
-
-    if (!$data) {
-        http_response_code(400);
-        log_event("  ❌ Payload vazio");
-        echo json_encode(['error' => 'Empty payload']);
-        return;
-    }
-
-    // Extrair SKU e novo preço
-    $sku = $data['sku'] ?? $data['produto_sku'] ?? $data['codigo'] ?? '';
-    $price = $data['preco'] ?? $data['price'] ?? $data['preco_venda'] ?? null;
-
-    if (!$sku || $price === null) {
-        http_response_code(400);
-        log_event("  ❌ SKU ou preco ausente");
-        echo json_encode(['error' => 'Missing SKU or price']);
-        return;
-    }
-
-    log_event("  SKU: {$sku} | Novo preço: R$ {$price}");
-    trigger_cache_resync($log_file);
-
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku, 'price' => $price, 'action' => 'sync queued']);
-    log_event("  ✅ Processado com sucesso");
-}
-
-function handle_stock_update($data, $log_file) {
-    log_event("STOCK UPDATE");
-
-    $sku = $data['sku'] ?? $data['produto_sku'] ?? $data['codigo'] ?? '';
-    $quantity = $data['estoque'] ?? $data['quantity'] ?? $data['estoque_disponivel'] ?? 0;
-
-    if (!$sku) {
-        http_response_code(400);
-        log_event("  ❌ SKU ausente");
-        echo json_encode(['error' => 'Missing SKU']);
-        return;
-    }
-
-    log_event("  SKU: {$sku} | Novo estoque: {$quantity}");
-    trigger_cache_resync($log_file);
-
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku, 'quantity' => $quantity, 'action' => 'sync queued']);
-    log_event("  ✅ Processado com sucesso");
-}
-
-function handle_product_update($data, $log_file) {
-    log_event("PRODUCT UPDATE");
-
-    $sku = $data['sku'] ?? $data['produto_sku'] ?? $data['codigo'] ?? '';
-    if (!$sku) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Missing SKU']);
-        return;
-    }
-
-    log_event("  SKU: {$sku}");
-    trigger_cache_resync($log_file);
-
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku, 'action' => 'sync queued']);
-    log_event("  ✅ Processado com sucesso");
-}
-
-function handle_order_update($data, $log_file) {
-    log_event("ORDER UPDATE");
-
-    $order_id = $data['id'] ?? $data['pedido_id'] ?? $data['order_id'] ?? '';
-    if (!$order_id) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Missing order ID']);
-        return;
-    }
-
-    log_event("  Order ID: {$order_id}");
-
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'order_id' => $order_id]);
-    log_event("  ✅ Processado com sucesso");
-}
-?>
