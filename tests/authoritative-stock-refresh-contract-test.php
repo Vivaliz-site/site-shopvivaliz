@@ -20,10 +20,18 @@ stock_contract_assert(str_contains($fetch, "\$item['estoque_disponivel'] = \$est
 stock_contract_assert(!str_contains($fetch, "!isset(\$item['estoque_disponivel'])"), 'estoque existente nao pode impedir novo refresh autoritativo');
 stock_contract_assert(str_contains($fetch, 'x-ratelimit-remaining'), 'cliente precisa respeitar headers de rate limit');
 stock_contract_assert(str_contains($fetch, 'authoritative_stock_coverage_below_90pct'), 'refresh incompleto precisa falhar fechado');
-stock_contract_assert(str_contains($force, "require __DIR__ . '/sync-on-webhook.php'"), 'force sync deve reutilizar lista canonica de ativos');
-stock_contract_assert(str_contains($force, "require __DIR__ . '/fetch-estoque-v3.php'"), 'force sync deve enriquecer estoque autoritativo');
-stock_contract_assert(!str_contains($force, "estoque_disponivel'] = 0"), 'force sync nao pode fabricar estoque zero');
-stock_contract_assert(str_contains($webhook, "'/olist/sync-on-webhook.php'") && str_contains($webhook, "'/olist/fetch-estoque-v3.php'") && str_contains($webhook, "'/sync-daemon-to-db.php'"), 'webhook precisa executar os tres passos');
-stock_contract_assert(str_contains($webhook, " . ' && ' . "), 'webhook precisa sequenciar refresh com AND shell');
+// All storefront prices must originate in Amazon list 991; legacy refresh
+// endpoints cannot run a second cache writer with independent locks.
+$canonical = (string)file_get_contents($root . '/daemon-sync-products.py');
+$legacy = (string)file_get_contents($root . '/olist/sync-on-webhook.php');
+stock_contract_assert(str_contains($force, "require __DIR__ . '/sync-on-webhook.php'"), 'force sync should forward to the canonical CLI entry');
+stock_contract_assert(!str_contains($force, "require __DIR__ . '/fetch-estoque-v3.php'"), 'manual refresh must not launch a second stock writer');
+stock_contract_assert(str_contains($legacy, 'daemon-sync-products.py'), 'legacy sync must delegate to canonical daemon');
+stock_contract_assert(!str_contains($legacy, 'file_put_contents('), 'legacy sync may not write the public catalog');
+stock_contract_assert(str_contains($webhook, 'svoei_refresh_product_from_v3'), 'webhook must use canonical ERP v3 refresh');
+stock_contract_assert(!str_contains($webhook, 'nohup') && !str_contains($webhook, 'sync-on-webhook.php'), 'legacy webhook cannot spawn a competing cache pipeline');
+stock_contract_assert(str_contains($fetch, '/storage/olist-erp-webhook.lock'), 'stock refresher must share catalog lock at commit');
+stock_contract_assert(str_contains($fetch, 'catalog_changed_during_stock_refresh'), 'stock refresher must reject stale cache revisions');
+stock_contract_assert(str_contains($canonical, 'catalog_changed_during_reconcile_retry_later'), 'main reconcile must reject stale cache revisions');
 
 fwrite(STDOUT, "authoritative-stock-refresh-contract: ok\n");
