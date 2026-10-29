@@ -165,6 +165,7 @@
           const product = decodeProductPayload(button.getAttribute('data-product'));
           fetch('/api/catalog/signal.php', {
             method: 'POST',
+            keepalive: true,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
           }).catch(function () {});
@@ -180,8 +181,7 @@
             button.classList.remove('btn-success-added');
           }, 1500);
 
-          if (window.openMiniCart) window.openMiniCart();
-          else window.location.href = '/carrinho';
+          window.location.href = '/checkout';
         } catch (error) {}
       });
     });
