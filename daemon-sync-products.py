@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import threading
 import time
 import urllib.error
@@ -22,6 +23,8 @@ _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
 _MIN_REQUEST_INTERVAL = 1.10
 DETAIL_CACHE_MAX_AGE_SECONDS = 2 * 60 * 60
+AMAZON_PRICE_LIST_ID = 991
+CENT = Decimal('0.01')
 
 
 def public_product(item: dict[str, Any]) -> dict[str, Any]:
@@ -57,6 +60,11 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "unidade": str(item.get("unidade") or ""),
         "gtin": str(item.get("gtin") or ""),
         "precos": {
+            "preco": float(prices.get("preco") or prices.get("preco_venda") or item.get("preco") or 0),
+            "precoPromocional": float(prices.get("precoPromocional") or 0),
+        },
+        # Preserve ERP cadastro values separately: site prices will be Amazon-list prices.
+        "_erp_base_prices": {
             "preco": float(prices.get("preco") or prices.get("preco_venda") or item.get("preco") or 0),
             "precoPromocional": float(prices.get("precoPromocional") or 0),
         },
@@ -164,6 +172,77 @@ def api_get(path: str, token: str, timeout: int = 30, attempts: int = 5) -> dict
     raise RuntimeError(f"API request failed for {path}: {last_error}")
 
 
+def price_decimal(value: Any, label: str, allow_zero: bool = True) -> Decimal:
+    if isinstance(value, bool):
+        raise RuntimeError(f"{label}_invalid")
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise RuntimeError(f"{label}_invalid") from None
+    if not number.is_finite() or number < 0 or (not allow_zero and number == 0):
+        raise RuntimeError(f"{label}_invalid")
+    return number
+
+
+def fetch_amazon_table(token: str) -> tuple[Decimal, dict[str, tuple[Decimal, Decimal]]]:
+    """Authoritative ERP Amazon price list: general percent + fixed per-product exceptions."""
+    payload = api_get(f"listas-precos/{AMAZON_PRICE_LIST_ID}", token)
+    if (str(payload.get("id")) != str(AMAZON_PRICE_LIST_ID)
+        or str(payload.get("descricao", "")).strip().casefold() != "amazon"
+        or not isinstance(payload.get("excecoes"), list)):
+        raise RuntimeError("amazon_price_table_invalid")
+    raw_percent = payload.get("acrescimoDesconto")
+    if raw_percent is None or isinstance(raw_percent, bool):
+        raise RuntimeError("amazon_percent_invalid")
+    try:
+        percent = Decimal(str(raw_percent))
+    except (InvalidOperation, ValueError, TypeError):
+        raise RuntimeError("amazon_percent_invalid") from None
+    if not percent.is_finite() or percent <= -100 or percent > 1000:
+        raise RuntimeError("amazon_percent_invalid")
+    exceptions: dict[str, tuple[Decimal, Decimal]] = {}
+    for row in payload["excecoes"]:
+        if not isinstance(row, dict):
+            raise RuntimeError("amazon_price_exception_invalid")
+        key = str(row.get("idProduto") or "").strip()
+        if not key.isdecimal() or key in exceptions:
+            raise RuntimeError("amazon_price_exception_id_invalid")
+        price = price_decimal(row.get("preco"), "amazon_exception_price", allow_zero=False)
+        promo = price_decimal(row.get("precoPromocional", 0), "amazon_exception_promo")
+        exceptions[key] = (price, promo)
+    return percent, exceptions
+
+
+def apply_amazon_prices(
+    products: list[dict[str, Any]],
+    table: tuple[Decimal, dict[str, tuple[Decimal, Decimal]]],
+) -> int:
+    """Recompute from original ERP prices on EVERY sync; never compound overrides."""
+    percent, exceptions = table
+    factor = Decimal("1") + percent / Decimal("100")
+    matched = 0
+    for item in products:
+        key = str(item.get("id") or "").strip()
+        base = item.get("_erp_base_prices")
+        if not key.isdecimal() or not isinstance(base, dict):
+            raise RuntimeError("erp_base_price_unavailable_preserve_existing_cache")
+        regular = price_decimal(base.get("preco"), "erp_base_price")
+        promo = price_decimal(base.get("precoPromocional", 0), "erp_base_promo")
+        if key in exceptions:
+            regular, promo = exceptions[key]
+            matched += 1
+        else:
+            regular, promo = regular * factor, promo * factor
+        item["precos"] = {
+            "preco": float(regular.quantize(CENT, rounding=ROUND_HALF_UP)),
+            "precoPromocional": float(promo.quantize(CENT, rounding=ROUND_HALF_UP)),
+        }
+        item["_price_source"] = "olist_tiny_amazon"
+        item["_price_list_id"] = AMAZON_PRICE_LIST_ID
+        item["sync_source"] = "tiny_v3"
+    return matched
+
+
 def fetch_products_active(token: str) -> list[dict[str, Any]]:
     products: list[dict[str, Any]] = []
     offset = 0
@@ -247,7 +326,8 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
             continue
         cached = previous.get(product_id)
         current_marker = str(summary.get("dataAlteracao") or "").strip()
-        if isinstance(cached, dict) and detail_cache_is_fresh(cached, current_marker):
+        if (isinstance(cached, dict) and isinstance(cached.get("_erp_base_prices"), dict)
+            and detail_cache_is_fresh(cached, current_marker)):
             enriched[product_id] = dict(cached)
             continue
         pending.append(summary)
@@ -337,7 +417,8 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
 def save_products(products: list[dict[str, Any]]) -> Path:
     registry = load_video_sources()
     products = [merge_video_sources(item, registry) for item in products]
-    payload = {"total": len(products), "timestamp": datetime.now(timezone.utc).isoformat(), "itens": products}
+    payload = {"total": len(products), "timestamp": datetime.now(timezone.utc).isoformat(),
+               "price_list_id": AMAZON_PRICE_LIST_ID, "price_source": "olist_tiny_amazon", "itens": products}
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = CACHE_PATH.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -350,6 +431,8 @@ def sync_once(workers: int) -> bool:
     if not token:
         print("[!] OLIST_ACCESS_TOKEN/TINY_ACCESS_TOKEN não configurado")
         return False
+    # Fail closed before publishing any price if the ERP price table cannot be read.
+    amazon_table = fetch_amazon_table(token)
     summaries = fetch_products_active(token)
     if not summaries:
         print("[!] A API não retornou produtos ativos; cache existente preservado")
@@ -358,6 +441,8 @@ def sync_once(workers: int) -> bool:
     if not products:
         print("[!] Nenhum detalhe utilizável; cache existente preservado")
         return False
+    exceptions_matched = apply_amazon_prices(products, amazon_table)
+    print(f"[+] Amazon ERP table {AMAZON_PRICE_LIST_ID}: {exceptions_matched} exceptions applied to active products")
     kits_updated = apply_kit_stock(products)
     if kits_updated:
         print(f"[+] Estoque recalculado pela composicao em {kits_updated} produtos tipo kit")

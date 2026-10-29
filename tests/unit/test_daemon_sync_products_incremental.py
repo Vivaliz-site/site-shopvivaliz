@@ -22,6 +22,7 @@ class IncrementalCatalogSyncTest(unittest.TestCase):
                 "estoque_disponivel": 4,
                 "_olist_updated_at": "2026-09-10T12:00:00Z",
                 "_detail_synced_at": "2999-09-10T12:00:00+00:00",
+                "_erp_base_prices": {"preco": 15.0, "precoPromocional": 0.0},
             }
         }
         summaries = [{"id": 10, "situacao": "A", "dataAlteracao": "2026-09-10T12:00:00Z"}]
