@@ -58,6 +58,34 @@ class AgentDocsGateTests(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("changed", reason)
 
+    def test_every_agent_entrypoint_references_live_topology(self) -> None:
+        entrypoints = [
+          "AGENTS.md",
+          "CLAUDE.md",
+          "GEMINI.md",
+          "docs/AGENTS.md",
+          ".github/AGENTS.md",
+          ".github/copilot-instructions.md",
+          ".github/instructions/ai-to-cli.instructions.md",
+          ".codex/agents/shopvivaliz-devops.md",
+          ".claude/rules/ai-to-cli.md",
+          ".cursor/rules/nonstop-continuity.mdc",
+          ".windsurf/rules/ai-to-cli.md",
+          ".windsurf/rules/nonstop-continuity.md",
+          "AGENTS-ACCESS-INDEX.md",
+          "docs/ai-agents-map.md",
+          "docs/knowledge/agent-rules.md",
+          "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+          "docs/knowledge/claude-vm-bootstrap.md",
+          "docs/knowledge/dev-agent-briefing.md",
+          ".ai/README.md"
+]
+        for relative in entrypoints:
+            with self.subTest(agent_entrypoint=relative):
+                content = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("ACTIVE_MARINA_ROUTING_20261029", content)
+                self.assertIn("docs/knowledge/current-topology-and-access-2026-10-29.md", content)
+
     def test_verify_fails_before_read(self) -> None:
         valid, reason, receipt = gate.verify_receipt("gpt", "task-001")
         self.assertFalse(valid)
