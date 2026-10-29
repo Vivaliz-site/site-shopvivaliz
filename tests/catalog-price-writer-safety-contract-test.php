@@ -35,7 +35,7 @@ $must(str_contains($apiLegacy, 'hash_equals') && str_contains($apiLegacy, 'sv_we
     'legacy Olist API path must require a configured secret');
 $must(str_contains($olistLegacy, 'hash_hmac') && str_contains($olistLegacy, 'sv_webhook_secret_valid'),
     'legacy Olist notification must reject unsigned anonymous traffic');
-$must(!str_contains($olistLegacy, "json_encode($decodedForLog"),
+$must(!str_contains($olistLegacy, 'json_encode($decodedForLog'),
     'legacy Olist notification must not log full payload');
 $must(str_contains($manual, 'legacy_catalog_rebuild_retired') && !str_contains($manual, 'file_put_contents('),
     'manual HTTP cache overwrite must be retired');
