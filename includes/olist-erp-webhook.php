@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/catalog-runtime.php';
+require_once __DIR__ . '/erp-amazon-price.php';
 require_once __DIR__ . '/tiny-order-push.php';
 require_once __DIR__ . '/melhorenvio-oauth.php';
 
@@ -327,6 +328,9 @@ function svoei_refresh_product_from_v3(string $root, string $productId = '', str
     $stock = is_array($stockResponse['json'] ?? null) ? $stockResponse['json'] : [];
     if (is_array($stock['estoque'] ?? null)) $stock = $stock['estoque'];
     $product = svoei_normalize_v3_product($detail, $stock);
+    // Price webhooks cannot trust payload/cadastro price: fetch authoritative Amazon list.
+    $amazonTable = sveap_read_table($token);
+    $product = sveap_apply_table($product, $amazonTable);
     svoei_upsert_catalog_product($root, $product);
     return $product;
 }
