@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T11:47:23.080Z",
+  "generated_at": "2026-10-29T13:59:21.295Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -15,6 +15,11 @@
       "file": "/public/dist/js/auto-image-carousel.abb84f1a5f.min.js",
       "bytes": 11450,
       "source_bytes": 13211
+    },
+    "/js/cart-erp-price-reconciliation-v1.js": {
+      "file": "/public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js",
+      "bytes": 3903,
+      "source_bytes": 5089
     },
     "/js/cart-persistence-v23.js": {
       "file": "/public/dist/js/cart-persistence-v23.abeb4c252b.min.js",
@@ -132,12 +137,12 @@
       "source_bytes": 1006
     },
     "/js/privacy-consent-v1.js": {
-      "file": "/public/dist/js/privacy-consent-v1.22f93cf05c.min.js",
-      "bytes": 5663,
-      "source_bytes": 6305
+      "file": "/public/dist/js/privacy-consent-v1.6cf074c721.min.js",
+      "bytes": 5827,
+      "source_bytes": 6489
     },
     "/js/product-conversion-v5.js": {
-      "file": "/public/dist/js/product-conversion-v5.49fb9770fd.min.js",
+      "file": "/public/dist/js/product-conversion-v5.60a56e542a.min.js",
       "bytes": 4922,
       "source_bytes": 6169
     },
@@ -177,9 +182,9 @@
       "source_bytes": 1459
     },
     "/js/shopvivaliz-google-events.js": {
-      "file": "/public/dist/js/shopvivaliz-google-events.9b17f9509a.min.js",
-      "bytes": 12004,
-      "source_bytes": 14771
+      "file": "/public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js",
+      "bytes": 11947,
+      "source_bytes": 14990
     },
     "/js/shopvivaliz-visual-v3.js": {
       "file": "/public/dist/js/shopvivaliz-visual-v3.98ab7f88b4.min.js",
@@ -242,9 +247,9 @@
       "source_bytes": 6304
     },
     "/css/checkout.css": {
-      "file": "/public/dist/css/checkout.bb7da78093.min.css",
-      "bytes": 6140,
-      "source_bytes": 8190
+      "file": "/public/dist/css/checkout.4f28b03a48.min.css",
+      "bytes": 6175,
+      "source_bytes": 8230
     },
     "/css/cls-stability-v1.css": {
       "file": "/public/dist/css/cls-stability-v1.45e332855f.min.css",
@@ -455,11 +460,6 @@
       "file": "/public/dist/assets/liz-assistant/liz-config.9495d4ac97.min.js",
       "bytes": 423,
       "source_bytes": 438
-    },
-    "/js/cart-erp-price-reconciliation-v1.js": {
-      "file": "/public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js",
-      "bytes": 3903,
-      "source_bytes": 5089
     }
   }
 }

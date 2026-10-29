@@ -5,6 +5,7 @@ import time
 
 import google_ads_antique_decore_status as legacy
 import google_ads_antique_decore_status_v2 as monitor
+from google_ads_legacy_budget_policy import refuse_legacy_ads_execution
 
 _MAX_ATTEMPTS = 3
 _RETRY_DELAY_SECONDS = 2
@@ -65,6 +66,7 @@ def cautious_pause_all(client, customer_id: str, campaign_rn: str, groups, ads, 
 
 
 def main() -> int:
+    refuse_legacy_ads_execution("google_ads_antique_decore_status_v3.py")
     legacy.validate_landing_pages = retrying_validate_landing_pages
     monitor.pause_all = cautious_pause_all
     return monitor.main()

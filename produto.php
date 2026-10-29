@@ -1165,7 +1165,7 @@ if ($notFound) {
     })();
     </script>
 
-    <script src="/js/product-conversion-v5.js?v=2026-07-26-v3"></script>
+    <script src="/js/product-conversion-v5.js?v=2026-10-29-direct-checkout"></script>
     <script src="/js/cro-interactions.js?v=<?= filemtime(__DIR__ . '/js/cro-interactions.js') ?: '1' ?>"></script>
     <script src="/js/first-purchase-popup-v1.js?v=<?= filemtime(__DIR__ . '/js/first-purchase-popup-v1.js') ?: '1' ?>" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260811-1"></script>

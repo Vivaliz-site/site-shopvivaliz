@@ -1,45 +1,21 @@
 name: Sales Round 01 Google Ads Delivery
 
+# Retired: only Vedante at BRL 5 average/day is authorized on 2026-10-29.
+# The old tuning step changed paused Vasos before its post-check could refuse.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/google_ads_sales_round1_delivery.py"
-      - "scripts/google_ads_campaign_live_ready.json"
-      - ".github/workflows/sales-round-01-google-ads-delivery.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: sales-round-01-google-ads-delivery
-  cancel-in-progress: false
-
 jobs:
-  tune-delivery:
+  blocked-legacy-policy:
     runs-on: ubuntu-latest
-    environment: Production
-    timeout-minutes: 10
-    env:
-      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-      GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
-      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
-      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
-      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Google Ads client
-        run: python3 -m pip install --disable-pip-version-check google-ads
-      - name: Tune CPC and high-intent phrase keywords
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 scripts/google_ads_sales_round1_delivery.py | tee /tmp/sales-round-01.txt
-      - name: Verify campaign guardrails after tuning
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 scripts/google_ads_antique_decore_automation.py | tee /tmp/sales-round-01-verify.txt
+      - name: Checkout policy-protected code
+        uses: actions/checkout@v4
+
+      # No Ads secrets, SDK installation or Production environment are needed.
+      - name: Refuse retired campaign mutations
+        run: python3 scripts/google_ads_sales_round1_delivery.py

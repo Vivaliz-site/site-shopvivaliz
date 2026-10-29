@@ -319,9 +319,11 @@ jobs:
 
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
           session_id=""
+          session_id_file="$RUNNER_TEMP/marina-bastion-session-id"
           original_cidrs="$RUNNER_TEMP/marina-bastion-cidrs.json"
           expanded_cidrs="$RUNNER_TEMP/marina-bastion-cidrs-expanded.json"
           security_list_id=""
+          security_list_id_file="$RUNNER_TEMP/marina-security-list-id"
           security_list_original="$RUNNER_TEMP/marina-marina-security-list-ingress.json"
           security_list_expanded="$RUNNER_TEMP/marina-marina-security-list-ingress-expanded.json"
           bastion_ssh_config="$RUNNER_TEMP/marina-bastion-ssh-config"
@@ -332,6 +334,7 @@ jobs:
           cleanup() {
             if [ -n "${session_id:-}" ]; then
               "${OCI[@]}" bastion session delete --session-id "$session_id" --force >/dev/null
+              rm -f "$session_id_file"
             fi
             if [ -s "$original_cidrs" ] && [ -n "$MARINA_BASTION_ID" ]; then
               "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$original_cidrs" --force >/dev/null
@@ -342,7 +345,7 @@ jobs:
                 return 1
               fi
             fi
-            rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs" "$security_list_original" "$security_list_expanded" "$bastion_ssh_config"
+            rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs" "$security_list_original" "$security_list_expanded" "$bastion_ssh_config" "$security_list_id_file"
             rm -f "$OCI_KEY_FILE" "$OCI_CONFIG_FILE"
           }
           trap cleanup EXIT
@@ -361,6 +364,7 @@ jobs:
           security_list_id="$(jq -r '.data."security-list-ids"[0] // empty' <<<"$subnet_json")"
           subnet_cidr="$(jq -r '.data."cidr-block" // empty' <<<"$subnet_json")"
           test -n "$security_list_id" && test -n "$subnet_cidr"
+          printf '%s\n' "$security_list_id" > "$security_list_id_file"
           "${OCI[@]}" network security-list get --security-list-id "$security_list_id" --query 'data."ingress-security-rules"' --output json > "$security_list_original"
           security_rule_state="$(python3 - "$bastion_source_cidr" "$security_list_original" "$security_list_expanded" <<'PY'
           import ipaddress, json, sys
@@ -412,6 +416,7 @@ jobs:
             --ssh-public-key-file "$bastion_key.pub" \
             --query 'data.id' --raw-output)"
           test -n "$session_id"
+          printf '%s\n' "$session_id" > "$session_id_file"
           for _ in $(seq 1 36); do
             state="$("${OCI[@]}" bastion session get --session-id "$session_id" --query 'data."lifecycle-state"' --raw-output)"
             [ "$state" = ACTIVE ] && break
@@ -722,8 +727,52 @@ jobs:
           echo "MARINA_CONNECTOR=PASS"
           echo "OCI_MARINA_CLOUDFLARE_ADMIN=PROVISIONED"
 
+      - name: Restore private Bastion state
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/marina-bastion-cidrs.json"
+          original_ingress="$RUNNER_TEMP/marina-marina-security-list-ingress.json"
+          session_file="$RUNNER_TEMP/marina-bastion-session-id"
+          security_file="$RUNNER_TEMP/marina-security-list-id"
+          # A completed EXIT trap already restored and removed both backups.
+          if [[ ! -s "$ORIGINAL_CIDRS_FILE" && ! -s "$original_ingress" ]]; then exit 0; fi
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          restore_status=0
+          if [[ -s "$session_file" ]]; then
+            IFS= read -r session_id < "$session_file"
+            if "${OCI[@]}" bastion session delete --session-id "$session_id" --force >/dev/null 2>&1; then
+              rm -f "$session_file"
+            else
+              restore_status=1
+            fi
+          fi
+          if [[ -s "$ORIGINAL_CIDRS_FILE" ]]; then
+            if [[ -n "${MARINA_BASTION_ID:-}" ]]; then
+              "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || restore_status=1
+            else
+              restore_status=1
+            fi
+          fi
+          if [[ -s "$original_ingress" ]]; then
+            if [[ -s "$security_file" ]]; then
+              IFS= read -r security_list_id < "$security_file"
+              "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$original_ingress" --force >/dev/null 2>&1 || restore_status=1
+            else
+              restore_status=1
+            fi
+          fi
+          if [[ "$restore_status" == 0 ]]; then
+            rm -f "$ORIGINAL_CIDRS_FILE" "$original_ingress" "$session_file" "$security_file"
+          else
+            echo '::error::Private Bastion cleanup did not restore every resource'
+          fi
+          exit "$restore_status"
+
       - name: Remove OCI material
         if: always()
         shell: bash
         run: |
           rm -f "${OCI_KEY_FILE:-}" "${OCI_CONFIG_FILE:-}" "$RUNNER_TEMP/marina-cloudflared-admin-unit.sh" "$RUNNER_TEMP/marina-bastions.json"
+          rm -f "$RUNNER_TEMP/marina-bastion-key" "$RUNNER_TEMP/marina-bastion-key.pub" "$RUNNER_TEMP/marina-vm-key" "$RUNNER_TEMP/marina-vm-known-hosts" "$RUNNER_TEMP/marina-bastion-ssh-config"
