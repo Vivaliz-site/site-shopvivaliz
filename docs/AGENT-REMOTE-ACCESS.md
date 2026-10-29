@@ -4,16 +4,17 @@ Este arquivo é leitura obrigatória antes de qualquer tarefa que envolva VM, ru
 
 ## Hosts canônicos
 
-- `shopvivaliz-free-a1` — produção web — VCN `10.0.1.112`.
-- `always-free-arm-1787907847-26` — backend/automação/browser — VCN `10.0.1.38`; Tailscale conhecido `100.66.174.74`.
+- `marina-a1-4c24g` — **producao web/deploy**, banco/workers/runner (OCI ESPOSA), privado documentado `10.80.1.116`, Tailscale observado `100.118.170.46`; RDC 1/2 direto online em 2026-10-29.
+- `always-free-arm-1787907847-26` — backend/automacao/browser/controller MCP (OCI PRINCIPAL), VCN `10.0.1.38`, Tailscale observado `100.66.174.74`.
+- `shopvivaliz-free-a1` — **origem excluida** segundo proprietario; SSH sem rota em 2026-10-29. Nao enviar comandos/probes/deploys. OCI `TERMINATED` nao foi validado nesta rodada.
 - `Fred-Win` e `KOCEPSV` são hosts de apoio. Navegador de tarefas ShopVivaliz não deve rodar neles.
 
 ## Ordem de acesso
 
-1. **Remote Control MCP:** rota operacional primária para hosts, serviços, diagnóstico, arquivos e tarefas duráveis quando a capacidade necessária estiver allowlisted. O controller canônico fica em `always-free-arm-1787907847-26` e o endpoint de controle permanece privado/loopback.
+1. **Remote Control MCP:** rota operacional primaria **do backend/hosts allowlisted ativos**. Seu inventario em 2026-10-29 ainda exibe origem excluida, mas **nao** Marina; nunca usar alias da origem para Marina. Para Marina, usar **RDC 1/2 direto** (online, ID descoberto pelo nome) ou SSH privado apenas apos autenticacao validada. MCP independente Marina permanece inativo. O controller canônico fica em `always-free-arm-1787907847-26` e o endpoint de controle permanece privado/loopback.
 2. **SSH privado/Tailscale:** usar o usuário dedicado `shopvivaliz-agent` somente quando a operação não estiver disponível pelo Remote Control MCP ou quando o control plane estiver comprovadamente indisponível. SSH público direto, login root público e autenticação por senha continuam proibidos.
 3. **GitHub Actions/OCI Bastion:** fallback auditável para bootstrap, recuperação e reparo do próprio Remote Control MCP quando não houver rota privada utilizável.
-4. **GUI/validação visual:** usar RustDesk self-hosted. Navegador, Playwright/Selenium/CDP, MFA, CAPTCHA, consentimento ou validação visual continuam na backend `always-free-arm-1787907847-26`, nunca nos hosts Windows.
+4. **GUI/validação visual:** usar o canal grafico autorizado por host (RDC direto para Marina quando apropriado, RustDesk self-hosted no fluxo backend). Navegador, Playwright/Selenium/CDP, MFA, CAPTCHA, consentimento ou validação visual continuam na backend `always-free-arm-1787907847-26`, nunca nos hosts Windows.
 
 ## Navegador
 
@@ -27,7 +28,9 @@ Qualquer navegador, Playwright/Selenium/CDP, MFA, CAPTCHA, consentimento ou vali
 - Produção é imutável: no site, não editar a release ativa/`current` diretamente.
 - Se o ambiente atual não tiver rota privada, declarar isso e usar o fallback autorizado em vez de concluir que a VM está offline.
 
-## Fonte canônica
+## Fonte canonica
+
+- Inventario dos MCPs, estado efetivo, rotas e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
 
 A implementação e documentação operacional de referência ficam em:
 - `Vivaliz-site/site-shopvivaliz/docs/knowledge/host-access.md`
