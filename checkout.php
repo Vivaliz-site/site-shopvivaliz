@@ -1078,9 +1078,11 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
     };
 
     renderCart();
+    window.addEventListener('shopvivaliz:cart-updated', renderCart);
 
 })();
 </script>
+<script src="/js/cart-erp-price-reconciliation-v1.js?v=20261029" defer></script>
 <!-- Purchase e conversao de Ads sao emitidos somente apos pagamento
      confirmado pelo webhook, nunca na simples criacao do pedido. -->
 </body>
