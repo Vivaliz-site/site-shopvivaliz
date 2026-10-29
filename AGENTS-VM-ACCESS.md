@@ -2,48 +2,30 @@
 
 Instrucao operacional obrigatoria para agentes que precisem executar comandos nas VMs Oracle Cloud da ShopVivaliz. Nunca versionar, imprimir ou copiar para logs/prompts chaves privadas, tokens, senhas, headers de autenticacao ou conteudo de `security_token_file`.
 
-## VMs atuais
+## VMs atuais — 2026-10-29
 
-| Alias | Instancia OCI | Endereco operacional | Exposicao publica |
+| Tenancy | Host | Endereco documentado | Papel |
 | --- | --- | --- | --- |
-| `vm1` | `shopvivaliz-free-a1` | privado `10.0.1.112`; loopback CI `127.0.0.1` | origin reservado `137.131.149.55`, HTTPS Cloudflare somente |
-| `vm2` | `always-free-arm-1787907847-26` | privado `10.0.1.38` | sem IP publico |
+| ESPOSA | `marina-a1-4c24g` | OCI privado `10.80.1.116`; Tailscale observado `100.118.170.46` | **producao web/deploy**, MySQL, workers, runner e Cloudflare admin |
+| PRINCIPAL | `always-free-arm-1787907847-26` | OCI privado `10.0.1.38`; Tailscale observado `100.66.174.74` | backend/controller MCP/browser/MEI/M365 |
 
-- Regiao OCI: `sa-saopaulo-1`.
-- Controlador canonico: Fred-Win (`LAPTOP-NIG4IFUU`).
-- Perfil OCI obrigatorio: `AGENTS`.
-- Config OCI protegida: `C:\Users\FRED\.oci\agents\config`.
-- Helper OCI: `C:\Users\FRED\.local\bin\sv-oci-vm-run.ps1`.
-- Executavel SSH canonico no Fred-Win: `C:\Program Files\Git\usr\bin\ssh.exe`.
-- Os IPs acima sao informativos; nomes/OCI sao a fonte de verdade caso o IP mude.
+**Origem excluida:** `shopvivaliz-free-a1` (antiga `vm1`; `10.0.1.112`). Exclusao relatada pelo proprietario; SSH sem rota em 2026-10-29, lifecycle OCI nao auditado. **Nunca executar comandos por alias `vm1`, `shopvivaliz-a1-site-raw`, ou enderecos legados.** A antiga `vm2` e o perfil local `AGENTS` eram ligados a topologia historica; nao pressupor que permitem acessar Marina/ESPOSA.
+
+As contas OCI `PRINCIPAL` e `ESPOSA` exigem identidades isoladas, conforme `docs/ops/oci-dual-account-access.md`. Enderecos Tailscale sao observacoes, nao prova de SSH. Ver `docs/knowledge/current-topology-and-access-2026-10-29.md`.
 
 ## Ordem obrigatoria de acesso
 
-1. **Remote Desktop Commander** diretamente pelo `device_name`, quando online, para operacao comum sem privilegio elevado.
-2. **Runner self-hosted/VCN privada** para automacoes: site via `127.0.0.1`, backend via `10.0.1.38`.
-3. **OCI Bastion** para SSH administrativo vindo de fora da VCN; SSH publico direto permanece fechado.
-4. **OCI Compute Instance Run Command**, via perfil `AGENTS`, como shell de fallback independente de SSH e de porta de entrada.
-5. **OCI serial console** somente como ultimo recurso de recuperacao quando acesso privilegiado e SSH estiverem indisponiveis.
+1. Backend: ShopVivaliz Remote Control MCP, somente para hosts vivos/allowlisted. A allowlist ainda inclui origem excluida e nao inclui Marina.
+2. Marina: RDC 1/2 direto, com descoberta do `deviceId` em `list_devices` e `hostname -s`, `id -un` antes de operar. Ambos listavam Marina online em 2026-10-29.
+3. SSH privado/VCN/Tailscale: somente se autenticacao/host key/permissoes forem comprovadas; nao habilitar acesso publico.
+4. Runner self-hosted **da Marina** para CI/deploy versionado; GitHub nao substitui shell/heartbeat/queue da controladora.
+5. OCI Bastion/Run Command/console serial: somente por canal oficial aprovado para bootstrap/recovery, sem burlar negativas de privilegio.
 
-Nao enfraquecer os bloqueios de `sudo`/`NoNewPrivileges` do Remote Desktop Commander para conseguir root.
+`shopvivaliz-cloudflared-admin.service` ativo nao e equivalente a MCP OpenAI. `shopvivaliz-marina-mcp.service` e `shopvivaliz-marina-mcp-tunnel.service` estavam inativos em 2026-10-29. Um `NoNewPrivileges=no` observado na unidade RDC nao concede privilegios nem revoga bloqueios/controles existentes.
 
 ## Shell direto via token/API OCI
 
-Preferir o helper validado. Ele cria o `Instance Agent Command`, aguarda estado terminal, imprime stdout e devolve o exit code remoto:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\FRED\.local\bin\sv-oci-vm-run.ps1 vm1 "hostname; id -un; pwd"
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\FRED\.local\bin\sv-oci-vm-run.ps1 vm2 "hostname; id -un; pwd"
-```
-
-Quando o atalho estiver no `PATH`, a forma curta tambem e valida:
-
-```powershell
-sv-oci-vm-run vm1 "hostname; id -un; pwd"
-sv-oci-vm-run vm2 "hostname; id -un; pwd"
-```
-
-O helper usa somente `C:\Users\FRED\.oci\agents\config` + perfil `AGENTS`; nunca usar `DEFAULT` como fallback.
+**Os comandos antigos `sv-oci-vm-run vm1` e `sv-oci-vm-run vm2` nao sao instrucoes atuais**. Antes de novo Run Command, confirmar explicitamente a tenancy OCI, compartment, lifecycle, instance OCID, perfil autorizado e o suporte do agente. O perfil legado `AGENTS` do Fred-Win nao comprova acesso a conta ESPOSA. Nao converter `vm1` em um alias da Marina sem implementacao revisada e validada. Consultar `docs/ops/oci-dual-account-access.md`.
 
 ### Privilegio do Run Command
 
@@ -55,27 +37,13 @@ O helper usa somente `C:\Users\FRED\.oci\agents\config` + perfil `AGENTS`; nunca
 
 ## SSH administrativo canonico
 
-No Fred-Win, usar os aliases existentes e **o OpenSSH distribuido com Git**:
-
-```powershell
-& 'C:\Program Files\Git\usr\bin\ssh.exe' -o BatchMode=yes shopvivaliz-a1-site-raw 'hostname; id -un; sudo -n id -u'
-& 'C:\Program Files\Git\usr\bin\ssh.exe' -o BatchMode=yes shopvivaliz-a1-backend-raw 'hostname; id -un; sudo -n id -u'
-```
-
-Validacao real de 2026-09-06: ambos os aliases autenticaram e `sudo -n id -u` retornou `0` com exit code local `0`.
-
-Na sessao automatizada do Fred-Win, `C:\Windows\System32\OpenSSH\ssh.exe` retornou exit `255` sem stderr, enquanto `C:\Program Files\Git\usr\bin\ssh.exe` funcionou. Ate nova validacao, agentes devem preferir o SSH do Git. Nunca usar `StrictHostKeyChecking=no`.
+O alias historico `shopvivaliz-a1-site-raw` aponta a alvo descomissionado e nao deve ser usado. Acesso atual SSH exige destino privado, usuario/chave protegidos ja autorizados, `known_hosts` valido e identidade real comprovada. Nao executar o alias antigo para conferir se a origem voltou. Nunca usar `StrictHostKeyChecking=no`.
 
 ## Remote Desktop Commander
 
-Device names atuais:
+Em 2026-10-29, os conectores RDC 1/2 listaram `marina-a1-4c24g` e `LAPTOP-NIG4IFUU` online; backend e origem apareceram offline **no inventario RDC**, embora o backend estivesse acessivel por MCP central. A origem nao deve ser utilizada. Descobrir o ID por nome a cada sessao; validar autorizacao e privilegios efetivos, nao somente conexao.
 
-- `shopvivaliz-free-a1`
-- `always-free-arm-1787907847-26`
-
-O DC e o caminho mais simples para comandos sem root. Seu bloqueio de comandos privilegiados e intencional; nao alterar essa politica como atalho operacional.
-
-## Estado validado em 2026-09-06
+## Evidencia historica 2026-09-06 (nao usar como acesso atual)
 
 - Oracle Cloud Agent e plugin `Compute Instance Run Command`: `RUNNING` nas duas instancias pela API OCI.
 - Helper `sv-oci-vm-run vm1`: retornou `HELPER_OK`, `shopvivaliz-free-a1`, `ocarun`, exit code `0`.
