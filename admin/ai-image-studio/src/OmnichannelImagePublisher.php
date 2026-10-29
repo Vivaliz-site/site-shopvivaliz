@@ -437,7 +437,11 @@ final class AiStudioOmnichannelImagePublisher
         if (!is_file($path) || !is_readable($path) || !is_writable(dirname($path))) {
             throw new RuntimeException('Cache ativo da vitrine indisponível.');
         }
-        $payload = json_decode((string)file_get_contents($path), true);
+        $originalRaw = file_get_contents($path);
+        if (!is_string($originalRaw) || $originalRaw === '') {
+            throw new RuntimeException('Cache ativo da vitrine vazio.');
+        }
+        $payload = json_decode($originalRaw, true);
         if (!is_array($payload)) {
             throw new RuntimeException('Cache ativo da vitrine contém JSON inválido.');
         }
@@ -495,75 +499,25 @@ final class AiStudioOmnichannelImagePublisher
         $walk($payload);
 
         if ($matched === 0) {
-            $this->appendStorefrontImageItem($payload, $product, $imageType, $publicUrl, $absoluteUrls);
-            $matched = 1;
+            // Missing SKUs must first be published by Olist ERP v3 with the
+            // Amazon 991 price. Image publishers must NEVER create products
+            // or synthesize commercial prices from image-studio inputs.
+            throw new RuntimeException('catalog_product_not_synced_from_erp_amazon_991');
         }
         if ($matched > 1) {
             throw new RuntimeException("Identidade ambígua no cache: {$matched} registros correspondem ao mesmo produto. Nenhuma alteração foi persistida.");
         }
 
         $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $tmpPath = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
-        if (!is_string($encoded) || file_put_contents($tmpPath, $encoded . PHP_EOL, LOCK_EX) === false) {
-            throw new RuntimeException('Falha ao persistir a galeria no cache ativo.');
+        if (!is_string($encoded)) {
+            throw new RuntimeException('Falha ao serializar a galeria do cache ativo.');
         }
-        if (!@rename($tmpPath, $path)) {
-            @unlink($tmpPath);
-            throw new RuntimeException('Falha ao substituir o cache ativo.');
-        }
+        require_once dirname(__DIR__, 3) . '/includes/catalog-cache-write-guard.php';
+        svcc_write_presentation_if_current($path, $originalRaw, $encoded . PHP_EOL);
         $readBack = json_decode((string)file_get_contents($path), true);
         if (!is_array($readBack)) {
             throw new RuntimeException('Read-back do cache ativo falhou.');
         }
-    }
-
-    /** @param array<string,mixed> $payload @param array<string,mixed> $product @param list<string> $absoluteUrls */
-    private function appendStorefrontImageItem(array &$payload, array $product, string $imageType, string $publicUrl, array $absoluteUrls): void
-    {
-        $sku = trim((string)($product['sku'] ?? ''));
-        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
-        $title = trim((string)($product['name'] ?? $product['descricao'] ?? ''));
-        $description = trim((string)($product['description'] ?? $product['descricao_completa'] ?? $title));
-        $gallery = array_slice(array_values(array_unique($absoluteUrls)), 0, 12);
-        $entry = [
-            'id' => $externalId !== '' ? $externalId : (int)($product['id'] ?? 0),
-            'product_id' => (int)($product['id'] ?? 0),
-            'sku' => $sku,
-            'descricao' => $title,
-            'name' => $title,
-            'nome' => $title,
-            'description' => $description,
-            'descricaoComplementar' => $description,
-            'descricao_complementar' => $description,
-            'active' => true,
-            'situacao' => 'A',
-            'images' => $gallery,
-            'imagens' => array_map(static fn(string $url): array => ['url' => $url], $gallery),
-        ];
-        if (in_array($imageType, ['cover', 'white'], true)) {
-            foreach (['image_url', 'primary_image_url', 'imagem_principal_url', 'imagem'] as $field) {
-                $entry[$field] = $publicUrl;
-            }
-        }
-        if (isset($product['price'])) {
-            $entry['precos'] = ['preco' => (float)$product['price'], 'precoPromocional' => (float)($product['promotional_price'] ?? 0)];
-        }
-        if (isset($product['stock'])) {
-            $entry['estoque'] = ['quantidade' => (int)$product['stock']];
-            $entry['estoque_disponivel'] = (int)$product['stock'];
-        }
-
-        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
-            if (isset($payload[$key]) && is_array($payload[$key])) {
-                $payload[$key][] = $entry;
-                return;
-            }
-        }
-        if (array_is_list($payload)) {
-            $payload[] = $entry;
-            return;
-        }
-        $payload['items'] = [$entry];
     }
 
     private function cacheItemMatchesProduct(array $item, string $sku, string $externalId): bool
