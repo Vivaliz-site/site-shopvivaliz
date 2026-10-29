@@ -1,3 +1,7 @@
+<!-- LIVE_TOPOLOGY_MCP_RECONCILED_V2 -->
+**Atualizacao operacional (2026-10-29):** a VM excluida saiu do MCP central em producao (PRs #3391/#3392); vinte jobs antigos foram bloqueados (PR #3395); o tunel SSH do MEI para Marina respondeu HTTP 200. Nao confundir o tunel MEI com o MCP OpenAI independente ainda sem registro. Consulte a pagina `current-topology-and-access-2026-10-29.md` para os estados verdadeiros e os gates pendentes.
+<!-- /LIVE_TOPOLOGY_MCP_RECONCILED_V2 -->
+
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 ## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
 
@@ -23,7 +27,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 ## Documentos principais
 
-- [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md) — **inventario operacional apos exclusao da VM origem: Marina web/deploy, backend PRINCIPAL, rotas RDC/SSH/OCI, MCP central desatualizado e MCP independente Marina inativo; prova e limites do runtime em 2026-10-29.**
+- [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md) — **inventario operacional apos exclusao da VM origem: Marina web/deploy, backend PRINCIPAL, rotas RDC/SSH/OCI, MCP central corrigido sem origem e MCP independente Marina inativo; prova e limites do runtime em 2026-10-29.**
 - [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts e acesso; Remote Control MCP é a rota operacional primária, com SSH privado/Tailscale e OCI Bastion/GitHub apenas nas condições documentadas.**
 - [`claude-vm-bootstrap.md`](claude-vm-bootstrap.md) — memória global do Claude na VM: projetos, hosts, navegador na VM, pesquisa técnica atual na web, segurança e fluxo de entrega.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
