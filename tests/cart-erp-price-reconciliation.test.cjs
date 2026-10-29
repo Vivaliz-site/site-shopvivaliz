@@ -12,6 +12,7 @@ function fixture(options = {}) {
   let items = (options.items || [{sku:'KIT4R-SOPRANO',quantity:1,price:45,image_url:'/img.png'}]).map(x => ({...x}));
   const rawStorage = new Map([['shopvivaliz_cart',JSON.stringify(items)],['shopvivaliz_cart_validated_at','old'],['shopvivaliz_shipping_quote','old']]);
   const events = [];
+  const eventShippingSnapshots = [];
   const inserted = [];
   let onReturn;
   const responsePromise = new Promise(resolve => {onReturn = resolve;});
@@ -36,7 +37,7 @@ function fixture(options = {}) {
   };
   const window = {
     addEventListener(){},
-    dispatchEvent(e) {events.push(e.type);}
+    dispatchEvent(e) {events.push(e.type);eventShippingSnapshots.push(rawStorage.get('shopvivaliz_shipping_quote'));}
   };
   const ctx = {
     location:{pathname:options.page||'/carrinho'},
@@ -50,6 +51,7 @@ function fixture(options = {}) {
   return {
     items() {return items;},
     events,
+    eventShippingSnapshots,
     storage:rawStorage,
     inserted,
     async respond(data,ok=true) {onReturn({ok,json:async()=>data});await settle();},
@@ -65,6 +67,7 @@ test('old localStorage prices are replaced by the authoritative Amazon price and
   assert.equal(app.items()[0].image_url,'/img.png');
   assert.equal(app.events.includes('shopvivaliz:cart-updated'),true);
   assert.equal(app.storage.has('shopvivaliz_shipping_quote'),false);
+  assert.equal(app.eventShippingSnapshots[0],undefined,'Shipping quote must be invalidated before UI render event');
   assert.equal(app.storage.has('shopvivaliz_cart_validated_at'),false);
   assert.match(app.inserted[0].textContent,/atualizados/);
 });
