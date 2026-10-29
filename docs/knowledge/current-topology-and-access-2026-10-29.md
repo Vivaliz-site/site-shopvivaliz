@@ -1,5 +1,17 @@
 # Topologia, acessos e MCPs vigentes — 2026-10-29
 
+## Atualizacao verificada: 8 CPUs e reparo MEI na Marina (2026-10-29)
+
+Esta evidencia posterior prevalece sobre os snapshots historicos de tamanho e conectividade abaixo:
+
+- **As duas VMs possuem 8 OCPUs A1, 24 GB de RAM e boot volume OCI de 200 GB.** A ampliacao da Marina foi expressamente autorizada pelo proprietario apos aviso de possivel cobranca. OCI ESPOSA confirmou `RUNNING / 8 / 24 / 200`; o Linux da Marina confirmou `nproc=8` apos reboot. O nome `marina-a1-4c24g` foi preservado e nao descreve mais sua CPU.
+- **SSH privado backend -> Marina comprovado:** `ubuntu@100.118.170.46`, chave provisionada `/home/ubuntu/.ssh/oci-marina-a1-2026`, host key ED25519 conferida diretamente pelo RDC e fixada em `/home/ubuntu/.ssh/known_hosts_marina_verified`. Login retornou o hostname exato, `ubuntu`, `NoNewPrivs=0` e `sudo -n -l` com autorizacao NOPASSWD do host. Isto nao e conexao do MCP Marina nem autoriza contornar recusas anteriores.
+- **MEI:** o tunel antigo apontava para a origem excluida `10.0.1.112`. A rota efetiva agora e backend `127.0.0.1:8010` -> SSH privado -> Marina `127.0.0.1:18010`, com chave dedicada protegida, origem Tailscale restrita, listener loopback e shell recusado. Override persistente: backend `/etc/systemd/system/mei-mg-email-site-tunnel.service.d/50-marina.conf`. Nao remover esse override nem reinstalar a rota antiga do template legado.
+- **HTTPS e DNS:** novo vhost `/etc/apache2/sites-available/shopvivaliz-dev-marina-https.conf` usa certificado Dev ja provisionado na Marina e proxy de `/descadastro` para o tunel privado. `dev.shopvivaliz.com.br` deixou o IP retirado `137.131.149.55` e passou para `137.131.173.240`, com proxy Cloudflare preservado; MX/TXT nao foram alterados.
+- **Provas reais:** HTTPS local com validacao de certificado e URL publica de descadastro responderam 200; `runtime_sender_preflight.py` concluiu exit 0 com schema, cota, suppression e endpoint publico validos; UI grafica na backend exibiu a pagina de confirmacao de descadastro. Nenhum descadastro real nem envio foi submetido. Evidencias MCP: DNS `0e19561f-a727-4914-8d40-b981c7b9a062`; preflight `90c1c8ad-579b-428c-bead-6850d7917990`; shell recusado `29bd4d3c-d007-4a63-af8e-6efc0b4a7527`.
+- **Limites ainda abertos:** `sender_blocked.pause` continua preservado e o worker de envio permanece parado; RDC backend ainda requer autorizacao do provedor; checkpoints de continuidade sem origem comprovada nao foram vinculados artificialmente; MCP independente Marina continua sem conexao ChatGPT comprovada. A reconciliacao MLRR foi interrompida por outro fluxo de manutencao em 2026-10-29 11:57:47 UTC e nao foi certificada como concluida. Nao declarar APTO global com esses gates abertos.
+
+
 > **Leitura obrigatoria para ChatGPT Dev/Atendimento, Claude, Codex, Gemini, Gepeto, subagentes, controladores e automacoes** antes de operar hosts. Este inventario prevalece sobre topologias em relatorios historicos, mas deve ser revalidado no runtime a cada sessao. Fonte de bootstrap: [host-access.md](host-access.md), [agent-rules.md](agent-rules.md) e `AGENTS.md`.
 
 ## Contrato de roteamento para todos os agentes (2026-10-29)
