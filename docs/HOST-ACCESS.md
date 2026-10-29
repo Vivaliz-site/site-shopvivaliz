@@ -6,14 +6,18 @@ Este arquivo é um runbook local e **não contém segredos**. A fonte central ma
 
 | Host | Endereço privado/rota | Papel |
 |---|---|---|
-| `shopvivaliz-free-a1` | `10.0.1.112` | produção web e deploy |
-| `always-free-arm-1787907847-26` | `10.0.1.38` | backend, controller do Remote Control MCP, navegador, MEI/M365 |
+| `marina-a1-4c24g` (OCI ESPOSA) | `10.80.1.116` documentado; Tailscale observado `100.118.170.46` | **producao web/deploy**, banco, workers, runner; RDC 1/2 direto online em 2026-10-29 |
+| `always-free-arm-1787907847-26` (OCI PRINCIPAL) | `10.0.1.38`; Tailscale observado `100.66.174.74` | backend, controller do MCP central, navegador, MEI/M365 |
 | Fred-Win / `LAPTOP-NIG4IFUU` | reverse SSH no backend `127.0.0.1:2222` | host Windows auxiliar |
 | KOCEPSV / `DESKTOP-KOCEPSV` | reverse SSH no backend `127.0.0.1:2223` | host Windows auxiliar |
 
-## Estado operacional conhecido em 2026-09-28
+## Estado operacional (2026-10-29; evidencias anteriores abaixo sao historicas)
 
-- Controller/backend e target Linux de produção: bootstrap comprovado.
+- Origem `shopvivaliz-free-a1` **excluida segundo proprietario**, `10.0.1.112:22` sem rota; nao e alvo de producao. Nao inferir `TERMINATED` na OCI sem consulta.
+- `marina-a1-4c24g` online via RDC 1/2; `shopvivaliz-cloudflared-admin.service` ativo; runner web ativo. MCP direto Marina e tunnel-client independentes **inativos**, sem app OpenAI autenticado.
+- MCP central do backend responde, porem seu inventario ainda inclui a origem e nao inclui Marina. Nao tentar operar Marina via esse MCP. Ver `knowledge/current-topology-and-access-2026-10-29.md`.
+
+- Backend/controller: bootstrap verificado via MCP. Marina e o alvo web, mas **nao** e executavel pelo MCP central.
 - Fred-Win `127.0.0.1:2222`: evidência recente de PASS.
 - KOCEPSV `127.0.0.1:2223`: **rota canônica, ainda não comprovada operacionalmente**. Tratar como indisponível até um teste fresco comprovar a porta e a identidade administrativa.
 - Etapas posteriores do Remote Control MCP (E2E 4 hosts, tarefa durável independente de GitHub e integração final com ChatGPT) não devem ser declaradas concluídas sem evidência nova.
@@ -50,7 +54,7 @@ Ao validar Windows, comprovar `hostname`, `whoami` e que a sessão administrativ
 
 ## Navegador e GUI
 
-- Navegador de agente ShopVivaliz: somente `always-free-arm-1787907847-26`.
+- Navegador corporativo de agente ShopVivaliz: somente `always-free-arm-1787907847-26`, enquanto perfil autenticado e isolamento estiverem confirmados.
 - Não abrir navegador operacional em Fred-Win ou KOCEPSV.
 - GUI: RustDesk self-hosted é o caminho principal.
 - O browser de agentes continua restrito à backend; não mover navegação para Windows como fallback.
@@ -62,8 +66,8 @@ Esta é a rota operacional prioritária para agentes. Se a ação necessária n�
 
 Arquitetura alvo:
 
-- controller: `always-free-arm-1787907847-26`
-- MCP loopback: `127.0.0.1:5580`
+- controller: `always-free-arm-1787907847-26` (MCP central; inclui inventario legado, nao a Marina)
+- MCP loopback: `127.0.0.1:5580` no backend; nao confundir com a porta proposta do MCP Marina, ainda inativo
 - Linux: privilégios administrativos somente pelo canal privado dedicado e auditado
 - Windows: Administrator somente após validação real
 - endpoint de controle nunca público
