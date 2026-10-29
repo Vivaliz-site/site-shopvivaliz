@@ -295,7 +295,7 @@ function svoei_resolve_v3_product_id(string $sku, string $token): string
 {
     $sku = trim($sku);
     if ($sku === '') throw new InvalidArgumentException('sku_missing');
-    $query = http_build_query(['pesquisa' => $sku, 'situacao' => 'A', 'limit' => 100, 'offset' => 0]);
+    $query = http_build_query(['codigo' => $sku, 'situacao' => 'A', 'limit' => 100, 'offset' => 0]);
     $response = svtop_tiny_get('/produtos?' . $query, $token);
     if ((int)($response['status'] ?? 0) !== 200) throw new RuntimeException('erp_product_search_failed');
     $json = is_array($response['json'] ?? null) ? $response['json'] : [];
