@@ -72,7 +72,15 @@ def test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap():
         "scripts/setup-remote-control-access.sh",
         "tests/should-deploy-production-test.sh",
     ])
-    assert not scope.is_backend_controller_only(["remote-control-mcp/server.py"])
+    assert scope.is_backend_controller_only(["remote-control-mcp/server.py"])
+    assert scope.is_backend_controller_only([
+        "remote-control-mcp/server.py",
+        "scripts/setup-remote-control-access.sh",
+        "tests/remote-control-mcp-test.py",
+        ".github/workflows/remote-control-mcp-bootstrap.yml",
+        "scripts/remote_mcp_bootstrap_scope.py",
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    ])
     assert not scope.is_backend_controller_only(["scripts/continuity/checkpoint_update_atomic.py"])
     assert not scope.is_backend_controller_only(["remote-control-mcp/server.py", "scripts/continuity/checkpoint_update_atomic.py", "scripts/setup-remote-control-windows.ps1"])
     assert not scope.is_backend_controller_only(["remote-control-mcp/server.py", "scripts/continuity/checkpoint_update_atomic.py", "deploy/systemd/shopvivaliz-remote-control-mcp.service"])
@@ -110,6 +118,8 @@ def test_workflow_keeps_full_bootstrap_and_browser_only_separate():
     assert "scripts/remote_mcp_bootstrap_scope.py" in yml
     assert "sudo -n bash scripts/setup-remote-control-browser-mcp.sh" in yml
     assert "Bootstrap Windows reverse SSH relays" in yml
+    assert "DECOMMISSIONED_SOURCE_GUARD_20261029" in yml
+    assert "if: ${{ false }}" in yml
 
 
 if __name__ == "__main__":
