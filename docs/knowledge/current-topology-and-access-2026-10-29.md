@@ -1,5 +1,17 @@
 # Topologia, acessos e MCPs vigentes — 2026-10-29
 
+## Atualizacao de runtime apos os PRs #3391, #3392 e #3395 (2026-10-29)
+
+**Este estado substitui os relatos de allowlist desatualizada abaixo, que permanecem como historico de auditoria.**
+
+- **MCP central corrigido e implantado no backend:** `hosts_list` retornou somente `always-free-arm-1787907847-26`, `Fred-Win` e `KOCEPSV`. A VM excluida `shopvivaliz-free-a1` nao e mais anunciada nem aceita como alvo executavel, e Marina continua **fora do MCP central** por desenho. `host_health` real confirmou backend com uid 0. O workflow de bootstrap restrito concluiu `success` (run #40871928630), com auditoria de checkpoint real.
+- **Legados de quatro hosts:** PR #3395 integrado apos 9 checks verdes. Vinte jobs que ainda continham rota executavel para a origem foram colocados em fail-closed e o dispatcher remoto rejeita o target removido antes de processar chaves. Isso nao substitui a migracao funcional de cada workflow para Marina; nunca simular cobertura E2E dessas rotinas por terem sido desativadas.
+- **MEI-MG:** unidade `mei-mg-email-site-tunnel.service` ativa no backend, com override privado root-owned `50-marina.conf`, SSH privado para a Marina pela rede Tailscale e encaminhamento loopback `127.0.0.1:18010`. `curl http://127.0.0.1:18010/health` executado na Marina retornou HTTP **200**. Isso e tunel SSH de aplicacao, nao MCP OpenAI.
+- **CI do MEI-MG:** `mei-ci-a1` na Marina encontra-se desabilitado e sem arquivo local `.runner`, com runner GitHub offline. `mei-backend-a1` no backend esta online mas tem outra funcao; nao lhe atribuir o label `mei-ci` ou migrar o banco Docker/backup para o backend. PR [#183](https://github.com/fredmourao-ai/mei-mg-email/pull/183) possui contrato do tunel e testes locais GREEN, mas continua sem gate de CI por falta de registro seguro do runner dedicado.
+- **Controlador 24x7:** `service_active=true` e status de ChatGPT browser autenticado, mas `continuity_ready=false`, com checkpoints/conversas sem vinculo e release ativo anterior ao `main`. A promocao pelo workflow oficial falhou com `RuntimeLockConflict`; a leitura nao secreta comprovou lease **legitimo e ainda vivo**, owner_kind `durable-recovery`, escopo de browser/continuation. Nao liberar nem contornar esse lease; depois da expiracao/cessao legitima, revalidar SHA e retomar pelo fluxo oficial.
+
+**Status:** `MCP_CENTRAL_RETIREMENT=VERIFIED`; `MARINA_DIRECT_MCP=NOT_CONNECTED`; `MEI_PRIVATE_TUNNEL=VERIFIED`; `MEI_CI_RUNNER=OFFLINE`; `CONTROLLER_CONTINUITY=NAO_APTO`; `GLOBAL_MIGRATION_STATUS` nao e certificado por essas validacoes isoladas. Como os servicos mudam ao longo do dia, conferir runtime antes de cada acao.
+
 ## Atualizacao verificada: 8 CPUs e reparo MEI na Marina (2026-10-29)
 
 Esta evidencia posterior prevalece sobre os snapshots historicos de tamanho e conectividade abaixo:
@@ -60,7 +72,7 @@ Esta evidencia posterior prevalece sobre os snapshots historicos de tamanho e co
 
 | Conector / componente | Situacao observada em 2026-10-29 | Limitacao |
 |---|---|---|
-| `ShopVivaliz Remote Control` / Orquestrador | MCP central acessivel no backend; `hosts_list` ainda retorna a origem excluida, backend e dois Windows | **Inventario desatualizado: Marina nao roteavel por esse MCP. Nao usar alias da origem para chegar a Marina.** |
+| `ShopVivaliz Remote Control` / Orquestrador | MCP central acessivel no backend; `hosts_list` agora retorna **somente backend e dois Windows**, apos PR #3391 | **Origem excluida e negada; Marina nao roteavel por esse MCP.** |
 | `Remote Desktop Commander` e `Remote Desktop Commander 2` | Marina e laptop online; outros dispositivos listados com status individual | Provider de acesso direto, nao equivale a novo MCP privado; quotas/escopos distintos devem ser verificados ao vivo |
 | `marina-direct-mcp` | Codigo, teste e runbook no repo; `shopvivaliz-marina-mcp.service` e `shopvivaliz-marina-mcp-tunnel.service` **inativos** na Marina; `127.0.0.1:5580/health` nao respondeu | **NAO INSTALADO/NAO CONECTADO** como app independente; nao anunciar shell/sudo; implementacao proposta e read-only |
 | Cloudflare admin da Marina | Servico systemd de `cloudflared` ativo | Nao comprova app OpenAI, publicacao MCP nem escopo de escrita |
@@ -73,7 +85,7 @@ Esta evidencia posterior prevalece sobre os snapshots historicos de tamanho e co
 - **Marina, 2026-10-29:** `hostname=marina-a1-4c24g`, `user=ubuntu`, Linux Oracle; Apache, MySQL, Tailscale, runner e Cloudflare admin `active`; release link `releases/20261029-095822-9374600d`; root volume ~193G (27G usados, 14%); tunnel-client/MCP privado inativos. O valor atual `systemctl show shopvivaliz-desktop-commander.service -p NoNewPrivileges` foi **no**, diferente de observacoes anteriores. Isto nao concede `sudo` nem revoga negativas anteriores: exigir privilegio, identidade e autorizacao efetiva em cada operacao.
 - **Backend, 2026-10-29:** `host_health` retorna `hostname=always-free-arm-1787907847-26`, `uid=0`; controlador relata servico ativo, porem continuidade `degraded=true` por vinculos de conversas/sessoes incompletos.
 - **Origem, 2026-10-29:** conexao SSH por MCP a `10.0.1.112` resulta `No route to host`. Excluida conforme afirmacao do proprietario; OCI lifecycle nao foi consultado nesta rodada.
-- Para completar a atualizacao de **runtime** ainda e necessario reconciliar allowlist/hosts do MCP central e comprovar a futura instalacao/registro do MCP Marina. Documentacao atualizada **nao e** deploy de um MCP nem certificacao da migracao integral.
+- A allowlist/hosts do MCP central **ja foi reconciliada e verificada no runtime**, mas ainda e necessario comprovar a futura instalacao/registro do MCP independente da Marina. Documentacao atualizada **nao e** deploy de um MCP nem certificacao da migracao integral.
 - Nenhum agente deve declarar `APTO` apenas por essa verificacao. Preservar testes RED/GREEN, paridade do SHA no deploy e E2E visual conforme `AUDIT_POLICY.md`.
 
 Atualize esta pagina sempre que uma verificacao posterior alterar os fatos. Em divergencia, registre a evidencia nova e corrija os pontos de entrada, nao os logs historicos.
