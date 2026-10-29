@@ -122,13 +122,14 @@ Antes de trabalhar em qualquer um deles, ler `AGENTS.md`, `CLAUDE.md`, README e 
 
 | Host | Papel |
 |---|---|
-| `shopvivaliz-free-a1` | produção web e deploy do ShopVivaliz |
-| `always-free-arm-1787907847-26` | backend, MEI, M365, relay e VM de navegação |
-| `shopvivaliz-ai` | DEV/e-mail/testes legado; **não é produção web** |
+| `marina-a1-4c24g` (OCI ESPOSA) | **producao web/deploy** do ShopVivaliz, MySQL, workers e runner; acesso direto RDC 1/2 comprovado |
+| `always-free-arm-1787907847-26` (OCI PRINCIPAL) | backend, MCP central, MEI/M365, relay e VM de navegacao |
+| `shopvivaliz-free-a1` | **origem excluida** segundo proprietario; jamais usar como alvo, nem criar aliases |
+| `shopvivaliz-ai` | legado E2; nao e producao |
 | Fred-Win | apoio/acesso remoto Windows |
 | KOCEPSV | apoio/acesso remoto Windows |
 
-Fonte canônica: `docs/knowledge/host-access.md`.
+Fontes canonicas: `docs/knowledge/host-access.md` e `docs/knowledge/current-topology-and-access-2026-10-29.md`. O MCP central ainda inclui a origem excluida e nao inclui Marina; nao tentar comandos da Marina nele. O MCP independente Marina e codigo staged/read-only, inativo e sem vinculo ChatGPT comprovado. Cloudflare admin ativo nao significa MCP ativo.
 
 ### Regra crítica
 
