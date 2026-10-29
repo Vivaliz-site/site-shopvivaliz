@@ -1,3 +1,7 @@
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 <!-- CURRENT_HOST_ACCESS_POLICY_20261029 -->
 **Topologia de acesso vigente:** `marina-a1-4c24g` (OCI ESPOSA) e producao web/deploy; `always-free-arm-1787907847-26` (OCI PRINCIPAL) opera o backend/browser e o **Remote Control MCP** central. A origem `shopvivaliz-free-a1` foi excluida segundo o proprietario; nunca acessa-la. O MCP central ainda nao inclui Marina; para ela, RDC 1/2 direto tem evidencias de acesso, enquanto o MCP independente permanece inativo. Revalidar `docs/knowledge/current-topology-and-access-2026-10-29.md` antes de operar.
 <!-- /CURRENT_HOST_ACCESS_POLICY_20261029 -->
