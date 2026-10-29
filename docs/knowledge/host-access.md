@@ -1,3 +1,7 @@
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
 <!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
 ## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
 
