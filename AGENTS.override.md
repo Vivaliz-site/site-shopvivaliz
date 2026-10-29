@@ -1,3 +1,7 @@
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **INSTRUÇÃO OPERACIONAL ATUAL PARA TODOS OS AGENTES (2026-10-29):** antes de qualquer execução ou `Retome`, ler no `main` `docs/knowledge/current-topology-and-access-2026-10-29.md`, `docs/knowledge/host-access.md`, `docs/knowledge/agent-rules.md` e o runbook do módulo; registrar SHA/checkpoint e validar identidade e autorização reais. **Produção web/DB/workers = `marina-a1-4c24g` (OCI ESPOSA), via RDC direto comprovado. Backend/controller/browser/MCP central = `always-free-arm-1787907847-26` (OCI PRINCIPAL). `shopvivaliz-free-a1` foi excluída e NÃO é destino válido; nunca reconectar, recriar ou substituir seu alias por Marina.** O MCP central ainda contém inventário antigo e não alcança Marina; seu MCP independente/túnel ainda não está ativo/registrado. SSH privado, RDC 2, sudo e OCI exigem autorização/prova por canal. Workflows/scripts antigos que apontem para a origem não devem ser executados, mesmo que relatórios históricos os recomendem; corrigir de forma revisada, testar e validar antes do uso.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 <!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
 ## Auditoria externa
 Auditoria externa/independente não é exceção ao ciclo corretivo. Com autorização, corrigir, testar e reauditar. Se o auditor for somente leitura, o relatório é intermediário e os achados devem seguir para executor autorizado até correção e revalidação independente ou bloqueio externo comprovado.
