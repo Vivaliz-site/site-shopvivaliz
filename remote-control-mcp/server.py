@@ -2376,6 +2376,9 @@ def execute_tool(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     host = args.get("host")
+    # Retired hosts are denied even before lease checks, transports and handlers.
+    if isinstance(host, str) and host in RETIRED_HOSTS:
+        raise ValueError("retired_host_not_executable")
     _assert_runtime_mutation(name, args)
     _assert_conversation_mutation(name, args)
     if name in {"marina_cart_preview", "marina_cart_retire_source"}:
