@@ -115,9 +115,9 @@ def test_workflow_disables_retired_full_bootstrap_and_keeps_backend_only():
     assert "Install only the backend MCP services" in yml
     assert "scripts/remote_mcp_bootstrap_scope.py" in yml
     assert "sudo -n bash scripts/setup-remote-control-browser-mcp.sh" in yml
-    assert "Bootstrap Windows reverse SSH relays" in yml
+    assert "Bootstrap Windows reverse SSH relays" not in yml
     assert "DECOMMISSIONED_SOURCE_GUARD_20261029" in yml
-    assert "if: ${{ false }}" in yml
+    assert "  bootstrap:" not in yml, "retired four-host job must be absent"
 
 
 if __name__ == "__main__":
