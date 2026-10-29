@@ -2,6 +2,17 @@ name: Google Ads Config CI
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/google_ads_legacy_budget_policy.py"
+      - "scripts/google_ads_antique_decore_*.py"
+      - "scripts/google_ads_operator_core_recovery.py"
+      - "scripts/google_ads_sales_round1_delivery.py"
+      - "tests/test_google_ads_legacy_budget_policy.py"
+      - ".github/workflows/google-ads-antique-decore-status.yml"
+      - ".github/workflows/google-ads-core-recovery.yml"
+      - ".github/workflows/sales-round-01-google-ads-delivery.yml"
+      - ".github/workflows/google-ads-config-ci.yml"
   push:
     branches: [main]
     paths:
@@ -14,6 +25,14 @@ on:
       - "scripts/google_ads_create_search_campaign.py"
       - "scripts/google_ads_api_activation.py"
       - "scripts/launch_google_ads.py"
+      - "scripts/google_ads_legacy_budget_policy.py"
+      - "scripts/google_ads_antique_decore_*.py"
+      - "scripts/google_ads_operator_core_recovery.py"
+      - "scripts/google_ads_sales_round1_delivery.py"
+      - "tests/test_google_ads_legacy_budget_policy.py"
+      - ".github/workflows/google-ads-antique-decore-status.yml"
+      - ".github/workflows/google-ads-core-recovery.yml"
+      - ".github/workflows/sales-round-01-google-ads-delivery.yml"
       - ".github/workflows/google-ads-config-ci.yml"
 
 permissions:
@@ -40,6 +59,9 @@ jobs:
 
       - name: Validate safe legacy launcher summary
         run: python scripts/launch_google_ads.py
+
+      - name: Verify retired Ads writers refuse before client or network access
+        run: python tests/test_google_ads_legacy_budget_policy.py
 
   live-readonly-audit:
     if: github.event_name == 'workflow_dispatch'

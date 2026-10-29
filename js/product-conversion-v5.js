@@ -100,7 +100,7 @@
             window.dispatchEvent(new CustomEvent('shopvivaliz:add_to_cart', {
                 detail: { product_id: product.olist_product_id, sku: product.sku, quantity: product.quantity }
             }));
-            window.location.href = '/carrinho';
+            window.location.href = '/checkout';
         }, true);
     }
 

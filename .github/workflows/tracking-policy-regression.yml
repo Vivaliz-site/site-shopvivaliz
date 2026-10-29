@@ -5,6 +5,27 @@ on:
       - 'includes/analytics-gtm-policy.php'
       - 'includes/analytics-tracking.php'
       - 'includes/head-analytics.php'
+      - 'includes/order-request-context.php'
+      - 'includes/ga4-order-conversion.php'
+      - 'checkout.php'
+      - 'includes/order-idempotency.php'
+      - 'includes/checkout-output-hardening.php'
+      - 'tests/checkout-payment-retry-regression.cjs'
+      - 'tests/order-idempotency-context-test.php'
+      - 'includes/order-payment-amounts.php'
+      - 'includes/mercadopago-gateway.php'
+      - 'includes/infinitepay-gateway.php'
+      - 'tests/payment-order-total-regression-test.php'
+      - 'tests/mercadopago-payment-tests.php'
+      - 'tests/infinitepay-approved-order-flow-test.php'
+      - 'js/shopvivaliz-google-events.js'
+      - 'js/privacy-consent-v1.js'
+      - 'tests/analytics-session-consent-regression-test.cjs'
+      - 'tests/ga4-order-identity-consent-test.php'
+      - 'tests/google-ads-attribution-and-cro-test.php'
+      - 'js/product-conversion-v5.js'
+      - 'produto.php'
+      - 'tests/product-buy-now-runtime.test.cjs'
       - 'tests/google-ads-v5-regression-test.php'
       - 'tests/test_ecommerce_live_production_scope.py'
       - '.github/workflows/tracking-policy-regression.yml'
@@ -39,6 +60,27 @@ on:
       - 'includes/analytics-gtm-policy.php'
       - 'includes/analytics-tracking.php'
       - 'includes/head-analytics.php'
+      - 'includes/order-request-context.php'
+      - 'includes/ga4-order-conversion.php'
+      - 'checkout.php'
+      - 'includes/order-idempotency.php'
+      - 'includes/checkout-output-hardening.php'
+      - 'tests/checkout-payment-retry-regression.cjs'
+      - 'tests/order-idempotency-context-test.php'
+      - 'includes/order-payment-amounts.php'
+      - 'includes/mercadopago-gateway.php'
+      - 'includes/infinitepay-gateway.php'
+      - 'tests/payment-order-total-regression-test.php'
+      - 'tests/mercadopago-payment-tests.php'
+      - 'tests/infinitepay-approved-order-flow-test.php'
+      - 'js/shopvivaliz-google-events.js'
+      - 'js/privacy-consent-v1.js'
+      - 'tests/analytics-session-consent-regression-test.cjs'
+      - 'tests/ga4-order-identity-consent-test.php'
+      - 'tests/google-ads-attribution-and-cro-test.php'
+      - 'js/product-conversion-v5.js'
+      - 'produto.php'
+      - 'tests/product-buy-now-runtime.test.cjs'
       - 'tests/google-ads-v5-regression-test.php'
       - 'tests/test_ecommerce_live_production_scope.py'
       - '.github/workflows/tracking-policy-regression.yml'
@@ -81,6 +123,9 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Lint and verify tracking without network or purchase events
         run: |
           set -euo pipefail
@@ -88,6 +133,25 @@ jobs:
           php -l includes/analytics-gtm-policy.php
           php -l includes/analytics-tracking.php
           php -l includes/head-analytics.php
+          php -l includes/order-request-context.php
+          php -l includes/ga4-order-conversion.php
+          php -l checkout.php
+          php -l includes/order-idempotency.php
+          php tests/order-idempotency-context-test.php
+          node tests/checkout-payment-retry-regression.cjs
+          php -l includes/order-payment-amounts.php
+          php -l includes/mercadopago-gateway.php
+          php -l includes/infinitepay-gateway.php
+          php -l tests/payment-order-total-regression-test.php
+          php -l tests/mercadopago-payment-tests.php
+          php -l tests/infinitepay-approved-order-flow-test.php
+          php tests/payment-order-total-regression-test.php
+          php tests/mercadopago-payment-tests.php
+          php tests/infinitepay-approved-order-flow-test.php
+          php tests/ga4-order-identity-consent-test.php
+          php tests/google-ads-attribution-and-cro-test.php
+          node tests/analytics-session-consent-regression-test.cjs
+          node tests/product-buy-now-runtime.test.cjs
           php tests/google-ads-v5-regression-test.php
           php tests/google-ads-ga4-health-test.php
           python3 tests/test_ecommerce_live_production_scope.py

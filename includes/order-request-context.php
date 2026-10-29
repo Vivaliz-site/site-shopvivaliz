@@ -33,33 +33,26 @@ function svorc_ga_client_id_from_cookie(): string {
 /**
  * Returns the GA4 session cookie for the active web stream.
  *
- * Since February 2026 GA4 Measurement Protocol accepts the full session cookie
- * as session_id. Persisting it with the browser client_id lets the approved
- * server-side purchase join the same tagged session instead of becoming an
- * unattributed offline event. We only read it after explicit site consent.
+ * Persist only the configured stream's cookie. Retired streams may still have
+ * cookies in returning browsers; using the first _ga_* cookie can join a
+ * purchase to the wrong session. The purchase sender normalizes this cookie
+ * to a numeric session_id. Read it only after explicit site consent.
  */
 function svorc_ga_session_cookie(): string {
     if (!hash_equals('accepted', (string)($_COOKIE['sv_privacy_consent'] ?? ''))) {
         return '';
     }
 
-    foreach ($_COOKIE as $name => $value) {
-        if (!is_string($name) || !str_starts_with($name, '_ga_') || !is_scalar($value)) {
-            continue;
-        }
-
-        $cookie = trim((string)$value);
-        if ($cookie === '' || strlen($cookie) > 96) {
-            continue;
-        }
-
-        // GA4 session cookies use GS* formats and can contain dots and "$".
-        if (preg_match('/^GS\d+(?:\.\d+)?[A-Za-z0-9.$_-]*$/', $cookie) === 1) {
-            return $cookie;
-        }
+    $measurementId = trim((string)(getenv('GA4_ID') ?: getenv('GOOGLE_ANALYTICS_ID') ?: getenv('GOOGLE_ANALYTICS') ?: getenv('GOOGLE_ANALITYCS') ?: 'G-1H55K1TZ5D'));
+    if (preg_match('/^G-[A-Z0-9]+$/i', $measurementId) !== 1) {
+        return '';
     }
-
-    return '';
+    $value = $_COOKIE['_ga_' . substr($measurementId, 2)] ?? '';
+    if (!is_scalar($value)) return '';
+    $cookie = trim((string)$value);
+    if ($cookie === '' || strlen($cookie) > 96) return '';
+    // GA4 session cookies use GS* formats and can contain dots and "$".
+    return preg_match('/^GS\d+(?:\.\d+)?[A-Za-z0-9.$_-]*$/', $cookie) === 1 ? $cookie : '';
 }
 
 /**
@@ -145,6 +138,13 @@ function svorc_set(array $body, array $resolvedItems): void {
         }
     }
     if (!$consentAccepted) {
+        // Checkout can submit a GA identity saved before consent was revoked.
+        // It must not become an attributable server-side purchase. Preserve
+        // the historical random first-party fallback for compatibility.
+        $identityParts = explode('|', trim((string)($body['funnel_client_id'] ?? '')), 2);
+        if (preg_match('/^\d+\.\d+$/D', trim((string)($identityParts[0] ?? ''))) === 1) {
+            $body['funnel_client_id'] = '';
+        }
         foreach (['gclid','gbraid','wbraid','dclid','utm_source','utm_medium','utm_campaign','utm_content'] as $key) {
             $body[$key] = '';
         }
