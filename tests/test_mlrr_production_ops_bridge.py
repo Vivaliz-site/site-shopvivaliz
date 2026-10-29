@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 WF = ROOT / ".github" / "workflows" / "mlrr-production-ops-bridge.yml"
@@ -18,9 +19,15 @@ def test_bridge_is_manual_auditable_and_fail_closed() -> None:
     assert "- rollout" in text
     assert "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]" in text
 
-    assert "github.event.issue.number == 1586" in text
-    assert "github.event.comment.user.login == 'fredmourao-ai'" in text
-    assert "startsWith(github.event.comment.body, '/mlrr ')" in text
+    # The source host was retired on 2026-10-29. Its permanent job guard
+    # supersedes the old issue-comment authorization; it must never execute.
+    jobs = text.split("jobs:\n", 1)[1]
+    assert re.findall(r"(?m)^  ([A-Za-z_][\w-]*):\s*$", jobs) == ["operate"]
+    header = jobs.split("  operate:\n", 1)[1].split("    steps:\n", 1)[0]
+    conditions = re.findall(r"(?m)^    if:\s*([^\n]+)$", header)
+    assert len(conditions) == 1, "retired job must have one unambiguous guard"
+    assert re.fullmatch(r"\$\{\{\s*false\s*\}\}\s*(?:#.*)?", conditions[0])
+    assert "RETIRED_SOURCE_JOB_GUARD_20261029" in header
     assert r"/mlrr\s+operation=(prepare|cutover|validate|shadow|preflight|rollout)" in text
 
     assert "uses: actions/checkout@v4" in text

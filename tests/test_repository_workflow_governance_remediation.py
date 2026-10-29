@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 import subprocess
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -100,8 +101,69 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
     def test_production_functional_audit_has_no_push_trigger(self):
         triggers = self.trigger_body("production-functional-audit.yml")
         self.assertRegex(triggers, r"(?m)^  workflow_dispatch:\s*$")
-        self.assertRegex(triggers, r"(?m)^  schedule:\s*$")
-        self.assertNotRegex(triggers, r"(?m)^  push:\s*$")
+        self.assertNotRegex(triggers, r"(?m)^  (?:push|schedule|workflow_run|issue_comment):")
+
+        # The deleted source remains disabled; scheduling belongs to Marina.
+        retired = self.text("production-functional-audit.yml")
+        jobs = retired.split("jobs:\n", 1)[1]
+        self.assertEqual(re.findall(r"(?m)^  ([A-Za-z_][\w-]*):\s*$", jobs), ["functional"])
+        header = jobs.split("  functional:\n", 1)[1].split("    steps:\n", 1)[0]
+        conditions = re.findall(r"(?m)^    if:\s*([^\n]+)$", header)
+        self.assertEqual(len(conditions), 1, "retired job must have one unambiguous guard")
+        self.assertRegex(conditions[0], r"^\$\{\{\s*false\s*\}\}\s*(?:#.*)?$")
+        self.assertIn("RETIRED_SOURCE_JOB_GUARD_20261029", header)
+
+        marina = self.text("production-functional-audit-marina.yml")
+        marina_triggers = self.trigger_body("production-functional-audit-marina.yml")
+        self.assertRegex(marina_triggers, r"(?m)^  workflow_dispatch:\s*$")
+        self.assertRegex(marina_triggers, r"(?m)^  schedule:\s*$")
+        self.assertNotRegex(marina_triggers, r"(?m)^  (?:push|workflow_run|issue_comment):")
+        marina_jobs = marina.split("jobs:\n", 1)[1]
+        self.assertEqual(re.findall(r"(?m)^  ([A-Za-z_][\w-]*):\s*$", marina_jobs), ["functional"])
+        marina_header = marina_jobs.split("  functional:\n", 1)[1].split("    steps:\n", 1)[0]
+        self.assertEqual(
+            re.findall(r"(?m)^    if:\s*([^\n]+)$", marina_header),
+            ["github.repository == 'Vivaliz-site/site-shopvivaliz'"],
+        )
+        self.assertEqual(
+            re.findall(r"(?m)^    runs-on:[ \t]*([^\n]+)$", marina_header),
+            ["[self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]"],
+        )
+        self.assertIn("environment: production", marina_header)
+        self.assertRegex(
+            marina,
+            r'(?m)^ {10,}test "\$\(hostname -s\)" = "marina-a1-4c24g"[ \t]*$',
+        )
+        self.assertIn("AUDIT_TARGET_IP: 127.0.0.1", marina)
+        self.assertIn("StrictHostKeyChecking=yes", marina)
+        self.assertIn("tests/test_production_functional_audit_contract.py", marina)
+        self.assertIn('bash "$stage/production-functional-audit.sh"', marina)
+        self.assertIn("PRODUCTION_FUNCTIONAL_AUDIT_MARINA=FAIL", marina)
+        self.assertNotIn("shopvivaliz-free-a1", marina)
+        self.assertNotIn("10.0.1.112", marina)
+
+    def test_marina_audit_contract_rejects_commented_guards(self):
+        original_text = self.text
+        marina = original_text("production-functional-audit-marina.yml")
+        runner = "    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]"
+        hostname = 'test "$(hostname -s)" = "marina-a1-4c24g"'
+        mutations = {
+            "commented runner with hosted replacement": marina.replace(
+                runner, runner.replace("runs-on:", "# runs-on:") + "\n    runs-on: ubuntu-latest"
+            ),
+            "commented hostname checks": marina.replace(hostname, "# " + hostname),
+        }
+        for label, mutated in mutations.items():
+            with self.subTest(label=label):
+                self.assertNotEqual(mutated, marina)
+                with patch.object(
+                    self, "text",
+                    side_effect=lambda name, fixture=mutated: (
+                        fixture if name == "production-functional-audit-marina.yml" else original_text(name)
+                    ),
+                ):
+                    with self.assertRaises(AssertionError, msg=label):
+                        self.test_production_functional_audit_has_no_push_trigger()
 
 
     def test_repository_governance_fails_closed_on_global_workflow_debt(self):
