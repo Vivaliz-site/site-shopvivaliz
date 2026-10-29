@@ -26,12 +26,24 @@ svclf_assert(count($tinyV3Rows) === count($decoded), 'snapshot alternativo so po
 require_once $root . '/includes/catalog-runtime.php';
 svclf_assert(svcr_fallback_products($root) === [], 'fallback legado nao pode publicar produtos');
 $products = svcr_products();
-svclf_assert(count($products) > 0, 'snapshot ERP Tiny V3 autorizado deve manter o catalogo disponivel sem cache runtime');
+$primary = $root . '/storage/products-cache-ativos.json';
 
 ob_start();
 require $root . '/google-merchant-feed.php';
 $feed = (string)ob_get_clean();
 $itemCount = substr_count($feed, '<item>');
-svclf_assert($itemCount > 0, 'Merchant feed deve usar o snapshot ERP Tiny V3 autorizado quando o cache runtime estiver ausente');
 
-printf("catalog-live-tiny-v3-authority: ok products=%d merchant_items=%d erp_rows=%d\n", count($products), $itemCount, count($decoded));
+// A V3-only snapshot does not attest the Amazon (991) price table. Under an
+// absent runtime cache we must fail closed, not publish misleading offers.
+if (!is_file($primary)) {
+    svclf_assert($products === [], 'cache ausente nao pode ressuscitar precos de snapshot sem Amazon 991');
+    svclf_assert($itemCount === 0, 'Merchant sem catalogo Amazon confirmado nao pode publicar ofertas legadas');
+} else {
+    $cache = json_decode((string)file_get_contents($primary), true);
+    svclf_assert(is_array($cache) && (int)($cache['price_list_id'] ?? 0) === 991,
+        'catalogo runtime deve provar tabela Amazon 991');
+    svclf_assert(count($products) > 0, 'cache Amazon 991 presente deve alimentar o catalogo');
+    svclf_assert($itemCount > 0, 'Merchant deve anunciar itens somente do cache Amazon 991');
+}
+
+printf("catalog-live-amazon-authority: ok products=%d merchant_items=%d legacy_rows=%d\n", count($products), $itemCount, count($decoded));

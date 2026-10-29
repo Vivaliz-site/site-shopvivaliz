@@ -355,19 +355,9 @@ function svcr_products(): array
         }
         if ($items === [] && array_is_list($payload)) $items = $payload;
     }
-    if ($items === []) {
-        $erpSnapshot = $root . '/api/catalog/fallback-products.json';
-        $snapshotPayload = is_file($erpSnapshot) ? json_decode((string)file_get_contents($erpSnapshot), true) : [];
-        if (is_array($snapshotPayload) && array_is_list($snapshotPayload)) {
-            $allTinyV3 = true;
-            foreach ($snapshotPayload as $candidateItem) {
-                if (!is_array($candidateItem)) { $allTinyV3 = false; break; }
-                $source = strtolower(trim((string)($candidateItem['sync_source'] ?? '')));
-                if ($source !== 'tiny_v3') { $allTinyV3 = false; break; }
-            }
-            if ($allTinyV3) $items = $snapshotPayload;
-        }
-    }
+    // Fail closed when no authoritative catalog has been published.
+    // A legacy snapshot marked only tiny_v3 does not prove Amazon-table
+    // price provenance and could silently resurrect stale commercial prices.
     if ($items === []) return [];
 
     $contentIndex = svcr_content_index($root);

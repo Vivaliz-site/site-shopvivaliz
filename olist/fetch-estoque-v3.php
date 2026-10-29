@@ -5,6 +5,14 @@
  */
 declare(strict_types=1);
 
+// Stock reconciliation is operational CLI maintenance, not an HTTP API.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['ok' => false, 'error' => 'cli_only']);
+    exit;
+}
+
 function fev3_env(string ...$keys): string
 {
     static $loaded = false;
@@ -154,6 +162,11 @@ function enrich_cache_with_estoque_v3(): array
     }
 
     try {
+        clearstatcache(true, $cacheFile);
+        $baselineStat = @stat($cacheFile);
+        if (!is_array($baselineStat)) {
+            return ['success' => false, 'total' => 0, 'updated' => 0, 'unresolved' => 0, 'available' => 0, 'error' => 'cache_revision_unavailable'];
+        }
         $cache = json_decode((string)file_get_contents($cacheFile), true);
         $items = is_array($cache['itens'] ?? null) ? $cache['itens'] : [];
         if ($items === []) {
@@ -207,13 +220,34 @@ function enrich_cache_with_estoque_v3(): array
         $cache['estoque_unresolved'] = $unresolved;
         $cache['estoque_available'] = $available;
 
-        $tmp = $cacheFile . '.tmp.' . getmypid();
-        $json = json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
-        if (!is_string($json) || file_put_contents($tmp, $json, LOCK_EX) === false || !rename($tmp, $cacheFile)) {
-            @unlink($tmp);
-            return ['success' => false, 'total' => $total, 'updated' => $updated, 'unresolved' => $unresolved, 'available' => $available, 'error' => 'atomic_cache_write_failed'];
+        // The canonical daemon and the webhook share this lock. The
+        // lengthy stock reads run outside it; compare the original inode
+        // inside the lock so an older stock snapshot cannot clobber a
+        // newer Amazon price/stock update.
+        $shared = fopen($root . '/storage/olist-erp-webhook.lock', 'c+');
+        if ($shared === false || !flock($shared, LOCK_EX)) {
+            if (is_resource($shared)) fclose($shared);
+            return ['success' => false, 'total' => $total, 'updated' => $updated, 'unresolved' => $unresolved, 'available' => $available, 'error' => 'catalog_shared_lock_failed'];
         }
-
+        try {
+            clearstatcache(true, $cacheFile);
+            $currentStat = @stat($cacheFile);
+            if (!is_array($currentStat)
+                || $currentStat['ino'] !== $baselineStat['ino']
+                || $currentStat['size'] !== $baselineStat['size']
+                || $currentStat['mtime'] !== $baselineStat['mtime']) {
+                return ['success' => false, 'total' => $total, 'updated' => 0, 'unresolved' => $unresolved, 'available' => 0, 'error' => 'catalog_changed_during_stock_refresh'];
+            }
+            $tmp = $cacheFile . '.tmp.' . getmypid();
+            $json = json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
+            if (!is_string($json) || file_put_contents($tmp, $json, LOCK_EX) === false || !rename($tmp, $cacheFile)) {
+                @unlink($tmp);
+                return ['success' => false, 'total' => $total, 'updated' => $updated, 'unresolved' => $unresolved, 'available' => $available, 'error' => 'atomic_cache_write_failed'];
+            }
+        } finally {
+            flock($shared, LOCK_UN);
+            fclose($shared);
+        }
         return ['success' => true, 'total' => $total, 'updated' => $updated, 'unresolved' => $unresolved, 'available' => $available];
     } finally {
         flock($lock, LOCK_UN);
