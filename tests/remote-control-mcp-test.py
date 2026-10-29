@@ -1728,7 +1728,7 @@ class BootstrapContractTests(unittest.TestCase):
             "python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py",
             text,
         )
-        self.assertIn("python3 tests/remote-control-browser-mcp-test.py", text)
+        self.assertIn("python3 tests/test_shopvivaliz_display_recovery.py", text)
         self.assertIn("bash -n scripts/setup-remote-control-browser-mcp.sh", text)
         self.assertIn(
             "sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
