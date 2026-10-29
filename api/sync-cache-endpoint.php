@@ -5,6 +5,7 @@ header('Cache-Control: no-store');
 
 $root = dirname(__DIR__);
 require_once $root . '/includes/storefront-image-source.php';
+require_once $root . '/includes/erp-amazon-price.php';
 
 $storageDir = $root . '/storage';
 if (!is_dir($storageDir)) {
@@ -22,6 +23,16 @@ try {
     if ($token === '') {
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'missing_token']);
+        exit;
+    }
+
+    // The manual cache rebuild must use the SAME ERP Amazon list as the daemon.
+    // On a provider error do not overwrite the last good catalog with cadastro prices.
+    try {
+        $amazonTable = sveap_read_table($token);
+    } catch (Throwable $e) {
+        http_response_code(503);
+        echo json_encode(['success' => false, 'error' => 'amazon_price_table_unavailable']);
         exit;
     }
 
@@ -104,7 +115,20 @@ try {
         unset($item);
     }
 
+    try {
+        foreach ($items as &$item) {
+            $item = sveap_apply_table($item, $amazonTable);
+        }
+        unset($item);
+    } catch (Throwable $e) {
+        http_response_code(503);
+        echo json_encode(['success' => false, 'error' => 'amazon_price_table_application_failed']);
+        exit;
+    }
+
     $payload = [
+        'price_source' => 'olist_tiny_amazon',
+        'price_list_id' => SV_AMAZON_PRICE_LIST_ID,
         'success' => true,
         'total' => count($items),
         'updated_at' => gmdate(DATE_ATOM),
