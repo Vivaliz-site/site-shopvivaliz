@@ -17,6 +17,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 ## Documentos principais
 
+- [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md) — **inventario operacional apos exclusao da VM origem: Marina web/deploy, backend PRINCIPAL, rotas RDC/SSH/OCI, MCP central desatualizado e MCP independente Marina inativo; prova e limites do runtime em 2026-10-29.**
 - [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts e acesso; Remote Control MCP é a rota operacional primária, com SSH privado/Tailscale e OCI Bastion/GitHub apenas nas condições documentadas.**
 - [`claude-vm-bootstrap.md`](claude-vm-bootstrap.md) — memória global do Claude na VM: projetos, hosts, navegador na VM, pesquisa técnica atual na web, segurança e fluxo de entrega.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
@@ -57,7 +58,7 @@ Outros documentos existentes na pasta podem registrar versões, dispositivos, de
 
 Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta ordem:
 
-1. `host-access.md` — descobrir o host e o método de acesso corretos;
+1. `host-access.md` e `current-topology-and-access-2026-10-29.md` — descobrir o host e o metodo de acesso corretos, sem usar a origem excluida;
 2. `agent-rules.md` — aplicar regras de evidência e segurança;
 3. `project.md` — entender o sistema e seus módulos;
 4. para o `@dev`/agente programador adicional, `dev-agent-briefing.md`;
