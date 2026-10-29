@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T13:59:21.295Z",
+  "generated_at": "2026-10-29T15:49:17.102Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -57,9 +57,9 @@
       "source_bytes": 550
     },
     "/js/catalog.js": {
-      "file": "/public/dist/js/catalog.eefcff7ba4.min.js",
-      "bytes": 16025,
-      "source_bytes": 18587
+      "file": "/public/dist/js/catalog.9fe96866be.min.js",
+      "bytes": 15989,
+      "source_bytes": 18553
     },
     "/js/category-real-images-v52.js": {
       "file": "/public/dist/js/category-real-images-v52.2a917c4e2d.min.js",
