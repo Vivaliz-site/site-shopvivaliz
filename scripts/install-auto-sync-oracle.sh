@@ -27,6 +27,33 @@ fi
 
 mkdir -p "$LOG_DIR"
 
+# A single canonical scheduler avoids simultaneous duplicate syncs. The
+# systemd timer is the primary scheduler on Marina; cron is a fallback ONLY
+# when the timer is not both enabled and active. Both scripts already take the
+# same repository lock, but the cron wrapper additionally owns the deploy
+# lock and can interfere with a legitimate release cutover.
+if command -v systemctl >/dev/null 2>&1 \
+  && systemctl is-enabled --quiet shopvivaliz-sync-safe.timer \
+  && systemctl is-active --quiet shopvivaliz-sync-safe.timer; then
+  if command -v crontab >/dev/null 2>&1; then
+    crontab -l > "$CRON_FILE" 2>/dev/null || : > "$CRON_FILE"
+    if grep -E 'auto-sync-oracle\\.sh|safe-repo-sync\\.sh' "$CRON_FILE" >/dev/null; then
+      python3 - "$CRON_FILE" <<'PY'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+safe = [line for line in lines if "auto-sync-oracle.sh" not in line and "safe-repo-sync.sh" not in line]
+p.write_text("\\n".join(safe) + ("\\n" if safe else ""), encoding="utf-8")
+PY
+      crontab "$CRON_FILE"
+      echo 'SAFE_SYNC_CRON_DUPLICATE_REMOVED=YES'
+    fi
+  fi
+  echo 'SAFE_SYNC_SYSTEMD_CANONICAL=PASS'
+  exit 0
+fi
+
 if ! command -v crontab >/dev/null 2>&1; then
   if systemctl is-enabled --quiet shopvivaliz-sync-safe.timer \
     && systemctl is-active --quiet shopvivaliz-sync-safe.timer; then
