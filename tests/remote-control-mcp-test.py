@@ -165,7 +165,8 @@ class RemoteControlMcpTests(unittest.TestCase):
         for required in ("AGENT_TASK_STATE_SOURCE", "CONTINUITY_SOURCE_DIR", "agent_task_state.py", "conversation_lease.py", "runtime_lock.py", "mutation_gate.py", "foreground_handoff.py"):
             self.assertIn(required, setup)
         bootstrap=(ROOT/".github"/"workflows"/"remote-control-mcp-bootstrap.yml").read_text()
-        self.assertIn("scripts/agent_task_state.py scripts/continuity", bootstrap)
+        self.assertIn("scripts/continuity/checkpoint_update_atomic.py", bootstrap)
+        self.assertNotIn("\n  bootstrap:\n", bootstrap)
         bastion=(ROOT/".github"/"workflows"/"oci-bastion-private-access-bootstrap.yml").read_text()
         for required in ("agent_task_state.py", "conversation_lease.py", "runtime_lock.py", "mutation_gate.py", "foreground_handoff.py"):
             self.assertIn(required, bastion)
@@ -1706,15 +1707,12 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("REMOTE_CONTROL_WINDOWS_SSHD=PASS", text)
         self.assertIn("openssh_binary_missing_after_capability", text)
 
-    def test_bootstrap_workflow_is_single_complete_sequence(self):
+    def test_retired_four_host_bootstrap_is_structurally_absent(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertEqual(text.count("- name: Four-host live MCP health validation"), 1)
-        self.assertEqual(text.count("- name: Persist sanitized bootstrap evidence"), 1)
-        self.assertNotIn("          PY\\n          PY\\n", text)
-        self.assertEqual(text.count("- name: Cleanup bootstrap material"), 1)
-        self.assertIn("test \"$(grep -cv '^#' \"$tmp\")\" -ge 3", text)
-        self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
-        self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
+        self.assertIn("  browser_only:", text)
+        self.assertIn("  backend_controller_only:", text)
+        self.assertNotIn("\n  bootstrap:\n", text)
+        self.assertNotIn("ubuntu@10.0.1.112", text)
 
     def test_bootstrap_tracks_validates_and_installs_browser_mcp_from_same_checkout(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
@@ -1737,89 +1735,50 @@ class BootstrapContractTests(unittest.TestCase):
             text,
         )
 
-    def test_bootstrap_stages_native_fred_desktop_bridge_from_canonical_checkout(self):
+    def test_retired_bootstrap_does_not_stage_native_fred_bridge(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertIn("- name: Stage native Fred-Win desktop bridge", text)
-        start = text.index("- name: Stage native Fred-Win desktop bridge")
-        block = text[start:]
-        self.assertIn("scripts/shopvivaliz-native-desktop-bridge.ps1", block)
-        self.assertIn("/var/lib/shopvivaliz-remote-control/id_ed25519", block)
-        self.assertIn("127.0.0.1", block)
-        self.assertIn("2222", block)
-        self.assertIn("Parser]::ParseFile", block)
-        self.assertIn("REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS", block)
-        self.assertNotIn("git show origin/main:scripts/shopvivaliz-native-desktop-bridge.ps1", block)
+        self.assertNotIn("- name: Stage native Fred-Win desktop bridge", text)
+        self.assertTrue((ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").is_file())
 
-    def test_bootstrap_runs_on_controller_backend(self):
+    def test_backend_controller_uses_restricted_install_only(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]", text)
-        self.assertIn("sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service", text)
-        self.assertNotIn("ubuntu@10.0.1.38)", text)
-        self.assertIn("ubuntu@10.0.1.112", text)
+        self.assertIn("install-controller-code-only", text)
+        self.assertNotIn("install-controller remote-control-mcp/server.py", text)
+        self.assertNotIn("ubuntu@10.0.1.112", text)
 
     def test_oci_bastion_bootstrap_copies_and_passes_canonical_controller_unit(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn('"${BACKEND_SCP[@]}" -r remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity ubuntu@127.0.0.1:/tmp/', text)
         self.assertIn('install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service /tmp/agent_task_state.py /tmp/continuity', text)
 
-    def test_bootstrap_uses_reverse_ssh_for_windows(self):
+    def test_retired_four_host_workflow_cannot_bootstrap_windows_reverse_ssh(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertIn("ssh_protocol_alive 2222", text)
-        self.assertIn("ssh_protocol_alive 2223", text)
-        self.assertNotIn("32222:127.0.0.1:2222", text)
-        self.assertNotIn("32223:127.0.0.1:2223", text)
-        self.assertIn("http://127.0.0.1:5558/mcp/tool/execute_command", text)
-        self.assertNotIn("tailscale status --json", text)
-        self.assertNotIn("</dev/tcp/$fred_ip/22", text)
-        self.assertNotIn("</dev/tcp/$desk_ip/22", text)
-        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
-        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
+        self.assertNotIn("ssh_protocol_alive 2222", text)
+        self.assertNotIn("ssh_protocol_alive 2223", text)
+        self.assertNotIn("REMOTE_CONTROL_FRED_REVERSE_SSH=FAIL", text)
 
-    def test_fred_bootstrap_recovers_missing_2222_via_legacy_relay(self):
+    def test_retired_workflow_does_not_launch_legacy_fred_relay(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertIn("http://127.0.0.1:5557/mcp/tool/execute_command", text)
-        self.assertIn("'scripts/ssh-tunnel-service-managed.ps1'", text)
-        self.assertIn("'scripts/fredwin-remote-bootstrap.ps1'", text)
-        self.assertIn("REMOTE_CONTROL_FRED_STAGE=PASS", text)
-        self.assertIn("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS", text)
-        self.assertIn('REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUED=PASS', text)
-        self.assertIn("REMOTE_CONTROL_{label}_SSHD_RECOVERY_STAGE=PASS", text)
-        self.assertIn("windows-openssh-recovery.ps1", text)
-        self.assertIn("git show 'origin/main:scripts/windows-openssh-recovery.ps1'", text)
-        self.assertIn("Start-Process -FilePath 'powershell.exe'", text)
-        self.assertIn('peers = (("FRED", 5557), ("KOCEPSV", 5558))', text)
-        self.assertNotIn("inner_b64", text)
-        self.assertIn("ssh_protocol_alive() {", text)
-        self.assertIn("ssh-keyscan -T 5 -p", text)
-        self.assertIn("REMOTE_CONTROL_FRED_REVERSE_SSH=FAIL protocol_handshake_unavailable", text)
+        self.assertNotIn("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS", text)
+        self.assertNotIn("REMOTE_CONTROL_FRED_STAGE=PASS", text)
 
-    def test_windows_controller_key_bootstraps_over_recovery_relays(self):
+    def test_retired_workflow_does_not_distribute_windows_controller_keys(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        start = text.index("# Bootstrap the controller public key")
-        end = text.index("- name: Pin private host keys for controller", start)
-        block = text[start:end]
-        self.assertIn('"write_file"', block)
-        self.assertIn("setup-remote-control-windows.ps1", block)
-        self.assertIn("REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS", block)
-        self.assertIn("/var/lib/shopvivaliz-remote-control/id_ed25519", block)
-        self.assertIn("REMOTE_CONTROL_CONTROLLER_KEY_AUTH=PASS", block)
-        self.assertNotIn('remote-control-bootstrap.key" scripts/setup-remote-control-windows.ps1', block)
-        self.assertNotIn(" scp -P \"$port\"", block)
+        self.assertNotIn("# Bootstrap the controller public key", text)
+        self.assertNotIn("REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS", text)
 
-    def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
+    def test_retired_workflow_does_not_restart_kocepsv_relay(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertIn("git fetch origin main", text)
-        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
-        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
-        self.assertIn('git show ("origin/main:" + $rel)', text)
-        self.assertIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", text)
+        self.assertNotIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", text)
         self.assertNotIn("git merge --ff-only origin/main", text)
 
-    def test_four_host_e2e_requires_explicit_stage5_dispatch(self):
+    def test_retired_four_host_e2e_input_cannot_launch_a_job(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("run_e2e:", text)
         self.assertIn("default: false", text)
-        self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.run_e2e == true", text)
+        self.assertNotIn("\n  bootstrap:\n", text)
+        self.assertNotIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
 
     def test_remote_control_ci_push_covers_workflow_changes(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
