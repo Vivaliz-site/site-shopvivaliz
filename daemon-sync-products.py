@@ -191,15 +191,13 @@ def fetch_amazon_table(token: str) -> tuple[Decimal, dict[str, tuple[Decimal, De
         or str(payload.get("descricao", "")).strip().casefold() != "amazon"
         or not isinstance(payload.get("excecoes"), list)):
         raise RuntimeError("amazon_price_table_invalid")
-    percent = price_decimal(payload.get("acrescimoDesconto"), "amazon_percent") if (
-        str(payload.get("acrescimoDesconto", "")).strip() not in ("", "None")
-        and str(payload.get("acrescimoDesconto", "")).strip()[0] != "-"
-    ) else None
-    if percent is None:
-        try:
-            percent = Decimal(str(payload["acrescimoDesconto"]))
-        except (KeyError, InvalidOperation, ValueError, TypeError):
-            raise RuntimeError("amazon_percent_invalid") from None
+    raw_percent = payload.get("acrescimoDesconto")
+    if raw_percent is None or isinstance(raw_percent, bool):
+        raise RuntimeError("amazon_percent_invalid")
+    try:
+        percent = Decimal(str(raw_percent))
+    except (InvalidOperation, ValueError, TypeError):
+        raise RuntimeError("amazon_percent_invalid") from None
     if not percent.is_finite() or percent <= -100 or percent > 1000:
         raise RuntimeError("amazon_percent_invalid")
     exceptions: dict[str, tuple[Decimal, Decimal]] = {}
