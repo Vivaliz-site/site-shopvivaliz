@@ -43,6 +43,10 @@
     }
   }
   function persist(items) {
+    // Invalidate dependent totals BEFORE dispatching a cart-updated event:
+    // the checkout listener immediately renders shipping and summary values.
+    localStorage.removeItem('shopvivaliz_cart_validated_at');
+    localStorage.removeItem('shopvivaliz_shipping_quote');
     if (window.ShopVivalizCart && typeof window.ShopVivalizCart.set === 'function') {
       window.ShopVivalizCart.set(items);
     } else {
@@ -50,8 +54,6 @@
       localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
       window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', {detail: {items: items}}));
     }
-    localStorage.removeItem('shopvivaliz_cart_validated_at');
-    localStorage.removeItem('shopvivaliz_shipping_quote');
   }
   function revalidate() {
     var now = Date.now();
