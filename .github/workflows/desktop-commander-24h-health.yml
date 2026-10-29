@@ -142,7 +142,7 @@ jobs:
           php tests/windows-desktop-commander-stale-cooldown-contract-test.php
 
   runtime:
-    if: github.event_name != 'pull_request'
+    if: ${{ false }} # RETIRED_SOURCE_JOB_GUARD_20261029; preserve contract job
     needs: contract
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 12
