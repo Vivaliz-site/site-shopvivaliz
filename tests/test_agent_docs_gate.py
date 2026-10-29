@@ -37,6 +37,27 @@ class AgentDocsGateTests(unittest.TestCase):
         gate.REQUIRED_DOCS = self.original_required
         self.temp.cleanup()
 
+    def test_mandatory_topology_is_in_real_preflight(self) -> None:
+        self.assertIn(
+            "docs/knowledge/current-topology-and-access-2026-10-29.md",
+            self.original_required,
+        )
+
+    def test_changed_topology_invalidates_receipt(self) -> None:
+        topo_name = "docs/knowledge/current-topology-and-access-2026-10-29.md"
+        gate.REQUIRED_DOCS = (*gate.REQUIRED_DOCS, topo_name)
+        topo = self.root / topo_name
+        topo.parent.mkdir(parents=True, exist_ok=True)
+        topo.write_text("Marina production\n", encoding="utf-8")
+        packet = gate.deliver_read_packet("codex", "topology")
+        gate.acknowledge("codex", "topology", packet["digest"])
+        valid, _, _ = gate.verify_receipt("codex", "topology")
+        self.assertTrue(valid)
+        topo.write_text("Marina production - source retired\n", encoding="utf-8")
+        valid, reason, _ = gate.verify_receipt("codex", "topology")
+        self.assertFalse(valid)
+        self.assertIn("changed", reason)
+
     def test_verify_fails_before_read(self) -> None:
         valid, reason, receipt = gate.verify_receipt("gpt", "task-001")
         self.assertFalse(valid)
