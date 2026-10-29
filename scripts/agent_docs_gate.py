@@ -28,6 +28,7 @@ REQUIRED_DOCS = (
     # not merely cited by AGENTS.md. Any revision invalidates stale receipts.
     "docs/knowledge/atendimento-chatgpt-bootstrap.md",
     "docs/knowledge/host-access.md",
+    "docs/knowledge/current-topology-and-access-2026-10-29.md",
     "docs/knowledge/README.md",
     "docs/knowledge/agent-rules.md",
     "docs/knowledge/task-continuity.md",
