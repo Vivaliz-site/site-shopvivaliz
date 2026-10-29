@@ -104,16 +104,14 @@ def test_empty_or_untrusted_diff_fails_closed():
         assert not scope.is_browser_only(bad)
 
 
-def test_workflow_keeps_full_bootstrap_and_browser_only_separate():
+def test_workflow_disables_retired_full_bootstrap_and_keeps_backend_only():
     yml = (ROOT / ".github/workflows/remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
     assert "needs: scope" in yml
     assert "group: shopvivaliz-remote-control-backend-bootstrap" in yml
     assert "cancel-in-progress: false" in yml
     assert "browser_only: " in yml
     assert "needs.scope.outputs.browser_only == 'true'" in yml
-    assert "needs.scope.outputs.browser_only != 'true'" in yml
     assert "needs.scope.outputs.backend_controller_only == 'true'" in yml
-    assert "needs.scope.outputs.backend_controller_only != 'true'" in yml
     assert "Install only the backend MCP services" in yml
     assert "scripts/remote_mcp_bootstrap_scope.py" in yml
     assert "sudo -n bash scripts/setup-remote-control-browser-mcp.sh" in yml
@@ -130,7 +128,7 @@ if __name__ == "__main__":
     test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap()
     test_code_only_installer_leaves_config_and_other_hosts_untouched()
     test_empty_or_untrusted_diff_fails_closed()
-    test_workflow_keeps_full_bootstrap_and_browser_only_separate()
+    test_workflow_disables_retired_full_bootstrap_and_keeps_backend_only()
     # Run the actual production classifier contract on every PR quality gate.
     # This proves that the restricted MCP-only merge cannot launch a web deploy.
     import subprocess
