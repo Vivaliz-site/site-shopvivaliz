@@ -1,3 +1,15 @@
+<!-- RDC_FRED_ONLY_IDENTITY_GATE_20261030 -->
+## RDC Fred-Win: identidade unica, continuidade e sem retorno para Dev
+
+**Conta exclusiva do Desktop Commander Remote no laptop `LAPTOP-NIG4IFUU`: `fred.discouto@hotmail.com`.** A conta corporativa `dev@shopvivaliz.com.br` permanece valida para seus outros servicos, mas deve ser DESCARTADA como identidade de provedor RDC do laptop. Nunca usar, restaurar, autenticar ou migrar a sessao RDC do laptop para Dev; nao copiar cookies, JWTs, OTPs ou credenciais entre contas.
+
+Antes de reiniciar, atualizar ou recuperar o RDC: consultar `who_am_i` do RDC 1/2 e o `deviceId` atual por `list_devices`, cruzar com o `deviceId` local autorizado e provar a conta Fred. Nao confundir dispositivo online, processo existente ou HTTP 200 com identidade validada. Se o vinculo local nao coincidir, falhar fechado, sem reautenticacao automatica, logout, revogacao ou troca de usuario.
+
+Os agendamentos legados `ShopVivaliz Desktop Commander 24h`, `ShopVivaliz Desktop Commander Task Guardian` e `ShopVivaliz RDC Relink 052` nao devem ser reativados enquanto puderem eliminar a sessao Fred e restaurar uma sessao antiga. O supervisor legado que encerra processos 'noncanonical' nao pode ser usado para recuperar o novo cliente. A recuperacao de Fred deve ser de instancia unica, limitada ao dispositivo previamente vinculado, sem matar processos ativos, usando versao de CLI aprovada com persistencia de sessao e registro nao secreto. Modelo revisado: `scripts/fredwin-rdc-fred-only-guardian.ps1` (a instalacao no Windows requer manutencao autorizada e validacao independente; arquivo Git por si so nao prova implantacao).
+
+**Continuidade:** esgotar os canais REALMENTE disponiveis (MCP central e seus hosts permitidos, RDC 1/2, SSH privado/Tailscale, tuneis independentes autorizados, UI e rotas oficiais de recovery) conforme `host-access.md`. Um bloqueio nao autoriza contornar negacao explicita de seguranca por outro canal. Preservar o RDC Fred online, reportar bloqueios exatos, manter checkpoints e nunca declarar 'estavel para sempre' sem testes de reconexao, logon, persistencia e uso real. PC desligado/suspenso nao pode ser tratado como online.
+<!-- /RDC_FRED_ONLY_IDENTITY_GATE_20261030 -->
+
 <!-- EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
 ## Regra obrigatoria: continuidade ate esgotamento comprovado de rotas autorizadas (2026-10-30)
 
