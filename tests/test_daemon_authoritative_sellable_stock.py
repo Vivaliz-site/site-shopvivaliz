@@ -42,8 +42,12 @@ class ERPSellableStockTest(unittest.TestCase):
     def test_authoritative_field_precedence_and_validation(self):
         self.assertEqual(0, daemon.authoritative_stock_quantity({"disponivel": 0, "saldo": 4, "reservado": 4}))
         self.assertEqual(4, daemon.authoritative_stock_quantity({"disponivel": 4, "saldo": 4, "reservado": 0}))
+        # The real Olist ERP returned -1 and -2 for two products: both are
+        # valid inventory measurements with zero sellable units.
+        self.assertEqual(0, daemon.authoritative_stock_quantity({"disponivel": -1, "saldo": -1, "reservado": 0}))
+        self.assertEqual(0, daemon.authoritative_stock_quantity({"disponivel": -2, "saldo": -2, "reservado": 0}))
         for bad in ({"saldo": 4}, {"disponivel": None}, {"disponivel": True},
-                    {"disponivel": -1}, {"disponivel": "nan"}, {"disponivel": "infinity"}):
+                    {"disponivel": "nan"}, {"disponivel": "infinity"}):
             with self.subTest(bad=bad), self.assertRaises(RuntimeError):
                 daemon.authoritative_stock_quantity(bad)
 

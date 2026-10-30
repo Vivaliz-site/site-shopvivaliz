@@ -335,9 +335,11 @@ def authoritative_stock_quantity(stock_detail: dict[str, Any]) -> int:
         quantity = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         raise RuntimeError("erp_sellable_stock_invalid") from None
-    if not quantity.is_finite() or quantity < 0:
+    if not quantity.is_finite():
         raise RuntimeError("erp_sellable_stock_invalid")
-    return int(quantity)
+    # Negative quantities are valid ERP responses for oversold/reserved
+    # products. There are zero units available to sell, not an API failure.
+    return max(0, int(quantity))
 
 
 def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 4) -> tuple[list[dict[str, Any]], int]:
