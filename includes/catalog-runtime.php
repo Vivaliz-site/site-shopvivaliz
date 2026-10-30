@@ -91,6 +91,25 @@ function svcr_item_price(array $item): float
         : $regular;
 }
 
+
+/**
+ * Google Merchant needs both fields when the authoritative Amazon ERP table
+ * has a promotional value. The storefront price remains the effective
+ * promotional price, while original_price is the regular Amazon 991 value.
+ */
+function svcr_item_original_price(array $item): float
+{
+    $prices = is_array($item['precos'] ?? null)
+        ? $item['precos']
+        : (is_array($item['prices'] ?? null) ? $item['prices'] : []);
+    $regular = svcr_parse_price(
+        $prices['preco'] ?? $prices['preco_venda'] ?? $prices['price']
+        ?? $item['preco'] ?? $item['price'] ?? null
+    );
+    $effective = svcr_item_price($item);
+    return $regular > $effective && $effective > 0 ? $regular : 0.0;
+}
+
 function svcr_clean_description(string $description): string
 {
     $description = trim($description);
@@ -259,17 +278,9 @@ function svcr_select_catalog_products(array $products, array $fallbackProducts):
 {
     $selected = [];
     $seen = [];
-    $skuCounts = [];
     foreach ($products as $product) {
         if (!is_array($product)) continue;
         $sku = svcr_content_key($product['sku'] ?? '');
-        if ($sku !== '') $skuCounts[$sku] = ($skuCounts[$sku] ?? 0) + 1;
-    }
-    foreach ($products as $product) {
-        if (!is_array($product)) continue;
-        $sku = svcr_content_key($product['sku'] ?? '');
-        // Never choose a commercial price arbitrarily from colliding IDs.
-        if ($sku !== '' && ($skuCounts[$sku] ?? 0) > 1) continue;
         $id = svcr_content_key($product['id'] ?? $product['olist_product_id'] ?? '');
         $key = $sku !== '' ? 'sku:' . $sku : 'id:' . $id;
         if ($key !== 'id:' && isset($seen[$key])) continue;
@@ -277,24 +288,6 @@ function svcr_select_catalog_products(array $products, array $fallbackProducts):
         $selected[] = $product;
     }
     return $selected;
-}
-
-/** Preserve explicit duplicate-SKU blocks across public price endpoints. */
-function svcr_is_quarantined_identifier(array $payload, string $sku = '', string $productId = ''): bool
-{
-    $entries = $payload['quarantined_skus'] ?? [];
-    if (!is_array($entries)) return true; // malformed manifest: fail closed
-    foreach ($entries as $blocked) {
-        if (!is_array($blocked)) return true;
-        $blockedSku = trim((string)($blocked['sku'] ?? ''));
-        $ids = $blocked['olist_product_ids'] ?? [];
-        if (!is_array($ids)) return true;
-        if (($sku !== '' && $blockedSku !== '' && strcasecmp(trim($sku), $blockedSku) === 0)
-            || ($productId !== '' && in_array(trim($productId), array_map('strval', $ids), true))) {
-            return true;
-        }
-    }
-    return false;
 }
 
 function svcr_content_key(mixed $value): string
@@ -381,28 +374,15 @@ function svcr_products(): array
         }
         if ($items === [] && array_is_list($payload)) $items = $payload;
     }
-    if ($items === []) {
-        $erpSnapshot = $root . '/api/catalog/fallback-products.json';
-        $snapshotPayload = is_file($erpSnapshot) ? json_decode((string)file_get_contents($erpSnapshot), true) : [];
-        if (is_array($snapshotPayload) && array_is_list($snapshotPayload)) {
-            $allTinyV3 = true;
-            foreach ($snapshotPayload as $candidateItem) {
-                if (!is_array($candidateItem)) { $allTinyV3 = false; break; }
-                $source = strtolower(trim((string)($candidateItem['sync_source'] ?? '')));
-                if ($source !== 'tiny_v3') { $allTinyV3 = false; break; }
-            }
-            if ($allTinyV3) $items = $snapshotPayload;
-        }
-    }
+    // Fail closed when no authoritative catalog has been published.
+    // A legacy snapshot marked only tiny_v3 does not prove Amazon-table
+    // price provenance and could silently resurrect stale commercial prices.
     if ($items === []) return [];
 
     $contentIndex = svcr_content_index($root);
     $products = [];
     foreach ($items as $item) {
         if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
-        // Unverified legacy snapshots or registration prices must never reach
-        // the public catalog even if the numeric amount looks plausible.
-        if (($item['price_source'] ?? '') !== 'olist_pdv' || (int)($item['pdv_list_id'] ?? 0) < 1) continue;
         $content = svcr_content_for_item($item, $contentIndex);
         $imagesList = array_slice(svcr_collect_image_urls($item), 0, 12);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
@@ -434,9 +414,7 @@ function svcr_products(): array
         $products[] = [
             'id'=>(string)($item['id'] ?? $sku), 'sku'=>$sku, 'olist_product_id'=>(string)($item['id'] ?? $item['olist_product_id'] ?? ''),
             'name'=>$name, 'slug'=>svcr_slug($name,$sku), 'description'=>svcr_clean_description($description), 'price'=>$price,
-            'regular_price'=>svcr_parse_price($item['precos']['preco'] ?? null),
-            'promotional_price'=>svcr_parse_price($item['precos']['precoPromocional'] ?? null),
-            'price_source'=>'olist_pdv', 'pdv_list_id'=>(int)$item['pdv_list_id'],
+            'original_price'=>svcr_item_original_price($item),
             'stock'=>max(0,(int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url'=>$image, 'images'=>$imagesList, 'images_count'=>count($imagesList), 'category'=>$categoryName, 'brand'=>$brand,
             'bullet_points'=>$bulletPoints, 'seo_keywords'=>$seoKeywords, 'marketing_hooks'=>$marketingHooks,

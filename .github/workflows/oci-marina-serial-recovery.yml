@@ -1,0 +1,822 @@
+name: OCI Marina serial recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Probe serial/VNC consoles, sanitize console history, or repair through an ephemeral console connection"
+        required: true
+        type: choice
+        options:
+          - probe
+          - history
+          - vnc-probe
+          - validate
+          - repair
+          - cleanup
+        default: probe
+      confirmation:
+        description: "For repair, enter REPAIR_MARINA_SERIAL"
+        required: true
+        type: string
+        default: probe
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-marina-serial-recovery
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 30
+    env:
+      OCI_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
+      OCI_USER: ${{ secrets.OCI_ESPOSA_USER }}
+      OCI_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
+      OCI_INSTANCE_NAME: marina-a1-4c24g
+      OCI_PROFILE: DEFAULT
+      ACTION: ${{ inputs.action }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      CLOUDFLARE_MARINA_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_MARINA_TUNNEL_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Install OCI CLI and JSON tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          python3 -m pip install --disable-pip-version-check --quiet pexpect
+          command -v oci >/dev/null
+          command -v jq >/dev/null
+          command -v ssh-keygen >/dev/null
+          command -v ssh-keyscan >/dev/null
+
+      - name: Create and verify an ephemeral serial console connection
+        env:
+          OCI_KEY_MATERIAL: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+          OCI_VM_KEY_MATERIAL: ${{ secrets.ORACLE_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+
+          api_key="$RUNNER_TEMP/oci-marina-api.pem"
+          config="$RUNNER_TEMP/oci-marina-config"
+          console_key="$RUNNER_TEMP/marina-console"
+          console_pub="$RUNNER_TEMP/marina-console.pub"
+
+          printf '%s\n' "$OCI_KEY_MATERIAL" > "$api_key"
+          chmod 600 "$api_key"
+          cat > "$config" <<EOF
+          [DEFAULT]
+          user=$OCI_USER
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY
+          region=$OCI_REGION
+          key_file=$api_key
+          EOF
+          chmod 600 "$config"
+
+          OCI=(oci --config-file "$config" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$OCI_INSTANCE_NAME'"
+          echo "MARINA_SERIAL_SEARCH_START=PASS"
+          search_count=""
+          for search_attempt in $(seq 1 5); do
+            search_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output 2>/dev/null || true)"
+            if [ "$search_count" = 1 ]; then
+              break
+            fi
+            echo "MARINA_SERIAL_SEARCH_RETRY=$search_attempt"
+            sleep 5
+          done
+          echo "MARINA_SERIAL_SEARCH_COUNT=$search_count"
+          test "$search_count" = 1
+          instance_id=""
+          compartment_id=""
+          instance_json=""
+          lifecycle=""
+          for resolve_attempt in $(seq 1 5); do
+            instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output 2>/dev/null || true)"
+            if [ -n "$instance_id" ] && [ "$instance_id" != null ]; then
+              compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output 2>/dev/null || true)"
+              instance_json="$("${OCI[@]}" compute instance get --instance-id "$instance_id" 2>/dev/null || true)"
+              lifecycle="$(jq -r '.data."lifecycle-state" // empty' <<<"$instance_json" 2>/dev/null || true)"
+              if [ -n "$compartment_id" ] && [ "$compartment_id" != null ] && [ "$lifecycle" = RUNNING ]; then
+                break
+              fi
+            fi
+            echo "MARINA_IDENTITY_RETRY=$resolve_attempt"
+            sleep 5
+          done
+          echo "MARINA_IDENTITY_RESOLUTION=$([ -n "$instance_id" ] && [ -n "$compartment_id" ] && [ "$lifecycle" = RUNNING ] && echo PASS || echo FAIL)"
+          test -n "$instance_id" && test "$instance_id" != null
+          test -n "$compartment_id" && test "$compartment_id" != null
+          test "$lifecycle" = RUNNING
+          echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle"
+
+          if [ "$ACTION" = vnc-probe ]; then
+            ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
+            chmod 600 "$console_key"
+            vnc_create_out="$RUNNER_TEMP/marina-vnc-create.json"
+            vnc_create_code=0
+            "${OCI[@]}" compute instance-console-connection create \
+              --instance-id "$instance_id" \
+              --ssh-public-key-file "$console_pub" >"$vnc_create_out" 2>"$RUNNER_TEMP/marina-vnc-create.err" || vnc_create_code=$?
+            if [ "$vnc_create_code" -ne 0 ]; then
+              echo "MARINA_VNC_CREATE=FAIL exit=$vnc_create_code"
+              exit "$vnc_create_code"
+            fi
+            vnc_connection_id="$(jq -r '.data.id // empty' <"$vnc_create_out")"
+            test -n "$vnc_connection_id"
+            trap '"${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$vnc_connection_id" --force >/dev/null 2>&1 || true' EXIT
+            vnc_state=""
+            vnc_connection_json=""
+            for _ in $(seq 1 36); do
+              vnc_connection_json="$("${OCI[@]}" compute instance-console-connection get --instance-console-connection-id "$vnc_connection_id")"
+              vnc_state="$(jq -r '.data."lifecycle-state" // empty' <<<"$vnc_connection_json")"
+              [ "$vnc_state" = ACTIVE ] && break
+              [ "$vnc_state" = FAILED ] || [ "$vnc_state" = TERMINATED ] && exit 1
+              sleep 5
+            done
+            echo "MARINA_VNC_CONNECTION=$vnc_state"
+            test "$vnc_state" = ACTIVE
+            # OCI exposes separate serial and VNC connection strings.  The
+            # generic connection-string is the serial-console endpoint; using
+            # it for port 5900 can create an SSH tunnel that accepts TCP while
+            # never speaking RFB, which looks like a VNC handshake timeout.
+            export MARINA_VNC_CONNECTION_STRING="$(jq -r '.data."vnc-connection-string" // empty' <<<"$vnc_connection_json")"
+            test -n "$MARINA_VNC_CONNECTION_STRING"
+            export MARINA_VNC_CONNECTION_ID="$vnc_connection_id"
+            export MARINA_VNC_INSTANCE_ID="$instance_id"
+            export MARINA_VNC_PRIVATE_KEY="$console_key"
+            python3 -m pip install --disable-pip-version-check --quiet vncdotool pillow pytesseract service_identity
+            if ! command -v tesseract >/dev/null 2>&1; then
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq tesseract-ocr
+            fi
+            python3 - <<'PY'
+          import os
+          import shlex
+          import socket
+          import subprocess
+          import time
+
+          from PIL import Image
+          import pytesseract
+          from vncdotool import api
+
+          connection = os.environ["MARINA_VNC_CONNECTION_STRING"]
+          console_key = os.environ["MARINA_VNC_PRIVATE_KEY"]
+          instance_id = os.environ["MARINA_VNC_INSTANCE_ID"]
+          tokens = shlex.split(connection)
+          proxy_value = next(
+              value.split("=", 1)[1]
+              for value in tokens
+              if value.startswith("ProxyCommand=")
+          )
+          target = tokens[-1]
+          proxy_tokens = shlex.split(proxy_value)
+          proxy_command = [
+              proxy_tokens[0], "-i", console_key,
+              "-o", "StrictHostKeyChecking=accept-new",
+              "-o", "UserKnownHostsFile=/tmp/marina-vnc-known-hosts",
+              *proxy_tokens[1:],
+          ]
+          outer = [
+              "ssh", "-i", console_key,
+              "-o", "ProxyCommand=" + " ".join(shlex.quote(item) for item in proxy_command),
+              "-o", "HostKeyAlgorithms=+ssh-rsa",
+              "-o", "PubkeyAcceptedAlgorithms=+ssh-rsa",
+              "-o", "StrictHostKeyChecking=accept-new",
+              "-o", "UserKnownHostsFile=/tmp/marina-vnc-known-hosts",
+              "-o", "ConnectTimeout=15",
+              "-N", "-L", f"127.0.0.1:5900:{instance_id}:5900", target,
+          ]
+          tunnel = subprocess.Popen(outer, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+          try:
+              deadline = time.time() + 45
+              connected = False
+              while time.time() < deadline:
+                  if tunnel.poll() is not None:
+                      break
+                  try:
+                      with socket.create_connection(("127.0.0.1", 5900), timeout=1):
+                          connected = True
+                          break
+                  except OSError:
+                      time.sleep(1)
+              if not connected:
+                  stderr = tunnel.stderr.read().decode("utf-8", "replace") if tunnel.stderr else ""
+                  print(
+                      "MARINA_VNC_TUNNEL=NOT_CONNECTED "
+                      f"exit={tunnel.poll()} "
+                      f"auth={str('Permission denied' in stderr or 'publickey' in stderr).lower()} "
+                      f"hostkey={str('Host key verification failed' in stderr).lower()} "
+                      f"proxy={str('ProxyCommand' in stderr or 'Could not resolve' in stderr).lower()} "
+                      f"negotiation={str('no matching' in stderr or 'handshake' in stderr).lower()}"
+                  )
+                  raise SystemExit(1)
+              print("MARINA_VNC_TUNNEL=CONNECTED")
+              try:
+                  with socket.create_connection(("127.0.0.1", 5900), timeout=15) as probe:
+                      probe.settimeout(15)
+                      header = b""
+                      while len(header) < 12:
+                          chunk = probe.recv(12 - len(header))
+                          if not chunk:
+                              break
+                          header += chunk
+                  if not header.startswith(b"RFB "):
+                      print(f"MARINA_VNC_RFB=FAIL bytes={len(header)}")
+                      raise SystemExit(1)
+                  version = header[4:11].decode("ascii", "replace")
+                  print(f"MARINA_VNC_RFB=PASS version={version}")
+              except Exception as error:
+                  if isinstance(error, SystemExit):
+                      raise
+                  print(f"MARINA_VNC_RFB=FAIL error_type={type(error).__name__}")
+                  raise SystemExit(1)
+              screenshot = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "marina-vnc.png")
+              try:
+                  with api.connect("127.0.0.1::5900", timeout=30) as client:
+                      with open(screenshot, "wb") as output:
+                          client.captureScreen(output, format="png")
+              except Exception as error:
+                  print(f"MARINA_VNC_SCREEN=FAIL error_type={type(error).__name__}")
+                  raise SystemExit(1)
+              image = Image.open(screenshot)
+              text = pytesseract.image_to_string(image, config="--psm 6")
+              normalized = " ".join(text.lower().split())
+              print(
+                  "MARINA_VNC_SCREEN=PASS "
+                  f"width={image.width} height={image.height} "
+                  f"grub={str('gnu grub' in normalized or 'grub' in normalized).lower()} "
+                  f"kernel={str('linux' in normalized or 'ubuntu' in normalized).lower()} "
+                  f"login={str('login' in normalized or 'password' in normalized).lower()}"
+              )
+          finally:
+              tunnel.terminate()
+              try:
+                  tunnel.wait(timeout=5)
+              except subprocess.TimeoutExpired:
+                  tunnel.kill()
+          PY
+            exit 0
+          fi
+
+          if [ "$ACTION" = validate ]; then
+            test -n "${CLOUDFLARE_API_TOKEN:-}"
+            tunnel_json="$RUNNER_TEMP/marina-cloudflare-connections.json"
+            tunnel_code="$(curl -sS -o "$tunnel_json" -w '%{http_code}' \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/0afb7d99f708b9455598df9fa1035164/cfd_tunnel/6e55e29e-7c62-4a00-ac66-8e3f9df1145f/connections")"
+            test "$tunnel_code" = 200
+            test "$(jq -r '.success // false' "$tunnel_json")" = true
+            connection_count="$(jq -r '.result | length' "$tunnel_json")"
+            statuses="$(jq -r '[.result[]?.status] | join(",")' "$tunnel_json")"
+            echo "MARINA_CLOUDFLARE_TUNNEL=PASS connections=$connection_count statuses=$statuses"
+            if timeout 8 bash -c '</dev/tcp/137.131.173.240/22' 2>/dev/null; then
+              echo "MARINA_PUBLIC_SSH=OPEN"
+              exit 1
+            fi
+            echo "MARINA_PUBLIC_SSH=BLOCKED"
+            exit 0
+          fi
+
+          if [ "$ACTION" = history ]; then
+            history_out="$RUNNER_TEMP/marina-console-history.json"
+            history_content="$RUNNER_TEMP/marina-console-history.txt"
+            history_id=""
+            cleanup_history() {
+              if [ -n "$history_id" ]; then
+                "${OCI[@]}" compute console-history delete \
+                  --instance-console-history-id "$history_id" --force >/dev/null 2>&1 || true
+              fi
+            }
+            trap cleanup_history EXIT
+            capture_code=0
+            "${OCI[@]}" compute console-history capture \
+              --instance-id "$instance_id" \
+              --display-name "shopvivaliz-marina-console-history" >"$history_out" 2>"$RUNNER_TEMP/marina-console-history.err" || capture_code=$?
+            if [ "$capture_code" -ne 0 ]; then
+              echo "MARINA_SERIAL_HISTORY_CAPTURE=FAIL exit=$capture_code"
+              sed -E \
+                -e 's/ocid1\.[^[:space:]]+/OCID/g' \
+                -e 's/[0-9a-f]{8}-[0-9a-f-]{27,}/UUID/g' \
+                "$RUNNER_TEMP/marina-console-history.err" | head -n 12
+              exit "$capture_code"
+            fi
+            history_id="$(jq -r '.data.id // empty' <"$history_out")"
+            test -n "$history_id"
+            history_state=""
+            for _ in $(seq 1 36); do
+              history_json="$("${OCI[@]}" compute console-history get --instance-console-history-id "$history_id")"
+              history_state="$(jq -r '.data."lifecycle-state" // empty' <<<"$history_json")"
+              if [ "$history_state" = SUCCEEDED ]; then
+                break
+              fi
+              if [ "$history_state" = FAILED ] || [ "$history_state" = TERMINATED ]; then
+                echo "MARINA_SERIAL_HISTORY_STATE=$history_state"
+                exit 1
+              fi
+              sleep 5
+            done
+            echo "MARINA_SERIAL_HISTORY_STATE=$history_state"
+            test "$history_state" = SUCCEEDED
+            "${OCI[@]}" compute console-history get-content \
+              --instance-console-history-id "$history_id" \
+              --file "$history_content" >/dev/null
+            history_bytes="$(wc -c <"$history_content" | tr -d '[:space:]')"
+            history_has_grub=false
+            history_has_kernel=false
+            history_has_login=false
+            history_has_sshd=false
+            grep -Eiq 'GNU GRUB|grub>' "$history_content" && history_has_grub=true || true
+            grep -Eiq 'Linux version|Loading Linux|vmlinuz|systemd' "$history_content" && history_has_kernel=true || true
+            grep -Eiq 'login:|cloud-init|ubuntu' "$history_content" && history_has_login=true || true
+            grep -Eiq 'sshd|OpenSSH' "$history_content" && history_has_sshd=true || true
+            echo "MARINA_SERIAL_HISTORY=PASS bytes=$history_bytes grub=$history_has_grub kernel=$history_has_kernel login=$history_has_login sshd=$history_has_sshd"
+            exit 0
+          fi
+
+          if [ "$ACTION" = cleanup ]; then
+            connection_list="$("${OCI[@]}" compute instance-console-connection list \
+              --compartment-id "$compartment_id" --instance-id "$instance_id" --all)"
+            total_connections="$(jq -r '(.data // []) | length' <<<"$connection_list")"
+            active_connections="$(jq -r '[.data[]? | select((."lifecycle-state" // "") as $state | ($state != "DELETING" and $state != "DELETED" and $state != "TERMINATED"))] | length' <<<"$connection_list")"
+            echo "MARINA_SERIAL_CLEANUP_COUNT=$total_connections"
+            echo "MARINA_SERIAL_ACTIVE_COUNT=$active_connections"
+            mapfile -t connection_ids < <(jq -r '.data[]? | select((."lifecycle-state" // "") as $state | ($state != "DELETING" and $state != "DELETED" and $state != "TERMINATED")) | .id' <<<"$connection_list")
+            deleted_count=0
+            failed_count=0
+            for existing_connection_id in "${connection_ids[@]}"; do
+              [ -n "$existing_connection_id" ] || continue
+              delete_code=0
+              "${OCI[@]}" compute instance-console-connection delete \
+                --instance-console-connection-id "$existing_connection_id" --force >/dev/null 2>"$RUNNER_TEMP/marina-serial-delete.err" || delete_code=$?
+              if [ "$delete_code" -eq 0 ]; then
+                deleted_count=$((deleted_count + 1))
+              else
+                failed_count=$((failed_count + 1))
+              fi
+            done
+            echo "MARINA_SERIAL_DELETED_COUNT=$deleted_count"
+            echo "MARINA_SERIAL_DELETE_FAILURES=$failed_count"
+            test "$failed_count" = 0
+            echo "MARINA_SERIAL_CLEANUP=PASS"
+            exit 0
+          fi
+
+          if [ "$ACTION" = repair ]; then
+            # OCI may keep a deleted serial connection in a terminating
+            # state for a short period. Creating the next connection before
+            # the resource disappears returns IncorrectState (409). Drain
+            # all residual connections and wait for the service-side count to
+            # reach zero before creating a new one.
+            stale_list="$("${OCI[@]}" compute instance-console-connection list --compartment-id "$compartment_id" --instance-id "$instance_id" --all)"
+            mapfile -t stale_ids < <(jq -r '.data[]? | select((."lifecycle-state" // "") as $state | ($state != "DELETING" and $state != "DELETED" and $state != "TERMINATED")) | .id' <<<"$stale_list")
+            for stale_id in "${stale_ids[@]}"; do
+              [ -n "$stale_id" ] || continue
+              "${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$stale_id" --force >/dev/null 2>&1 || true
+            done
+            remaining=0
+            for _ in $(seq 1 60); do
+              stale_list="$("${OCI[@]}" compute instance-console-connection list --compartment-id "$compartment_id" --instance-id "$instance_id" --all)"
+              remaining="$(jq -r '[.data[]? | select((."lifecycle-state" // "") as $state | ($state != "DELETING" and $state != "DELETED" and $state != "TERMINATED"))] | length' <<<"$stale_list")"
+              [ "$remaining" = 0 ] && break
+              sleep 10
+            done
+            echo "MARINA_SERIAL_PRECREATE_ACTIVE=$remaining"
+            test "$remaining" = 0
+          fi
+
+          ssh-keygen -q -t rsa -b 2048 -N '' -f "$console_key"
+          chmod 600 "$console_key"
+          create_err="$RUNNER_TEMP/marina-serial-create.err"
+          create_out="$RUNNER_TEMP/marina-serial-create.json"
+          create_code=0
+          echo "MARINA_SERIAL_CREATE_START=PASS"
+          "${OCI[@]}" compute instance-console-connection create \
+            --instance-id "$instance_id" \
+            --ssh-public-key-file "$console_pub" >"$create_out" 2>"$create_err" || create_code=$?
+          if [ "$create_code" -ne 0 ]; then
+            echo "MARINA_SERIAL_CREATE_EXIT=$create_code"
+            sed -E \
+              -e 's/ocid1\.[^[:space:]]+/OCID/g' \
+              -e 's/[0-9a-f]{8}-[0-9a-f-]{27,}/UUID/g' \
+              -e 's#[^[:space:]]+\.pem#KEYFILE#g' \
+              "$create_err" | head -n 12
+            exit "$create_code"
+          fi
+          create_json="$(<"$create_out")"
+          connection_id="$(jq -r '.data.id // empty' <<<"$create_json")"
+          test -n "$connection_id"
+          trap '"${OCI[@]}" compute instance-console-connection delete --instance-console-connection-id "$connection_id" --force >/dev/null 2>&1 || true' EXIT
+
+          state=""
+          for _ in $(seq 1 36); do
+            console_json="$("${OCI[@]}" compute instance-console-connection get --instance-console-connection-id "$connection_id")"
+            state="$(jq -r '.data."lifecycle-state" // empty' <<<"$console_json")"
+            if [ "$state" = ACTIVE ]; then
+              break
+            fi
+            if [ "$state" = FAILED ] || [ "$state" = TERMINATED ]; then
+              echo "MARINA_SERIAL_CONNECTION=$state"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          test "$state" = ACTIVE
+          connection_string="$(jq -r '.data."connection-string" // empty' <<<"$console_json")"
+          service_host_fingerprint="$(jq -r '.data."service-host-key-fingerprint" // empty' <<<"$console_json")"
+          test -n "$connection_string"
+          test -n "$service_host_fingerprint"
+          echo "MARINA_SERIAL_CONNECTION=ACTIVE"
+          echo "MARINA_SERIAL_STRING_PRESENT=true"
+          echo "MARINA_SERIAL_HOST_FINGERPRINT_PRESENT=true"
+          echo "MARINA_SERIAL_PROBE=PASS"
+
+          if [ "$ACTION" = repair ]; then
+            test "$CONFIRMATION" = REPAIR_MARINA_SERIAL
+            test -n "$OCI_VM_KEY_MATERIAL"
+            vm_key="$RUNNER_TEMP/marina-authorized-key"
+            printf '%s\n' "$OCI_VM_KEY_MATERIAL" > "$vm_key"
+            chmod 600 "$vm_key"
+            vm_public_key="$(ssh-keygen -y -f "$vm_key")"
+            rm -f "$vm_key"
+            export CONSOLE_CONNECTION_STRING="$connection_string"
+            export CONSOLE_HOST_FINGERPRINT="$service_host_fingerprint"
+            export CONSOLE_PRIVATE_KEY="$console_key"
+            export MARINA_INSTANCE_ID="$instance_id"
+            export OCI_CONFIG="$config"
+            export MARINA_VM_PUBLIC_KEY="$vm_public_key"
+            python3 - <<'PY'
+          import os
+          import re
+          import shlex
+          import subprocess
+          import time
+
+          import pexpect
+
+          connection = os.environ["CONSOLE_CONNECTION_STRING"]
+          expected_fingerprint = os.environ["CONSOLE_HOST_FINGERPRINT"]
+          console_key = os.environ["CONSOLE_PRIVATE_KEY"]
+          known_hosts = os.path.join(os.environ["RUNNER_TEMP"], "marina-console-known-hosts")
+          hosts = sorted(set(re.findall(r"[A-Za-z0-9.-]+\.oci\.oraclecloud\.com", connection)))
+          if not hosts:
+              print("MARINA_SERIAL_TRANSPORT=NO_ENDPOINT")
+              raise SystemExit(1)
+          with open(known_hosts, "w", encoding="utf-8") as handle:
+              for host in hosts:
+                  scanned = False
+                  for port in (22, 443):
+                      scan = subprocess.run(
+                          ["ssh-keyscan", "-T", "15", "-p", str(port), host],
+                          check=False,
+                          capture_output=True,
+                          text=True,
+                      )
+                      if scan.returncode == 0 and scan.stdout.strip():
+                          handle.write(scan.stdout)
+                          scanned = True
+                  if not scanned:
+                      print("MARINA_SERIAL_HOSTKEY=SCAN_FAILED")
+                      raise SystemExit(1)
+          fingerprint = subprocess.run(
+              ["ssh-keygen", "-lf", known_hosts, "-E", "sha256"],
+              check=False,
+              capture_output=True,
+              text=True,
+          ).stdout
+          if expected_fingerprint not in fingerprint:
+              print("MARINA_SERIAL_HOSTKEY=MISMATCH")
+              raise SystemExit(1)
+          print("MARINA_SERIAL_HOSTKEY=PASS")
+
+          command = re.sub(
+              r"-i\s+(?:'[^']*'|\"[^\"]*\"|\S+)",
+              "",
+              connection,
+          )
+          ssh_options = (
+              f"-i {shlex.quote(console_key)} "
+              "-tt "
+              "-o StrictHostKeyChecking=accept-new "
+              f"-o UserKnownHostsFile={shlex.quote(known_hosts)} "
+              "-o ConnectTimeout=15"
+          )
+          command = command.replace("ssh ", f"ssh {ssh_options} ")
+          def spawn_console():
+              session = pexpect.spawn("/bin/bash", ["-lc", command], encoding="utf-8", timeout=5)
+              session.sendline("")
+              return session
+
+          def connect_console(wait_seconds=120):
+              """Wait for an activated serial terminal, including after a reset."""
+              deadline = time.time() + wait_seconds
+              connection_errors = (
+                  "Permission denied",
+                  "Host key verification failed",
+                  "Could not resolve",
+                  "Connection refused",
+                  "Connection timed out",
+                  "Connection reset by peer",
+              )
+              ready_marker = "IMPORTANT: Use a console connection"
+              while time.time() < deadline:
+                  session = spawn_console()
+                  output = ""
+                  probe_deadline = min(deadline, time.time() + 20)
+                  while time.time() < probe_deadline:
+                      try:
+                          output += session.read_nonblocking(size=4096, timeout=0.4)
+                      except pexpect.TIMEOUT:
+                          pass
+                      except pexpect.EOF:
+                          break
+                      if any(error in output for error in connection_errors):
+                          break
+                      if ready_marker in output:
+                          return session
+                  if session.isalive() and ready_marker in output:
+                      return session
+                  if session.isalive():
+                      session.close(force=True)
+                  time.sleep(3)
+              print("MARINA_SERIAL_TRANSPORT=NOT_READY")
+              raise SystemExit(1)
+
+          child = connect_console()
+          print("MARINA_SERIAL_TRANSPORT=CONNECTED")
+
+          root_confirmed = False
+          prompt_observed = False
+          # The previous implementation reused the reconnect number as the
+          # number of editor lines to move through.  That is unsafe: on the
+          # second reconnect GRUB was observed, but ten arrows moved past the
+          # Linux command, so init=/bin/bash was not applied.  Keep the
+          # proven Linux-line offset fixed and vary only the transport retry.
+          linux_line_offsets = (5, 10, 15)
+          def drain_console(seconds=2):
+              deadline = time.time() + seconds
+              while time.time() < deadline:
+                  try:
+                      child.read_nonblocking(size=4096, timeout=0.3)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+
+          def uid_zero(value):
+              normalized = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)
+              normalized = normalized.replace("\r", "")
+              return bool(re.search(r"(?:^|\n)\s*0\s*(?:\n|$)", normalized))
+
+          for reconnect_attempt in (1, 2, 3):
+              if reconnect_attempt != 1:
+                  if child.isalive():
+                      child.close(force=True)
+                  child = spawn_console()
+                  time.sleep(1)
+                  print(f"MARINA_SERIAL_RECONNECT=attempt_{reconnect_attempt}")
+              # Discard buffered console output from the previous boot before
+              # requesting another reset; otherwise stale GRUB text can make
+              # the next interaction edit the wrong screen.
+              drain_console()
+              reboot = subprocess.run(
+                  [
+                      "oci",
+                      "--config-file",
+                      os.environ["OCI_CONFIG"],
+                      "--profile",
+                      os.environ["OCI_PROFILE"],
+                      "compute",
+                      "instance",
+                      "action",
+                      "--instance-id",
+                      os.environ["MARINA_INSTANCE_ID"],
+                      "--action",
+                      # RESET is the OCI immediate reboot action. SOFTRESET
+                      # can remain in STOPPING for up to 15 minutes while it
+                      # waits for the guest OS, which is unsafe for this
+                      # console recovery loop.
+                      "RESET",
+                  ],
+                  check=False,
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
+              )
+              if reboot.returncode != 0:
+                  print(f"MARINA_REBOOT=REQUEST_FAILED attempt={reconnect_attempt}")
+                  raise SystemExit(1)
+              print(f"MARINA_REBOOT=REQUESTED attempt={reconnect_attempt}")
+              # Keep the existing serial channel across RESET. Reopening it
+              # after a fixed delay can miss the short GRUB window entirely;
+              # this is especially easy on a fast ARM guest. If OCI closes
+              # the channel, reconnect only as a fallback.
+              time.sleep(1)
+              if not child.isalive():
+                  child = connect_console()
+              print(f"MARINA_SERIAL_RECONNECT=READY attempt={reconnect_attempt}")
+
+              grub = ""
+              deadline = time.time() + 45
+              while time.time() < deadline:
+                  child.send("\x1b")
+                  try:
+                      grub += child.read_nonblocking(size=4096, timeout=0.2)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+                  if "GNU GRUB" in grub or "Advanced options" in grub:
+                      break
+              grub_observed = "GNU GRUB" in grub or "Advanced options" in grub
+              if reconnect_attempt in (1, 2, 3):
+                  # Prefer GRUB's command prompt on every bounded attempt.
+                  # It avoids depending on the number of generated
+                  # menu-editor lines in an ARM cloud image.
+                  child.send("\x1b")
+                  time.sleep(2)
+                  child.send("c")
+                  time.sleep(1)
+                  for grub_command in (
+                      "set pager=0",
+                      "search --no-floppy --file --set=root /vmlinuz",
+                      "linux /vmlinuz root=LABEL=cloudimg-rootfs rw init=/bin/bash console=ttyAMA0,115200n8",
+                      "initrd /initrd.img",
+                      "boot",
+                  ):
+                      child.sendline(grub_command)
+                      time.sleep(0.5)
+                  command_shell = ""
+                  deadline = time.time() + 60
+                  while time.time() < deadline:
+                      try:
+                          command_shell += child.read_nonblocking(size=4096, timeout=0.3)
+                      except pexpect.TIMEOUT:
+                          pass
+                      except pexpect.EOF:
+                          break
+                      if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", command_shell):
+                          break
+                  child.sendline("id -u")
+                  identity = ""
+                  deadline = time.time() + 8
+                  while time.time() < deadline:
+                      try:
+                          identity += child.read_nonblocking(size=4096, timeout=0.3)
+                      except pexpect.TIMEOUT:
+                          pass
+                      except pexpect.EOF:
+                          break
+                  print(
+                      "MARINA_GRUB_COMMAND=ATTEMPTED "
+                      f"kernel={str('Linux version' in command_shell or 'Loading Linux' in command_shell).lower()} "
+                      f"shell={str(bool(re.search(r'(bash[- ]|cannot access tty|job control)', command_shell))).lower()}"
+                  )
+                  if uid_zero(identity):
+                      print("MARINA_ROOT_SHELL=PASS_COMMAND_LINE attempt=1")
+                      print("MARINA_ROOT_ID=0 attempt=1")
+                      root_confirmed = True
+                      break
+                  print("MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED attempt=1")
+                  print("MARINA_ROOT_ID=NOT_CONFIRMED attempt=1")
+                  continue
+              child.send("e")
+              # GRUB may have rendered its menu text before the serial
+              # terminal is ready to accept the editor transition.
+              time.sleep(3)
+              editor = ""
+              editor_deadline = time.time() + 4
+              while time.time() < editor_deadline:
+                  try:
+                      editor += child.read_nonblocking(size=4096, timeout=0.3)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+              editor_has_linux = bool(re.search(r"\blinux\s+", editor))
+              editor_has_initrd = bool(re.search(r"\binitrd\s+", editor))
+              print(
+                  "MARINA_GRUB_EDITOR="
+                  f"linux={str(editor_has_linux).lower()} "
+                  f"initrd={str(editor_has_initrd).lower()}"
+              )
+              # Serial GRUB can drop a burst of cursor/control events while
+              # the menu is repainting. Pace the navigation and use one
+              # boot key per attempt: Ctrl-X first, F10 alone on attempt 2.
+              linux_line_offset = linux_line_offsets[reconnect_attempt - 1]
+              for _ in range(linux_line_offset):
+                  child.send("\x1b[B")
+                  time.sleep(0.25)
+              child.send("\x05")
+              time.sleep(0.5)
+              child.send(" init=/bin/bash")
+              time.sleep(0.5)
+              child.send("\x18" if reconnect_attempt != 2 else "\x1b[21~")
+              shell = ""
+              deadline = time.time() + 60
+              while time.time() < deadline:
+                  try:
+                      shell += child.read_nonblocking(size=4096, timeout=0.3)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+                  if re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell):
+                      break
+              print(
+                  f"MARINA_GRUB={'OBSERVED_EDIT' if grub_observed else 'BLIND_EDIT'} attempt={reconnect_attempt}"
+              )
+              prompt_observed = bool(re.search(r"(root@[^ ]+:\S+#|bash-\S+#|#\s*$)", shell))
+              print(
+                  "MARINA_ROOT_SHELL=PASS attempt=" + str(reconnect_attempt)
+                  if prompt_observed
+                  else "MARINA_ROOT_SHELL=PROMPT_NOT_MATCHED attempt=" + str(reconnect_attempt)
+              )
+              print(
+                  "MARINA_BOOT_SCREEN="
+                  f"bytes={len(shell)} "
+                  f"kernel={str(bool(re.search(r'Linux version|Loading Linux|vmlinuz', shell))).lower()} "
+                  f"bash={str(bool(re.search(r'bash[- ]|cannot access tty|job control', shell))).lower()} "
+                  f"login={str(bool(re.search(r'login:', shell))).lower()}"
+              )
+              child.sendline("")
+              child.sendline("id -u")
+              identity = ""
+              deadline = time.time() + 8
+              while time.time() < deadline:
+                  try:
+                      identity += child.read_nonblocking(size=4096, timeout=0.3)
+                  except pexpect.TIMEOUT:
+                      pass
+                  except pexpect.EOF:
+                      break
+              if uid_zero(identity):
+                  print(f"MARINA_ROOT_ID=0 attempt={reconnect_attempt}")
+                  if not prompt_observed:
+                      print("MARINA_ROOT_SHELL=PASS_BY_UID")
+                  root_confirmed = True
+                  break
+              print(f"MARINA_ROOT_ID=NOT_CONFIRMED attempt={reconnect_attempt}")
+              time.sleep(3)
+          if not root_confirmed:
+              raise SystemExit(1)
+
+          public_key = os.environ["MARINA_VM_PUBLIC_KEY"]
+          quoted_key = shlex.quote(public_key)
+          tunnel_token = os.environ["CLOUDFLARE_MARINA_TUNNEL_TOKEN"]
+          if not tunnel_token:
+              print("MARINA_CLOUDFLARED=TOKEN_MISSING")
+              raise SystemExit(1)
+          quoted_tunnel_token = shlex.quote(tunnel_token)
+          commands = [
+              "mount -o remount,rw /",
+              "mkdir -p /home/ubuntu/.ssh",
+              f"touch /home/ubuntu/.ssh/authorized_keys && grep -qxF {quoted_key} /home/ubuntu/.ssh/authorized_keys || printf '%s\\n' {quoted_key} >> /home/ubuntu/.ssh/authorized_keys",
+              "chown -R ubuntu:ubuntu /home/ubuntu/.ssh",
+              "chmod 700 /home/ubuntu/.ssh",
+              "chmod 600 /home/ubuntu/.ssh/authorized_keys",
+              "if [ -x /usr/sbin/sshd ]; then mkdir -p /etc/ssh/sshd_config.d /etc/systemd/system/multi-user.target.wants /run/sshd; ssh-keygen -A; [ -f /etc/ssh/sshd_config ] || printf '%s\\n' 'Include /etc/ssh/sshd_config.d/*.conf' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config; printf '%s\\n' 'PubkeyAuthentication yes' 'PasswordAuthentication no' 'PermitRootLogin no' > /etc/ssh/sshd_config.d/99-shopvivaliz-admin.conf; printf '%s\\n' '[Unit]' 'Description=OpenSSH server' 'After=network.target' '[Service]' 'Type=simple' 'RuntimeDirectory=sshd' 'ExecStartPre=/usr/sbin/sshd -t' 'ExecStart=/usr/sbin/sshd -D -e' 'ExecReload=/bin/kill -HUP $MAINPID' 'Restart=on-failure' '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/ssh.service; if /usr/sbin/sshd -t; then ln -sf /etc/systemd/system/ssh.service /etc/systemd/system/multi-user.target.wants/ssh.service; echo MARINA_SSHD_PRESENT > /root/.shopvivaliz-sshd-state; else echo MARINA_SSHD_CONFIG_INVALID > /root/.shopvivaliz-sshd-state; fi; else echo MARINA_SSHD_MISSING > /root/.shopvivaliz-sshd-state; fi",
+              f"if [ -x /home/ubuntu/.local/bin/cloudflared ]; then CF_BIN=/home/ubuntu/.local/bin/cloudflared; else CF_BIN=$(find /home/ubuntu -type f -name cloudflared -perm -111 -print -quit 2>/dev/null); fi; if [ -n \"$CF_BIN\" ] && install -o root -g root -m 0755 \"$CF_BIN\" /usr/local/bin/cloudflared && /usr/local/bin/cloudflared --version >/dev/null 2>&1; then install -d -o root -g root -m 0700 /etc/shopvivaliz/cloudflare-admin; printf '%s\\n' {quoted_tunnel_token} > /etc/shopvivaliz/cloudflare-admin/token; chown root:root /etc/shopvivaliz/cloudflare-admin/token; chmod 0600 /etc/shopvivaliz/cloudflare-admin/token; touch /etc/shopvivaliz/cloudflare-admin/access-approved; printf '%s\\n' '[Unit]' 'Description=ShopVivaliz independent Cloudflare admin tunnel for Marina OCI' 'After=network-online.target' 'Wants=network-online.target' 'ConditionPathExists=/etc/shopvivaliz/cloudflare-admin/access-approved' '' '[Service]' 'Type=simple' 'DynamicUser=yes' 'NoNewPrivileges=yes' 'LoadCredential=tunnel-token:/etc/shopvivaliz/cloudflare-admin/token' 'ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate run --token-file=%d/tunnel-token' 'Restart=on-failure' 'RestartSec=5s' 'PrivateTmp=yes' 'ProtectSystem=strict' 'ProtectHome=yes' 'ReadWritePaths=/run' '' '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/shopvivaliz-cloudflared-admin.service; mkdir -p /etc/systemd/system/multi-user.target.wants; ln -sf /etc/systemd/system/shopvivaliz-cloudflared-admin.service /etc/systemd/system/multi-user.target.wants/shopvivaliz-cloudflared-admin.service; echo MARINA_CLOUDFLARED_READY > /root/.shopvivaliz-cloudflared-state; else echo MARINA_CLOUDFLARED_BINARY_MISSING > /root/.shopvivaliz-cloudflared-state; fi",
+              "sync",
+          ]
+          for command_line in commands:
+              child.sendline(command_line)
+              time.sleep(0.8)
+          child.sendline("cat /root/.shopvivaliz-sshd-state /root/.shopvivaliz-cloudflared-state 2>/dev/null || true")
+          sshd_state = ""
+          deadline = time.time() + 3
+          while time.time() < deadline:
+              try:
+                  sshd_state += child.read_nonblocking(size=4096, timeout=0.3)
+              except (pexpect.TIMEOUT, pexpect.EOF):
+                  pass
+          if "MARINA_SSHD_PRESENT" in sshd_state:
+              print("MARINA_SSHD=PRESENT")
+          elif "MARINA_SSHD_MISSING" in sshd_state:
+              print("MARINA_SSHD=MISSING")
+          else:
+              print("MARINA_SSHD=UNKNOWN")
+          if "MARINA_CLOUDFLARED_READY" in sshd_state:
+              print("MARINA_CLOUDFLARED=READY")
+          elif "MARINA_CLOUDFLARED_BINARY_MISSING" in sshd_state:
+              print("MARINA_CLOUDFLARED=BINARY_MISSING")
+          else:
+              print("MARINA_CLOUDFLARED=UNKNOWN")
+          print("MARINA_SSH_AUTHORIZED_KEY=RESTORED")
+          child.sendline("/sbin/reboot -f")
+          print("MARINA_REBOOT=NORMAL_REQUESTED")
+          time.sleep(8)
+          child.close(force=True)
+          PY
+          fi

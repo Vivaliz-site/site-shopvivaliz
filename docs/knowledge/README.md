@@ -1,3 +1,7 @@
+<!-- LIVE_TOPOLOGY_MCP_RECONCILED_V2 -->
+**Atualizacao operacional (2026-10-29):** a VM excluida saiu do MCP central em producao (PRs #3391/#3392); vinte jobs antigos foram bloqueados (PR #3395); o tunel SSH do MEI para Marina respondeu HTTP 200. Nao confundir o tunel MEI com o MCP OpenAI independente ainda sem registro. Consulte a pagina `current-topology-and-access-2026-10-29.md` para os estados verdadeiros e os gates pendentes.
+<!-- /LIVE_TOPOLOGY_MCP_RECONCILED_V2 -->
+
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 ## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
 
@@ -15,8 +19,15 @@ Para cada erro, executar e evidenciar: (1) RED/reproducao observavel e impacto, 
 
 Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
+**Topologia atual (2026-10-29):** producao web/deploy na `marina-a1-4c24g` (OCI ESPOSA), backend/controller/browser na `always-free-arm-1787907847-26` (OCI PRINCIPAL). A origem `shopvivaliz-free-a1` foi excluida segundo proprietario e nao deve ser usada. Ver `current-topology-and-access-2026-10-29.md` para as rotas e MCPs comprovados.
+
+## Auditoria de divergências e hierarquia documental
+
+- [Auditoria de consistência de instruções de agentes — 2026-10-29](../audits/2026-10-29-agent-documentation-consistency.md) — inventário de 814 arquivos Markdown/TXT, origens históricas, instruções conflitantes, correções e pendências de runtime. Uma varredura automatizada não equivale à validação E2E da produção.
+
 ## Documentos principais
 
+- [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md) — **inventario operacional apos exclusao da VM origem: Marina web/deploy, backend PRINCIPAL, rotas RDC/SSH/OCI, MCP central corrigido sem origem e MCP independente Marina inativo; prova e limites do runtime em 2026-10-29.**
 - [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts e acesso; Remote Control MCP é a rota operacional primária, com SSH privado/Tailscale e OCI Bastion/GitHub apenas nas condições documentadas.**
 - [`claude-vm-bootstrap.md`](claude-vm-bootstrap.md) — memória global do Claude na VM: projetos, hosts, navegador na VM, pesquisa técnica atual na web, segurança e fluxo de entrega.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
@@ -57,7 +68,7 @@ Outros documentos existentes na pasta podem registrar versões, dispositivos, de
 
 Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta ordem:
 
-1. `host-access.md` — descobrir o host e o método de acesso corretos;
+1. `host-access.md` e `current-topology-and-access-2026-10-29.md` — descobrir o host e o metodo de acesso corretos, sem usar a origem excluida;
 2. `agent-rules.md` — aplicar regras de evidência e segurança;
 3. `project.md` — entender o sistema e seus módulos;
 4. para o `@dev`/agente programador adicional, `dev-agent-briefing.md`;

@@ -17,6 +17,8 @@ $storage = $root . '/storage';
 mkdir($storage, 0775, true);
 
 $payload = [
+    'price_list_id' => 991,
+    'price_source' => 'olist_tiny_amazon',
     'itens' => [
         [
             'sku' => 'TEST-ASSENTO',

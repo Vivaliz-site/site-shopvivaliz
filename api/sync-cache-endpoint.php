@@ -2,18 +2,31 @@
 declare(strict_types=1);
 
 /**
- * The old HTTP cache-sync handler copied registration prices directly to the
- * storefront and could overwrite a previously verified PDV catalog. Disabled
- * permanently: only the privileged scheduled/authorized PDV reconciler may
- * publish an atomic, fully validated product snapshot under its shared lock.
- * An HTTP caller must not spawn a privileged synchronizer.
+ * Retired unsafe catalog rebuild endpoint.
+ *
+ * Previously a public GET/POST could replace the live catalog with an
+ * incompletely enriched ERP list, using a lock different from the webhook
+ * and periodic daemon. Never expose catalog mutation by an HTTP endpoint.
+ *
+ * Authorized operators use the canonical systemd catalog reconciliation
+ * service, which resolves the Amazon ERP list and applies a shared lock.
  */
-header('Content-Type: application/json; charset=utf-8');
+header_remove('X-Powered-By');
+header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
+header('Allow: POST');
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'error' => 'method_not_allowed']);
+    exit;
+}
+
 http_response_code(410);
 echo json_encode([
-    'ok' => false,
-    'error' => 'legacy_cache_sync_disabled',
-    'required_source' => 'olist_pdv',
+    'success' => false,
+    'error' => 'legacy_catalog_rebuild_retired',
+    'source_of_truth' => 'olist_tiny_amazon',
+    'reconcile_service' => 'shopvivaliz-catalog-reconcile.service',
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

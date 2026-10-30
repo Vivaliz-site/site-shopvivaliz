@@ -32,7 +32,7 @@ $tipo = strtolower(trim((string)($payload['tipo'] ?? '')));
 if (!in_array($tipo, svoei_supported_types(), true)) {
     svoei_response(422, ['ok' => false, 'error' => 'unsupported_webhook_type']);
 }
-if (!sv_webhook_secret_valid('olist')) {
+if (!sv_webhook_secret_gate('olist', false)) {
     svoei_response(401, ['ok' => false, 'error' => 'unauthorized']);
 }
 
@@ -59,14 +59,13 @@ try {
             exit;
 
         case 'precos':
-            $ref = svoei_price_event_reference($data);
-            $price = svoei_refresh_price_from_v3($root, $ref['product_id'], $ref['sku']);
-            svoei_log($root, 'price_synced', [
-                'tipo' => $tipo,
-                'sku' => $price['sku'],
-                'product_id' => $ref['product_id'],
-            ]);
-            svoei_response(200, ['ok' => true, 'tipo' => $tipo, 'sku' => $price['sku']]);
+            // ERP product ID wins over SKU: multiple active product IDs can
+            // share a SKU with different Amazon-list prices (issue #3271).
+            $productId = svoei_first_text([$data['idProduto'] ?? '', $data['id'] ?? '']);
+            $erpSku = svoei_first_text([$data['codigo'] ?? '', $data['sku'] ?? '', $data['skuMapeamento'] ?? '']);
+            $product = svoei_refresh_price_from_v3($root, $productId, $erpSku);
+            svoei_log($root, 'price_synced', ['tipo' => $tipo, 'sku' => (string)($product['sku'] ?? $erpSku)]);
+            svoei_response(200, ['ok' => true, 'tipo' => $tipo, 'sku' => (string)($product['sku'] ?? $erpSku)]);
 
         case 'estoque':
             $productId = svoei_first_text([$data['idProduto'] ?? '', $data['id'] ?? '']);

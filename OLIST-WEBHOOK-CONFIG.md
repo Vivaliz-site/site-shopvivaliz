@@ -12,14 +12,10 @@ O token anteriormente versionado deve ser considerado comprometido e revogado no
 
 ## URLs para configurar na Olist
 
-A configuracao pertence a **Integrações -> API do ERP -> Gerenciar -> Notificações**. O parametro `key` deve ser preenchido somente no painel ERP com o segredo protegido `OLIST_WEBHOOK_SECRET` / `TINY_WEBHOOK_SECRET`; nunca versionar o valor. Conferir sanitizacao das queries nos logs de acesso e, quando disponivel, preferir `X-Webhook-Key`. A alteracao precisa ser verificada por evento genuino do provedor; nao basta copiar uma URL.
-
-O endpoint canonico diferencia os eventos pelo campo `tipo` no JSON oficial (produto, precos, estoque).
-
 ### Produtos
 
 ```text
-https://shopvivaliz.com.br/api/olist/webhook.php?key=<SEGREDO_CONFIGURADO>
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=product
 ```
 
 Eventos: `produto.criado`, `produto.atualizado`, `preco.alterado`, `estoque.alterado`.
@@ -27,7 +23,7 @@ Eventos: `produto.criado`, `produto.atualizado`, `preco.alterado`, `estoque.alte
 ### Estoque
 
 ```text
-https://shopvivaliz.com.br/api/olist/webhook.php?key=<SEGREDO_CONFIGURADO>
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=stock
 ```
 
 Evento: `estoque.alterado`.
@@ -35,7 +31,7 @@ Evento: `estoque.alterado`.
 ### Preços
 
 ```text
-https://shopvivaliz.com.br/api/olist/webhook.php?key=<SEGREDO_CONFIGURADO>
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=price
 ```
 
 Evento: `preco.alterado`.

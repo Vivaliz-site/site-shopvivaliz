@@ -2,8 +2,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/catalog-runtime.php';
+require_once __DIR__ . '/erp-amazon-price.php';
 require_once __DIR__ . '/tiny-order-push.php';
-require_once __DIR__ . '/olist-pdv-price.php';
 require_once __DIR__ . '/melhorenvio-oauth.php';
 
 /** @return list<string> */
@@ -40,11 +40,9 @@ function svoei_attachments(array $item): array
 }
 
 /** @return array<string,mixed> */
-function svoei_normalize_v3_product(array $item, array $stockDetail = [], ?array $pdvPrices = null): array
+function svoei_normalize_v3_product(array $item, array $stockDetail = []): array
 {
-    if (!is_array($pdvPrices) || ($pdvPrices['price_source'] ?? '') !== 'olist_pdv' || (int)($pdvPrices['pdv_list_id'] ?? 0) < 1) {
-        throw new RuntimeException('pdv_prices_required');
-    }
+    $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
     $stock = is_array($item['estoque'] ?? null) ? $item['estoque'] : [];
     $category = is_array($item['categoria'] ?? null) ? $item['categoria'] : [];
     $dimensions = is_array($item['dimensoes'] ?? null) ? $item['dimensoes'] : [];
@@ -70,11 +68,9 @@ function svoei_normalize_v3_product(array $item, array $stockDetail = [], ?array
         'unidade' => (string)($item['unidade'] ?? ''),
         'gtin' => (string)($item['gtin'] ?? ''),
         'precos' => [
-            'preco' => $pdvPrices['preco'],
-            'precoPromocional' => $pdvPrices['precoPromocional'],
+            'preco' => svoei_number($prices['preco'] ?? $prices['preco_venda'] ?? $item['preco'] ?? 0),
+            'precoPromocional' => svoei_number($prices['precoPromocional'] ?? $prices['preco_promocional'] ?? $item['precoPromocional'] ?? 0),
         ],
-        'price_source' => 'olist_pdv',
-        'pdv_list_id' => (int)$pdvPrices['pdv_list_id'],
         'estoque' => ['quantidade' => (int)floor(svoei_number($available))],
         'estoque_disponivel' => (int)floor(svoei_number($available)),
         'categoria' => [
@@ -173,27 +169,7 @@ function svoei_load_active_catalog(string $root): array
     return svoei_cache_items($payload);
 }
 
-/** Quarantined ERP IDs and SKUs cannot re-enter the storefront via webhooks. */
-function svoei_assert_not_quarantined(string $root, string $sku, string $productId): void
-{
-    $path = $root . '/storage/products-cache-ativos.json';
-    $payload = is_file($path) ? json_decode((string)file_get_contents($path), true) : null;
-    if (!is_array($payload)) throw new RuntimeException('catalog_cache_invalid');
-    $quarantine = $payload['quarantined_skus'] ?? [];
-    if (!is_array($quarantine)) throw new RuntimeException('catalog_quarantine_invalid');
-    foreach ($quarantine as $blocked) {
-        if (!is_array($blocked)) throw new RuntimeException('catalog_quarantine_invalid');
-        $blockedSku = trim((string)($blocked['sku'] ?? ''));
-        $ids = $blocked['olist_product_ids'] ?? [];
-        if (!is_array($ids)) throw new RuntimeException('catalog_quarantine_invalid');
-        if (($sku !== '' && $blockedSku !== '' && strcasecmp($sku, $blockedSku) === 0)
-            || ($productId !== '' && in_array($productId, array_map('strval', $ids), true))) {
-            throw new RuntimeException('catalog_sku_quarantined');
-        }
-    }
-}
-
-function svoei_catalog_mutate(string $root, callable $mutator, string $sku = '', string $productId = ''): mixed
+function svoei_catalog_mutate(string $root, callable $mutator): mixed
 {
     $lockPath = $root . '/storage/olist-erp-webhook.lock';
     $lock = fopen($lockPath, 'c+');
@@ -203,7 +179,6 @@ function svoei_catalog_mutate(string $root, callable $mutator, string $sku = '',
         throw new RuntimeException('catalog_lock_failed');
     }
     try {
-        svoei_assert_not_quarantined($root, $sku, $productId);
         $items = svoei_load_active_catalog($root);
         $result = $mutator($items);
         svoei_save_active_catalog($root, $items);
@@ -214,11 +189,36 @@ function svoei_catalog_mutate(string $root, callable $mutator, string $sku = '',
     }
 }
 
-function svoei_item_matches(array $item, string $sku, string $id = ''): bool
+/**
+ * Olist allows different product IDs to share the same SKU. Only the ERP ID
+ * identifies the product when supplied; a SKU-only lookup is valid solely
+ * when exactly one active catalog record has that SKU. Never use ID OR SKU.
+ *
+ * @param list<array<string,mixed>> $items
+ */
+function svoei_catalog_item_index(array $items, string $sku, string $id = ''): ?int
 {
-    $itemSku = trim((string)($item['sku'] ?? $item['codigo'] ?? ''));
-    $itemId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
-    return ($sku !== '' && strcasecmp($itemSku, $sku) === 0) || ($id !== '' && $itemId === $id);
+    $sku = trim($sku);
+    $id = trim($id);
+    if ($sku === '' && $id === '') throw new InvalidArgumentException('product_identifier_missing');
+
+    $matches = [];
+    foreach ($items as $index => $item) {
+        if (!is_array($item)) continue;
+        $itemId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
+        $itemSku = trim((string)($item['sku'] ?? $item['codigo'] ?? ''));
+        if ($id !== '') {
+            if ($itemId === $id) $matches[] = $index;
+        } elseif ($itemSku !== '' && strcasecmp($itemSku, $sku) === 0) {
+            $matches[] = $index;
+        }
+    }
+    if (count($matches) > 1) {
+        throw new RuntimeException($id !== ''
+            ? 'catalog_product_id_ambiguous'
+            : 'catalog_product_sku_ambiguous_requires_id');
+    }
+    return $matches[0] ?? null;
 }
 
 function svoei_upsert_catalog_product(string $root, array $product): void
@@ -227,124 +227,47 @@ function svoei_upsert_catalog_product(string $root, array $product): void
     $id = trim((string)($product['id'] ?? ''));
     if ($sku === '' && $id === '') throw new InvalidArgumentException('product_identifier_missing');
     svoei_catalog_mutate($root, static function (array &$items) use ($product, $sku, $id): void {
-        $idMatches = [];
-        $skuMatches = [];
-        $legacySkuMatches = [];
-        foreach ($items as $index => $item) {
-            $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
-            $existingSku = trim((string)($item['sku'] ?? $item['codigo'] ?? ''));
-            if ($id !== '' && $existingId === $id) $idMatches[] = $index;
-            if ($sku === '' || strcasecmp($existingSku, $sku) !== 0) continue;
-            $skuMatches[] = $index;
-            // A reused SKU may NOT overwrite a different ERP product ID.
-            if ($id !== '' && $existingId !== '' && $existingId !== $id) {
-                throw new RuntimeException('catalog_sku_identity_conflict');
-            }
-            if ($existingId === '') $legacySkuMatches[] = $index;
-        }
-
-        // An identified product may not acquire a SKU already owned by a
-        // separate legacy (ID-less) catalog row. Otherwise the ID-first path
-        // silently creates two products with the same public SKU.
-        if ($idMatches !== [] && $legacySkuMatches !== []) {
-            throw new RuntimeException('catalog_sku_identity_conflict');
-        }
-
-        $matches = $id !== ''
-            ? ($idMatches !== [] ? $idMatches : $legacySkuMatches)
-            : $skuMatches;
-        if (count($matches) > 1) throw new RuntimeException('catalog_product_ambiguous');
-        if ($matches !== []) {
-            $index = $matches[0];
+        $index = svoei_catalog_item_index($items, $sku, $id);
+        if ($index !== null) {
             $items[$index] = array_replace($items[$index], $product);
             return;
         }
         $items[] = $product;
-    }, $sku, $id);
+    });
 }
 
-function svoei_update_catalog_price(string $root, string $sku, float $price, float $promotional = 0.0, string $productId = '', int $pdvListId = 0): void
+function svoei_update_catalog_price(string $root, string $sku, float $price, float $promotional = 0.0, string $id = ''): void
 {
-    if ($pdvListId < 1) throw new RuntimeException('pdv_list_id_required');
     $sku = trim($sku);
-    $productId = trim($productId);
-    if ($sku === '' && $productId === '') throw new InvalidArgumentException('product_identifier_missing');
-    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $price, $promotional, $productId, $pdvListId): void {
-        // ERP product ID is authoritative. A SKU may be reused by a different
-        // product, or changed while the cache still contains its old value.
-        $matches = [];
-        if ($productId !== '') {
-            foreach ($items as $index => $item) {
-                $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
-                if ($existingId === $productId) $matches[] = $index;
-            }
-            // Only legacy records WITHOUT a product ID may fall back to SKU.
-            // Never overwrite a different, identified product on SKU collision.
-            if ($matches === [] && $sku !== '') {
-                foreach ($items as $index => $item) {
-                    $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
-                    if ($existingId === '' && svoei_item_matches($item, $sku)) $matches[] = $index;
-                }
-            }
-        } else {
-            foreach ($items as $index => $item) {
-                if (svoei_item_matches($item, $sku)) $matches[] = $index;
-            }
-        }
-        if ($matches === []) throw new RuntimeException('catalog_product_not_found');
-        if (count($matches) !== 1) throw new RuntimeException('catalog_product_ambiguous');
-
-        $index = $matches[0];
-        $item = $items[$index];
-        $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
+    $id = trim($id);
+    if ($sku === '' && $id === '') throw new InvalidArgumentException('product_identifier_missing');
+    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $price, $promotional, $id): void {
+        $index = svoei_catalog_item_index($items, $sku, $id);
+        if ($index === null) throw new RuntimeException('catalog_product_not_found');
+        $prices = is_array($items[$index]['precos'] ?? null) ? $items[$index]['precos'] : [];
         $prices['preco'] = max(0.0, $price);
         $prices['precoPromocional'] = max(0.0, $promotional);
         $items[$index]['precos'] = $prices;
-        $items[$index]['price_source'] = 'olist_pdv';
-        $items[$index]['pdv_list_id'] = $pdvListId;
         $items[$index]['sync_source'] = 'tiny_v3';
         $items[$index]['_detail_synced_at'] = gmdate(DATE_ATOM);
-    }, $sku, $productId);
+    });
 }
 
-function svoei_update_catalog_stock(string $root, string $sku, int $quantity, string $productId = ''): void
+function svoei_update_catalog_stock(string $root, string $sku, int $quantity, string $id = ''): void
 {
     $sku = trim($sku);
-    $productId = trim($productId);
-    if ($sku === '' && $productId === '') throw new InvalidArgumentException('product_identifier_missing');
+    $id = trim($id);
+    if ($sku === '' && $id === '') throw new InvalidArgumentException('product_identifier_missing');
     $quantity = max(0, $quantity);
-    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $quantity, $productId): void {
-        // As for prices, a recycled SKU must not select a different ERP
-        // product. Prefer the authoritative product ID when it is available.
-        $matches = [];
-        if ($productId !== '') {
-            foreach ($items as $index => $item) {
-                $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
-                if ($existingId === $productId) $matches[] = $index;
-            }
-            // Compatibility is limited to legacy rows with no ERP ID.
-            if ($matches === [] && $sku !== '') {
-                foreach ($items as $index => $item) {
-                    $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
-                    if ($existingId === '' && svoei_item_matches($item, $sku)) $matches[] = $index;
-                }
-            }
-        } else {
-            foreach ($items as $index => $item) {
-                if (svoei_item_matches($item, $sku)) $matches[] = $index;
-            }
-        }
-        if ($matches === []) throw new RuntimeException('catalog_product_not_found');
-        if (count($matches) !== 1) throw new RuntimeException('catalog_product_ambiguous');
-
-        $index = $matches[0];
-        $item = $items[$index];
+    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $quantity, $id): void {
+        $index = svoei_catalog_item_index($items, $sku, $id);
+        if ($index === null) throw new RuntimeException('catalog_product_not_found');
         $items[$index]['estoque_disponivel'] = $quantity;
-        $items[$index]['estoque'] = is_array($item['estoque'] ?? null) ? $item['estoque'] : [];
+        $items[$index]['estoque'] = is_array($items[$index]['estoque'] ?? null) ? $items[$index]['estoque'] : [];
         $items[$index]['estoque']['quantidade'] = $quantity;
         $items[$index]['sync_source'] = 'tiny_v3';
         $items[$index]['_detail_synced_at'] = gmdate(DATE_ATOM);
-    }, $sku, $productId);
+    });
 }
 
 /** @return list<array<string,string>> */
@@ -392,7 +315,7 @@ function svoei_resolve_v3_product_id(string $sku, string $token): string
 {
     $sku = trim($sku);
     if ($sku === '') throw new InvalidArgumentException('sku_missing');
-    $query = http_build_query(['pesquisa' => $sku, 'situacao' => 'A', 'limit' => 100, 'offset' => 0]);
+    $query = http_build_query(['codigo' => $sku, 'situacao' => 'A', 'limit' => 100, 'offset' => 0]);
     $response = svtop_tiny_get('/produtos?' . $query, $token);
     if ((int)($response['status'] ?? 0) !== 200) throw new RuntimeException('erp_product_search_failed');
     $json = is_array($response['json'] ?? null) ? $response['json'] : [];
@@ -424,71 +347,71 @@ function svoei_refresh_product_from_v3(string $root, string $productId = '', str
     if ((int)($stockResponse['status'] ?? 0) !== 200) throw new RuntimeException('erp_stock_read_failed');
     $stock = is_array($stockResponse['json'] ?? null) ? $stockResponse['json'] : [];
     if (is_array($stock['estoque'] ?? null)) $stock = $stock['estoque'];
-    $pdvList = svpdv_lookup_list($token);
-    $pdv = svpdv_product_prices($token, $productId, $detail, $pdvList);
-    $product = svoei_normalize_v3_product($detail, $stock, $pdv);
+    $product = svoei_normalize_v3_product($detail, $stock);
+    // Price webhooks cannot trust payload/cadastro price: fetch authoritative Amazon list.
+    $amazonTable = sveap_read_table($token);
+    $product = sveap_apply_table($product, $amazonTable);
     svoei_upsert_catalog_product($root, $product);
     return $product;
 }
 
 
 /**
- * Extract ERP references from price notifications. Some price events provide
- * only idProduto, while others provide codigo/sku/skuMapeamento.
- * idMapeamento is NOT a Tiny product ID and must never be used for this lookup.
- *
- * @return array{product_id:string,sku:string}
+ * Persist only the authoritative Amazon 991 price snapshot, preserving
+ * inventory, images, descriptions and commercial references on existing rows.
+ * New IDs begin with zero available stock until a separate stock event runs.
  */
-function svoei_price_event_reference(array $data): array
+function svoei_apply_amazon_price_snapshot(string $root, array $priced): void
 {
-    $productId = svoei_first_text([$data['idProduto'] ?? '', $data['id'] ?? '']);
-    if ($productId !== '' && !ctype_digit($productId)) $productId = '';
-    $sku = svoei_first_text([$data['codigo'] ?? '', $data['sku'] ?? '', $data['skuMapeamento'] ?? '']);
-    if ($productId === '' && $sku === '') throw new InvalidArgumentException('product_identifier_missing');
-    return ['product_id' => $productId, 'sku' => $sku];
+    $id = trim((string)($priced['id'] ?? ''));
+    $sku = trim((string)($priced['sku'] ?? ''));
+    if ($id === '' || !ctype_digit($id)) throw new InvalidArgumentException('product_id_invalid');
+    if (($priced['_price_source'] ?? '') !== 'olist_tiny_amazon'
+        || ($priced['_price_list_id'] ?? null) !== 991
+        || !is_array($priced['precos'] ?? null)
+        || !is_array($priced['_erp_base_prices'] ?? null)) {
+        throw new RuntimeException('amazon_price_snapshot_invalid');
+    }
+    svoei_catalog_mutate($root, static function (array &$items) use ($priced, $id, $sku): void {
+        $index = svoei_catalog_item_index($items, $sku, $id);
+        if ($index === null) {
+            $new = $priced;
+            $new['estoque_disponivel'] = 0;
+            $new['estoque'] = ['quantidade' => 0];
+            $items[] = $new;
+            return;
+        }
+        foreach (['precos', '_erp_base_prices', '_price_source', '_price_list_id',
+                  'sync_source', '_detail_synced_at'] as $key) {
+            $items[$index][$key] = $priced[$key];
+        }
+    });
 }
 
-/**
- * Price events must not depend on a successful stock API call. Read the current
- * ERP v3 product detail, never trust a webhook-supplied commercial amount,
- * then patch the active catalog under the existing webhook lock.
- *
- * @return array{sku:string,price:float,promotional_price:float}
- */
+/** @return array<string,mixed> */
 function svoei_refresh_price_from_v3(string $root, string $productId = '', string $sku = ''): array
 {
     $token = svtop_tiny_get_token();
     if ($token === '') throw new RuntimeException('erp_access_token_missing');
     $productId = trim($productId);
-    $sku = trim($sku);
-    if ($productId === '' && $sku === '') throw new InvalidArgumentException('product_identifier_missing');
     if ($productId === '') $productId = svoei_resolve_v3_product_id($sku, $token);
     if (!ctype_digit($productId)) throw new InvalidArgumentException('product_id_invalid');
 
+    // The price notification must NOT depend on /estoque/{id} availability.
+    // Never trust the commercial amount supplied in a webhook payload.
     $response = svtop_tiny_get('/produtos/' . rawurlencode($productId), $token);
-    if ((int)($response['status'] ?? 0) !== 200) throw new RuntimeException('erp_price_read_failed');
+    if ((int)($response['status'] ?? 0) !== 200) throw new RuntimeException('erp_product_read_failed');
     $detail = svoei_unwrap_product(is_array($response['json'] ?? null) ? $response['json'] : []);
-    if ($detail === []) throw new RuntimeException('erp_price_payload_empty');
-    $returnedId = trim((string)($detail['id'] ?? ''));
-    if ($returnedId !== '' && $returnedId !== $productId) throw new RuntimeException('erp_product_id_mismatch');
-    $resolvedSku = svoei_first_text([$detail['sku'] ?? '', $detail['codigo'] ?? '']);
-    if ($resolvedSku === '') throw new RuntimeException('erp_product_sku_missing');
+    if ($detail === []) throw new RuntimeException('erp_product_payload_empty');
+    $resolvedId = trim((string)($detail['id'] ?? $productId));
+    if ($resolvedId !== $productId) throw new RuntimeException('erp_product_id_mismatch');
 
-    $pdvList = svpdv_lookup_list($token);
-    $pdv = svpdv_product_prices($token, $productId, $detail, $pdvList);
-    $price = $pdv['preco'];
-    $promotional = $pdv['precoPromocional'];
-
-    try {
-        svoei_update_catalog_price($root, $resolvedSku, $price, $promotional, $productId, $pdv['pdv_list_id']);
-    } catch (RuntimeException $e) {
-        if ($e->getMessage() !== 'catalog_product_not_found') throw $e;
-        // For a newly-created item, first import its authoritative v3 detail.
-        $newProduct = svoei_refresh_product_from_v3($root, $productId, $resolvedSku);
-        if (trim((string)($newProduct['sku'] ?? '')) === '') throw new RuntimeException('erp_new_product_import_failed');
-    }
-
-    return ['sku' => $resolvedSku, 'price' => $price, 'promotional_price' => $promotional];
+    $normalized = svoei_normalize_v3_product($detail, ['disponivel' => 0]);
+    $normalized['id'] = $productId;
+    $amazonTable = sveap_read_table($token);
+    $priced = sveap_apply_table($normalized, $amazonTable);
+    svoei_apply_amazon_price_snapshot($root, $priced);
+    return $priced;
 }
 
 function svoei_refresh_stock_from_v3(string $root, string $productId, string $mappedSku, string $erpSku = ''): int

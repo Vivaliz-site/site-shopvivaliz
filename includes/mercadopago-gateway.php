@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
+require_once __DIR__ . '/order-payment-amounts.php';
 
 final class SvMercadoPagoApiException extends RuntimeException
 {
@@ -363,49 +364,37 @@ PY;
 /** @return array */
 function svmp_build_items(array $order): array
 {
+    $amounts = svopa_payment_lines($order);
     $items = [];
-    foreach ((array)($order['items'] ?? []) as $item) {
-        if (!is_array($item)) {
-            continue;
-        }
-        $quantity = max(1, (int)($item['quantity'] ?? 1));
-        $unitPrice = round((float)($item['price'] ?? 0), 2);
-        if ($unitPrice <= 0) {
-            continue;
+    foreach ($amounts['items'] as $line) {
+        $item = $line['item'];
+        $unitPrice = $line['unit_cents'] / 100;
+        if ((int)round($unitPrice * 100) !== $line['unit_cents']) {
+            throw new InvalidArgumentException('payment_amount_out_of_range');
         }
         $items[] = [
             'id' => svmp_truncate((string)($item['sku'] ?? 'produto'), 50),
             'title' => svmp_truncate((string)($item['name'] ?? $item['sku'] ?? 'Produto ShopVivaliz'), 120),
-            'quantity' => $quantity,
+            'quantity' => $line['quantity'],
             'currency_id' => 'BRL',
             'unit_price' => $unitPrice,
             'category_id' => 'others',
             'external_code' => svmp_truncate((string)($item['sku'] ?? ''), 50),
         ];
     }
-    $shipping = round((float)($order['shipping_total'] ?? 0), 2);
-    if ($shipping > 0) {
+    if ($amounts['shipping_cents'] > 0) {
+        $shippingPrice = $amounts['shipping_cents'] / 100;
+        if ((int)round($shippingPrice * 100) !== $amounts['shipping_cents']) {
+            throw new InvalidArgumentException('payment_amount_out_of_range');
+        }
         $items[] = [
             'id' => 'frete',
             'title' => svmp_truncate((string)($order['shipping_label'] ?? 'Frete'), 120),
             'quantity' => 1,
             'currency_id' => 'BRL',
-            'unit_price' => $shipping,
+            'unit_price' => $shippingPrice,
             'category_id' => 'others',
             'external_code' => 'shipping_fee',
-        ];
-    }
-    $discount = round((float)($order['coupon_discount'] ?? 0), 2);
-    if ($discount > 0) {
-        $couponCode = (string)($order['coupon_code'] ?? '');
-        $items[] = [
-            'id' => 'desconto',
-            'title' => svmp_truncate('Desconto' . ($couponCode !== '' ? ' (' . $couponCode . ')' : ''), 120),
-            'quantity' => 1,
-            'currency_id' => 'BRL',
-            'unit_price' => -$discount,
-            'category_id' => 'others',
-            'external_code' => 'coupon_discount',
         ];
     }
     return $items;

@@ -1,8 +1,12 @@
-# Codex Recovery Memory — 2026-08-29
+# Codex Recovery Memory — base historica 2026-08-29
+
+## Atualizacao vinculante — 2026-10-29
+
+O binding de duas VMs da secao de 2026-08-29 abaixo **nao e mais atual**. Producao web/deploy atual e `marina-a1-4c24g` na OCI ESPOSA (RDC 1/2 online), enquanto `always-free-arm-1787907847-26` na OCI PRINCIPAL continua backend/controller/browser. A VM origem `shopvivaliz-free-a1` foi excluida segundo proprietario; SSH `10.0.1.112:22` sem rota. Proibido usar como alvo ou recriar. O MCP central ainda devolve o host antigo em `hosts_list` e nao aceita Marina; MCP independente Marina e seu tunnel-client OpenAI estao inativos. Para operacoes atuais, ler em `main` `AGENTS.md`, `docs/knowledge/host-access.md` e `docs/knowledge/current-topology-and-access-2026-10-29.md`; este arquivo preserva fatos de 2026-08-29 somente como historico. Quotas/OCPU/RAM/volumes devem ser consultados na OCI antes de qualquer decisao; nao reutilizar valores abaixo como atuais.
 
 Read before infrastructure, deploy, cleanup, migration or recovery work.
 
-## Binding state
+## Binding state (historico supersedido em 2026-10-29)
 - Production architecture is TWO surviving OCI A1 VMs only.
 - Backend/data/services: `always-free-arm-1787907847-26` — 3 OCPU / 16 GB.
 - Storefront/web/deploy: `shopvivaliz-free-a1` — 1 OCPU / 8 GB.

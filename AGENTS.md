@@ -1,3 +1,17 @@
+<!-- EXHAUST_AUTHORIZED_ROUTES_V5_20261030 -->
+## Continuidade obrigatoria e esgotamento das rotas autorizadas
+
+Em toda retomada, auditoria V5 e tarefa de reparo, investigar e corrigir ate validar o resultado. Falha de uma ferramenta ou transporte nao encerra a tarefa. Antes de declarar BLOCKED_EXTERNAL, verificar para cada operacao as rotas realmente provisionadas e independentemente autorizadas: MCP ShopVivaliz/controlador; RDC 1 e RDC 2; SSH privado/Tailscale; tunel independente aprovado; navegador grafico real com sessao e lease corretos; e recuperacao oficial via OCI/GitHub Actions quando aplicavel. Registrar em checkpoint nao secreto identidade, permissao, lease/fencing, teste, falha, reparo, proximo fallback e evidencia. Diferenciar NOT_PROVISIONED, AUTH_EXPIRED, NOT_REACHABLE, RUNTIME_LOCKED e DENIED_BY_PROVIDER. Corrigir falhas tecnicas reparaveis e testar novamente sem repeticoes ilimitadas nem agentes duplicados. Nenhum 401/403, MFA, RBAC, protecao de branch, gate de aprovacao humana ou recusa da plataforma pode ser contornado mudando de rota. Nao tocar na VM removida shopvivaliz-free-a1. Sem testes GREEN, efeitos persistidos e E2E na UI real, manter NAO_APTO e checkpoint de continuidade; nao declarar CONCLUIDO.
+<!-- /EXHAUST_AUTHORIZED_ROUTES_V5_20261030 -->
+
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Verificacao posterior, prevalente (2026-10-29):** o MCP central do backend foi corrigido e implantado (PRs #3391/#3392): `hosts_list` agora divulga **somente backend, Fred-Win e KOCEPSV**; `shopvivaliz-free-a1` foi excluida e rejeitada. Marina segue fora da allowlist MCP central; seu MCP proprio OpenAI esta inativo, embora haja RDC direto, SSH privado verificado e tunel SSH do **MEI** ativo para Marina (HTTP 200). O PR #3395 bloqueou 20 jobs legados na origem, sem certificar as funcoes substitutas. O controlador 24x7 ainda exige reconciliacao sob lease valido e o runner `mei-ci-a1` permanece sem registro. **Toda afirmacao mais antiga de "MCP central ainda inclui a origem" neste arquivo e um snapshot anterior, agora superado.** Ver `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **INSTRUÇÃO OPERACIONAL ATUAL PARA TODOS OS AGENTES (2026-10-29):** antes de qualquer execução ou `Retome`, ler no `main` `docs/knowledge/current-topology-and-access-2026-10-29.md`, `docs/knowledge/host-access.md`, `docs/knowledge/agent-rules.md` e o runbook do módulo; registrar SHA/checkpoint e validar identidade e autorização reais. **Produção web/DB/workers = `marina-a1-4c24g` (OCI ESPOSA), via RDC direto comprovado. Backend/controller/browser/MCP central = `always-free-arm-1787907847-26` (OCI PRINCIPAL). `shopvivaliz-free-a1` foi excluída e NÃO é destino válido; nunca reconectar, recriar ou substituir seu alias por Marina.** O MCP central ainda contém inventário antigo e não alcança Marina; seu MCP independente/túnel ainda não está ativo/registrado. SSH privado, RDC 2, sudo e OCI exigem autorização/prova por canal. Workflows/scripts antigos que apontem para a origem não devem ser executados, mesmo que relatórios históricos os recomendem; corrigir de forma revisada, testar e validar antes do uso.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 <!-- OCI_DUAL_ACCOUNT_CANONICAL_V1 -->
 ## OCI: duas contas Oracle Cloud (PRINCIPAL / ESPOSA)
 
@@ -207,20 +221,17 @@ Todo agente (GPT, Claude, Codex, Gemini e controladores) deve associar os clones
 <!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
 
 <!-- SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
-## Acesso canônico aos hosts ShopVivaliz
+## Acesso canonico aos hosts ShopVivaliz — revisao 2026-10-29
 
-Antes de qualquer operação em host, VM, runtime, navegador, serviço, deploy, logs ou recuperação, leia `docs/HOST-ACCESS.md`. No repositório principal, a fonte central detalhada permanece `Vivaliz-site/site-shopvivaliz:docs/knowledge/host-access.md`.
+**Antes de operar:** ler `docs/knowledge/host-access.md` e `docs/knowledge/current-topology-and-access-2026-10-29.md`; registrar revisao e confirmar host/identidade/permissoes ao vivo.
 
-Regras obrigatórias:
-- produção web/deploy: `shopvivaliz-free-a1`, privado `10.0.1.112`;
-- backend/controller/browser: `always-free-arm-1787907847-26`, privado `10.0.1.38`;
-- navegador de agente roda somente no backend/controller; não usar navegador operacional em Fred-Win ou KOCEPSV;
-- rota operacional primaria para hosts/servicos/diagnostico: **Remote Control MCP** privado e auditavel;
-- shell Linux direto: usar SSH privado/Tailscale com identidade dedicada somente quando a capacidade necessaria nao existir no MCP ou ele estiver comprovadamente indisponivel; SSH público, senha interativa e root público são proibidos;
-- sem rota privada ou para reparar/bootstrap do MCP: usar OCI Bastion/GitHub control plane auditável; RustDesk self-hosted permanece para GUI;
-- Windows via backend: Fred-Win = `127.0.0.1:2222`; KOCEPSV = `127.0.0.1:2223`; os relays legados `5557/5558` são apenas bootstrap/recovery;
-- evidência fresca obrigatória antes de operar: `hostname`, identidade (`whoami`/`id`), diretório e estado Git quando aplicável;
-- nunca registrar em Git, docs, logs ou chat o conteúdo de chaves, senhas, tokens, cookies, OTP/TOTP ou secrets.
+- **Producao web/deploy/servicos do site:** `marina-a1-4c24g` (OCI ESPOSA, privado documentado `10.80.1.116`; Tailscale observado `100.118.170.46`). RDC 1/2 direto para operacoes autorizadas; runner Marina para deploys versionados.
+- **Backend/controller/browser:** `always-free-arm-1787907847-26` (OCI PRINCIPAL, privado `10.0.1.38`; Tailscale observado `100.66.174.74`). MCP central so para hosts presentes e validos em sua allowlist; navegador corporativo Dev/Atendimento permanece no backend.
+- **Origem web `shopvivaliz-free-a1` aposentada/excluida conforme proprietario em 2026-10-29**; `10.0.1.112:22` sem rota. Proibido acionar, publicar ou recriar como fallback. Confirmacao `TERMINATED` na OCI exige inventario de lifecycle.
+- **MCP central DESATUALIZADO:** `hosts_list` ainda inclui origem excluida e omite Marina. Nao renomear o host legado nem pressupor que `admin_command_run` do central opera na Marina.
+- **MCP independente Marina NAO APTO:** `shopvivaliz-marina-mcp.service` e `shopvivaliz-marina-mcp-tunnel.service` inativos; Cloudflare admin `active` nao comprova registro de conector OpenAI. Seguir `marina-direct-mcp/README.md` e `docs/ops/marina-independent-secure-mcp-tunnel.md` antes de anunciar disponibilidade.
+- Usar SSH privado/Tailscale somente apos comprovar autenticacao/host key; OCI/GitHub control plane para bootstrap/recovery autorizado; GUI real quando exigida; Windows sao apoio, nao producao.
+- Identidade de host, `sudo`, RBAC, lease/fencing, CI e releases imutaveis devem ser validados; nunca publicar secrets, copiar perfis ou contornar recusa de privilegio.
 <!-- /SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
 
 <!-- GEPETO_EVERY_TASK_V1 -->
@@ -237,7 +248,7 @@ Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs o
 
 <!-- SHOPVIVALIZ_HOST_BOOTSTRAP_V1 -->
 > 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md). O GPT `@dev` e qualquer agente adicional usado como programador/revisor também devem ler [`docs/knowledge/dev-agent-briefing.md`](docs/knowledge/dev-agent-briefing.md), inclusive a política de pesquisa técnica atualizada na web.
-> Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay/controller = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Use **Remote Control MCP como primeira rota operacional**; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
+> **Topologia atual (2026-10-29):** Marina `marina-a1-4c24g` = web/deploy (OCI ESPOSA); `always-free-arm-1787907847-26` = backend/controller/browser (OCI PRINCIPAL). A antiga `shopvivaliz-free-a1` foi excluida segundo o proprietario; seu IP `10.0.1.112` nao e destino valido. O MCP central ainda aponta ao legado e nao inclui Marina; acesso comprovado a Marina e RDC direto, MCP proprio ainda inativo. Ver `docs/knowledge/current-topology-and-access-2026-10-29.md`.
 
 <!-- SUPERPOWERS_EVERY_STAGE_V1 -->
 > 🧭 **@Superpowers CONTÍNUO E OBRIGATÓRIO:** toda conversa, sessão, agente e retomada de tarefa ShopVivaliz deve usar @Superpowers **em cada etapa material**, não apenas no início. Reaplique a disciplina adequada ao passar por planejamento, investigação, implementação, debugging, TDD/testes, revisão, correção, PR/merge, deploy, pós-deploy e auditoria. Em `retome/continue/prossiga`, continue do último checkpoint comprovado sob @Superpowers. Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`.

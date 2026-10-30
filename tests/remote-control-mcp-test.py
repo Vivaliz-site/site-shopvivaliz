@@ -62,11 +62,53 @@ class RemoteControlMcpTests(unittest.TestCase):
         with self.assertRaises(sqlite3.ProgrammingError):
             db.execute("SELECT 1")
 
-    def test_four_canonical_hosts(self):
-        self.assertEqual(
-            set(m.HOSTS),
-            {"always-free-arm-1787907847-26", "shopvivaliz-free-a1", "Fred-Win", "KOCEPSV"},
-        )
+    def test_only_active_hosts_are_advertised(self):
+        self.assertEqual(set(m.HOSTS), {"always-free-arm-1787907847-26", "Fred-Win", "KOCEPSV"})
+        self.assertNotIn("shopvivaliz-free-a1", m.HOSTS)
+        self.assertNotIn("marina-a1-4c24g", m.HOSTS)
+        advertised = {item["name"] for item in m.execute_tool("hosts_list", {})["hosts"]}
+        self.assertEqual(advertised, set(m.HOSTS))
+        for spec in m.tool_specs():
+            host = spec["inputSchema"]["properties"].get("host", {})
+            self.assertNotIn("shopvivaliz-free-a1", host.get("enum", []))
+            self.assertNotIn("marina-a1-4c24g", host.get("enum", []))
+
+    def test_retired_source_rejected_before_network_or_mutation(self):
+        for name, args in (
+            ("host_health", {"host": "shopvivaliz-free-a1"}),
+            ("task_submit", {"host": "shopvivaliz-free-a1", "command": "printf blocked"}),
+            ("admin_command_run", {"host": "shopvivaliz-free-a1", "command": "printf blocked"}),
+        ):
+            with self.subTest(tool=name):
+                with mock.patch.object(m, "subprocess") as execution:
+                    with self.assertRaisesRegex(ValueError, "retired_host_not_executable"):
+                        m.execute_tool(name, args)
+                    execution.run.assert_not_called()
+                    execution.Popen.assert_not_called()
+        with self.assertRaisesRegex(ValueError, "unsupported_host"):
+            m.validate_host("marina-a1-4c24g")
+
+    def test_mcp_startup_filters_legacy_queued_tasks_before_worker(self):
+        source = SERVER_PATH.read_text(encoding="utf-8")
+        main_section = source.split("def main() -> None:", 1)[1]
+        self.assertLess(main_section.index("cancel_retired_queued_tasks()"),
+                        main_section.index("threading.Thread(target=task_worker"))
+
+    def test_retired_queued_task_is_cancelled_without_losing_history(self):
+        tid = "00000000-0000-4000-8000-000000000001"
+        with m.db_conn() as db:
+            db.execute(
+                "INSERT INTO tasks(id,host,command,command_sha256,state,created_at,timeout) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (tid, "shopvivaliz-free-a1", "printf unsafe", "a" * 64, "queued", m.now(), 30),
+            )
+        self.assertEqual(m.cancel_retired_queued_tasks(), 1)
+        record = m.load_task(tid)
+        self.assertEqual(record["state"], "cancelled")
+        self.assertEqual(record["recovery_note"], "retired_host_no_execution")
+        self.assertEqual(m.cancel_retired_queued_tasks(), 0)
+        self.assertEqual(m.load_task(tid)["state"], "cancelled")
+
 
     def test_mcp_tools_include_privileged_and_durable_controls(self):
         names = {item["name"] for item in m.tool_specs()}
@@ -1405,7 +1447,7 @@ systemctl() {
 
     def test_backend_durable_concurrency_is_bounded(self):
         self.assertEqual(m.HOST_DURABLE_LIMITS["always-free-arm-1787907847-26"], 2)
-        self.assertEqual(m.HOST_DURABLE_LIMITS["shopvivaliz-free-a1"], 2)
+        self.assertNotIn("shopvivaliz-free-a1", m.HOST_DURABLE_LIMITS)
         self.assertEqual(m.HOST_DURABLE_LIMITS["Fred-Win"], 1)
         self.assertEqual(m.HOST_DURABLE_LIMITS["KOCEPSV"], 1)
 
@@ -1441,12 +1483,11 @@ systemctl() {
         self.assertEqual(inv[:4], ["/usr/bin/env", "HOME=/root", "USER=root", "LOGNAME=root"])
         self.assertEqual(inv[4:6], ["bash", "-lc"])
 
-    def test_linux_target_uses_privileged_sudo(self):
+    def test_retired_linux_source_cannot_build_ssh_invocation(self):
         m.SSH_KEY.write_text("x")
         m.KNOWN_HOSTS.write_text("x")
-        inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
-        self.assertIn("sudo -n bash", inv[-1])
-        self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
+        with self.assertRaisesRegex(ValueError, "retired_host_not_executable"):
+            m.remote_invocation("shopvivaliz-free-a1", "id -u")
 
     def test_windows_uses_reverse_ssh_ports_not_tailscale(self):
         m.SSH_KEY.write_text("x")
@@ -1478,10 +1519,10 @@ systemctl() {
             "Fred-Win",
             "Permission denied (publickey).",
         ))
-        self.assertFalse(m.is_recoverable_reverse_ssh_error(
-            "shopvivaliz-free-a1",
-            "Connection timed out during banner exchange",
-        ))
+        with self.assertRaisesRegex(ValueError, "retired_host_not_executable"):
+            m.is_recoverable_reverse_ssh_error(
+                "shopvivaliz-free-a1", "Connection timed out during banner exchange",
+            )
 
     def test_reverse_ssh_listener_pid_accepts_only_sshd_listener(self):
         sample = mock.Mock(
@@ -3164,12 +3205,12 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertEqual(result["queue_position"], 1)
         self.assertLess(elapsed, 0.5)
 
-    def test_worker_allows_one_durable_task_per_host_in_parallel(self):
+    def test_worker_allows_one_durable_task_per_active_host_in_parallel(self):
         active_id = self.submit(command="sleep 30")["task_id"]
         self.claim(active_id, state="running", started=True)
         site = m.execute_tool("task_submit", {
-            "host": "shopvivaliz-free-a1",
-            "command": "printf site",
+            "host": "Fred-Win",
+            "command": "printf support",
             "timeout": 30,
         })
         with mock.patch.object(m, "systemd_unit_state", return_value="active"), \

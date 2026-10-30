@@ -18,13 +18,8 @@ on:
       - 'includes/**'
       - 'scripts/*.php'
       - 'scripts/*.js'
-      - 'scripts/olist_pdv.py'
-      - 'scripts/pdv_release_cache.py'
-      - 'scripts/deploy-production.sh'
-      - 'daemon-sync-products.py'
       - 'tests/*.php'
       - 'tests/*.js'
-      - 'tests/test_olist_pdv.py'
       - 'remote-control-browser-mcp/**'
       - 'tests/test_dev_aux_adoption_deploy.py'
       - 'scripts/adopt-verified-dev-aux-browser.sh'
@@ -192,14 +187,6 @@ jobs:
           node --check public/assets/liz-assistant/liz-assistant.js
       - name: Regressao de resolucao de credenciais Tiny/Olist (incidente #747)
         run: php tests/integration-health-credentials-test.php
-      - name: Contrato real de identidade e preco dos webhooks Olist
-        run: |
-          set -Eeuo pipefail
-          php tests/olist-erp-webhook-contract-test.php
-      - name: Contrato comercial da tabela PDV Olist v3
-        run: |
-          set -Eeuo pipefail
-          python3 -m unittest discover -s tests -p 'test_olist_pdv.py'
       - name: Amazon Returns e SAFE-T recovery
         run: |
           set -Eeuo pipefail

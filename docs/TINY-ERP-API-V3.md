@@ -28,8 +28,7 @@ leia o bloco `cURL` de exemplo pra confirmar o path exato antes de codificar —
 | Formas de envio — listar | `GET /formas-envio` | [listar-formas-de-envio](https://api-docs.erp.olist.com/api-reference/logistica/listar-formas-de-envio) |
 | Transportadores — listar | **não existe** (`/transportadores` = 404) | — |
 | Naturezas de operação — listar | **não existe** (`/naturezas-operacao` = 404) | — |
-| Listas de preço — listar | `GET /listas-precos?limit=100&offset=0` (documentação oficial v3; validar na conta autenticada) | [listar listas](https://api-docs.erp.olist.com/api-reference/lista-de-pre%C3%A7os/listar-listas-de-pre%C3%A7os) |
-| Lista de preço — obter exceções | `GET /listas-precos/{idListaDePreco}?idProduto={id}` (documentação oficial v3; validar na conta autenticada) | [obter lista](https://api-docs.erp.olist.com/api-reference/lista-de-pre%C3%A7os/obter-lista-de-pre%C3%A7os) |
+| Listas de preço — listar | não confirmado (`/lista-de-precos`/`/listas-precos` = 404, path real não achado ainda) | — |
 | Estoque | `GET /estoque/{id}` | — (só esse tem `disponivel` correto pra kits) |
 | Pedidos — atualizar despacho/rastreio | `PUT /pedidos/{idPedido}/despacho` | [atualizar-informações-de-rastreamento-do-pedido](https://api-docs.erp.olist.com/api-reference/pedidos/atualizar-informa%C3%A7%C3%B5es-de-rastreamento-do-pedido) |
 | Notas fiscais — obter | `GET /notas/{idNota}` | [obter-nota-fiscal](https://api-docs.erp.olist.com/api-reference/notas/obter-nota-fiscal) |
@@ -416,45 +415,13 @@ curl -s -X POST https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect
   -d client_secret=$OLIST_CLIENT_SECRET -d refresh_token=$OLIST_REFRESH_TOKEN
 
 # Cadastros
-curl -s https://api.tiny.com.br/public-api/v3/formas-pagamento -H "Authorization: Bearer [REDACTED]
-curl -s https://api.tiny.com.br/public-api/v3/formas-envio -H "Authorization: Bearer [REDACTED]
-curl -s https://api.tiny.com.br/public-api/v3/depositos -H "Authorization: Bearer [REDACTED]
-curl -s https://api.tiny.com.br/public-api/v3/vendedores -H "Authorization: Bearer [REDACTED]
+curl -s https://api.tiny.com.br/public-api/v3/formas-pagamento -H "Authorization: Bearer $TOKEN"
+curl -s https://api.tiny.com.br/public-api/v3/formas-envio -H "Authorization: Bearer $TOKEN"
+curl -s https://api.tiny.com.br/public-api/v3/depositos -H "Authorization: Bearer $TOKEN"
+curl -s https://api.tiny.com.br/public-api/v3/vendedores -H "Authorization: Bearer $TOKEN"
 
 # Estoque real de um produto (inclui calculo de kit)
-curl -s https://api.tiny.com.br/public-api/v3/estoque/{id} -H "Authorization: Bearer [REDACTED]
+curl -s https://api.tiny.com.br/public-api/v3/estoque/{id} -H "Authorization: Bearer $TOKEN"
 ```
 
 Documentação completa (sitemap com ~322 páginas): `https://api-docs.erp.olist.com/sitemap.xml`.
-
-
-## Regra comercial ShopVivaliz: PDV obrigatória (2026-10-27)
-
-Os preços públicos base e promocional saem **exclusivamente da lista de preços
-chamada PDV**, identificada por consulta autenticada, paginada, em
-`GET /listas-precos`; não presumir ID a partir de scripts históricos. A fonte
-do cadastro `GET /produtos/{id}.precos` pode ser apenas a base para calcular o
-percentual da PDV, **nunca** a quantia pública sem comprovar a lista.
-
-Consultar `GET /listas-precos/{id}?idProduto={idProduto}` para o produto
-específico, validar identidade da lista, `acrescimoDesconto`, preço fixo e
-`precoPromocional` da exceção. Sem resposta autenticada, com múltiplas listas
-PDV, exceção de produto errada, alteração percentual durante a execução ou
-promoção inválida, falhar fechado; não inventar preço e não editar valores
-comerciais no ERP.
-
-Webhooks, daemon de catálogo, endpoint individual e vitrine exigem origem
-`price_source=olist_pdv` e `pdv_list_id` positivo. A rotina de reconciliação
-deve reconsultar a PDV mesmo quando os detalhes do cadastro estão em cache:
-uma alteração de tabela não necessariamente muda `dataAlteracao` no produto.
-Duplicidade de SKU entre IDs Olist ativos bloqueia publicação de cache novo,
-sem escolher silenciosamente o primeiro produto (#3271).
-
-**Preflight obrigatório antes de integrar e implantar:** na conta efetivamente
-autenticada, atestar nome, ID, percentual e exceções (inclusive promocionais);
-executar regressões PHP/Python; obter revisão/CI e
-`human-approved-price-stock`; publicar via release imutável; confirmar mesmo
-SHA em `main`, `deployment-evidence/deployment/latest.json` e
-`/api/health/version.php`; revalidar 100% do catálogo, endpoints e páginas
-desktop/mobile. Não executar pedidos reais. Até a paridade ser atestada, o
-release permanece não aprovado, mesmo com testes sintéticos verdes.

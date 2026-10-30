@@ -5,6 +5,7 @@ import os
 import re
 
 import google_ads_antique_decore_status as legacy
+from google_ads_legacy_budget_policy import refuse_legacy_ads_execution
 
 CORE_GROUPS = {"Vasos Antique Japi", "Vasos Decore Japi"}
 EXPANSION_GROUP = "Vasos Japi"
@@ -111,6 +112,7 @@ def validate_expansion_keywords(ga, customer_id: str, group_id: int) -> tuple[bo
 
 
 def main() -> int:
+    refuse_legacy_ads_execution("google_ads_antique_decore_status_v2.py")
     required = [
         "GOOGLE_OAUTH_CLIENT_ID",
         "GOOGLE_OAUTH_CLIENT_SECRET",

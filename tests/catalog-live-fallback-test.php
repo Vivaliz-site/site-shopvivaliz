@@ -25,19 +25,25 @@ svclf_assert(count($tinyV3Rows) === count($decoded), 'snapshot alternativo so po
 
 require_once $root . '/includes/catalog-runtime.php';
 svclf_assert(svcr_fallback_products($root) === [], 'fallback legado nao pode publicar produtos');
-$blockManifest = ['quarantined_skus' => [
-    ['sku'=>'1C7Q-LKVS-MDOC','olist_product_ids'=>['342902508','387064728']],
-]];
-svclf_assert(svcr_is_quarantined_identifier($blockManifest, '1c7q-lkvs-mdoc'), 'duplicate SKU must fail closed in public price endpoint');
-svclf_assert(svcr_is_quarantined_identifier($blockManifest, '', '387064728'), 'ID-only access to duplicate SKU must also fail closed');
-svclf_assert(!svcr_is_quarantined_identifier($blockManifest, 'SAFE-1'), 'unrelated catalog products must remain accessible');
 $products = svcr_products();
-svclf_assert(count($products) === 0, 'snapshot antigo sem lista PDV comprovada nao pode expor precos no site');
+$primary = $root . '/storage/products-cache-ativos.json';
 
 ob_start();
 require $root . '/google-merchant-feed.php';
 $feed = (string)ob_get_clean();
 $itemCount = substr_count($feed, '<item>');
-svclf_assert($itemCount === 0, 'Merchant feed nao pode publicar precos de snapshot sem identidade PDV comprovada');
 
-printf("catalog-live-pdv-fail-closed: ok products=%d merchant_items=%d erp_rows=%d\n", count($products), $itemCount, count($decoded));
+// A V3-only snapshot does not attest the Amazon (991) price table. Under an
+// absent runtime cache we must fail closed, not publish misleading offers.
+if (!is_file($primary)) {
+    svclf_assert($products === [], 'cache ausente nao pode ressuscitar precos de snapshot sem Amazon 991');
+    svclf_assert($itemCount === 0, 'Merchant sem catalogo Amazon confirmado nao pode publicar ofertas legadas');
+} else {
+    $cache = json_decode((string)file_get_contents($primary), true);
+    svclf_assert(is_array($cache) && (int)($cache['price_list_id'] ?? 0) === 991,
+        'catalogo runtime deve provar tabela Amazon 991');
+    svclf_assert(count($products) > 0, 'cache Amazon 991 presente deve alimentar o catalogo');
+    svclf_assert($itemCount > 0, 'Merchant deve anunciar itens somente do cache Amazon 991');
+}
+
+printf("catalog-live-amazon-authority: ok products=%d merchant_items=%d legacy_rows=%d\n", count($products), $itemCount, count($decoded));

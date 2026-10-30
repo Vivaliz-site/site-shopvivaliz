@@ -7,6 +7,7 @@ import argparse
 import fcntl
 import json
 import os
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import threading
 import time
 import urllib.error
@@ -16,8 +17,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from scripts.olist_pdv import discover_pdv, fetch_pdv_snapshot, pdv_product_prices
-
 API_BASE = "https://api.tiny.com.br/public-api/v3"
 CACHE_PATH = Path("storage/products-cache-ativos.json")
 VIDEO_SOURCES_PATH = Path("storage/product-video-sources.json")
@@ -25,15 +24,14 @@ _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
 _MIN_REQUEST_INTERVAL = 1.10
 DETAIL_CACHE_MAX_AGE_SECONDS = 2 * 60 * 60
+AMAZON_PRICE_LIST_ID = 991
+CENT = Decimal('0.01')
+_UNCHECKED_CACHE_REVISION = object()
 
 
 def public_product(item: dict[str, Any]) -> dict[str, Any]:
     """Keep only fields required by the public storefront cache."""
-    if item.get("price_source") != "olist_pdv" or int(item.get("pdv_list_id") or 0) < 1:
-        raise ValueError("pdv_prices_required")
     prices = item.get("precos") if isinstance(item.get("precos"), dict) else {}
-    if float(prices.get("preco") or 0) <= 0:
-        raise ValueError("pdv_price_invalid")
     stock = item.get("estoque") if isinstance(item.get("estoque"), dict) else {}
     category = item.get("categoria") if isinstance(item.get("categoria"), dict) else {}
     brand = item.get("marca") if isinstance(item.get("marca"), dict) else {}
@@ -43,7 +41,12 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
     for attachment in item.get("anexos", []) if isinstance(item.get("anexos"), list) else []:
         if isinstance(attachment, dict) and str(attachment.get("url", "")).startswith("https://"):
             attachments.append({"url": str(attachment["url"])})
-    quantity = max(0, int(item.get("estoque_disponivel") or stock.get("quantidade") or 0))
+    # Numeric zero is a valid authoritative ERP available-stock value.
+    # Never fall back to the gross physical quantity when available is 0.
+    source_quantity = (item["estoque_disponivel"]
+                       if item.get("estoque_disponivel") is not None
+                       else stock.get("quantidade", 0))
+    quantity = max(0, int(source_quantity or 0))
     kit_composition = []
     for component in item.get("kit", []) if isinstance(item.get("kit"), list) else []:
         if not isinstance(component, dict):
@@ -64,9 +67,12 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "unidade": str(item.get("unidade") or ""),
         "gtin": str(item.get("gtin") or ""),
         "precos": {
-            # Only the explicitly PDV-derived fields are publishable.
-            # Never fall back to registration preco/preco_venda.
-            "preco": float(prices["preco"]),
+            "preco": float(prices.get("preco") or prices.get("preco_venda") or item.get("preco") or 0),
+            "precoPromocional": float(prices.get("precoPromocional") or 0),
+        },
+        # Preserve ERP cadastro values separately: site prices will be Amazon-list prices.
+        "_erp_base_prices": {
+            "preco": float(prices.get("preco") or prices.get("preco_venda") or item.get("preco") or 0),
             "precoPromocional": float(prices.get("precoPromocional") or 0),
         },
         "estoque": {"quantidade": quantity},
@@ -91,10 +97,6 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "slug": str(seo.get("slug") or item.get("slug") or ""),
         "video_url": str(seo.get("linkVideo") or item.get("video_url") or "").strip(),
         "sync_source": "tiny_v3",
-        "price_source": "olist_pdv",
-        "pdv_list_id": int(item["pdv_list_id"]),
-        "_pdv_erp_price": item.get("_pdv_erp_price"),
-        "_pdv_erp_promo": item.get("_pdv_erp_promo"),
         "_olist_updated_at": str(item.get("_olist_updated_at") or "").strip(),
         "_detail_synced_at": str(item.get("_detail_synced_at") or datetime.now(timezone.utc).isoformat()),
     }
@@ -177,6 +179,77 @@ def api_get(path: str, token: str, timeout: int = 30, attempts: int = 5) -> dict
     raise RuntimeError(f"API request failed for {path}: {last_error}")
 
 
+def price_decimal(value: Any, label: str, allow_zero: bool = True) -> Decimal:
+    if isinstance(value, bool):
+        raise RuntimeError(f"{label}_invalid")
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise RuntimeError(f"{label}_invalid") from None
+    if not number.is_finite() or number < 0 or (not allow_zero and number == 0):
+        raise RuntimeError(f"{label}_invalid")
+    return number
+
+
+def fetch_amazon_table(token: str) -> tuple[Decimal, dict[str, tuple[Decimal, Decimal]]]:
+    """Authoritative ERP Amazon price list: general percent + fixed per-product exceptions."""
+    payload = api_get(f"listas-precos/{AMAZON_PRICE_LIST_ID}", token)
+    if (str(payload.get("id")) != str(AMAZON_PRICE_LIST_ID)
+        or str(payload.get("descricao", "")).strip().casefold() != "amazon"
+        or not isinstance(payload.get("excecoes"), list)):
+        raise RuntimeError("amazon_price_table_invalid")
+    raw_percent = payload.get("acrescimoDesconto")
+    if raw_percent is None or isinstance(raw_percent, bool):
+        raise RuntimeError("amazon_percent_invalid")
+    try:
+        percent = Decimal(str(raw_percent))
+    except (InvalidOperation, ValueError, TypeError):
+        raise RuntimeError("amazon_percent_invalid") from None
+    if not percent.is_finite() or percent <= -100 or percent > 1000:
+        raise RuntimeError("amazon_percent_invalid")
+    exceptions: dict[str, tuple[Decimal, Decimal]] = {}
+    for row in payload["excecoes"]:
+        if not isinstance(row, dict):
+            raise RuntimeError("amazon_price_exception_invalid")
+        key = str(row.get("idProduto") or "").strip()
+        if not key.isdecimal() or key in exceptions:
+            raise RuntimeError("amazon_price_exception_id_invalid")
+        price = price_decimal(row.get("preco"), "amazon_exception_price", allow_zero=False)
+        promo = price_decimal(row.get("precoPromocional", 0), "amazon_exception_promo")
+        exceptions[key] = (price, promo)
+    return percent, exceptions
+
+
+def apply_amazon_prices(
+    products: list[dict[str, Any]],
+    table: tuple[Decimal, dict[str, tuple[Decimal, Decimal]]],
+) -> int:
+    """Recompute from original ERP prices on EVERY sync; never compound overrides."""
+    percent, exceptions = table
+    factor = Decimal("1") + percent / Decimal("100")
+    matched = 0
+    for item in products:
+        key = str(item.get("id") or "").strip()
+        base = item.get("_erp_base_prices")
+        if not key.isdecimal() or not isinstance(base, dict):
+            raise RuntimeError("erp_base_price_unavailable_preserve_existing_cache")
+        regular = price_decimal(base.get("preco"), "erp_base_price")
+        promo = price_decimal(base.get("precoPromocional", 0), "erp_base_promo")
+        if key in exceptions:
+            regular, promo = exceptions[key]
+            matched += 1
+        else:
+            regular, promo = regular * factor, promo * factor
+        item["precos"] = {
+            "preco": float(regular.quantize(CENT, rounding=ROUND_HALF_UP)),
+            "precoPromocional": float(promo.quantize(CENT, rounding=ROUND_HALF_UP)),
+        }
+        item["_price_source"] = "olist_tiny_amazon"
+        item["_price_list_id"] = AMAZON_PRICE_LIST_ID
+        item["sync_source"] = "tiny_v3"
+    return matched
+
+
 def fetch_products_active(token: str) -> list[dict[str, Any]]:
     products: list[dict[str, Any]] = []
     offset = 0
@@ -247,83 +320,80 @@ def detail_cache_is_fresh(cached: dict[str, Any], current_marker: str, now: date
     return age <= DETAIL_CACHE_MAX_AGE_SECONDS
 
 
+def authoritative_stock_quantity(stock_detail: dict[str, Any]) -> int:
+    """Only the ERP /estoque/{id}.disponivel field is sellable inventory.
+
+    A gross 'saldo' can include reserved units; using it can oversell stock.
+    Unavailable or malformed authoritative data must fail closed.
+    """
+    if not isinstance(stock_detail, dict) or "disponivel" not in stock_detail:
+        raise RuntimeError("erp_sellable_stock_unavailable")
+    value = stock_detail["disponivel"]
+    if isinstance(value, bool):
+        raise RuntimeError("erp_sellable_stock_invalid")
+    try:
+        quantity = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise RuntimeError("erp_sellable_stock_invalid") from None
+    if not quantity.is_finite():
+        raise RuntimeError("erp_sellable_stock_invalid")
+    # Negative quantities are valid ERP responses for oversold/reserved
+    # products. There are zero units available to sell, not an API failure.
+    return max(0, int(quantity))
+
+
 def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 4) -> tuple[list[dict[str, Any]], int]:
-    # This is a LIVE authenticated discovery; never infer a saved/historical ID.
-    pdv_list = discover_pdv(api_get, token)
-    pdv_snapshot = fetch_pdv_snapshot(api_get, token, pdv_list)
     previous = load_previous_cache()
     enriched: dict[str, dict[str, Any]] = {}
     failures = 0
     pending: list[dict[str, Any]] = []
+    reusable_count = 0
 
     for summary in summaries:
         product_id = str(summary.get("id", ""))
         if not product_id:
             failures += 1
             continue
-        cached = previous.get(product_id)
-        current_marker = str(summary.get("dataAlteracao") or "").strip()
-        if (isinstance(cached, dict)
-                and cached.get("price_source") == "olist_pdv"
-                and cached.get("_pdv_erp_price") is not None
-                and detail_cache_is_fresh(cached, current_marker)):
-            try:
-                current_prices = pdv_product_prices(
-                    api_get, token, int(product_id),
-                    {"preco": cached["_pdv_erp_price"], "precoPromocional": cached.get("_pdv_erp_promo", 0)},
-                    pdv_list,
-                    pdv_snapshot,
-                )
-                refreshed = dict(cached)
-                refreshed["precos"] = {
-                    "preco": current_prices["preco"],
-                    "precoPromocional": current_prices["precoPromocional"],
-                }
-                refreshed["pdv_list_id"] = current_prices["pdv_list_id"]
-                refreshed["price_source"] = "olist_pdv"
-                enriched[product_id] = refreshed
-            except (TypeError, ValueError, RuntimeError) as exc:
-                failures += 1
-                print(f"[!] PDV indisponivel para ID {product_id}: {type(exc).__name__}; cache nao sera publicado")
-            continue
         pending.append(summary)
+        cached = previous.get(product_id)
+        marker = str(summary.get("dataAlteracao") or "").strip()
+        if (isinstance(cached, dict) and isinstance(cached.get("_erp_base_prices"), dict)
+            and detail_cache_is_fresh(cached, marker)):
+            reusable_count += 1
 
-    reused = len(summaries) - len(pending) - failures
-    if reused:
-        print(f"[+] Detalhes reaproveitados do cache: {reused}; pendentes={len(pending)}")
+    if reusable_count:
+        print(f"[+] Detalhes reutilizaveis: {reusable_count}; estoque sera consultado no ERP para todos")
 
     def fetch(summary: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         product_id = str(summary.get("id", ""))
         if not product_id:
             raise RuntimeError("product_id_missing")
-        detail = api_get(f"produtos/{product_id}", token)
-        merged = dict(summary)
-        merged.update(detail)
-        stock = merged.get("estoque") if isinstance(merged.get("estoque"), dict) else {}
-        quantity = max(0, int(stock.get("quantidade") or 0))
-        try:
-            stock_detail = api_get(f"estoque/{product_id}", token, attempts=2)
-            if "disponivel" in stock_detail:
-                quantity = max(0, int(stock_detail.get("disponivel") or 0))
-        except RuntimeError:
-            pass
+        cached = previous.get(product_id)
+        current_marker = str(summary.get("dataAlteracao") or "").strip()
+        reuse_detail = (isinstance(cached, dict) and isinstance(cached.get("_erp_base_prices"), dict)
+                        and detail_cache_is_fresh(cached, current_marker))
 
-        raw_prices = detail.get("precos") if isinstance(detail.get("precos"), dict) else {}
-        pdv = pdv_product_prices(api_get, token, int(product_id), raw_prices, pdv_list, pdv_snapshot)
-        merged["_pdv_erp_price"] = raw_prices.get("preco", raw_prices.get("preco_venda"))
-        merged["_pdv_erp_promo"] = raw_prices.get("precoPromocional", raw_prices.get("preco_promocional", 0))
-        merged["precos"] = {
-            "preco": pdv["preco"],
-            "precoPromocional": pdv["precoPromocional"],
-        }
-        merged["price_source"] = "olist_pdv"
-        merged["pdv_list_id"] = pdv["pdv_list_id"]
-        merged["estoque_disponivel"] = quantity
-        marker = str(summary.get("dataAlteracao") or merged.get("dataAlteracao") or "").strip()
-        if marker:
-            merged["_olist_updated_at"] = marker
-        merged["_detail_synced_at"] = datetime.now(timezone.utc).isoformat()
-        return product_id, public_product(merged)
+        if reuse_detail:
+            product = dict(cached)
+        else:
+            detail = api_get(f"produtos/{product_id}", token)
+            merged = dict(summary)
+            merged.update(detail)
+            product = public_product(merged)
+            marker = str(summary.get("dataAlteracao") or merged.get("dataAlteracao") or "").strip()
+            if marker:
+                product["_olist_updated_at"] = marker
+            product["_detail_synced_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Even if product registration/price has not changed, a new reservation
+        # can change available stock. Never reuse inventory for two hours.
+        stock_detail = api_get(f"estoque/{product_id}", token, attempts=2)
+        quantity = authoritative_stock_quantity(stock_detail)
+        product["estoque_disponivel"] = quantity
+        product["estoque"] = {"quantidade": quantity}
+        product["_stock_synced_at"] = datetime.now(timezone.utc).isoformat()
+        product.pop("_stock_sync_status", None)
+        return product_id, product
 
     if pending:
         with ThreadPoolExecutor(max_workers=max(1, min(workers, 8))) as executor:
@@ -336,9 +406,20 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
                     enriched[key] = product
                 except Exception as exc:
                     failures += 1
-                    print(f"[!] Detalhe/PDV {product_id} falhou; cache inteiro anterior preservado ({type(exc).__name__})")
+                    cached = previous.get(product_id)
+                    if isinstance(cached, dict):
+                        # Keep the previous verified Amazon price/identity but
+                        # fail CLOSED for commerce: unknown sellable stock = 0.
+                        fallback = dict(cached)
+                        fallback["estoque_disponivel"] = 0
+                        fallback["estoque"] = {"quantidade": 0}
+                        fallback["_stock_sync_status"] = "unavailable"
+                        enriched[product_id] = fallback
+                        print(f"[!] Estoque {product_id} indisponivel; venda bloqueada ({type(exc).__name__})")
+                    else:
+                        print(f"[!] Produto novo {product_id} adiado sem estoque autoritativo ({type(exc).__name__})")
                 if index % 25 == 0 or index == len(pending):
-                    print(f"[+] Detalhes processados: {index}/{len(pending)}; falhas={failures}")
+                    print(f"[+] Produtos com estoque ERP verificado: {index}/{len(pending)}; falhas={failures}")
 
     ordered = [enriched[str(item.get("id", ""))] for item in summaries if str(item.get("id", "")) in enriched]
     return ordered, failures
@@ -351,11 +432,15 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
     dos kits como o minimo, entre os componentes, de estoque_do_componente
     dividido pela quantidade exigida por kit.
     """
-    stock_by_sku = {
-        str(item.get("sku") or ""): int(item.get("estoque_disponivel") or 0)
-        for item in products
-        if item.get("sku")
-    }
+    stock_by_sku: dict[str, int] = {}
+    for item in products:
+        sku = str(item.get("sku") or "").strip()
+        if not sku:
+            continue
+        stock = max(0, int(item.get("estoque_disponivel") or 0))
+        # Duplicate SKUs are ambiguous in kits; using the last row can
+        # overstate stock if another product ID is already out of stock.
+        stock_by_sku[sku] = min(stock_by_sku[sku], stock) if sku in stock_by_sku else stock
     updated = 0
     for item in products:
         if item.get("tipo") != "K":
@@ -375,136 +460,71 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
     return updated
 
 
-def recover_missing_skus(summaries: list[dict[str, Any]], token: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Verify missing SKU from the authenticated ERP detail, never from stale cache."""
-    resolved: list[dict[str, Any]] = []
-    quarantined: list[dict[str, Any]] = []
-    for row in summaries:
-        product_id = str(row.get("id") or "").strip()
-        if not product_id or not product_id.isdigit():
-            raise ValueError("erp_product_id_missing")
-        sku = str(row.get("sku") or row.get("codigo") or "").strip()
-        if sku:
-            resolved.append(row)
-            continue
-        detail = api_get(f"produtos/{product_id}", token)
-        if str(detail.get("id") or "") != product_id:
-            raise ValueError("erp_product_id_mismatch")
-        verified_sku = str(detail.get("sku") or detail.get("codigo") or "").strip()
-        if not verified_sku:
-            quarantined.append({
-                "sku": "",
-                "olist_product_ids": [product_id],
-                "reason": "missing_erp_sku",
-            })
-            continue
-        updated = dict(row)
-        updated["sku"] = verified_sku
-        resolved.append(updated)
-    return resolved, quarantined
+def cache_revision(path: Path) -> tuple[int, int, int] | None:
+    """Identity of the last published atomic cache; inode changes on each replace."""
+    try:
+        st = path.stat()
+    except FileNotFoundError:
+        return None
+    return st.st_ino, st.st_mtime_ns, st.st_size
 
 
-def partition_ambiguous_skus(summaries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Keep only unambiguous ERP IDs; quarantine EVERY member of a colliding SKU.
-
-    Ambiguity is an explicit unresolved ERP incident, not a silent choice of the
-    cheapest/first item. Missing identities or repeated IDs block the full sync.
-    """
-    by_sku: dict[str, list[dict[str, Any]]] = {}
-    seen_ids: set[str] = set()
-    for row in summaries:
-        sku = str(row.get("sku") or row.get("codigo") or "").strip()
-        product_id = str(row.get("id") or "").strip()
-        if not sku or not product_id or product_id in seen_ids:
-            raise ValueError("erp_missing_or_duplicate_identity")
-        seen_ids.add(product_id)
-        by_sku.setdefault(sku.casefold(), []).append(row)
-    quarantined: list[dict[str, Any]] = []
-    ambiguous_keys: set[str] = set()
-    for key, rows in by_sku.items():
-        if len(rows) < 2:
-            continue
-        ambiguous_keys.add(key)
-        quarantined.append({
-            "sku": str(rows[0].get("sku") or rows[0].get("codigo") or "").strip(),
-            "olist_product_ids": sorted(str(row["id"]) for row in rows),
-            "reason": "duplicate_active_sku",
-        })
-    clean = [row for row in summaries if str(row.get("sku") or row.get("codigo") or "").strip().casefold() not in ambiguous_keys]
-    return clean, sorted(quarantined, key=lambda item: item["sku"].casefold())
-
-
-def save_products(products: list[dict[str, Any]], quarantined: list[dict[str, Any]] | None = None, source_count: int | None = None, *, publish: bool = True) -> Path:
+def save_products(
+    products: list[dict[str, Any]],
+    expected_revision: tuple[int, int, int] | None | object = _UNCHECKED_CACHE_REVISION,
+) -> Path:
     registry = load_video_sources()
     products = [merge_video_sources(item, registry) for item in products]
-    blocked = quarantined or []
-    payload = {
-        "total": len(products),
-        "source_active_count": source_count if source_count is not None else len(products),
-        "quarantined_skus": blocked,
-        "quarantined_product_count": sum(len(row["olist_product_ids"]) for row in blocked),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "itens": products,
-    }
+    payload = {"total": len(products), "timestamp": datetime.now(timezone.utc).isoformat(),
+               "price_list_id": AMAZON_PRICE_LIST_ID, "price_source": "olist_tiny_amazon", "itens": products}
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # Same cross-language lock used by the authenticated Olist webhook.
+    # Every writer checks the revision INSIDE the lock, preventing a slow
+    # reconciliation from overwriting a newer event or another reconciliation.
     lock_path = CACHE_PATH.parent / "olist-erp-webhook.lock"
-    # PHP webhook mutations and the full reconciler must share one writer lock.
-    with lock_path.open("a+") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        temporary = CACHE_PATH.with_suffix(".json.tmp")
+    with lock_path.open("a+") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         try:
-            temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            temporary.replace(CACHE_PATH)
-            if publish:
-                # Derived caches must not serve registration prices after a PDV refresh.
-                (CACHE_PATH.parent / "cache" / "products-cache-ativos.json").unlink(missing_ok=True)
-                derived_dir = CACHE_PATH.parent / "cache" / "catalog-api"
-                if derived_dir.is_dir():
-                    for old_response in derived_dir.glob("*.json"):
-                        old_response.unlink(missing_ok=True)
+            if (expected_revision is not _UNCHECKED_CACHE_REVISION
+                    and cache_revision(CACHE_PATH) != expected_revision):
+                raise RuntimeError("catalog_changed_during_reconcile_retry_later")
+            temporary = CACHE_PATH.with_suffix(".json.tmp")
+            try:
+                temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                os.chmod(temporary, 0o660)
+                temporary.replace(CACHE_PATH)
+            finally:
+                temporary.unlink(missing_ok=True)
         finally:
-            temporary.unlink(missing_ok=True)
-            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
     return CACHE_PATH
 
 
-def sync_once(workers: int, *, stage_only: bool = False) -> bool:
+def sync_once(workers: int) -> bool:
+    initial_revision = cache_revision(CACHE_PATH)
     token = get_token()
     if not token:
         print("[!] OLIST_ACCESS_TOKEN/TINY_ACCESS_TOKEN não configurado")
         return False
+    # Fail closed before publishing any price if the ERP price table cannot be read.
+    amazon_table = fetch_amazon_table(token)
     summaries = fetch_products_active(token)
     if not summaries:
         print("[!] A API não retornou produtos ativos; cache existente preservado")
         return False
-    # Block ONLY the ambiguous SKUs, with durable provenance in the same atomic
-    # catalog snapshot. Other products may publish only after full PDV proof.
-    try:
-        identified_summaries, missing_skus = recover_missing_skus(summaries, token)
-        unique_summaries, duplicate_skus = partition_ambiguous_skus(identified_summaries)
-        quarantined = sorted(missing_skus + duplicate_skus, key=lambda item: (item["sku"].casefold(), item["olist_product_ids"]))
-    except (TypeError, ValueError, RuntimeError) as exc:
-        print(f"[!] Identidade ERP invalida ({type(exc).__name__}); cache anterior preservado")
+    products, failures = enrich_products(summaries, token, workers)
+    if not products:
+        print("[!] Nenhum detalhe utilizável; cache existente preservado")
         return False
-    if not unique_summaries:
-        print("[!] Nenhum SKU unico verificavel; cache anterior preservado")
-        return False
-    if quarantined:
-        print(f"[!] QUARENTENA ERP: {len(quarantined)} SKU(s), issue #3271; todos os IDs associados bloqueados")
-    products, failures = enrich_products(unique_summaries, token, workers)
-    if failures or len(products) != len(unique_summaries):
-        print(f"[!] PDV dos SKUs unicos nao comprovada; {failures} falhas; {len(products)}/{len(unique_summaries)} produtos; cache anterior preservado")
-        return False
-    if any(item.get("price_source") != "olist_pdv" or int(item.get("pdv_list_id") or 0) < 1 for item in products):
-        print("[!] Algum preco nao proveio de PDV; cache anterior preservado")
-        return False
+    exceptions_matched = apply_amazon_prices(products, amazon_table)
+    print(f"[+] Amazon ERP table {AMAZON_PRICE_LIST_ID}: {exceptions_matched} exceptions applied to active products")
     kits_updated = apply_kit_stock(products)
     if kits_updated:
         print(f"[+] Estoque recalculado pela composicao em {kits_updated} produtos tipo kit")
-    output = save_products(products, quarantined, len(summaries), publish=not stage_only)
+    output = save_products(products, expected_revision=initial_revision)
     with_stock = sum(1 for item in products if int(item.get("estoque_disponivel") or 0) > 0)
     with_images = sum(1 for item in products if isinstance(item.get("anexos"), list) and item["anexos"])
-    print(f"[+] Cache atômico salvo: {len(products)} produtos PDV, {with_stock} com estoque, {with_images} com imagem; {len(quarantined)} SKU(s) em quarentena NAO_APTO; {failures} falhas em {output}")
+    print(f"[+] Cache atômico salvo: {len(products)} produtos, {with_stock} com estoque, {with_images} com imagem, {failures} falhas em {output}")
     return failures < len(summaries)
 
 
@@ -513,21 +533,11 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="Executa uma sincronização e encerra")
     parser.add_argument("--interval", type=int, default=300, help="Intervalo do daemon em segundos")
     parser.add_argument("--workers", type=int, default=4, help="Concorrência para detalhes (1-8)")
-    parser.add_argument("--stage-cache", type=Path, help="Gravar SOMENTE cache candidato isolado; nunca publicar o resultado")
     args = parser.parse_args()
-    global CACHE_PATH
-    if args.stage_cache is not None:
-        if not args.once or not args.stage_cache.is_absolute() or not args.stage_cache.name.startswith(".pdv-stage-") or args.stage_cache.suffix != ".json":
-            parser.error("--stage-cache exige --once e destino absoluto .pdv-stage-*.json")
-        # The deployment runner creates this non-web-linked staging directory.
-        allowed_stage_root = Path("/home/ubuntu/shopvivaliz-deploy/shared/deployment-pdv").resolve()
-        if args.stage_cache.parent.resolve() != allowed_stage_root:
-            parser.error("--stage-cache deve permanecer no diretorio de staging autorizado")
-        CACHE_PATH = args.stage_cache
     while True:
         started = time.monotonic()
         try:
-            ok = sync_once(args.workers, stage_only=args.stage_cache is not None)
+            ok = sync_once(args.workers)
         except KeyboardInterrupt:
             return 130
         except Exception as exc:

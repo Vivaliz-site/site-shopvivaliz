@@ -25,6 +25,19 @@ try {
     $user = $canonical->fetch(PDO::FETCH_ASSOC);
 
     if (!$user || empty($user['id'])) {
+        require_once __DIR__ . '/../includes/admin-identity-smoke-resolver.php';
+
+        $domainAdminQuery = $pdo->prepare(
+            "SELECT id, is_admin
+               FROM users
+              WHERE LOWER(email) LIKE :domain
+                AND is_admin = 1
+              ORDER BY id ASC
+              LIMIT 1"
+        );
+        $domainAdminQuery->execute([':domain' => '%@shopvivaliz.com.br']);
+        $domainAdmin = $domainAdminQuery->fetch(PDO::FETCH_ASSOC);
+
         $domain = $pdo->prepare(
             "SELECT id, is_admin
                FROM users
@@ -34,11 +47,12 @@ try {
         );
         $domain->execute([':domain' => '%@shopvivaliz.com.br']);
         $accounts = $domain->fetchAll(PDO::FETCH_ASSOC);
-        if (count($accounts) !== 1 || empty($accounts[0]['id'])) {
-            fwrite(STDERR, "Unable to resolve one persisted ShopVivaliz admin identity\n");
+        $user = sv_choose_admin_smoke_identity(null, $domainAdmin ?: null, $accounts);
+
+        if (!$user || empty($user['id'])) {
+            fwrite(STDERR, "Unable to resolve a persisted ShopVivaliz admin identity without guessing\n");
             exit(3);
         }
-        $user = $accounts[0];
     }
 
     if ((int)($user['is_admin'] ?? 0) !== 1) {

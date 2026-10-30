@@ -2,3 +2,57 @@ self-hosted-runner:
   labels:
     - shopvivaliz-a1-deploy
     - shopvivaliz-backend-browser
+
+# Deleted-host jobs intentionally remain fail closed. Suppress only actionlint's
+# literal-false advisory in these exact retired workflow files. Syntax, other
+# expressions (including constant true), runner and security checks stay active.
+# https://github.com/rhysd/actionlint/blob/v1.7.12/docs/config.md#configuration-file
+paths:
+  .github/workflows/abandoned-cart-cron-install.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/amazon-returns-safet-recovery.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/backend-disk-hygiene-reconcile.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/dc-four-host-login-once.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/desktop-commander-24h-health.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/desktop-commander-peer-repair.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/desktop-commander-reauth-runner.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/google-ads-rest-audit.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/linux-desktop-commander-stage-protection.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/ml-pricing-production-bootstrap.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/mlrr-production-ops-bridge.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/oci-principal-controller-downsize.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/oci-site-runner-recovery.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/production-functional-audit.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/recover-shopvivaliz-runner.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/remote-control-mcp-bootstrap.yml:
+    ignore:
+      - '^constant expression "false" in condition\. remove the if: section$'

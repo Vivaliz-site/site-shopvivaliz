@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 
 import google_ads_antique_decore_status_v2 as monitor
+from google_ads_legacy_budget_policy import refuse_legacy_ads_execution
 
 EXPECTED_CAMPAIGN_ID = int(os.getenv("EXPECTED_CAMPAIGN_ID", "24144257692"))
 # Mirrors scripts/google_ads_campaign_live_ready.json guardrails.max_cpc_brl = 0.90.
@@ -15,6 +16,7 @@ def fail(message: str) -> None:
 
 
 def main() -> int:
+    refuse_legacy_ads_execution("google_ads_operator_core_recovery.py")
     required = [
         "GOOGLE_OAUTH_CLIENT_ID",
         "GOOGLE_OAUTH_CLIENT_SECRET",

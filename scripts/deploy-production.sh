@@ -204,8 +204,12 @@ reconcile_ai_squad_codex_bridge_unit() {
   if ! run_ai_squad_installer "$installer"; then
     log ERROR "Falha ao reconciliar bridge Codex"
     log ERROR "Codex bridge diagnostics follow"
-    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user --no-pager --full status shopvivaliz-squad-codex-bridge.service >> "$LOG_FILE" 2>&1 || true
-    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" journalctl --user -u shopvivaliz-squad-codex-bridge.service -n 40 --no-pager >> "$LOG_FILE" 2>&1 || true
+    if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user --no-pager --full status shopvivaliz-squad-codex-bridge.service >> "$LOG_FILE" 2>&1; then
+      log WARN "Diagnostico do bridge Codex: status indisponivel ou servico inativo; falha de reconciliacao preservada"
+    fi
+    if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" journalctl --user -u shopvivaliz-squad-codex-bridge.service -n 40 --no-pager >> "$LOG_FILE" 2>&1; then
+      log WARN "Diagnostico do bridge Codex: journal indisponivel; falha de reconciliacao preservada"
+    fi
     return 1
   fi
 }
@@ -915,7 +919,9 @@ case "$deploy_available_bytes" in
 esac
 if [ "$deploy_available_bytes" -lt "$MIN_DEPLOY_FREE_BYTES" ]; then
   log ERROR "Deploy adiado: ${deploy_available_bytes} bytes livres abaixo de ${MIN_DEPLOY_FREE_BYTES}"
-  write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "disco abaixo do minimo de 6 GiB; nova release nao criada" || true
+  if ! write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "disco abaixo do minimo de 6 GiB; nova release nao criada"; then
+    log ERROR "Falha ao registrar adiamento por disco; deploy continua recusado com exit 75"
+  fi
   exit 75
 fi
 
@@ -1017,32 +1023,6 @@ if ! reconcile_runtime_secrets "$NEW_RELEASE_PATH"; then
   exit 1
 fi
 
-# First PDV release: build and attest a complete, non-public candidate before
-# switching the immutable current symlink. Without this step the new storefront
-# would reject every legacy registration-priced row and appear empty.
-if [ -f "$NEW_RELEASE_PATH/includes/olist-pdv-price.php" ] \
-  && { [ ! -e "$CURRENT_LINK/includes/olist-pdv-price.php" ] || [ ! -f "$CURRENT_LINK/includes/olist-pdv-price.php" ]; }; then
-  log INFO "PDV first-cutover: preparing validated catalog while old release stays active"
-  pdv_stage_dir="$SHARED_DIR/deployment-pdv"
-  pdv_candidate="$pdv_stage_dir/.pdv-stage-$REMOTE_SHA.json"
-  install -d -m 0700 "$pdv_stage_dir"
-  if ! (cd "$NEW_RELEASE_PATH" && python3 daemon-sync-products.py --once --stage-cache "$pdv_candidate") >> "$LOG_FILE" 2>&1; then
-    log ERROR "PDV stage failed; keeping existing release and live cache untouched"
-    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV snapshot unavailable"
-    exit 1
-  fi
-  if ! python3 "$NEW_RELEASE_PATH/scripts/pdv_release_cache.py" --expected-sha "$REMOTE_SHA" >> "$LOG_FILE" 2>&1; then
-    log ERROR "PDV preflight failed; keeping existing release and live cache untouched"
-    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV verification failed"
-    exit 1
-  fi
-  # Keep the validated candidate isolated until immediately before the
-  # immutable release flip; avoid an old timer overwriting the published PDV
-  # cache during unrelated migration and hardening steps.
-  pdv_first_cutover_ready=1
-  log INFO "PDV candidate verified; live catalog not yet changed"
-fi
-
 if [ -f "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" ]; then
   php "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" >> "$LOG_FILE" 2>&1
 fi
@@ -1065,17 +1045,6 @@ php -l "$NEW_RELEASE_PATH/index.php" > /dev/null
 php -l "$NEW_RELEASE_PATH/api/health/version.php" > /dev/null
 if [ -f "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" ]; then
   php -l "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" > /dev/null
-fi
-
-if [ "${pdv_first_cutover_ready:-0}" = "1" ]; then
-  # Final cutover operation: re-verify and atomically promote the staged
-  # candidate immediately before switching the release symlink.
-  if ! python3 "$NEW_RELEASE_PATH/scripts/pdv_release_cache.py" --expected-sha "$REMOTE_SHA" --promote >> "$LOG_FILE" 2>&1; then
-    log ERROR "PDV promotion failed; immutable current release not switched"
-    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "pre-cutover PDV promotion failed"
-    exit 1
-  fi
-  log INFO "PDV catalog promoted, quarantine preserved; now switching release"
 fi
 
 ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"

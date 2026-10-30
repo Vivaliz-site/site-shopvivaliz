@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   resize:
-    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    if: ${{ false }} # RETIRED_SOURCE_JOB_GUARD_20261029; old VM still hardcoded
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 30
