@@ -46,6 +46,29 @@ def extract_prices(item: dict[str, Any]) -> tuple[int | None, int | None]:
     return cents(regular), cents(promotional)
 
 
+def amazon_prices_for(
+    product_id: str, detail: dict[str, Any],
+    table: tuple[Decimal, dict[str, tuple[Decimal, Decimal]]],
+) -> tuple[int | None, int | None]:
+    """Recompute Amazon table 991 from raw ERP cadastro, never from local cache.
+
+    Fixed ERP exceptions apply to exact product IDs; otherwise multiply the
+    original ERP detail regular and promo prices by (100+percent)/100.
+    Decimal + ROUND_HALF_UP matches the site's atomic reconciler.
+    """
+    base_regular, base_promo = extract_prices(detail)
+    if base_regular is None or base_promo is None:
+        return None, None
+    percent, exceptions = table
+    if product_id in exceptions:
+        regular, promo = exceptions[product_id]
+        return cents(regular), cents(promo)
+    factor = Decimal("1") + percent / Decimal("100")
+    regular = (Decimal(base_regular) * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    promotional = (Decimal(base_promo) * factor).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return int(regular), int(promotional)
+
+
 def read_json(url: str) -> dict[str, Any]:
     req = urllib.request.Request(url, headers={
         "User-Agent": "ShopVivaliz-ERP-Price-ReadOnly-Audit/1.0",
@@ -85,6 +108,7 @@ def evaluate(
     erp_details: dict[str, dict[str, Any]],
     cache_rows: list[dict[str, Any]],
     storefront_rows: list[dict[str, Any]],
+    amazon_table: tuple[Decimal, dict[str, tuple[Decimal, Decimal]]],
 ) -> dict[str, Any]:
     active = {str(x.get("id")): x for x in active_rows if x.get("id") is not None}
     cached = {str(x.get("id")): x for x in cache_rows if x.get("id") is not None}
@@ -120,7 +144,8 @@ def evaluate(
         if not detail:
             issues.append({"code": "erp_detail_missing", "id": pid, "sku": sku})
             continue
-        regular, promotional = extract_prices(detail)
+        erp_base, erp_base_promo = extract_prices(detail)
+        regular, promotional = amazon_prices_for(pid, detail, amazon_table)
         effective = effective_price(regular, promotional)
         if effective is None:
             issues.append({"code": "erp_price_invalid", "id": pid, "sku": sku})
@@ -139,7 +164,17 @@ def evaluate(
             if (cached_regular, cached_promo or 0) != (regular, promotional or 0):
                 issues.append({"code": "cache_price_differs_from_erp", "id": pid, "sku": sku,
                     "erp_regular_cents": regular, "erp_promo_cents": promotional or 0,
-                    "cache_regular_cents": cached_regular, "cache_promo_cents": cached_promo or 0})
+                    "cache_regular_cents": cached_regular, "cache_promo_cents": cached_promo or 0,
+                    "commercial_source": "olist_tiny_amazon_991"})
+            local_base = item.get("_erp_base_prices")
+            if not isinstance(local_base, dict):
+                issues.append({"code": "erp_original_price_missing_from_cache", "id": pid, "sku": sku})
+            else:
+                local_regular, local_promo = extract_prices({"precos": local_base})
+                if (local_regular, local_promo or 0) != (erp_base, erp_base_promo or 0):
+                    issues.append({"code": "erp_original_price_stale_in_cache", "id": pid, "sku": sku})
+            if item.get("_price_source") != "olist_tiny_amazon" or item.get("_price_list_id") != 991:
+                issues.append({"code": "amazon_price_provenance_missing", "id": pid, "sku": sku})
         if page is None:
             if sku.casefold() in EXPLICIT_EXCLUDED_SKUS:
                 excluded.append({"id": pid, "sku": sku, "reason": "explicit_storefront_exclusion"})
@@ -175,6 +210,7 @@ def evaluate(
     counts = {
         "erp_active": len(active), "cache_active": len(cached),
         "site_published": len(public), "erp_details_verified": verified,
+        "price_list_id": 991,
         "published_prices_matching_erp": verified_published,
         "excluded_or_duplicate_not_published": len(excluded),
         "duplicate_erp_sku_groups": sum(x["code"] == "duplicate_erp_sku" for x in issues),
@@ -203,6 +239,9 @@ def main() -> int:
     cache_rows = cache_doc.get("itens")
     if not isinstance(cache_rows, list) or not cache_rows:
         raise RuntimeError("active_catalog_cache_unavailable")
+    if (cache_doc.get("price_list_id") != 991
+        or cache_doc.get("price_source") != "olist_tiny_amazon"):
+        raise RuntimeError("active_cache_not_derived_from_amazon_991")
     site_rows, served_sha = public_products()
     if not re.fullmatch(r"[0-9a-f]{40}", served_sha) or served_sha != live_sha:
         raise RuntimeError("public_release_sha_mismatch")
@@ -216,6 +255,7 @@ def main() -> int:
     token = api.get_token()
     if not token:
         raise RuntimeError("erp_oauth_token_missing")
+    amazon_table = api.fetch_amazon_table(token)
     active = api.fetch_products_active(token)
     if not active:
         raise RuntimeError("erp_active_list_empty")
@@ -238,7 +278,7 @@ def main() -> int:
             errors.append({"code": "erp_detail_query_failed", "id": pid, "reason": type(exc).__name__})
         if index % 25 == 0 or index == len(active):
             print(f"ERP_DETAILS_CHECKED={index}/{len(active)} API_ERRORS={len(errors)}", flush=True)
-    result = evaluate(active, details, cache_rows, site_rows)
+    result = evaluate(active, details, cache_rows, site_rows, amazon_table)
     # A deploy that moves under this lengthy full-catalog audit invalidates its
     # snapshot; do not certify an earlier release as the current storefront.
     current_live_sha = (ROOT / ".release-sha").read_text().strip()
@@ -252,6 +292,10 @@ def main() -> int:
             "end_public_sha": current_public_sha})
         result["counts"]["errors"] = len(result["issues"])
         result["status"] = "FAIL"
+    if hashlib.sha256(cache_path.read_bytes()).digest() != hashlib.sha256(raw_cache).digest():
+        result["issues"].append({"code": "cache_changed_during_price_audit"})
+        result["counts"]["errors"] = len(result["issues"])
+        result["status"] = "FAIL"
     if errors:
         result["issues"].extend(errors)
         result["counts"]["errors"] = len(result["issues"])
@@ -261,7 +305,10 @@ def main() -> int:
         "release_sha": live_sha, "published_release_sha": served_sha,
         "cache_timestamp": cache_doc.get("timestamp"),
         "cache_sha256": hashlib.sha256(raw_cache).hexdigest(),
-        "source": "official_olist_tiny_erp_v3", "read_only": True,
+        "source": "official_olist_tiny_amazon_991", "read_only": True,
+        "price_list_id": 991,
+        "amazon_percent": str(amazon_table[0]),
+        "amazon_exception_count": len(amazon_table[1]),
     })
     destination = Path(args.output)
     destination.parent.mkdir(parents=True, exist_ok=True)
