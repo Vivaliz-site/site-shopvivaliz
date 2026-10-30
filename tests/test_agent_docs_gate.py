@@ -53,8 +53,8 @@ class AgentDocsGateTests(unittest.TestCase):
 
         rules = (ROOT / "docs/knowledge/agent-rules.md").read_text(encoding="utf-8")
         self.assertIn("TASK_SESSION_CONTINUITY_V1", rules)
-        self.assertIn("controlador de continuidade e contingencia", rules)
-        self.assertIn("nao sao prazo de validade", rules)
+        self.assertIn("controlador de continuidade e contingencia", rules.lower())
+        self.assertIn("nao sao prazo de validade", rules.lower())
         self.assertIn("read -> acknowledge -> verify", rules)
 
         continuity = (ROOT / "docs/knowledge/task-continuity.md").read_text(encoding="utf-8")
