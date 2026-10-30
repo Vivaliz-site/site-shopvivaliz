@@ -191,8 +191,15 @@ jobs:
           assert current['status']=='RUNNING','checkpoint_terminal_or_mismatch'
           assert current['task']=='retome_orquestrador_shopvivaliz_continuity','checkpoint_task_mismatch'
           original_stat=checkpoint.stat()
+          # The freshly restarted MCP may have no external audit entries yet.
+          # Generate provenance by actually reading the local controller state,
+          # then recording that real observation in the SAME protected audit DB.
+          observation=mcp.execute_tool('controller_status',{})
+          assert isinstance(observation,dict) and 'host' in observation and 'service_active' in observation,'controller_status_not_observed'
+          fresh_id=mcp.audit('controller_status',None,{},True,'verified_controller_status_after_mcp_reload')
           audit=mcp.execute_tool('audit_recent',{'limit':30})
           ids=[event.get('id') for event in audit.get('events',[]) if event.get('tool') in ('controller_status','continuity_status','file_read') and isinstance(event.get('id'),str)]
+          assert fresh_id in ids,'verified_controller_audit_missing'
           assert ids,'no_verified_audit_ids'
           ident=f"mcp-checkpoint-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           args={
@@ -221,7 +228,11 @@ jobs:
 
   bootstrap:
     needs: scope
-    if: needs.scope.outputs.browser_only != 'true' && needs.scope.outputs.backend_controller_only != 'true'
+    # DECOMMISSIONED_SOURCE_GUARD_20261029: four-host bootstrap still targets
+    # deleted shopvivaliz-free-a1. Fail closed until separately rearchitected
+    # for authorized live hosts; never provision the retired source automatically.
+    if: ${{ false }} # retired four-host path permanently disabled
+
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:

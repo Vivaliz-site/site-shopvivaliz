@@ -3,6 +3,7 @@ import os
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 MODULE = Path(__file__).resolve().parents[1] / "scripts" / "continuity" / "conversation_lease.py"
@@ -38,4 +39,26 @@ class ConversationLeaseTests(unittest.TestCase):
         m=load_module(); lease=m.acquire_conversation_lease("conv-3","foreground","turn-a",11,30,["read"])
         current=m.assert_conversation_lease("conv-3",lease["lease_id"],lease["fencing_token"],"read"); self.assertEqual(current["checkpoint_version"],11)
         with self.assertRaises(m.LeaseConflict): m.assert_conversation_lease("conv-3",lease["lease_id"],lease["fencing_token"],"send")
+    def test_privileged_writer_inherits_owner_for_json_and_lock(self):
+        """Root recovery writers must leave shared leases readable by the service user."""
+        m=load_module()
+        owner=m._state_root().stat()
+        changes=[]
+        with mock.patch.object(m.os,"geteuid",return_value=0), mock.patch.object(
+            m.os,"fchown",side_effect=lambda fd,uid,gid: changes.append((uid,gid))
+        ):
+            lease=m.acquire_conversation_lease("root-interoperability","maintenance","owner",1,30,["read"])
+        self.assertEqual(lease["fencing_token"],1)
+        self.assertEqual(changes,[(owner.st_uid,owner.st_gid)]*2)
+        self.assertEqual(m.get_conversation_lease("root-interoperability")["lease_id"],lease["lease_id"])
+
+    def test_unprivileged_writer_never_changes_file_ownership(self):
+        m=load_module()
+        with mock.patch.object(m.os,"geteuid",return_value=1001), mock.patch.object(
+            m.os,"fchown",side_effect=AssertionError("unexpected chown")
+        ):
+            lease=m.acquire_conversation_lease("normal-interoperability","foreground","owner",1,30,["read"])
+            renewed=m.renew_conversation_lease("normal-interoperability",lease["lease_id"],lease["fencing_token"],30)
+        self.assertEqual(renewed["fencing_token"],lease["fencing_token"])
+
 if __name__ == "__main__": unittest.main()

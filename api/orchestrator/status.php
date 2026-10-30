@@ -23,7 +23,7 @@ declare(strict_types=1);
     }
 })();
 
-require_once __DIR__ . '/queue.php';
+require_once dirname(__DIR__, 2) . '/core/queue/queue.php';
 
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');

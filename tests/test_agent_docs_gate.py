@@ -37,6 +37,55 @@ class AgentDocsGateTests(unittest.TestCase):
         gate.REQUIRED_DOCS = self.original_required
         self.temp.cleanup()
 
+    def test_mandatory_topology_is_in_real_preflight(self) -> None:
+        self.assertIn(
+            "docs/knowledge/current-topology-and-access-2026-10-29.md",
+            self.original_required,
+        )
+
+    def test_changed_topology_invalidates_receipt(self) -> None:
+        topo_name = "docs/knowledge/current-topology-and-access-2026-10-29.md"
+        gate.REQUIRED_DOCS = (*gate.REQUIRED_DOCS, topo_name)
+        topo = self.root / topo_name
+        topo.parent.mkdir(parents=True, exist_ok=True)
+        topo.write_text("Marina production\n", encoding="utf-8")
+        packet = gate.deliver_read_packet("codex", "topology")
+        gate.acknowledge("codex", "topology", packet["digest"])
+        valid, _, _ = gate.verify_receipt("codex", "topology")
+        self.assertTrue(valid)
+        topo.write_text("Marina production - source retired\n", encoding="utf-8")
+        valid, reason, _ = gate.verify_receipt("codex", "topology")
+        self.assertFalse(valid)
+        self.assertIn("changed", reason)
+
+    def test_every_agent_entrypoint_references_live_topology(self) -> None:
+        entrypoints = [
+          "AGENTS.md",
+          "CLAUDE.md",
+          "GEMINI.md",
+          "docs/AGENTS.md",
+          ".github/AGENTS.md",
+          ".github/copilot-instructions.md",
+          ".github/instructions/ai-to-cli.instructions.md",
+          ".codex/agents/shopvivaliz-devops.md",
+          ".claude/rules/ai-to-cli.md",
+          ".cursor/rules/nonstop-continuity.mdc",
+          ".windsurf/rules/ai-to-cli.md",
+          ".windsurf/rules/nonstop-continuity.md",
+          "AGENTS-ACCESS-INDEX.md",
+          "docs/ai-agents-map.md",
+          "docs/knowledge/agent-rules.md",
+          "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+          "docs/knowledge/claude-vm-bootstrap.md",
+          "docs/knowledge/dev-agent-briefing.md",
+          ".ai/README.md"
+]
+        for relative in entrypoints:
+            with self.subTest(agent_entrypoint=relative):
+                content = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("ACTIVE_MARINA_ROUTING_20261029", content)
+                self.assertIn("docs/knowledge/current-topology-and-access-2026-10-29.md", content)
+
     def test_verify_fails_before_read(self) -> None:
         valid, reason, receipt = gate.verify_receipt("gpt", "task-001")
         self.assertFalse(valid)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """ShopVivaliz private remote-control MCP.
 
-Stateless MCP-over-HTTP endpoint bound to backend loopback. It controls four
-canonical hosts through local execution or private/reverse SSH and persists
+Stateless MCP-over-HTTP endpoint bound to backend loopback. It controls the
+currently authorized backend and Windows support hosts and persists
 durable tasks/audit state in SQLite. No GitHub API is used at runtime.
 """
 from __future__ import annotations
@@ -99,10 +99,6 @@ HOSTS = {
         "platform": "linux", "transport": "local", "role": "backend/control/browser",
         "service_user_owner": "ubuntu",
     },
-    "shopvivaliz-free-a1": {
-        "platform": "linux", "transport": "ssh", "address": "10.0.1.112",
-        "user": "shopvivaliz-remote", "role": "production web/deploy"
-    },
     "Fred-Win": {
         "platform": "windows", "transport": "reverse_ssh", "address": "127.0.0.1",
         "port": 2222, "user": "FRED", "role": "support workstation"
@@ -112,6 +108,10 @@ HOSTS = {
         "port": 2223, "user": "user", "role": "support workstation"
     },
 }
+
+# Terminally retired source. Never advertised, routed, queued or bootstrapped.
+# Keeping the name only as a denial marker preserves historical task records.
+RETIRED_HOSTS = frozenset({"shopvivaliz-free-a1"})
 
 # Keep enough durable capacity for a control/diagnostic task even when one
 # long job is active. Windows relay work stays serialized.
@@ -146,7 +146,6 @@ def rustdesk_host_id(host: str) -> str:
 
 HOST_DURABLE_LIMITS = {
     "always-free-arm-1787907847-26": 2,
-    "shopvivaliz-free-a1": 2,
     "Fred-Win": 1,
     "KOCEPSV": 1,
 }
@@ -214,6 +213,8 @@ def redact_text(value: str) -> str:
 
 
 def validate_host(host: str) -> dict[str, Any]:
+    if host in RETIRED_HOSTS:
+        raise ValueError("retired_host_not_executable")
     if host not in HOSTS:
         raise ValueError("unsupported_host")
     return HOSTS[host]
@@ -1153,6 +1154,15 @@ def update_heartbeat_and_progress(task_id: str, result_dir: Path) -> None:
 
 def run_task_entrypoint(task_id: str) -> int:
     row = load_task(task_id)
+    if str(row["host"]) in RETIRED_HOSTS and row["state"] not in TERMINAL_STATES:
+        # Legacy queued/starting units must not reach remote_invocation().
+        with db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state='cancelled',finished_at=?,heartbeat_at=?,progress=?,recovery_note=? "
+                "WHERE id=? AND state NOT IN ('succeeded','failed','expired','cancelled','indeterminate')",
+                (now(), now(), "retired_host_not_executed", "retired_host_no_execution", task_id),
+            )
+        return 0
     if row["state"] == "cancel_requested":
         finalize_cancelled_without_result(task_id)
         return 0
@@ -2366,10 +2376,15 @@ def execute_tool(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     host = args.get("host")
+    # Retired hosts are denied even before lease checks, transports and handlers.
+    if isinstance(host, str) and host in RETIRED_HOSTS:
+        raise ValueError("retired_host_not_executable")
     _assert_runtime_mutation(name, args)
     _assert_conversation_mutation(name, args)
     if name in {"marina_cart_preview", "marina_cart_retire_source"}:
         import maintenance_cart as cart
+        if cart.SOURCE_HOST in RETIRED_HOSTS:
+            raise cart.MaintenanceDenied("retired_source_not_operable")
         scoped = lambda hostname, cmd: _cart_scoped_host_command(hostname, cmd, cancel_check)
         if name == "marina_cart_preview":
             return cart.preview(scoped)
@@ -2705,7 +2720,7 @@ TOOLS = [
         "ticket": {"type": "object"},
         "signature_b64": {"type": "string", "maxLength": 128},
     }, False, True),
-    ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
+    ("hosts_list", "List the currently authorized backend and Windows support hosts; retired VMs are excluded.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("service_status", "Inspect a service on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}}, True, False),
@@ -2761,12 +2776,27 @@ def tool_specs() -> list[dict[str, Any]]:
     return specs
 
 
+def cancel_retired_queued_tasks() -> int:
+    """Cancel never-started legacy work without deleting its audit history."""
+    total = 0
+    for retired_host in RETIRED_HOSTS:
+        with db_conn() as db:
+            total += db.execute(
+                "UPDATE tasks SET state='cancelled',finished_at=?,heartbeat_at=?, "
+                "progress='retired_host_not_executed',recovery_note='retired_host_no_execution' "
+                "WHERE host=? AND state='queued'",
+                (now(), now(), retired_host),
+            ).rowcount
+    return total
+
+
 def task_worker() -> None:
     next_analysis_at = 0.0
     while not STOP_EVENT.wait(0.2):
         tid = None
         try:
             reconcile_tasks()
+            cancel_retired_queued_tasks()
             current = time.monotonic()
             if current >= next_analysis_at:
                 process_indeterminate_tasks(limit=50)
@@ -2969,6 +2999,8 @@ def main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
     reconcile_tasks()
+    # Block all never-started legacy work before the queue worker is spawned.
+    cancel_retired_queued_tasks()
     worker = threading.Thread(target=task_worker, name="task-worker", daemon=True)
     worker.start()
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)

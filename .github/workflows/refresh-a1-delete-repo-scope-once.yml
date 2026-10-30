@@ -12,7 +12,9 @@ concurrency:
 
 jobs:
   refresh:
+    # RETIRED_SOURCE_JOB_GUARD_20261029
     if: >-
+      false &&
       github.event.issue.number == 1586 &&
       github.event.comment.user.login == 'fredmourao-ai' &&
       github.event.comment.body == '/refresh-a1-delete-repo-scope-v1 CONFIRM'

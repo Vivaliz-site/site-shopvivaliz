@@ -16,6 +16,7 @@ jobs:
   rescue:
     if: >-
       ${{
+        false &&
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
         github.event.issue.title == '[production-runner-bastion-rescue]' &&
         github.event.issue.user.login == 'fredmourao-ai' &&

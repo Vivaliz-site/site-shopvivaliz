@@ -12,6 +12,9 @@ on:
       - 'tests/test_marina_stage_service.py'
       - 'blog/**'
       - 'includes/**'
+      - 'daemon-sync-products.py'
+      - 'tests/test_daemon_authoritative_sellable_stock.py'
+      - 'tests/test_catalog_cache_concurrency.py'
       - 'scripts/quality/deployment_closure_guard.py'
       - 'tests/test_deployment_closure_guard.py'
       - '.github/workflows/production-deployment-closure-guard.yml'
@@ -50,6 +53,7 @@ on:
       - 'scripts/setup-remote-control-browser-mcp.sh'
       - 'scripts/remote_mcp_bootstrap_scope.py'
       - 'tests/test_remote_mcp_bootstrap_scope.py'
+      - 'tests/test_retired_source_workflow_guards.py'
       - '.github/workflows/remote-control-mcp-bootstrap.yml'
       - 'tests/public-layout-*.sh'
       - 'tests/chatgpt-account-diagnostic-contract-test.sh'
@@ -130,16 +134,22 @@ jobs:
           bash -n scripts/setup-remote-control-browser-mcp.sh
           python3 tests/test_chatgpt_access_parity.py
           python3 tests/test_remote_mcp_bootstrap_scope.py
+          python3 tests/test_retired_source_workflow_guards.py
           python3 tests/test_ecommerce_excellence_credential_literals.py
           python3 tests/test_deployment_closure_guard.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
+          python3 -m py_compile daemon-sync-products.py
+          python3 tests/test_daemon_authoritative_sellable_stock.py
+          python3 tests/test_catalog_cache_concurrency.py
           node --check scripts/public-layout-audit.mjs
           node --check scripts/chatgpt-account-diagnostic.mjs
           node --check scripts/production-runtime-parity.mjs
           node --check scripts/lib/audit-concurrency.mjs
           node --check js/catalog-conversion-v4.js
           node --check js/product-conversion-v5.js
+          node --check js/catalog.js
+          node --test tests/product-buy-now-runtime.test.cjs tests/catalog-buy-now-runtime.test.cjs tests/catalog-search-order.test.cjs tests/shipping-postcode-session.test.cjs
           node tests/shipping-request-dedupe-runtime-test.js
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs tests/public-layout-audit-parallelism.test.mjs
           bash tests/master-production-monitor-regression.sh

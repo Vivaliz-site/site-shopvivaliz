@@ -650,7 +650,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                 if (city && d.localidade) city.value = d.localidade;
                 if (state && d.uf) state.value = d.uf;
                 var number = document.getElementById('street-number-input');
-                if (number) number.focus();
+                if (number && document.activeElement === cepInput) number.focus();
             }).catch(function(){});
     }
     /* Cotacao de frete automatica: antes, o checkout so lia a cotacao ja
@@ -817,10 +817,39 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
     });
     updatePaymentFields();
 
-    function pendingKey(items, method) {
-        return JSON.stringify({method: method, items: items.map(function(item) {
-            return [String(item.sku || ''), Number(item.quantity || 1)];
-        })});
+    function pendingKey(items, method, payload) {
+        if (!window.crypto || !window.crypto.subtle || typeof TextEncoder === 'undefined') {
+            throw new Error('Não foi possível preparar a sessão segura de pagamento. Recarregue o checkout.');
+        }
+        var customer = {};
+        ['customer_name', 'customer_email', 'customer_phone', 'cep', 'address', 'street_name',
+            'street_number', 'complement', 'neighborhood', 'city', 'state', 'cpf',
+            'document_type', 'company_legal_name', 'company_trade_name', 'customer_id',
+            'customer_registration_date', 'notes'].forEach(function(field) {
+                customer[field] = String(payload[field] || '').trim();
+            });
+        customer.customer_email = customer.customer_email.toLowerCase();
+        ['customer_phone', 'cep', 'cpf'].forEach(function(field) {
+            customer[field] = customer[field].replace(/\D/g, '');
+        });
+        customer.state = customer.state.toUpperCase();
+        customer.document_type = customer.document_type.toLowerCase();
+        var identity = JSON.stringify({
+            method: String(method || '').trim().toLowerCase(),
+            customer: customer,
+            coupon_code: String(payload.coupon_code || '').trim().toUpperCase(),
+            shipping_quote_id: String(payload.shipping_quote_id || ''),
+            items: items.map(function(item) {
+                return [String(item.sku || ''), Number(item.quantity || 1), Math.round(Number(item.price || 0) * 100) / 100];
+            })
+        });
+        // Only the digest is persisted; checkout contact/address data stays out
+        // of the pending-payment cache. Tracking changes do not change an order.
+        return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity)).then(function(hash) {
+            return 'v2:' + Array.from(new Uint8Array(hash), function(byte) {
+                return byte.toString(16).padStart(2, '0');
+            }).join('');
+        });
     }
     function readPendingPayment() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_pending_payment') || 'null'); } catch (e) { return null; }
@@ -912,8 +941,8 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
         } catch (ignore) {}
 
         var method = fd.get('payment_method') || 'pix';
-        var key = pendingKey(items, method);
         try {
+            var key = await pendingKey(items, method, payload);
             var pending = readPendingPayment();
             var order = pending && pending.key === key && pending.order_number && pending.payment_session_token
                 ? pending
@@ -922,7 +951,11 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                 throw new Error('Sessão segura de pagamento não foi criada.');
             }
             if (order.payment_session_token) {
-                writePendingPayment({key: key, method: method, order_number: order.order_number, payment_session_token: order.payment_session_token});
+                writePendingPayment({
+                    key: key, method: method, order_number: order.order_number,
+                    payment_session_token: order.payment_session_token,
+                    total: order.total, shipping_total: order.shipping_total
+                });
             }
 
             var shippingQuote = getShippingQuote();
@@ -1078,10 +1111,13 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
     };
 
     renderCart();
+    window.addEventListener('shopvivaliz:cart-updated', renderCart);
 
 })();
 </script>
+<script src="/js/cart-erp-price-reconciliation-v1.js?v=20261029" defer></script>
 <!-- Purchase e conversao de Ads sao emitidos somente apos pagamento
      confirmado pelo webhook, nunca na simples criacao do pedido. -->
+<script src="/js/shipping-postcode-session-v1.js?v=20261030" defer></script>
 </body>
 </html>

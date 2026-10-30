@@ -38,6 +38,12 @@
 
 ---
 
+### 2026-10-29 — Total do pedido e retomada do pagamento precisam permanecer consistentes
+**Sistema/arquivo:** `includes/order-payment-amounts.php`, `includes/mercadopago-gateway.php`, `includes/infinitepay-gateway.php`, `checkout.php`, `includes/order-idempotency.php`
+**O que descobri:** reconstruir o pagamento a partir dos preços dos itens e somente do cupom omitia o desconto já aplicado de Compre junto. Um pedido validado de R$ 51,53 produzia linhas de R$ 52,83 no builder anterior. Os gateways agora repartem em centavos os descontos existentes entre os produtos e preservam o frete, as quantidades e o total autoritativo, sem alterar preços ou regras comerciais. O cache de pagamento pendente também precisava conservar total e frete; sem eles, o hardener rejeitava a segunda tentativa antes de alcançar o gateway. A identidade de retry agora considera dados comerciais relevantes, mantendo a mesma sessão quando esses dados não mudam.
+**Por quê importa:** testes offline de payload e retry comprovam esses defeitos e suas correções, mas não comprovam aprovação real do provedor nem explicam retrospectivamente todos os pedidos pendentes. Cache v1 sem total não é migrado; verificar pedidos/reservas recentes antes do rollout. Não criar pedidos ou compras artificiais em produção para testar. As restrições atuais de Ads estão em documento próprio; nenhuma automação antiga herda autorização para aumentar gastos.
+**Ver também:** `tests/payment-order-total-regression-test.php`, `tests/checkout-payment-retry-regression.cjs`, `tests/order-idempotency-context-test.php`, `docs/knowledge/google-ads-budget-policy.md`, `docs/knowledge/ga4-server-validation.md`
+
 ### 2026-09-01 — Commit/PR aberta não significam tarefa concluída
 **Sistema/arquivo:** governança Git de todos os agentes; `AGENTS.md`, `CLAUDE.md`, `REGRAS-AGENTES-CENTRALIZADAS.md`, `docs/POLITICA-PR-AGENTES.md`
 **O que descobri:** houve uma execução que parou depois de criar um commit local, apesar da regra existente exigir PR e merge. A regra foi tornada explícita: commit é somente checkpoint intermediário. O estado final obrigatório é branch → validação real → commit → push → PR → checks/revisão → merge → validação pós-merge → working tree limpa → nenhuma PR pendente da própria rodada.

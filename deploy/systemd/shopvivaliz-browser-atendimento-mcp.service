@@ -1,6 +1,6 @@
 [Unit]
 Description=ShopVivaliz Browser Atendimento MCP
-After=network-online.target graphical.target shopvivaliz-remote-control-mcp.service
+After=network-online.target shopvivaliz-remote-control-mcp.service
 Wants=network-online.target shopvivaliz-remote-control-mcp.service
 
 [Service]

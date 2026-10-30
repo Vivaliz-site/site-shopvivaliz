@@ -24,6 +24,45 @@ for relative, markers in CHECKS.items():
         if marker not in text:
             failures.append(f"{relative}: missing marker {marker}")
 
+# Audit every agent entrypoint without modifying globally pinned policy blobs.
+TOPOLOGY = "docs/knowledge/current-topology-and-access-2026-10-29.md"
+entrypoints = [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "docs/AGENTS.md",
+    ".github/AGENTS.md",
+    ".github/copilot-instructions.md",
+    ".github/instructions/ai-to-cli.instructions.md",
+    ".codex/agents/shopvivaliz-devops.md",
+    ".claude/rules/ai-to-cli.md",
+    ".cursor/rules/nonstop-continuity.mdc",
+    ".windsurf/rules/ai-to-cli.md",
+    ".windsurf/rules/nonstop-continuity.md",
+    "AGENTS-ACCESS-INDEX.md",
+    "docs/ai-agents-map.md",
+    "docs/knowledge/agent-rules.md",
+    "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+    "docs/knowledge/claude-vm-bootstrap.md",
+    "docs/knowledge/dev-agent-briefing.md",
+    ".ai/README.md"
+]
+policy = (ROOT / TOPOLOGY).read_text(encoding="utf-8", errors="replace")
+if "## Contrato de roteamento para todos os agentes" not in policy:
+    failures.append(f"{TOPOLOGY}: missing active routing contract")
+if f'"{TOPOLOGY}"' not in (ROOT / "scripts/agent_docs_gate.py").read_text(encoding="utf-8"):
+    failures.append("agent docs manifest does not require current topology")
+for relative in entrypoints:
+    candidate = ROOT / relative
+    if not candidate.is_file():
+        failures.append(f"agent entrypoint missing: {relative}")
+        continue
+    body = candidate.read_text(encoding="utf-8", errors="replace")
+    if "ACTIVE_MARINA_ROUTING_20261029" not in body:
+        failures.append(f"agent entrypoint missing retired VM guard: {relative}")
+    if TOPOLOGY not in body:
+        failures.append(f"agent entrypoint missing topology reference: {relative}")
+
 if failures:
     for failure in failures:
         print(f"ERROR {failure}", file=sys.stderr)

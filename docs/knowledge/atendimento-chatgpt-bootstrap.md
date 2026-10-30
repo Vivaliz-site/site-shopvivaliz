@@ -1,3 +1,11 @@
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Estado de runtime posterior, prevalente (2026-10-29):** o MCP central do backend agora anuncia **somente backend, Fred-Win e KOCEPSV**; a origem `shopvivaliz-free-a1` foi removida da allowlist (PRs #3391/#3392) e nunca e alvo. Marina permanece fora do MCP central, mas RDC direto e SSH privado foram comprovados; o tunel SSH do MEI para Marina esta ativo (HTTP 200), separado do MCP independente Marina que continua nao instalado. O PR #3395 bloqueou 20 jobs antigos sem migrar automaticamente seus objetivos. Controlador 24x7 ainda precisa de lease valido e recuperacao de checkpoints; CI `mei-ci-a1` segue sem registro. Declaracoes de "MCP ainda inclui origem" abaixo sao apenas historicas. Referencia: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 ## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
 
@@ -35,15 +43,16 @@ Nesta ordem:
 
 ## Mapa operacional de hosts
 
-- `shopvivaliz-free-a1`: site/web/deploy de produção; origin `137.131.149.55`, privado `10.0.1.112`.
-- `always-free-arm-1787907847-26`: backend, controller do Remote Control MCP, navegador, MEI, M365 e relay; privado `10.0.1.38`.
-- `shopvivaliz-ai` / `137.131.156.17`: DEV legado/e-mail/testes; nunca assumir como produção web.
+- `marina-a1-4c24g` (OCI ESPOSA): **site/web/deploy de produção**, Apache/MySQL/workers/runner; IP privado documentado `10.80.1.116`, Tailscale observado `100.118.170.46`. Acesso direto RDC 1/2 confirmado em 2026-10-29.
+- `always-free-arm-1787907847-26` (OCI PRINCIPAL): backend/controller do MCP central, navegador corporativo, MEI/M365 e relay; privado `10.0.1.38`, Tailscale observado `100.66.174.74`.
+- `shopvivaliz-free-a1`: **origem excluida segundo proprietario** em 2026-10-29, SSH sem rota; proibido usar como destino. `shopvivaliz-ai` e E2 antigas sao historicas.
+- Estado dos MCPs e alternativas: [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md).
 - Produção: `/home/ubuntu/shopvivaliz-deploy/`, com releases imutáveis. Nunca editar `current/` nem a release ativa diretamente.
 
 ## Rota de operação
 
-1. ShopVivaliz Remote Control MCP é a rota primária para host, serviço, browser, arquivos e tarefas duráveis.
-2. SSH privado/Tailscale somente quando a capacidade necessária não existir no MCP ou ele estiver comprovadamente indisponível.
+1. Backend: ShopVivaliz Remote Control MCP para hosts **validos de sua allowlist**; a origem excluida ainda aparece, e Marina **nao** aparece nesse MCP.
+2. Marina: RDC 1/2 direto comprovado em 2026-10-29 (descobrir o ID atual pelo nome), com identidade/privilegios verificados; SSH privado/Tailscale somente apos autenticacao comprovada. O MCP independente Marina permanece inativo/nao conectado. Nunca redirecionar comandos da origem para a Marina implicitamente.
 3. GitHub Actions/OCI Bastion somente para bootstrap/recovery.
 4. Navegador operacional roda na VM de backend; não usar navegador dos hosts Windows nem Opera Connector para tarefas ShopVivaliz.
 5. GitHub é fonte/bootstrap/recovery, não transporte normal de runtime.
@@ -195,7 +204,7 @@ Nunca incluir em formulários, chats ou evidências externas senhas, tokens, cha
 
 Uma configuração só é considerada validada quando, em uma conversa nova da conta `atendimento@shopvivaliz.com.br`, a própria conta consegue:
 
-1. identificar corretamente os papéis de `shopvivaliz-free-a1` e `always-free-arm-1787907847-26`;
+1. identificar corretamente Marina como site/producao, backend como controller/browser, e `shopvivaliz-free-a1` como origem excluida;
 2. localizar e ler este bootstrap e os documentos obrigatórios;
 3. invocar ShopVivaliz Remote Control em uma ação reversível;
 4. localizar o repositório principal pelo GitHub;
@@ -217,8 +226,9 @@ Leia primeiro:
 2. docs/knowledge/host-access.md
 3. docs/knowledge/README.md
 4. docs/knowledge/agent-rules.md
-5. docs/knowledge/project.md
-6. docs/knowledge/browser-sessions.md
+5. docs/knowledge/current-topology-and-access-2026-10-29.md
+6. docs/knowledge/project.md
+7. docs/knowledge/browser-sessions.md
 7. docs/knowledge/chatgpt-account-migration-curated.md
 8. docs/knowledge/dev-agent-briefing.md quando houver trabalho de engenharia.
 

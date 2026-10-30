@@ -545,6 +545,11 @@ def compare_counters(prior: dict, current: dict[str, list[int]]) -> list[str]:
 def policy_anomalies(host: str) -> list[str]:
     is_site = host == "shopvivaliz-free-a1"
     is_backend = host == "always-free-arm-1787907847-26"
+    # Marina now serves a versioned web release but has no AI-agent
+    # controller or Ollama: watch unauthorized paid activity without
+    # falsely requiring services belonging to the old hosts.
+    if host == "marina-a1-4c24g":
+        return []
     if not (is_site or is_backend):
         return ["HOST_IDENTITY_UNKNOWN"]
     issues = []

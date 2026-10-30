@@ -2,8 +2,6 @@ name: Production Functional Audit
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '7 * * * *'
 
 permissions:
   contents: read
@@ -14,6 +12,8 @@ concurrency:
 
 jobs:
   functional:
+    # RETIRED_SOURCE_JOB_GUARD_20261029: host deleted; do not execute legacy SSH/OCI/runner route.
+    if: ${{ false }}
     name: Prove production actually works
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 12

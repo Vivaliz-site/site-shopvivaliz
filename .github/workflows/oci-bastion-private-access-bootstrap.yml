@@ -9,11 +9,13 @@ permissions:
 
 jobs:
   bootstrap:
+    # RETIRED_SOURCE_JOB_GUARD_20261029: old VM deleted, fail closed.
     concurrency:
       group: shopvivaliz-oci-bastion-mutation
       cancel-in-progress: false
     if: >-
       ${{
+        false && (
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
         github.event.issue.title == '[private-access-bootstrap]' &&
         github.event.issue.user.login == 'fredmourao-ai' &&
@@ -37,6 +39,7 @@ jobs:
           github.event.issue.body == 'action=backend-storage-cleanup-safe' ||
           github.event.issue.body == 'action=claude-remote-control-install' ||
           github.event.issue.body == 'action=claude-remote-control-status'
+        )
         )
       }}
     runs-on: ubuntu-latest

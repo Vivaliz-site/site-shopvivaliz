@@ -1,113 +1,86 @@
 <?php
-/**
- * Webhook Receiver - Olist envia notificacoes de mudancas
- * POST https://shopvivaliz.com.br/olist/webhook-receiver.php
- */
 declare(strict_types=1);
 
-header('Content-Type: application/json; charset=utf-8');
+/**
+ * Backward-compatible Olist notification URL.
+ * Authenticated notifications refresh the product through the official ERP v3
+ * path; this route may NEVER overwrite the cache from the legacy API or
+ * launch a detached three-step sync pipeline.
+ */
+header_remove('X-Powered-By');
+header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 $root = dirname(__DIR__);
 require_once $root . '/includes/runtime-env-reader.php';
+require_once $root . '/includes/webhook-secret.php';
+require_once $root . '/includes/olist-erp-webhook.php';
 
-$webhookLog = $root . '/logs/webhook.log';
-@mkdir(dirname($webhookLog), 0755, true);
-
-$requestBody = (string)file_get_contents('php://input');
-$timestamp = date('Y-m-d H:i:s');
-$decodedForLog = json_decode($requestBody, true);
-$logEntry = "[$timestamp] " . ($_SERVER['REQUEST_METHOD'] ?? '') . ' '
-    . json_encode($decodedForLog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-    . PHP_EOL;
-@file_put_contents($webhookLog, $logEntry, FILE_APPEND | LOCK_EX);
+function svol_response(int $status, array $body): never
+{
+    http_response_code($status);
+    echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['erro' => 'Apenas POST permitido'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+    svol_response(405, ['ok' => false, 'error' => 'method_not_allowed']);
+}
+$raw = (string)(file_get_contents('php://input') ?: '');
+if ($raw === '' || strlen($raw) > 200000) {
+    svol_response($raw === '' ? 400 : 413, ['ok' => false, 'error' => 'payload_size_invalid']);
 }
 
-function verify_webhook_signature(string $requestBody, string $signature, string $root): bool
-{
-    $secret = svre_value('OLIST_WEBHOOK_SECRET', $root);
-    if ($secret === '') {
-        error_log('[WEBHOOK] WARNING: OLIST_WEBHOOK_SECRET not configured. Signature verification skipped.');
-        return true;
-    }
-
-    $expectedSignature = hash_hmac('sha256', $requestBody, $secret, false);
-    $valid = hash_equals($expectedSignature, $signature);
-    if (!$valid) {
-        error_log('[WEBHOOK] FAILED: Signature mismatch.');
-    }
-    return $valid;
-}
-
-$signature = (string)($_SERVER['HTTP_X_OLIST_SIGNATURE'] ?? $_SERVER['HTTP_X_SIGNATURE'] ?? '');
+// Signed messages use HMAC; partners without signatures must supply the
+// shared secret configured in the ERP notification URL or X-Webhook-Key.
+$signature = trim((string)($_SERVER['HTTP_X_OLIST_SIGNATURE'] ?? $_SERVER['HTTP_X_SIGNATURE'] ?? ''));
 if ($signature !== '') {
-    if (!verify_webhook_signature($requestBody, $signature, $root)) {
-        error_log('[WEBHOOK] REJECTED: Invalid signature.');
-        http_response_code(403);
-        echo json_encode(['erro' => 'Assinatura invalida'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        exit;
-    }
-    error_log('[WEBHOOK] VERIFIED: Signature valid');
+    $secret = svre_value('OLIST_WEBHOOK_SECRET', $root);
+    $authorized = $secret !== '' && hash_equals(hash_hmac('sha256', $raw, $secret), $signature);
 } else {
-    error_log('[WEBHOOK] WARNING: No signature header found. Accepting unsigned webhook.');
+    $authorized = sv_webhook_secret_valid('olist');
+}
+if (!$authorized) {
+    svol_response(401, ['ok' => false, 'error' => 'unauthorized']);
 }
 
-$data = json_decode($requestBody, true);
+$data = json_decode($raw, true);
 if (!is_array($data) || $data === []) {
-    http_response_code(400);
-    echo json_encode(['erro' => 'JSON invalido'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+    svol_response(400, ['ok' => false, 'error' => 'invalid_json']);
 }
+$event = strtolower(trim((string)($data['event'] ?? $data['tipo'] ?? $data['type'] ?? '')));
+$shouldSync = in_array($event, [
+    'produto.criado', 'produto.atualizado', 'produto.alterado',
+    'preco.alterado', 'estoque.alterado', 'estoque', 'preco', 'produto',
+], true) || str_contains($event, 'produto') || str_contains($event, 'estoque')
+    || str_contains($event, 'preco');
 
-$eventType = trim((string)($data['event'] ?? $data['tipo'] ?? $data['type'] ?? ''));
-$productId = $data['produto_id'] ?? $data['product_id'] ?? $data['id'] ?? null;
-if (!$productId && isset($data['dados']['idProduto'])) {
-    $productId = $data['dados']['idProduto'];
+if (!$shouldSync) {
+    svol_response(200, ['ok' => true, 'status' => 'ignored', 'event' => $event]);
 }
+$item = is_array($data['dados'] ?? null) ? $data['dados']
+    : (is_array($data['produto'] ?? null) ? $data['produto'] : $data);
+$id = trim((string)($item['produto_id'] ?? $item['product_id'] ?? $item['idProduto'] ?? $item['id'] ?? ''));
+$sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['skuMapeamento'] ?? ''));
+if ($id !== '' && !ctype_digit($id)) svol_response(422, ['ok' => false, 'error' => 'product_id_invalid']);
+if ($sku === '' && $id === '') svol_response(422, ['ok' => false, 'error' => 'product_identifier_missing']);
+if (strlen($sku) > 160) svol_response(422, ['ok' => false, 'error' => 'sku_invalid']);
 
-$syncEvents = [
-    'produto.criado',
-    'produto.atualizado',
-    'produto.alterado',
-    'preco.alterado',
-    'estoque.alterado',
-    'estoque',
-    'preco',
-    'produto',
-];
-$shouldSync = in_array($eventType, $syncEvents, true)
-    || str_contains($eventType, 'produto')
-    || str_contains($eventType, 'estoque')
-    || str_contains($eventType, 'preco');
-
-if ($shouldSync) {
-    // O refresh precisa ser sequencial: primeiro recria a lista canonica de
-    // ativos, depois consulta o estoque autoritativo e so entao espelha no
-    // banco local. Rodar sync e estoque em paralelo cria corrida de cache.
-    $pipeline = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/olist/sync-on-webhook.php')
-        . ' && ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/olist/fetch-estoque-v3.php')
-        . ' && ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/sync-daemon-to-db.php');
-    exec('nohup sh -c ' . escapeshellarg($pipeline) . ' > /dev/null 2>&1 &');
-
-    http_response_code(200);
-    echo json_encode([
-        'sucesso' => true,
-        'mensagem' => 'Webhook recebido e sincronizacao sequencial iniciada',
-        'event' => $eventType,
-        'product_id' => $productId,
-        'steps' => ['active-sync-v3', 'authoritative-stock-v3', 'local-db-sync'],
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+try {
+    $product = svoei_refresh_product_from_v3($root, $id, $sku);
+    svoei_log($root, 'legacy_olist_notification_synced', [
+        'tipo' => $event, 'sku' => (string)($product['sku'] ?? $sku),
+        'product_id' => $id,
+    ]);
+    svol_response(200, [
+        'ok' => true,
+        'status' => 'synced',
+        'event' => $event,
+        'price_source' => 'olist_tiny_amazon',
+        'price_list_id' => SV_AMAZON_PRICE_LIST_ID,
+    ]);
+} catch (Throwable $e) {
+    error_log('[olist-notification] canonical ERP v3 refresh failed: ' . get_class($e));
+    svol_response(503, ['ok' => false, 'error' => 'erp_catalog_refresh_failed']);
 }
-
-http_response_code(200);
-echo json_encode([
-    'sucesso' => true,
-    'mensagem' => 'Webhook ignorado (evento nao monitorado)',
-    'event' => $eventType,
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

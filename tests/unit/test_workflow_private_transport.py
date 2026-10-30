@@ -1,5 +1,7 @@
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 import unittest
 
 WORKFLOWS = Path('.github/workflows')
@@ -85,6 +87,60 @@ def workflow_run_script(step: str) -> str:
     return '\n'.join(lines)
 
 
+def backend_runner_is_pinned(block: str) -> bool:
+    return bool(re.search(
+        r'(?m)^    runs-on: \[self-hosted, Linux, ARM64, shopvivaliz-backend-browser\]\s*$', block))
+
+
+def reviewed_post_deploy_browser_smoke(path: Path, text: str) -> bool:
+    """Keep the existing production smoke contract, only on its reviewed route."""
+    if path.name != 'active-products-browser-smoke.yml':
+        return False
+    head = text.split('jobs:', 1)[0].split('\npermissions:', 1)[0]
+    if set(re.findall(r'(?m)^  ([a-z_]+):', head)) != {'workflow_run', 'workflow_dispatch'}:
+        return False
+    if "    workflows: ['Master Production Pipeline 24/7']\n    types: [completed]" not in head:
+        return False
+    blocks = job_blocks(text)
+    if len(blocks) != 1 or blocks[0][0] != 'browser-smoke':
+        return False
+    block = blocks[0][1]
+    guard = re.search(r'(?m)^    if: >-\n((?:      .*\n)+)', block)
+    expected = """github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main')"""
+    if not guard or re.sub(r'\s+', '', guard.group(1)) != re.sub(r'\s+', '', expected):
+        return False
+    return backend_runner_is_pinned(block) and all(
+        re.search(r'(?m)^' + re.escape(line) + r'\s*$', block) for line in (
+        "          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.event.workflow_run.head_sha }}",
+        '          persist-credentials: false',
+        "          SV_RELAY_LOCAL: '1'",
+        "          if port not in {'5557','5558'}: raise SystemExit('invalid relay port')",
+    ))
+
+
+def reviewed_backend_local_ssh(path: Path, job: str, block: str) -> bool:
+    """The canonical backend runner may SSH to its own fixed private address."""
+    if path.name != 'shopvivaliz-remote-access.yml' or job != 'execute':
+        return False
+    if not backend_runner_is_pinned(block) or 'ubuntu@127.0.0.1' in block:
+        return False
+    if 'StrictHostKeyChecking=no' in block or 'UserKnownHostsFile=/dev/null' in block:
+        return False
+    starts = list(re.finditer(r'(?m)^      - ', block))
+    scripts = '\n'.join(workflow_run_script(block[item.start():
+        starts[i + 1].start() if i + 1 < len(starts) else len(block)])
+        for i, item in enumerate(starts))
+    refusal = 'if target == "shopvivaliz-free-a1":\n    raise SystemExit("RETIRED_SOURCE_TARGET_DENIED")'
+    if refusal not in scripts or 'test -n "$VM_KEY"' not in scripts:
+        return False
+    return (scripts.index(refusal) < scripts.index('test -n "$VM_KEY"')
+            and all(marker in scripts for marker in (
+                'ubuntu@10.0.1.38', 'StrictHostKeyChecking=yes', 'UserKnownHostsFile=')))
+
+
 def uses_verified_private_bastion(block: str) -> bool:
     """Check the declared hosted tunnel and its unconditional cleanup step."""
     if not re.search(r'(?m)^    runs-on: ubuntu-latest\s*$', block):
@@ -146,7 +202,8 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
                 continue
             head = text.split('jobs:', 1)[0]
             found = [event[:-1] for event in automatic if event in head]
-            if found and not reviewed_bootstrap_push(path, text):
+            if found and not (reviewed_bootstrap_push(path, text)
+                              or reviewed_post_deploy_browser_smoke(path, text)):
                 offenders.append(f'{path}:{"/".join(found)}')
         self.assertEqual(offenders, [], 'legacy relay workflows still auto-trigger: ' + ', '.join(offenders))
 
@@ -156,7 +213,8 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
             for job, block in job_blocks(text):
                 if not any(f'ubuntu@{target}' in block for target in PRIVATE_TARGETS):
                     continue
-                if SITE_RUNNER not in block and not uses_verified_private_bastion(block):
+                if (SITE_RUNNER not in block and not uses_verified_private_bastion(block)
+                        and not reviewed_backend_local_ssh(path, job, block)):
                     offenders.append(f'{path}:{job}')
         self.assertEqual(offenders, [], 'private VM SSH jobs not pinned to site runner: ' + ', '.join(offenders))
 
@@ -241,6 +299,100 @@ class ReviewedTransportBoundaryTests(unittest.TestCase):
                 self.assertFalse(reviewed_bootstrap_push(path, changed), name + ':' + event)
             self.assertFalse(reviewed_bootstrap_push(path, text.replace(
                 '    paths:', '    paths:\n      - "application/**"')))
+
+
+class CanonicalTransportBoundaryTests(unittest.TestCase):
+    def test_post_deploy_exception_rejects_broader_events_runners_and_guards(self):
+        path = WORKFLOWS / 'active-products-browser-smoke.yml'
+        text = path.read_text()
+        self.assertTrue(reviewed_post_deploy_browser_smoke(path, text))
+        self.assertFalse(reviewed_post_deploy_browser_smoke(Path('unreviewed.yml'), text))
+        for changed in (
+            text.replace('  workflow_run:', '  push:\n  workflow_run:'),
+            text.replace('Master Production Pipeline 24/7', 'Unreviewed Pipeline'),
+            text.replace("== 'success'", "!= 'success'"),
+            text.replace("== 'main')", "== 'main' || true)"),
+            text.replace('[self-hosted, Linux, ARM64, shopvivaliz-backend-browser]', 'ubuntu-latest'),
+            text.replace('persist-credentials: false', 'persist-credentials: true'),
+            text.replace('github.event.workflow_run.head_sha }}', 'github.sha }}'),
+            text.replace('          ref:', '          # ref:'),
+            text.replace('          persist-credentials:', '          # persist-credentials:'),
+            text.replace('          SV_RELAY_LOCAL:', '          # SV_RELAY_LOCAL:'),
+            text.replace('          if port not in', '          # if port not in'),
+        ):
+            self.assertFalse(reviewed_post_deploy_browser_smoke(path, changed))
+
+    def test_backend_local_exception_rejects_other_jobs_hosts_and_unverified_ssh(self):
+        path = WORKFLOWS / 'shopvivaliz-remote-access.yml'
+        job, block = job_blocks(path.read_text())[0]
+        self.assertTrue(reviewed_backend_local_ssh(path, job, block))
+        self.assertFalse(reviewed_backend_local_ssh(Path('unreviewed.yml'), job, block))
+        self.assertFalse(reviewed_backend_local_ssh(path, 'another-job', block))
+        for changed in (
+            block.replace('[self-hosted, Linux, ARM64, shopvivaliz-backend-browser]', 'ubuntu-latest'),
+            block.replace('ubuntu@10.0.1.38', 'ubuntu@127.0.0.1'),
+            block.replace('StrictHostKeyChecking=yes', 'StrictHostKeyChecking=no'),
+            block.replace('UserKnownHostsFile=', 'UnverifiedHostFile='),
+            block.replace('raise SystemExit("RETIRED_SOURCE_TARGET_DENIED")', 'pass'),
+        ):
+            self.assertFalse(reviewed_backend_local_ssh(path, job, changed))
+
+
+class BastionCleanupFallbackTests(unittest.TestCase):
+    def run_cleanup_fixture(self, failure=''):
+        text = (WORKFLOWS / 'oci-marina-cloudflare-admin-tunnel.yml').read_text()
+        parts = re.split(r'(?m)^      - ', text)
+        step = next((part for part in parts if part.startswith('name: Restore private Bastion state')), '')
+        self.assertTrue(step, 'cleanup must be a real, unconditional Actions step')
+        script = workflow_run_script('      - ' + step)
+        self.assertIn('        if: always()', step)
+        with tempfile.TemporaryDirectory(prefix='private-bastion-cleanup-') as tmp:
+            root = Path(tmp)
+            for name, content in {
+                'marina-bastion-cidrs.json': '[]',
+                'marina-marina-security-list-ingress.json': '[]',
+                'marina-bastion-session-id': 'fixture-session\n',
+                'marina-security-list-id': 'fixture-security\n',
+                'oci-config': 'fixture',
+            }.items():
+                (root / name).write_text(content)
+            binary = root / 'oci'
+            binary.write_text('''#!/bin/bash
+printf '%s\\n' "$*" >> "$CALL_LOG"
+if [[ "$FAIL_KIND" == session && "$*" == *"bastion session delete"* ]]; then exit 9; fi
+if [[ "$FAIL_KIND" == cidrs && "$*" == *"bastion bastion update"* ]]; then exit 9; fi
+if [[ "$FAIL_KIND" == ingress && "$*" == *"network security-list update"* ]]; then exit 9; fi
+''')
+            binary.chmod(0o700)
+            env = {
+                'PATH': str(root) + ':/usr/bin:/bin', 'RUNNER_TEMP': str(root),
+                'OCI_CONFIG_FILE': str(root / 'oci-config'), 'OCI_PROFILE': 'fixture',
+                'MARINA_BASTION_ID': 'fixture-bastion', 'CALL_LOG': str(root / 'calls'),
+                'FAIL_KIND': failure,
+            }
+            result = subprocess.run(['bash', '-c', script], env=env, capture_output=True, text=True)
+            calls = (root / 'calls').read_text().splitlines()
+            if not failure:
+                again = subprocess.run(['bash', '-c', script], env=env, capture_output=True, text=True)
+                self.assertEqual(again.returncode, 0, again.stderr)
+                self.assertEqual((root / 'calls').read_text().splitlines(), calls)
+            return result, calls
+
+    def test_cleanup_attempts_every_restore_even_when_one_provider_call_fails(self):
+        for failure in ('session', 'cidrs', 'ingress'):
+            with self.subTest(failure=failure):
+                result, calls = self.run_cleanup_fixture(failure)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertTrue(any('bastion session delete' in call for call in calls))
+                self.assertTrue(any('bastion bastion update' in call for call in calls))
+                self.assertTrue(any('network security-list update' in call for call in calls))
+                self.assertNotIn('fixture-', result.stdout + result.stderr)
+
+    def test_successful_cleanup_is_idempotent_and_does_not_emit_resource_ids(self):
+        result, calls = self.run_cleanup_fixture()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(result.stdout + result.stderr, '')
 
 
 if __name__ == '__main__':

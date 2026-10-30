@@ -1,3 +1,37 @@
+<!-- EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
+## Regra obrigatoria: continuidade ate esgotamento comprovado de rotas autorizadas (2026-10-30)
+
+Quando o usuario disser "retome", "continue", "nao pare" ou solicitar conclusao integral, **nao encerrar por falha de uma unica ferramenta, autenticacao, pagina ou transporte**. Antes de classificar qualquer tarefa como bloqueada, o agente deve verificar, para o host e operacao especificos, cada rota REALMENTE instalada, acessivel e autorizada: (1) conectores oficiais do servico e MCP ShopVivaliz/controlador; (2) RDC/Remote Desktop Commander 1 e 2, com identificacao atual do dispositivo e privilegios efetivos; (3) SSH privado/Tailscale e tuneis Cloudflare/MCP independentes comprovados; (4) navegador/sessao grafica corporativa ja autenticada e respectivo controle de interface autorizado; (5) OCI Bastion, runner e GitHub Actions apenas nas funcoes de bootstrap e recuperacao oficialmente autorizadas. Nao pressupor que um tunel concede permissao administrativa, que uma sessao grafica permite cliques por MCP ou que uma credencial valida para leitura autoriza escrita.
+
+**Para cada rota:** obter evidencia do estado real, identidade, autorizacao, lease/fencing, resultado da acao e motivo de indisponibilidade; distinguir NOT_PROVISIONED, DENIED_BY_PROVIDER, AUTH_EXPIRED, RUNTIME_LOCKED, NOT_REACHABLE e VERIFIED_OK. Reutilizar credenciais e sessoes protegidas ja provisionadas sem expor segredos nem pedir credenciais repetidas. Se uma rota falhar por motivo tecnico reparavel, corrigir, testar novamente e prosseguir para as demais rotas permitidas. Registrar checkpoint duravel e proxima acao acionavel; manter o incidente aberto e a continuidade pelo controlador existente, sem duplicar workers ou automacoes. Nao afirmar APTO/CONCLUIDO antes de validacao de escrita, persistencia, regressao e UI E2E quando houver interface.
+
+**Limite inegociavel:** a exaustao de caminhos nao autoriza contornar um 401/403 ou recusa explicita do provedor, RBAC, CAPTCHA/MFA, protecoes de plataforma, runtime_lock_required, approvacao obrigatoria ou delimitacao do escopo comercial. Outra rota so pode ser utilizada para finalidade INDEPENDENTEMENTE autorizada; nunca como bypass da mesma acao negada. Preservar dados, precos, estoques, publicacoes organicas e terceiros. Se depender de permissao externa, identificar o provedor, capacidade faltante, evidencias, fluxo oficial de liberacao e status NAO_CONCLUIDO/BLOCKED_EXTERNAL, continuando por tarefas seguras executaveis e sem prometer execucao em segundo plano inexistente.
+
+**Exemplo Mercado Ads #3416:** advertiser 20098, token com leitura de Product Ads mas escrita explicitamente recusada pelo Mercado Livre HTTP 401. A UI autenticada no laptop nao equivale a ferramenta de clique autorizada, e o agrupamento por variantes impede pausar toda campanha/grupo misto quando anuncios ROAS >=12x devem permanecer ativos. Conferir oficialmente permissao de escrita e operacao individual sem alterar publicacoes organicas. Evidencia: https://github.com/Vivaliz-site/site-shopvivaliz/issues/3416 .
+<!-- /EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
+
+<!-- REMOTE_ROUTE_EXHAUSTION_V2_20261030 -->
+## Regra operacional: esgotar caminhos reais de acesso antes de parar
+
+Em qualquer retomada, auditoria V5, correcao, deploy ou validacao de projeto, o agente NAO encerra por uma falha isolada de API, comando, ferramenta, sessao, navegador ou transporte. Examinar, nesta ordem e conforme o runbook vigente, TODAS as rotas concretamente disponiveis e autorizadas para o host e a operacao: MCP ShopVivaliz Remote Control/Orquestrador; Remote Desktop Commander 1 e 2; tunel privado documentado, SSH/Tailscale; navegador grafico autorizado; plano de controle OCI/GitHub Actions exclusivamente para bootstrap/recovery. Confirmar identidade do destino, usuario, permissoes, lease/fencing, capacidade efetiva e estado de cada rota. A VM historica excluida NUNCA sera reativada, contatada ou recriada. Marina e a producao; backend e o controlador conforme topologia viva.
+
+O agente deve tentar corrigir a causa tecnica dos erros de conexao, testar novamente de forma limitada e idempotente, e seguir para a proxima rota adequada quando houver. Registrar em checkpoint nao secreto: host, caminho, estado, teste, resultado, correcoes, evidencia temporal e proxima acao. Uma rota nao provisionada nao conta como rota testada. Nao transferir credenciais/cookies entre perfis nem contornar MFA, RBAC, recusas explicitas de plataforma, controles de seguranca ou protecoes de branch. Alternativa tecnica nao equivale a autorizacao para bypass.
+
+A tarefa permanece RUNNING/NAO_APTO ate a verificacao do ciclo diagnosticar -> corrigir -> prevenir -> testar -> validar, incluindo UI grafica real quando aplicavel. Nunca declarar CONCLUIDO ou APTO por HTTP 200, testes unitarios ou logs apenas. Se todas as rotas seguras e autorizadas forem comprovadamente esgotadas, registrar BLOCKED_EXTERNAL com evidencia e next_action; encaminhar ao mecanismo de retomada ja existente, sem inventar execucao em segundo plano, duplicar agentes ou mascarar pendencias.
+<!-- /REMOTE_ROUTE_EXHAUSTION_V2_20261030 -->
+
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Estado de runtime posterior, prevalente (2026-10-29):** o MCP central do backend agora anuncia **somente backend, Fred-Win e KOCEPSV**; a origem `shopvivaliz-free-a1` foi removida da allowlist (PRs #3391/#3392) e nunca e alvo. Marina permanece fora do MCP central, mas RDC direto e SSH privado foram comprovados; o tunel SSH do MEI para Marina esta ativo (HTTP 200), separado do MCP independente Marina que continua nao instalado. O PR #3395 bloqueou 20 jobs antigos sem migrar automaticamente seus objetivos. Controlador 24x7 ainda precisa de lease valido e recuperacao de checkpoints; CI `mei-ci-a1` segue sem registro. Declaracoes de "MCP ainda inclui origem" abaixo sao apenas historicas. Referencia: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
+<!-- CURRENT_HOST_ACCESS_POLICY_20261029 -->
+**Topologia de acesso vigente:** `marina-a1-4c24g` (OCI ESPOSA) e producao web/deploy; `always-free-arm-1787907847-26` (OCI PRINCIPAL) opera o backend/browser e o **Remote Control MCP** central. A origem `shopvivaliz-free-a1` foi excluida segundo o proprietario; nunca acessa-la. O MCP central ainda nao inclui Marina; para ela, RDC 1/2 direto tem evidencias de acesso, enquanto o MCP independente permanece inativo. Revalidar `docs/knowledge/current-topology-and-access-2026-10-29.md` antes de operar.
+<!-- /CURRENT_HOST_ACCESS_POLICY_20261029 -->
+
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 ## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
 
@@ -120,7 +154,7 @@ Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
 
 
 - Em projetos ShopVivaliz com autenticação já provisionada, o agente deve primeiro usar as fontes seguras existentes (env/arquivo protegido/systemd/secret/host autenticador) e **não pedir ao usuário novamente usuário, senha ou OTP** sem antes provar que a fonte existente está ausente ou inválida.
-- Para Amazon Returns / Seller Central, o browser/bridge roda em `shopvivaliz-free-a1` e o TOTP é fornecido de forma restrita por `always-free-arm-1787907847-26`. O agente deve usar esse caminho automático e nunca depender de o usuário transcrever OTP rotineiramente.
+- Para Amazon Returns / Seller Central, **a antiga rota browser/bridge em `shopvivaliz-free-a1` foi desativada pela exclusao da origem**. Verificar qual novo browser isolado/bridge foi realmente implantado (backend ou Marina) antes de tentar login ou MFA; nao presumir migracao ou reaproveitar sessao/segredo de outro perfil. TOTP somente por fluxo seguro ja autorizado, sem expor valor ou exigir transcricao rotineira.
 - Antes de reportar `AUTH_REQUIRED`, verificar o runbook do projeto, referências de credencial e canal de MFA já configurados, sem revelar valores secretos.
 - Pedir intervenção humana apenas para credencial realmente revogada/ausente, CAPTCHA, recovery, consentimento novo ou outro desafio que tecnicamente não possa ser resolvido pelo fluxo seguro existente.
 - Nunca registrar em Git, docs, logs ou chat o conteúdo de senhas, tokens, chaves, seeds TOTP, OTPs ou cookies; documentar somente a localização segura e o procedimento.
