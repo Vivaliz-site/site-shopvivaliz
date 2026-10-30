@@ -1,3 +1,18 @@
+<!-- ACCESS_ROUTE_EXHAUSTION_NO_PREMATURE_STOP_V2_20261030 -->
+## Continuidade sem parada prematura: RDC, MCP, tunnel e credenciais existentes
+
+Em solicitacoes de "continue/retome/nao pare ate concluir", o agente nao encerra porque um unico conector, browser ou login falhou quando existe outro caminho adequado e autorizado ainda nao verificado.
+
+1. Definir capacidade exata que falta: consulta ERP, envio via PrintNode, validacao UI ou comprovacao fisica. Disponibilidade de host nao implica capacidade operacional.
+2. Inventariar e testar separadamente os caminhos ja provisionados e permitidos: ShopVivaliz Remote Control MCP; RDC/Remote Desktop Commander 1 e 2; tunel privado/SSH via Tailscale/VCN; GUI/RustDesk/desktop bridge; navegador corporativo autenticado; APIs/OAuth existentes; e caminhos oficiais de recuperacao (OCI Bastion, Cloudflare, GitHub Actions apenas dentro do seu escopo). Um tunnel de outro projeto nao autoriza automaticamente acesso ao alvo.
+3. Para cada rota, provar host, identidade, autorizacao, sessao/perfil, lease/fencing, conectividade e permissao concreta da operacao. Credenciais provisionadas exigem preflight nao secreto ou APIs oficiais: nunca exibir/extrair/copiar tokens, cookies, senhas, OTPs, nem contornar MFA/RBAC ou recusas explicitas.
+4. Uma falha de API/UI nao permite substituir o objetivo: para Olist/PrintNode, executar o lote pelo PrintNode, nao pela impressao direta Windows. Preservar status de pedidos entregues/cancelados e evitar etiquetas ou expedicoes duplicadas.
+5. Checkpoint nao secreto obrigatorio por rota: capability_required, route, provisioned, identity_verified, authorized, attempt, result, repair, evidence, next_route e next_action. Nao provisionado significa NOT_PROVISIONED, nao FAILED.
+6. Havendo acao segura executavel, manter RUNNING e continuar. BLOCKED_EXTERNAL/NAO_APTO somente depois de esgotar rotas adequadas, com dependencia externa especifica demonstrada. Nao prometer execucao futura sem automacao criada. APTO/CONCLUIDO apenas com validacao E2E/UI e saida fisica quando aplicavel.
+
+Complementa REMOTE_ACCESS_EXHAUSTION_GATE_V1 e nao expande permissoes nem autoriza operar a origem excluida shopvivaliz-free-a1.
+<!-- /ACCESS_ROUTE_EXHAUSTION_NO_PREMATURE_STOP_V2_20261030 -->
+
 <!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
 > **Estado de runtime posterior, prevalente (2026-10-29):** o MCP central do backend agora anuncia **somente backend, Fred-Win e KOCEPSV**; a origem `shopvivaliz-free-a1` foi removida da allowlist (PRs #3391/#3392) e nunca e alvo. Marina permanece fora do MCP central, mas RDC direto e SSH privado foram comprovados; o tunel SSH do MEI para Marina esta ativo (HTTP 200), separado do MCP independente Marina que continua nao instalado. O PR #3395 bloqueou 20 jobs antigos sem migrar automaticamente seus objetivos. Controlador 24x7 ainda precisa de lease valido e recuperacao de checkpoints; CI `mei-ci-a1` segue sem registro. Declaracoes de "MCP ainda inclui origem" abaixo sao apenas historicas. Referencia: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
 <!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
