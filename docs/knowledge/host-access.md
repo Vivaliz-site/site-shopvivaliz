@@ -1,3 +1,7 @@
+<!-- ACCESS_ROUTE_PRIORITY_V2_20261030 -->
+> **Obrigacao de retomada:** antes de declarar bloqueio ou encerrar, esgotar as rotas autorizadas e realmente provisionadas de MCP central/Orquestrador, RDC 1 e RDC 2, SSH/Tailscale, tuneis privados documentados e GUI real. OCI/GitHub Actions sao apenas para recuperacao/bootstrap. Testar identidade/permissoes/leases e registrar evidencias por rota; corrigir falhas de transporte e usar o proximo caminho seguro. Nao confundir tunel de aplicacao com MCP de comandos. Nunca reutilizar a VM de origem excluida, contornar recusas de seguranca ou executar fora das permissoes existentes. O criterio completo esta em `agent-rules.md`.
+<!-- /ACCESS_ROUTE_PRIORITY_V2_20261030 -->
+
 <!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
 > **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
 <!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
