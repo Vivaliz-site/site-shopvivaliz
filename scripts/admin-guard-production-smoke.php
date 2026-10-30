@@ -50,7 +50,7 @@ try {
         $user = sv_choose_admin_smoke_identity(null, $domainAdmin ?: null, $accounts);
 
         if (!$user || empty($user['id'])) {
-            fwrite(STDERR, "Unable to resolve a persisted ShopVivaliz admin identity without guessing\\n");
+            fwrite(STDERR, "Unable to resolve a persisted ShopVivaliz admin identity without guessing\n");
             exit(3);
         }
     }
