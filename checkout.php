@@ -650,7 +650,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                 if (city && d.localidade) city.value = d.localidade;
                 if (state && d.uf) state.value = d.uf;
                 var number = document.getElementById('street-number-input');
-                if (number) number.focus();
+                if (number && document.activeElement === cepInput) number.focus();
             }).catch(function(){});
     }
     /* Cotacao de frete automatica: antes, o checkout so lia a cotacao ja
@@ -1118,5 +1118,6 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
 <script src="/js/cart-erp-price-reconciliation-v1.js?v=20261029" defer></script>
 <!-- Purchase e conversao de Ads sao emitidos somente apos pagamento
      confirmado pelo webhook, nunca na simples criacao do pedido. -->
+<script src="/js/shipping-postcode-session-v1.js?v=20261030" defer></script>
 </body>
 </html>
