@@ -299,13 +299,21 @@ def docs_preflight(agent_id: str, task: dict[str, Any]) -> tuple[bool, str]:
     task_id = task_id_for(task)
     if not task_id:
         return False, "tarefa sem identificador; preflight de documentação não pode ser vinculado"
-    valid, reason, _ = verify_receipt(agent_id, task_id, task_scope_docs(task))
+    try:
+        documents = task_scope_docs(task)
+    except ValueError as exc:
+        return False, f"invalid task-specific documentation: {exc}"
+    valid, reason, _ = verify_receipt(agent_id, task_id, documents)
     return valid, reason
 
 
 def docs_read_command(agent_id: str, task: dict[str, Any]) -> str:
     task_id = task_id_for(task) or "task-sem-id"
-    extras = "".join(f" --doc {json.dumps(path)}" for path in task_scope_docs(task))
+    try:
+        documents = task_scope_docs(task)
+    except ValueError as exc:
+        return f"TASK_SCOPE_DOCS_INVALID: correct task documentation metadata before preflight ({exc})"
+    extras = "".join(f" --doc {json.dumps(path)}" for path in documents)
     return f"python scripts/agent-docs-gate.py read --agent {agent_id} --task {task_id}{extras}"
 
 
