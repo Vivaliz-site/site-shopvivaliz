@@ -1036,6 +1036,7 @@ if ($notFound) {
         }
     })();
     </script>
+    <?php if (!$notFound && $priceRaw > 0 && $stockRaw > 0): ?>
     <div class="sticky-buy-wrapper">
         <div class="sticky-buy-info">
             <span class="sticky-buy-title"><?= sv_esc($name) ?></span>
@@ -1043,6 +1044,7 @@ if ($notFound) {
         </div>
         <button class="btn btn-primary btn-comprar" onclick="document.getElementById('buy-now').click()">Comprar</button>
     </div>
+    <?php endif; ?>
 
     <script>
     (function() {
