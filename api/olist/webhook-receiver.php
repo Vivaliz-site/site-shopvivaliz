@@ -84,7 +84,7 @@ if (strlen($sku) > 160) svlo_response(422, ['ok' => false, 'error' => 'sku_inval
 try {
     // The source of truth is always the Olist ERP Amazon price list, not
     // the webhook payload. This function writes under olist-erp-webhook.lock.
-    $product = svoei_refresh_product_from_v3($root, '', $sku);
+    $product = svoei_refresh_product_from_v3($root, $productId, $sku);
     svoei_log($root, 'legacy_webhook_catalog_synced', [
         'tipo' => $event, 'sku' => (string)($product['sku'] ?? $sku),
     ]);
