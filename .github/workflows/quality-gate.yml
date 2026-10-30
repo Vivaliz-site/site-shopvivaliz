@@ -12,6 +12,9 @@ on:
       - 'tests/test_marina_stage_service.py'
       - 'blog/**'
       - 'includes/**'
+      - 'daemon-sync-products.py'
+      - 'tests/test_daemon_authoritative_sellable_stock.py'
+      - 'tests/test_catalog_cache_concurrency.py'
       - 'scripts/quality/deployment_closure_guard.py'
       - 'tests/test_deployment_closure_guard.py'
       - '.github/workflows/production-deployment-closure-guard.yml'
@@ -136,6 +139,9 @@ jobs:
           python3 tests/test_deployment_closure_guard.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
+          python3 -m py_compile daemon-sync-products.py
+          python3 tests/test_daemon_authoritative_sellable_stock.py
+          python3 tests/test_catalog_cache_concurrency.py
           node --check scripts/public-layout-audit.mjs
           node --check scripts/chatgpt-account-diagnostic.mjs
           node --check scripts/production-runtime-parity.mjs
