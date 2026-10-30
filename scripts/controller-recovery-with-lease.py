@@ -35,6 +35,8 @@ def promote(
     """Fail closed on another writer or on a stale GitHub main commit."""
     if not SHA_PATTERN.fullmatch(expected_sha):
         raise ValueError("invalid_expected_sha")
+    if not 0 <= lock_wait_seconds <= 180:
+        raise ValueError("lock_wait_seconds_out_of_range")
     release_dir = Path(release_dir)
     if not release_dir.is_absolute():
         raise ValueError("release_dir_must_be_absolute")
@@ -45,8 +47,6 @@ def promote(
     # Wait briefly for a legitimate writer to finish. Never release, extend,
     # replace or steal another owner's lease; the runtime lock performs the
     # final atomic acquisition and fencing check.
-    if not 0 <= lock_wait_seconds <= 180:
-        raise ValueError("lock_wait_seconds_out_of_range")
     deadline = monotonic() + lock_wait_seconds
     while True:
         try:
