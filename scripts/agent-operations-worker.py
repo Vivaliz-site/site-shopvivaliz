@@ -228,12 +228,25 @@ def task_id_for(task: dict[str, Any]) -> str:
 
 
 def task_scope_docs(task: dict[str, Any]) -> list[str]:
-    raw = task.get("required_docs") or task.get("scope_docs") or []
-    if isinstance(raw, str):
-        raw = [raw]
-    if not isinstance(raw, list):
-        return []
-    return [str(item).strip() for item in raw if str(item).strip()]
+    """Collect every scope document; never discard one list for another.
+
+    Both keys are independently meaningful. The ordering is stable so that
+    receipt digests and preflight commands describe the same document set.
+    """
+    documents: list[str] = []
+    for field in ("required_docs", "scope_docs"):
+        raw = task.get(field) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list):
+            raise ValueError(f"{field} must be a string or list of strings")
+        for item in raw:
+            if not isinstance(item, str):
+                raise ValueError(f"{field} entries must be strings")
+            name = item.strip()
+            if name and name not in documents:
+                documents.append(name)
+    return documents
 
 
 def persist_task_continuity(
