@@ -11,7 +11,7 @@ SPEC.loader.exec_module(daemon)
 
 
 class IncrementalCatalogSyncTest(unittest.TestCase):
-    def test_unchanged_product_reuses_cached_detail_without_api_calls(self):
+    def test_unchanged_product_reuses_metadata_but_refreshes_erp_availability(self):
         previous = {
             "10": {
                 "id": 10,
@@ -26,13 +26,24 @@ class IncrementalCatalogSyncTest(unittest.TestCase):
             }
         }
         summaries = [{"id": 10, "situacao": "A", "dataAlteracao": "2026-09-10T12:00:00Z"}]
+        calls = []
+
+        def api(path, token, **kwargs):
+            calls.append(path)
+            if path == "estoque/10":
+                return {"saldo": 4, "reservado": 2, "disponivel": 2}
+            raise AssertionError("unchanged metadata must not be fetched again: " + path)
+
         with patch.object(daemon, "load_previous_cache", return_value=previous), patch.object(
-            daemon, "api_get", side_effect=AssertionError("unchanged product must not hit API")
+            daemon, "api_get", side_effect=api
         ):
             products, failures = daemon.enrich_products(summaries, "token", workers=1)
 
         self.assertEqual(0, failures)
-        self.assertEqual(previous["10"], products[0])
+        self.assertEqual(["estoque/10"], calls)
+        self.assertEqual(2, products[0]["estoque_disponivel"])
+        self.assertEqual(previous["10"]["_erp_base_prices"], products[0]["_erp_base_prices"])
+        self.assertEqual(previous["10"]["anexos"], products[0]["anexos"])
         self.assertEqual([{"sku": "COMP-1", "quantidade": 2}], products[0]["kit"])
 
 
