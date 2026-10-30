@@ -76,7 +76,9 @@ if (!in_array($event, ['price', 'stock', 'product'], true)) {
 $item = is_array($data['produto'] ?? null) ? $data['produto']
     : (is_array($data['dados'] ?? null) ? $data['dados'] : $data);
 $sku = trim((string)($item['sku'] ?? $item['produto_sku'] ?? $item['codigo'] ?? $item['skuMapeamento'] ?? ''));
-if ($sku === '') svlo_response(422, ['ok' => false, 'error' => 'sku_missing']);
+$productId = trim((string)($item['idProduto'] ?? $item['produto_id'] ?? $item['product_id'] ?? $item['id'] ?? ''));
+if ($productId !== '' && !ctype_digit($productId)) svlo_response(422, ['ok' => false, 'error' => 'product_id_invalid']);
+if ($sku === '' && $productId === '') svlo_response(422, ['ok' => false, 'error' => 'product_identifier_missing']);
 if (strlen($sku) > 160) svlo_response(422, ['ok' => false, 'error' => 'sku_invalid']);
 
 try {
