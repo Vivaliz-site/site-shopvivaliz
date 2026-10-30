@@ -1,3 +1,15 @@
+<!-- AGENT_ACCESS_EXHAUSTION_V2_20261030 -->
+## Obrigacao de esgotamento de rotas autorizadas antes de interromper
+
+Para toda tarefa ShopVivaliz acionada por "Retome", "Continue", "Prossiga" ou "nao pare ate concluir", cada agente deve **executar a acao disponivel e continuar**: diagnostico isolado, PR aberto, falha de login, timeout ou uma ferramenta inoperante nao constituem conclusao. Identificar primeiro o host e a topologia vigentes no main; registrar `remote_access_attempts` nao secreto por host/tarefa e consultar as capacidades *realmente expostas*.
+
+**Rotas a investigar e tentar quando aptas ao escopo**, com fallback justificado: (1) ShopVivaliz Remote Control MCP, suas tarefas duraveis, inspecao e navegador grafico; (2) Remote Desktop Commander (RDC 1 e RDC 2, cada um com sessao/permissoes proprias) na Marina, backend, laptop Fred-Win ou KOCEPSV; (3) SSH privado autenticado pela VCN ou Tailscale, usando apenas credenciais ja provisionadas por mecanismo oficial; (4) tuneis privados/reverse SSH ou Cloudflare explicitamente documentados, sem confundir tunel de aplicacao MEI com MCP administrativo; (5) GUI autorizada por perfil/sessao (browser bridge, RustDesk) quando houver interface; (6) OCI Bastion/console/Run Command e GitHub Actions como mecanismos de recuperacao ou deploy **apenas nos respectivos fluxos permitidos**. A indisponibilidade de um conector nao invalida os demais; a existencia de uma rota tambem nao garante permissao para toda acao.
+
+Para cada tentativa aplicavel, documentar horario UTC, host/identidade, canal, teste, permissao efetiva, resultado, causa, correcao, evidencias, proximo fallback e classificacao (`PASS`, `FAILED_REPAIRABLE`, `NOT_PROVISIONED`, `DENIED`, `NOT_APPLICABLE`). Nao registrar segredos, cookies, OTP ou tokens. Recuperar sessao autentica existente sem copiar credenciais entre perfis. Resolver erros reparaveis, testar novamente de modo finito/idempotente, seguir para a proxima rota autorizada e preservar estado `RUNNING/NAO_APTO` enquanto houver trabalho executavel. **So declarar `BLOCKED_EXTERNAL`** quando houver prova objetiva de impedimento externo apos esgotar e justificar todas as rotas aplicaveis; registrar proprietario do bloqueio e acao segura seguinte.
+
+**Limites superiores inalterados:** recusas explicitas da plataforma, RBAC, sudo, MFA, CAPTCHA, leases/fencing, branch protection, aprovacao humana para estoque/precos, quotas e controles de gasto nao podem ser burlados usando outro MCP, RDC, SSH, tunnel, navegador, identidade, workflow ou host. A VM `shopvivaliz-free-a1` foi retirada e nunca pode ser alvo. Marina e producao e backend e controlador; confirmar ao vivo. Para correcoes de codigo: RED, causa raiz, GREEN, CI protegido, merge autorizado, deploy por Master Pipeline, SHA publico exato e E2E GUI com trace/persistencia. Sem isso nao marcar `CONCLUIDO/APTO`. Esta regra reforca, nao revoga, `docs/knowledge/host-access.md`, `GEPETO-POLICY.md` e as politicas vigentes.
+<!-- /AGENT_ACCESS_EXHAUSTION_V2_20261030 -->
+
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 ## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
 
