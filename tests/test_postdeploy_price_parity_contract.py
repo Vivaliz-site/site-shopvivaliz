@@ -44,6 +44,12 @@ class PostDeployPriceParityContract(unittest.TestCase):
         for marker in (
             'daemon-sync-products.py',
             'token = api.get_token()',
+            'api.fetch_amazon_table(token)',
+            'amazon_prices_for(',
+            'active_cache_not_derived_from_amazon_991',
+            'amazon_price_provenance_missing',
+            'amazon_exception_count',
+            'cache_changed_during_price_audit',
             'api.fetch_products_active(token)',
             'api.api_get("produtos/" + pid, token',
             'public_products()',
@@ -80,6 +86,7 @@ class PostDeployPriceParityContract(unittest.TestCase):
                 content = (ROOT / relative).read_text(encoding="utf-8")
                 self.assertIn("DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2", content)
                 self.assertIn("postdeploy-erp-price-parity.yml", content)
+                self.assertIn("Amazon", content)
 
 
 if __name__ == "__main__":
