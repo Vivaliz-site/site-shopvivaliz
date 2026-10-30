@@ -129,6 +129,7 @@ jobs:
           php tests/no-public-mock-auth-test.php
           php tests/mercadopago-legacy-success-route-regression.php
           php scripts/quality/validate-asset-manifest.php
+          php tests/checkout-coupon-layout-test.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           python3 -m py_compile scripts/ecommerce-excellence-audit.py
           bash -n scripts/setup-remote-control-browser-mcp.sh
