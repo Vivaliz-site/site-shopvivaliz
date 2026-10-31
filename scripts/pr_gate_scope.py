@@ -32,7 +32,11 @@ RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     )),
     ("ShopVivaliz QA", (
         "api/**", "admin/**", "includes/**", "public/**", "assets/**", "blog/**",
-        "*.php", ".github/workflows/shopvivaliz-qa.yml",
+        "css/**", "js/**", "*.php", "*.html",
+        "package.json", "package-lock.json", "composer.json", "composer.lock",
+        "scripts/deploy-production.sh", "tests/public-*.mjs", "tests/catalog-*.mjs",
+        "tests/product-*.mjs", "tests/*.cjs",
+        ".github/workflows/shopvivaliz-qa.yml",
     )),
     ("Policy Engine", (
         "api/**", "includes/**", "public/**", "assets/**", "erp/**",
