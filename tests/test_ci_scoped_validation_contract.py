@@ -70,6 +70,34 @@ class ScopedGateContractTests(unittest.TestCase):
         self.assertIn('validate-audit-governance.py', text)
         self.assertIn('check-agent-docs-enforcement.py', text)
 
+    def test_storefront_qa_does_not_repeat_heavy_continuity_bridge(self):
+        # The 114s browser-worker test is relevant to the continuity runtime,
+        # not to ordinary CSS/JS/site changes (measured 2026-10-31).
+        qa = (ROOT / ".github/workflows/shopvivaliz-qa.yml").read_text(encoding="utf-8")
+        continuity = (ROOT / ".github/workflows/task-continuity-fast-gate.yml").read_text(encoding="utf-8")
+        self.assertNotIn("node tests/chatgpt-continuity-bridge-worker-test.mjs", qa)
+        self.assertIn("node tests/chatgpt-continuity-bridge-worker-test.mjs", continuity)
+        self.assertIn("'scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'", continuity)
+        # Unknown/shared impact still runs the mandatory full regression.
+        self.assertIn("bash scripts/repository-governance-validate.sh ci", WORKFLOW.read_text(encoding="utf-8"))
+
+    def test_postmerge_quality_gate_keeps_release_trigger_without_unrelated_pr_gate(self):
+        # Master Production Pipeline is workflow_run-triggered by Quality Gate.
+        # Its main-push event must remain unconditional until a separately
+        # reviewed release trigger replaces that dependency.
+        quality = (ROOT / ".github/workflows/quality-gate.yml").read_text(encoding="utf-8")
+        release = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn("  push:\n", quality)
+        self.assertIn("  pull_request:\n", quality)
+        push = quality.split("  push:\n", 1)[1].split("  pull_request:\n", 1)[0]
+        pull_request = quality.split("  pull_request:\n", 1)[1].split("  workflow_dispatch:\n", 1)[0]
+        self.assertIn("branches: [main, master]", push)
+        self.assertNotIn("    paths:", push)
+        self.assertIn("    paths:", pull_request)
+        self.assertIn("  workflow_run:", release)
+        self.assertIn("workflows: [Quality Gate]", release)
+        self.assertIn("Classify production impact", release)
+
     def test_cloudflare_preflight_is_not_removed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Cloudflare admin staging preflight regression (when present)", text)

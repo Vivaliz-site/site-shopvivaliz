@@ -33,8 +33,6 @@ on:
       - 'tests/test_task_continuity_actions_queue.py'
       - 'tests/test_task_continuity_e2e.py'
       - 'tests/test_chatgpt_continuity_proof_certifier.py'
-      - 'tests/test_ci_feedback_optimization.py'
-      - 'tests/test_pr_gate_scope.py'
       - 'tests/test_executor_fallback_order.py'
       - 'tests/test_remote_control_mcp_priority_policy.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'

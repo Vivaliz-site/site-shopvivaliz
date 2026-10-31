@@ -3,7 +3,9 @@ name: Marina Cart Signed Maintenance Contract (NO DEPLOY)
 on:
   pull_request:
     paths:
-      - 'remote-control-mcp/**'
+      - 'remote-control-mcp/server.py'
+      - 'remote-control-mcp/maintenance_cart.py'
+      - 'remote-control-mcp/retire-origin-abandoned-cart.py'
       - 'tests/test_marina_cart_signed_maintenance.py'
       - 'scripts/send-abandoned-cart-emails.php'
       - 'scripts/install-abandoned-cart-recovery-service.sh'
