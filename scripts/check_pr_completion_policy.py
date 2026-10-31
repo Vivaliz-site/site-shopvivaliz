@@ -162,6 +162,20 @@ REQUIRED = {
     ],
 }
 
+# Agent preflight and non-abandonment rules are checked as part of the existing
+# PR Policy Enforcement gate; deleting the policy fails closed.
+REQUIRED["docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md"] = [
+    "rules_loaded",
+    "read -> acknowledge -> verify",
+    "RULES_NOT_LOADED",
+    "TODOS os PRs",
+    "governance",
+    "certifier",
+    "next_action",
+    "head SHA",
+    "sem bypass",
+]
+
 FORBIDDEN = {
     ".github/workflows/pr-conflict-auto-healer.yml": [
         "GH_REPO_TOKEN",
