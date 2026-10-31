@@ -3,6 +3,13 @@
 ## Decisao do proprietario (2026-10-31)
 A validacao e liberacao **expressa** pelo proprietario em Pull Request e o mecanismo oficial de autorizacao humana para mudancas sensiveis de codigo, politica e infraestrutura ShopVivaliz, quando a organizacao e a plataforma reconhecerem tal aprovacao.
 
+## Gatilho obrigatorio: chat nao aceito como autorizacao formal
+Sempre que uma regra de seguranca, RBAC, governanca, infraestrutura ou provedor exigir **acao direta e autenticada do proprietario** e **nao aceitar autorizacao escrita no chat** como prova suficiente, o agente deve obrigatoriamente preparar um PR Draft de aprovacao com a mudanca proposta, testes, impacto e rollback. Nao repetir pedidos de autorizacao pelo chat nem encerrar apenas com o bloqueio.
+
+A aprovacao/liberacao autenticada do PR constitui a manifestacao formal do proprietario **para o escopo revisado**, nos sistemas que aceitam o fluxo PR como autorizacao. Caso OCI, OpenAI Platform ou outro provedor exija um ato administrativo proprio (por exemplo, consentimento OAuth, alteracao RBAC, MFA ou aprovacao de owner), anexar ao PR as instrucoes e evidencias dessa etapa e solicitar que ela seja feita por seu mecanismo oficial. Aprovacao do PR nao altera por si so a politica do provedor.
+
+O agente deve continuar executando todas as etapas que nao dependam desse ato, sem contornar negativas de privilegio. O PR permanece sem merge ate validacao expressa do proprietario e todos os gates necessarios.
+
 ## Contrato
 1. Agente investiga, corrige, executa testes e abre PR para revisao do proprietario. O PR deve informar exatamente alvo, risco, diff, testes, impacto, rollback, efeitos externos e operacoes de deploy previstas.
 2. Para mudanca sensivel, abrir PR em **Draft** e **nao realizar merge** ate aprovacao verificavel do proprietario. A existencia do PR, CI verde ou aprovacao de outro agente nao constituem autorizacao.
