@@ -33,6 +33,9 @@ IGNORED_PREFIXES = (
 
 NONCOMMERCIAL_SENSITIVE_PATH_EXCEPTIONS = {
     ".github/workflows/test-inventory.yml",
+    # This is a read-only fail-closed quality probe, not an ERP/stock writer.
+    # Keep content scanning active so actual stock mutations still require approval.
+    "scripts/quality/validate-product-stock.php",
 }
 
 MUTATION_PATTERN = re.compile(
