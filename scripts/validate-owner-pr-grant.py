@@ -37,6 +37,11 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
     if not (pr.get("merged") is True and pr.get("state") == "closed" and
             pr.get("number") == pr_number):
         return False, "pr_not_merged"
+    # Owner-only grants require a direct owner action. GitHub auto-merge
+    # (even when enabled by the owner login) is not evidence of a human-only
+    # merge. Missing API metadata is also not a trustworthy authorization.
+    if "auto_merge" not in pr or pr["auto_merge"] is not None:
+        return False, "owner_only_merge_not_proven_manual"
     if str(pr.get("merged_by", {}).get("login", "")).casefold() != owner_login.casefold():
         return False, "merge_actor_not_owner"
     if pr.get("merge_commit_sha") != merge_sha or pr.get("head", {}).get("sha") != head_sha:
