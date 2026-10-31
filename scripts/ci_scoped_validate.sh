@@ -9,7 +9,7 @@ groups_csv="${1:-}"
 IFS=',' read -r -a groups <<< "$groups_csv"
 for group in "${groups[@]}"; do
   case "$group" in
-    shopee|mail|continuity|docs) ;;
+    shopee|mail|continuity|chatgpt-dispatcher|docs) ;;
     *) echo "unsupported_scoped_validation_group=$group" >&2; exit 64 ;;
   esac
 done
@@ -42,6 +42,9 @@ for group in "${groups[@]}"; do
     continuity)
       python3 -m unittest tests.test_task_continuation_watchdog tests.test_task_resume_dispatcher tests.test_task_resume_queue tests.test_global_task_continuity_v8 tests.test_checkpoint_first_zero_window tests.test_chatgpt_continuity_nudge_dispatcher -v
       node tests/chatgpt-continuity-bridge-worker-test.mjs
+      ;;
+    chatgpt-dispatcher)
+      python3 -m unittest tests.test_chatgpt_continuity_nudge_dispatcher -v
       ;;
     mail)
       python3 tests/shopvivaliz-mail-legacy-provider-guard-test.py
