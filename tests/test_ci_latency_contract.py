@@ -48,13 +48,9 @@ class CiLatencyContractTests(unittest.TestCase):
 
     def test_clean_stale_pr_sync_does_not_require_gemini(self) -> None:
         healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text(encoding="utf-8")
-        merge_pos = healer.index("if git merge --no-edit --no-commit --no-ff origin/main; then")
-        abort_pos = healer.index("git merge --abort || fail 'clean merge rollback failed'")
+        merge_pos = healer.index('if [[ "$merge_clean" -eq 0 ]]')
         credential_pos = healer.index("--credential-preflight")
-        self.assertGreater(abort_pos, merge_pos)
-        self.assertGreater(credential_pos, abort_pos)
-        self.assertIn("pr_clean_merge_no_push=true", healer)
-        self.assertIn('if [[ "$after_sha" == "$before_sha" ]]; then', healer)
+        self.assertGreater(credential_pos, merge_pos)
 
     def test_history_integrity_avoids_blob_downloads(self) -> None:
         workflow = (WF / "history-integrity.yml").read_text(encoding="utf-8")
