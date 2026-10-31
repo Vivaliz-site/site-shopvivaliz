@@ -12,6 +12,18 @@ A validacao e liberacao **expressa** pelo proprietario em Pull Request e o mecan
 6. O deploy exige trilha auditavel que associe PR aprovado, SHA merged, artefato, executor, runtime lease/fencing, validacao de estado, rollback e testes pos-implantacao. Se o workflow oficial de deploy nao tiver essa amarracao, propor implementacao em PR separado e nao alegar que ja esta enforceado.
 7. Acoes nao cobertas pelo escopo exato do PR (inclusive financeiras, destrutivas ou de acesso administrativo especial) continuam sujeitas a controles/aprovacoes proprios e a recusa expressa do provedor.
 
+
+## Regra universal: toda intervencao humana requerida vira PR de autorizacao
+Quando QUALQUER tarefa depender de intervencao do proprietario — liberacao administrativa, configuracao privilegiada, permissoes de MCP, alteracao de seguranca, acesso a API, infraestrutura, deploy, credenciais/provisionamento ou confirmacao operacional — o agente deve, antes de devolver o impedimento:
+1. Investigar a origem, definir a mudanca minima, implementar apenas artefatos reversiveis de preparacao, testes e rollback, sem acionar a permissao ausente.
+2. Criar PR Draft especifico com descricao exata da acao a autorizar, escopo, riscos, rollback, evidencias, tests GREEN e checklist verificavel de aprovacao do proprietario.
+3. Vincular no PR o identificador do host, do componente e o SHA, especificando se o merge dispara alguma automacao; tornar visivel qualquer efeito privilegiado, sem segredos.
+4. Aguardar a validacao e liberacao explicitas do proprietario por review/merge. Um PR aprovado so autoriza aquilo que consta no diff e que o aprovador tem poderes para autorizar. Nenhum agente presume que um PR cria permissoes externas.
+5. Apos merge, executar o procedimento oficial, verificar controles externos obrigatorios, registrar trilha e testar runtime/rollback. Caso o provedor exija concessao independente fora do GitHub, incluir no PR roteiro verificavel da acao oficial; o PR nao substitui a propria concessao.
+
+### Exemplo obrigatorio: MCP independente da Marina
+Para habilitar capacidades administrativas do MCP em `marina-a1-4c24g`, abrir PR dedicado detalhando endpoint, identidade de servico, RBAC de minimo privilegio, lista explicita de ferramentas (por exemplo `file_write`, `database_admin`, `deployment_manage`), autorizacao de cada operacao, escopo de hosts e paths, logs sem segredos, ttl/lease/fencing, testes negativos de acesso e rollback. O PR deve instalar/propor guardrails e mecanismo oficial de provisionamento, mas **nunca** conceder root indiscriminado, desativar `NoNewPrivileges`, trocar identidades ou burlar owner/RBAC do OpenAI Platform. A aprovacao do PR e autorizacao humana para o diff; a ativacao depende tambem das permissoes reais do provedor e da maquina.
+
 ## Evidencia minima
 PR e SHA, aprovador autenticado, workflow/gates, evento de merge, identidade do executor, lease/fencing (sem segredos), checks de runtime e rollback. Sem isso, nao declarar EXECUTADO nem APTO.
 
