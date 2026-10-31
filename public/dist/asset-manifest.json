@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-30T03:38:35.468Z",
+  "generated_at": "2026-10-31T04:47:42.014Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -170,6 +170,11 @@
       "file": "/public/dist/js/sales-conversion-v1.513b731b42.min.js",
       "bytes": 16102,
       "source_bytes": 18069
+    },
+    "/js/shipping-postcode-session-v1.js": {
+      "file": "/public/dist/js/shipping-postcode-session-v1.de322b4818.min.js",
+      "bytes": 1809,
+      "source_bytes": 2335
     },
     "/js/shipping-request-dedupe-v1.js": {
       "file": "/public/dist/js/shipping-request-dedupe-v1.27fa88e116.min.js",

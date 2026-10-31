@@ -12,6 +12,9 @@ on:
       - 'tests/test_marina_stage_service.py'
       - 'blog/**'
       - 'includes/**'
+      - 'daemon-sync-products.py'
+      - 'tests/test_daemon_authoritative_sellable_stock.py'
+      - 'tests/test_catalog_cache_concurrency.py'
       - 'scripts/quality/deployment_closure_guard.py'
       - 'tests/test_deployment_closure_guard.py'
       - '.github/workflows/production-deployment-closure-guard.yml'
@@ -126,6 +129,7 @@ jobs:
           php tests/no-public-mock-auth-test.php
           php tests/mercadopago-legacy-success-route-regression.php
           php scripts/quality/validate-asset-manifest.php
+          php tests/checkout-coupon-layout-test.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           python3 -m py_compile scripts/ecommerce-excellence-audit.py
           bash -n scripts/setup-remote-control-browser-mcp.sh
@@ -136,6 +140,9 @@ jobs:
           python3 tests/test_deployment_closure_guard.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
+          python3 -m py_compile daemon-sync-products.py
+          python3 tests/test_daemon_authoritative_sellable_stock.py
+          python3 tests/test_catalog_cache_concurrency.py
           node --check scripts/public-layout-audit.mjs
           node --check scripts/chatgpt-account-diagnostic.mjs
           node --check scripts/production-runtime-parity.mjs
@@ -143,7 +150,7 @@ jobs:
           node --check js/catalog-conversion-v4.js
           node --check js/product-conversion-v5.js
           node --check js/catalog.js
-          node --test tests/product-buy-now-runtime.test.cjs tests/catalog-buy-now-runtime.test.cjs tests/catalog-search-stock-race.test.cjs
+          node --test tests/product-buy-now-runtime.test.cjs tests/catalog-buy-now-runtime.test.cjs tests/catalog-search-order.test.cjs tests/catalog-search-stock-race.test.cjs tests/shipping-postcode-session.test.cjs
           node tests/shipping-request-dedupe-runtime-test.js
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs tests/public-layout-audit-parallelism.test.mjs
           bash tests/master-production-monitor-regression.sh

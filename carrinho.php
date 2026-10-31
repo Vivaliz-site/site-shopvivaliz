@@ -343,5 +343,6 @@ header('Content-Type: text/html; charset=UTF-8');
 <script src="/js/cart-persistence-v23.js" defer></script>
 <script src="/js/cart-erp-price-reconciliation-v1.js?v=20261029" defer></script>
 <script src="/js/cart-shipping-v7.js?v=2026-07-26-v2"></script>
+<script src="/js/shipping-postcode-session-v1.js?v=20261030" defer></script>
 </body>
 </html>

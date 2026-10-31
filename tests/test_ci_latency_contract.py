@@ -41,7 +41,10 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertNotIn("update-branch", workflow)
         self.assertNotIn("ai-stale-pr-repair.yml", workflow)
         self.assertIn("external_auth_branch_sync=true", workflow)
-        self.assertIn("REMOTE_HEAL_SCRIPT", workflow)
+        self.assertIn("bash trusted/scripts/pr_conflict_vm_heal.sh", workflow)
+        self.assertIn("bash trusted/scripts/merge_green_pr_via_vm.sh", workflow)
+        self.assertNotIn("REMOTE_HEAL_SCRIPT", workflow)
+        self.assertNotIn("ssh -o BatchMode", workflow)
 
     def test_clean_stale_pr_sync_does_not_require_gemini(self) -> None:
         healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text(encoding="utf-8")

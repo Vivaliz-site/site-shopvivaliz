@@ -1036,6 +1036,7 @@ if ($notFound) {
         }
     })();
     </script>
+    <?php if (!$notFound && $priceRaw > 0 && $stockRaw > 0): ?>
     <div class="sticky-buy-wrapper">
         <div class="sticky-buy-info">
             <span class="sticky-buy-title"><?= sv_esc($name) ?></span>
@@ -1043,6 +1044,7 @@ if ($notFound) {
         </div>
         <button class="btn btn-primary btn-comprar" onclick="document.getElementById('buy-now').click()">Comprar</button>
     </div>
+    <?php endif; ?>
 
     <script>
     (function() {
@@ -1170,5 +1172,6 @@ if ($notFound) {
     <script src="/js/first-purchase-popup-v1.js?v=<?= filemtime(__DIR__ . '/js/first-purchase-popup-v1.js') ?: '1' ?>" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260811-1"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
+<script src="/js/shipping-postcode-session-v1.js?v=20261030" defer></script>
 </body>
 </html>

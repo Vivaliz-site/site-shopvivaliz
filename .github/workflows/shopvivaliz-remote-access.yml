@@ -737,23 +737,21 @@ jobs:
               backend_token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"
               backend_token_file="$backend_token_dir/bridge.token"
               marina_token_file="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token"
-              marina_key="$(mktemp)"
-              marina_known_hosts="$(mktemp)"
+              # The backend runner already has a separately verified, host-pinned
+              # private Tailscale route to Marina. The old public SSH bootstrap
+              # times out before the bridge can be repaired; do not fall back to
+              # public SSH or repurpose its GitHub secret in this action.
+              test "$(hostname -s)" = "always-free-arm-1787907847-26"
+              marina_private_key="/home/ubuntu/.ssh/oci-marina-a1-2026"
+              marina_private_known_hosts="/home/ubuntu/.ssh/known_hosts_marina_verified"
+              test -r "$marina_private_key"
+              test -s "$marina_private_known_hosts"
               remote_dir="/tmp/shopvivaliz-chatgpt-continuity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
               cleanup_continuity_repair() {
-                rm -f "$marina_key" "$marina_known_hosts"
                 "${SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :
               }
               trap cleanup_continuity_repair RETURN
-
-              test -n "$MARINA_VM_KEY"
-              test -n "$MARINA_VM_KNOWN_HOSTS"
-              printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
-              printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
-              printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
-              chmod 600 "$marina_key" "$marina_known_hosts"
-              MARINA_SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key" "ubuntu@$MARINA_PUBLIC_IP")
-
+              MARINA_SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_private_known_hosts" -o ConnectTimeout=10 -i "$marina_private_key" ubuntu@100.118.170.46)
               marina_sha="$("${MARINA_SSH[@]}" "test \"\$(hostname -s)\" = marina-a1-4c24g && sudo -n test -s '$marina_token_file' && sudo -n sha256sum -- '$marina_token_file'" | awk '{print $1}')"
               test -n "$marina_sha"
               "${MARINA_SSH[@]}" "sudo -n python3 -c 'from pathlib import Path; v=Path(\"$marina_token_file\").read_bytes().strip(); raise SystemExit(0 if len(v) >= 32 else 1)'"

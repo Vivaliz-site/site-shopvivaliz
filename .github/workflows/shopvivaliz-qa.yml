@@ -3,6 +3,47 @@ name: ShopVivaliz QA
 on:
   push:
     branches: [main]
+    paths:
+      - 'marina-direct-mcp/**'
+      - 'tests/test_marina_direct_mcp.py'
+      - 'tests/test_marina_tunnel_preflight.py'
+      - 'tests/test_marina_tunnel_units.py'
+      - 'tests/test_marina_stage_service.py'
+      - 'api/**'
+      - 'scripts/quality/deployment_closure_guard.py'
+      - 'tests/test_deployment_closure_guard.py'
+      - '.github/workflows/production-deployment-closure-guard.yml'
+      - 'admin/**'
+      - 'includes/**'
+      - 'scripts/*.php'
+      - 'scripts/*.js'
+      - 'tests/*.php'
+      - 'tests/*.js'
+      - 'remote-control-browser-mcp/**'
+      - 'tests/test_dev_aux_adoption_deploy.py'
+      - 'tests/test_ci_postmerge_qa_scope.py'
+      - 'scripts/adopt-verified-dev-aux-browser.sh'
+      - 'tests/remote-control-browser-mcp-test.py'
+      - 'docs/knowledge/browser-sessions.md'
+      - 'blog/**'
+      - '*.php'
+      - '.github/workflows/shopvivaliz-qa.yml'
+      - '.github/actionlint.yaml'
+      - '.github/workflows/public-layout-audit.yml'
+      - 'css/**'
+      - 'js/**'
+      - 'public/**'
+      - 'assets/**'
+      - '*.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'scripts/deploy-production.sh'
+      - 'tests/public-*.mjs'
+      - 'tests/catalog-*.mjs'
+      - 'tests/product-*.mjs'
+      - 'tests/*.cjs'
   pull_request:
     paths:
       - 'marina-direct-mcp/**'
@@ -22,6 +63,7 @@ on:
       - 'tests/*.js'
       - 'remote-control-browser-mcp/**'
       - 'tests/test_dev_aux_adoption_deploy.py'
+      - 'tests/test_ci_postmerge_qa_scope.py'
       - 'scripts/adopt-verified-dev-aux-browser.sh'
       - 'tests/remote-control-browser-mcp-test.py'
       - 'docs/knowledge/browser-sessions.md'
@@ -30,6 +72,20 @@ on:
       - '.github/workflows/shopvivaliz-qa.yml'
       - '.github/actionlint.yaml'
       - '.github/workflows/public-layout-audit.yml'
+      - 'css/**'
+      - 'js/**'
+      - 'public/**'
+      - 'assets/**'
+      - '*.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'scripts/deploy-production.sh'
+      - 'tests/public-*.mjs'
+      - 'tests/catalog-*.mjs'
+      - 'tests/product-*.mjs'
+      - 'tests/*.cjs'
   workflow_dispatch:
 
 concurrency:
@@ -111,6 +167,8 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.12
         with:
           args: -color -shellcheck=
+      - name: Verify storefront QA impact scope and global PR-gate contracts
+        run: python3 -m unittest tests.test_ci_postmerge_qa_scope tests.test_ci_relevant_specialized_gates -v
 
   php-lint:
     runs-on: ubuntu-latest
@@ -201,7 +259,8 @@ jobs:
           set -Eeuo pipefail
           for test in tests/chatgpt-continuity-*.php; do php "$test"; done
           node --check scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
-          node tests/chatgpt-continuity-bridge-worker-test.mjs
+          # Deep browser-worker simulation is owned by Task Continuity Fast Gate.
+          # Mandatory Validation Gate retains cross-cutting fail-closed coverage.
       - name: Sintaxe do instalador Windows do bridge do ChatGPT
         shell: pwsh
         run: $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/install-chatgpt-continuity-windows-bridge.ps1), [ref]$null)

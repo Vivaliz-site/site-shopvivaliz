@@ -702,6 +702,25 @@ def _run_once_locked(
         ledger[fingerprint] = ledger_row
         if result.get("ok"):
             dispatched += 1
+        elif (
+            claimed_state is not None
+            and isinstance(result.get("body"), dict)
+            and result["body"].get("enqueued") is False
+        ):
+            # Explicit negative acknowledgement proves the bridge did not
+            # enqueue a worker. Do not strand the exclusive runtime lease
+            # until TTL expiry. Ambiguous transport failures retain ownership:
+            # an unknown delivery outcome must not be retried concurrently.
+            try:
+                release_recovery_ownership(
+                    task_id,
+                    owner_id=f"dispatcher:{fingerprint}",
+                    reason="bridge_explicit_not_enqueued",
+                )
+            except TaskStateError:
+                # A changed owner/version must never be released by this
+                # dispatcher. Recovery remains guarded by fencing.
+                pass
 
     # Keep failed outcomes visible throughout cooldown. Only the current
     # queued fingerprint may affect readiness; completed/superseded work must

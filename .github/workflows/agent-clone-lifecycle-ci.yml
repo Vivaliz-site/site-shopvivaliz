@@ -11,7 +11,6 @@ on:
       - 'scripts/install-agent-clone-lifecycle.sh'
       - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.service'
       - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.timer'
-      - 'AGENTS.md'
   push:
     branches: [main]
     paths:
@@ -23,7 +22,6 @@ on:
       - 'scripts/install-agent-clone-lifecycle.sh'
       - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.service'
       - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.timer'
-      - 'AGENTS.md'
 
 permissions:
   contents: read
