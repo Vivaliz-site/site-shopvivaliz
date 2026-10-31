@@ -17,6 +17,25 @@ Verificacoes obrigatorias e fail-closed antes de conceder permissoes: identidade
 
 **Distincao tecnica:** o provedor/autorizador **administrado pela ShopVivaliz** deve acatar a decisao formal apos essas verificacoes e executar o grant autorizado pela API/rotina oficial. Um provedor externo (OCI, OpenAI Platform, etc.) nao e tecnicamente obrigado por um PR do GitHub; o adaptador deve usar suas APIs e permissoes oficiais para efetivar a concessao, quando autorizado e suportado. Se a operacao depender de papel/consentimento externo ausente, registrar a etapa administrativa externa exata, sem fingir que o PR ja a executou nem tentar contornar recusa explicita.
 
+### Contrato tecnico verificavel para a aceitacao
+O prototipo de verificador `scripts/validate-owner-pr-grant.py` usa a API oficial do GitHub com token de leitura e a identidade do proprietario configurada exclusivamente em `SHOPVIVALIZ_SECURITY_OWNER_LOGIN` na configuracao protegida do autorizador. Nao inferir o proprietario a partir do usuario GitHub usado pelo agente.
+
+A autorizacao concedida em cada PR de seguranca deve incluir o documento `security/owner-approvals/<NUMERO_PR>.json` com o seguinte contrato de dados (exemplo ilustrativo, NAO E GRANT ATIVO):
+
+```json
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 123,
+  "resource": "mcp:marina",
+  "principal": "marina-mcp-service",
+  "capabilities": ["file_write"],
+  "expires_at_utc": "2026-12-01T00:00:00Z"
+}
+```
+
+O provedor sob controle ShopVivaliz verifica PR merged pelo proprietario, branch `main`, SHA do head e do merge, principal, recurso, capacidade, validade e integridade do documento ainda presente no `main`. Um grant removido ou modificado posteriormente e automaticamente recusado. Com status `OWNER_PR_GRANT=AUTHORIZED`, deve reconhecer a decisao humana sem pedir nova aprovacao; caso `DENIED`, falhar fechado. O comando **nao executa** o grant: a rotina do MCP precisa chamar o verificador imediatamente antes da concessao oficial, respeitando seu proprio RBAC/lease/fencing. Implantar e testar a integracao do MCP Marina em PR separado, antes de afirmar que a verificacao esta ativa no host.
+
 ## Aprovacao formal do MCP Marina: aceitar e executar, nao alegar bypass
 Quando a liberacao de funcoes administrativas do MCP independente de Marina exigir consentimento do proprietario, submeter PR especifico com as ferramentas e escopos precisos e permitir que o proprietario autentique e aprove pelo fluxo formal GitHub. Quando o mecanismo de seguranca reconhecer essa aprovacao, **tratar a aprovacao como valida e prosseguir com implementacao, merge/deploy autorizado e verificacao**, em vez de pedir novamente a mesma autorizacao por chat ou chamar a aprovacao formal de contorno de seguranca.
 
