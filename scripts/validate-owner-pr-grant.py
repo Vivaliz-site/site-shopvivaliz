@@ -65,6 +65,13 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
     return True, "owner_authorization_verified"
 
 
+def immutable_grant_still_active(approved_blob: object, current_blob: object) -> bool:
+    """Revocation or later edits on main invalidate an older authorization."""
+    return bool(isinstance(approved_blob, dict) and isinstance(current_blob, dict)
+                and approved_blob.get("sha") and approved_blob.get("sha") == current_blob.get("sha")
+                and approved_blob.get("path") == current_blob.get("path"))
+
+
 def github_json(path: str, token: str) -> object:
     request = Request("https://api.github.com" + path, headers={
         "Accept": "application/vnd.github+json",
@@ -99,7 +106,10 @@ def main() -> int:
             f"/repos/{repo}/contents/{path}?ref={quote(args.merge_sha, safe='')}", token)
         if not isinstance(encoded, dict) or encoded.get("encoding") != "base64":
             raise ValueError("unsupported_contents_encoding")
-        raw = base64.b64decode(encoded["content"], validate=False)
+        current = github_json(f"/repos/{repo}/contents/{path}?ref=main", token)
+        if not immutable_grant_still_active(encoded, current):
+            raise ValueError("authorization_revoked_or_replaced")
+        raw = base64.b64decode(encoded["content"].replace("\n", ""), validate=True)
         grant = json.loads(raw.decode("utf-8"))
         ok, reason = decide(pr, grant, repository=args.repository,
                             pr_number=args.pr_number, owner_login=owner,
