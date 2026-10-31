@@ -73,12 +73,18 @@ git checkout -B "$head_ref" "origin/$head_ref" >/dev/null
 [[ "$(git rev-parse HEAD)" == "$expected_head_sha" ]] || fail 'checked-out SHA differs from expected'
 
 before_sha="$(git rev-parse HEAD)"
-merge_clean=0
-if git merge --no-edit --no-ff origin/main; then
-  merge_clean=1
-fi
-
-if [[ "$merge_clean" -eq 0 ]]; then
+# A PR that is already mergeable must NOT receive a pointless bot merge.
+# Such branch-only commits invalidate valid CI on the previous head, and bot
+# pushes may leave the new SHA with GitHub Actions "action_required" and no jobs.
+# Test the merge without committing; abort the clean merge and retain the head.
+if git merge --no-edit --no-commit --no-ff origin/main; then
+  if [[ -f "$(git rev-parse --git-path MERGE_HEAD)" ]]; then
+    git merge --abort || fail 'clean merge rollback failed'
+  fi
+  [[ "$(git rev-parse HEAD)" == "$before_sha" ]] || fail 'clean probe changed head'
+  [[ -z "$(git status --porcelain)" ]] || fail 'clean probe left a dirty worktree'
+  echo 'pr_clean_merge_no_push=true'
+else
   mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
   (( ${#unresolved[@]} > 0 )) || fail 'merge failed without conflict entries'
   printf 'pr_conflict_count=%s\n' "${#unresolved[@]}"
