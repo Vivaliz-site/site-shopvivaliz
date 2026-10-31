@@ -918,8 +918,15 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("shopvivaliz-chatgpt-continuity-a1-tunnel.service", installer)
         self.assertIn("/home/ubuntu/.ssh/oci-marina-a1-2026", installer)
         self.assertIn("-L 127.0.0.1:18081:127.0.0.1:8080", installer)
-        self.assertIn("100.118.170.46", installer)
-        self.assertIn("/home/ubuntu/.ssh/known_hosts_marina_verified", installer)
+        self.assertIn('tunnel_host="${CHATGPT_CONTINUITY_TUNNEL_HOST:-100.118.170.46}"', installer)
+        self.assertIn('tunnel_known_hosts="${CHATGPT_CONTINUITY_TUNNEL_KNOWN_HOSTS:-/home/ubuntu/.ssh/known_hosts_marina_verified}"', installer)
+        # Text elsewhere in the installer is not proof the SSH systemd unit
+        # actually consumes the verified host and pinned host-key file.
+        unit = installer.split('cat > "$tunnel_unit_tmp" <<UNIT', 1)[1].split("\nUNIT\n", 1)[0]
+        self.assertIn("ExecStart=$ssh_bin -NT", unit)
+        self.assertIn("-o UserKnownHostsFile=$tunnel_known_hosts", unit)
+        self.assertIn("ubuntu@$tunnel_host", unit)
+        self.assertIn("-L 127.0.0.1:18081:127.0.0.1:8080", unit)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", installer)
         self.assertIn("-o ConnectTimeout=10", installer)
         self.assertIn("-o StrictHostKeyChecking=yes", installer)
