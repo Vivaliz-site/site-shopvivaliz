@@ -35,7 +35,7 @@ def promote(
     """Fail closed on another writer or on a stale GitHub main commit."""
     if not SHA_PATTERN.fullmatch(expected_sha):
         raise ValueError("invalid_expected_sha")
-    if not 0 <= lock_wait_seconds <= 180:
+    if not 0 <= lock_wait_seconds <= 600:
         raise ValueError("lock_wait_seconds_out_of_range")
     release_dir = Path(release_dir)
     if not release_dir.is_absolute():
@@ -63,7 +63,10 @@ def promote(
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise
-            sleep(min(5.0, remaining))
+            # A recovery lease may last 300s. Polling every five seconds can miss
+            # its legitimate expiry gap and repeatedly starve maintenance.
+            # Never revoke or alter another owner's lease or fencing token.
+            sleep(min(0.5, remaining))
     try:
         runtime.assert_runtime_lock(
             lease["lease_id"], lease["fencing_token"], "controller_promote"
@@ -125,7 +128,7 @@ def main() -> int:
     try:
         # Bounded wait on existing legitimate browser/recovery writers; the
         # workflow still exits nonzero when contention persists.
-        result = promote(Path(sys.argv[1]), sys.argv[2], runtime=runtime_lock, lock_wait_seconds=120)
+        result = promote(Path(sys.argv[1]), sys.argv[2], runtime=runtime_lock, lock_wait_seconds=420)
     except Exception as exc:
         # No lease IDs, fencing tokens, API credentials or OTP are logged.
         print("CONTROLLER_RECOVERY=FAILED:" + type(exc).__name__, file=sys.stderr)
