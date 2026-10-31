@@ -61,12 +61,13 @@ class OnlyRelevantGatesTest(unittest.TestCase):
         unfiltered = []
         for path in sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml")):
             source = path.read_text(encoding="utf-8")
-            event = re.search(r"(?m)^  pull_request:\\s*(?:#.*)?$", source)
+            event = re.search(r"(?m)^  pull_request:[ \t]*(?:#.*)?$", source)
             if event is None:
                 continue
             end = re.search(r"(?m)^  [a-z_]+:", source[event.end():])
             body = source[event.end():event.end() + end.start() if end else len(source)]
-            if not re.search(r"(?m)^    paths(?:-ignore)?:\\s*(?:\\[|$)", body):
+            # Both multiline and inline YAML path lists are accepted.
+            if not re.search(r"(?m)^    paths(?:-ignore)?:[ \t]*(?:\[|$)", body):
                 unfiltered.append(path.name)
         self.assertEqual(sorted(unfiltered), sorted(always_required))
 
