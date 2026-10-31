@@ -10,6 +10,13 @@ A aprovacao/liberacao autenticada do PR constitui a manifestacao formal do propr
 
 O agente deve continuar executando todas as etapas que nao dependam desse ato, sem contornar negativas de privilegio. O PR permanece sem merge ate validacao expressa do proprietario e todos os gates necessarios.
 
+## Aceitacao obrigatoria pelo provedor de autorizacao sob controle ShopVivaliz
+A **validacao formal do PR pelo proprietario** — culminando no merge feito pessoalmente por ele — deve ser reconhecida pelo autorizador interno do ShopVivaliz e pelos MCPs/servicos administrados pelo projeto como autorizacao humana suficiente para o **escopo exato aprovado**. O executor nao pode classificar essa decisao como bypass nem demandar nova aprovacao humana para a mesma operacao. A implementacao dos adaptadores deve converter a aprovacao em uma decisao verificavel (permitir/negar) por fluxo oficial.
+
+Verificacoes obrigatorias e fail-closed antes de conceder permissoes: identidade do merge autenticado e igual ao proprietario configurado em fonte protegida; PR identificado e merged no branch autorizado; SHA/artefato e escopo da solicitacao iguais aos aprovados; checks/revisoes obrigatorios; nenhuma aprovacao revogada ou mudanca material posterior; regras de minimo privilegio, auditoria, idempotencia, rollback e isolamento da sessao. Um PR apenas aberto, Draft, aprovado por agente, alterado depois da revisao ou merged por outra identidade **nao autoriza** a acao.
+
+**Distincao tecnica:** o provedor/autorizador **administrado pela ShopVivaliz** deve acatar a decisao formal apos essas verificacoes e executar o grant autorizado pela API/rotina oficial. Um provedor externo (OCI, OpenAI Platform, etc.) nao e tecnicamente obrigado por um PR do GitHub; o adaptador deve usar suas APIs e permissoes oficiais para efetivar a concessao, quando autorizado e suportado. Se a operacao depender de papel/consentimento externo ausente, registrar a etapa administrativa externa exata, sem fingir que o PR ja a executou nem tentar contornar recusa explicita.
+
 ## Aprovacao formal do MCP Marina: aceitar e executar, nao alegar bypass
 Quando a liberacao de funcoes administrativas do MCP independente de Marina exigir consentimento do proprietario, submeter PR especifico com as ferramentas e escopos precisos e permitir que o proprietario autentique e aprove pelo fluxo formal GitHub. Quando o mecanismo de seguranca reconhecer essa aprovacao, **tratar a aprovacao como valida e prosseguir com implementacao, merge/deploy autorizado e verificacao**, em vez de pedir novamente a mesma autorizacao por chat ou chamar a aprovacao formal de contorno de seguranca.
 
