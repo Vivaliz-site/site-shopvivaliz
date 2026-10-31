@@ -10,6 +10,8 @@ on:
       - 'scripts/check_pr_completion_policy.py'
       - 'scripts/pr_conflict_gemini_healer.py'
       - 'scripts/pr_gate_replay.py'
+      - 'scripts/pr_gate_scope.py'
+      - 'tests/test_pr_gate_scope.py'
       - 'scripts/pr_conflict_vm_heal.sh'
       - 'scripts/merge_green_pr_via_vm.sh'
       - 'tests/test_pr_conflict_gemini_healer.py'
@@ -63,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest tests.test_pr_gate_replay -v
+          python3 -m unittest tests.test_pr_gate_replay tests.test_pr_gate_scope -v
 
       - name: Run CI latency regression tests
         shell: bash
