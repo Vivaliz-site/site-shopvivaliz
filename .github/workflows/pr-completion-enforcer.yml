@@ -28,6 +28,14 @@ jobs:
       should_run: ${{ steps.gate.outputs.should_run }}
       target_pr: ${{ steps.gate.outputs.target_pr }}
     steps:
+      - name: Checkout trusted fair scheduler from main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Check production deploy queue after event fan-out settles
         id: gate
         shell: bash
@@ -39,17 +47,11 @@ jobs:
           set -Eeuo pipefail
           target_pr="${TRIGGER_PR:-}"
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
-            target_pr="$(
-              gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" |
-                jq -r --arg repo "$GITHUB_REPOSITORY" '
-                  [.[] | select(.head.repo.full_name == $repo and (.draft | not))]
-                  | sort_by(
-                      (if ([.labels[].name] | index("repair-required-now")) then 0 else 1 end),
-                      .updated_at
-                    )
-                  | .[0].number // empty
-                '
-            )"
+            # Fair queue rotation; a stuck PR must not starve newer PRs.
+            open_prs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" | jq -s 'add')"
+            slot="$(( $(date -u +%s) / 900 ))"
+            target_pr="$(printf '%s\n' "$open_prs" | python3 trusted/scripts/pr_completion_scheduler.py --repo "$GITHUB_REPOSITORY" --slot "$slot" --batch 1)"
+            echo "schedule_fair_slot=$slot"
             echo 'schedule_target_budget=1'
             if [[ -z "$target_pr" ]]; then
               echo "target_pr=" >> "$GITHUB_OUTPUT"
