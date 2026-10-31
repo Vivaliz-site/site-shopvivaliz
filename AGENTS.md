@@ -1,6 +1,6 @@
 <!-- OWNER_PR_SECURITY_APPROVAL_20261031 -->
-## Aprovacao humana de mudancas sensiveis por Pull Request
-Para toda mudanca sensivel, aplicar `docs/knowledge/security-approval-via-pr.md`: abrir PR Draft para revisao e liberacao explicita do proprietario, vinculada ao SHA. Nao efetuar merge ou deploy antes dos gates e autorizacao. Aprovacao humana nao substitui lease/fencing, RBAC, credenciais ou protecoes operacionais independentes. Qualquer dependencia de intervencao do proprietario deve ser preparada como PR Draft com escopo, risco, testes e roteiro de aprovacao, inclusive liberacao administrativa do MCP Marina. Nao deixar apenas diagnostico ou pedido solto no chat. Se politica/provedor nao aceitar autorizacao escrita no chat, preparar PR Draft para aprovacao direta autenticada do proprietario; se ainda exigir ato proprio no provedor, inclui-lo como etapa oficial, sem tratar PR como bypass.
+## Autorizacao humana: chat quando aceito; PR somente quando necessario
+Aplicar `docs/knowledge/security-approval-via-pr.md`. Quando a politica e o sistema aceitarem autorizacao explicita escrita no chat, usar o chat e prosseguir com os gates aplicaveis, sem criar PR apenas para pedir autorizacao. Se uma regra de seguranca exigir acao formal do proprietario e NAO aceitar o chat, preparar PR Draft com escopo, testes, riscos e rollback para aprovacao autenticada; se o provedor exigir ato administrativo proprio, incluir essa etapa sem contorno. PRs de revisao de codigo continuam obrigatorios onde a governanca do repositorio exigir. Preservar RBAC, lease/fencing e outras protecoes.
 <!-- /OWNER_PR_SECURITY_APPROVAL_20261031 -->
 
 <!-- V5_NO_DIAGNOSTIC_ONLY_ENFORCEMENT_20261030 -->
