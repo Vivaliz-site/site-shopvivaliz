@@ -102,16 +102,13 @@ final class ShopvivalizCatalogMetadataAgent
                 return $this->result(true, $startedAt, $actions, []);
             }
 
+            // A metadata pass may have started before an Olist webhook or the
+            // periodic Amazon sync. Never replace the commercial catalog from
+            // stale bytes, even when prices are unchanged in this process.
             $backup = $this->backup($cachePath, $raw);
             $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";
-            $temporary = $cachePath . '.agent-' . getmypid() . '.tmp';
-            if (file_put_contents($temporary, $encoded, LOCK_EX) === false) {
-                throw new RuntimeException('catalog_cache_write_failed');
-            }
-            if (!rename($temporary, $cachePath)) {
-                @unlink($temporary);
-                throw new RuntimeException('catalog_cache_atomic_replace_failed');
-            }
+            require_once __DIR__ . '/../../../includes/catalog-cache-write-guard.php';
+            svcc_write_presentation_if_current($cachePath, $raw, $encoded);
 
             $readback = json_decode((string)file_get_contents($cachePath), true, 512, JSON_THROW_ON_ERROR);
             if (!is_array($readback)) {
@@ -119,8 +116,9 @@ final class ShopvivalizCatalogMetadataAgent
             }
             $sensitiveAfterWrite = $this->sensitiveHash($readback);
             if (!hash_equals($sensitiveBefore, $sensitiveAfterWrite)) {
-                copy($backup, $cachePath);
-                throw new RuntimeException('sensitive_fields_changed_after_write');
+                // NEVER restore a stale backup on top of a newer ERP webhook.
+                // The shared-lock CAS guard already verified our own write.
+                throw new RuntimeException('catalog_changed_after_presentation_write');
             }
 
             $actions[] = [

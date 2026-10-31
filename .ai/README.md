@@ -1,3 +1,11 @@
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Rotas operacionais atualizadas em 2026-10-29:** para qualquer agente (Claude, Codex, Gemini, GPT, IA híbrida, Copilot, Windsurf, browser/QA e subagentes), a fonte válida é `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`, com SHA, identidade, permissão e runbook do projeto confirmados. Web/deploy/MySQL/workers ficam na **Marina** (`marina-a1-4c24g`, OCI ESPOSA; RDC direto já comprovado); backend/browser/MCP central ficam em `always-free-arm-1787907847-26` (OCI PRINCIPAL). A VM origem `shopvivaliz-free-a1` foi excluída e nunca pode ser acessada ou recriada. O MCP central ainda a anuncia erroneamente e não executa Marina; o MCP independente Marina está inativo/não registrado. Não reutilizar aliases SSH ou receitas de quatro hosts, nem presumir RDC 2, sudo ou túnel pelo status de cloudflared. Respeitar a política central imutável, auditoria V5 com UI real, leases/fencing, segredo protegido e correção/teste/validação após cada erro. Em rotina persistente, respeitar prioridade de IA gratuita e limites de custo.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 # 🧠 Hybrid AI System - Shop Vivaliz
 
 Sistema híbrido que combina **IA local (Ollama)** com **modelos pagos (GPT, Claude, Gemini)** para automação inteligente do Shop Vivaliz.

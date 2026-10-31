@@ -76,6 +76,13 @@ class Tests(unittest.TestCase):
                 s.policy_anomalies("shopvivaliz-free-a1"),
             )
 
+    def test_marina_passive_host_has_no_invented_ollama_dependency(self):
+        # Marina hosts web/pricing/returns; the remote AI model runner is
+        # not deployed. Existing process and scheduled-launcher surveillance
+        # still runs in sentinel.run for this host.
+        self.assertEqual(s.policy_anomalies("marina-a1-4c24g"), [])
+        self.assertIn("HOST_IDENTITY_UNKNOWN", s.policy_anomalies("unrecognized-host"))
+
     def test_health_rejects_enabled_and_wrong_endpoint(self):
         valid={"endpoint":"ai-squad-codex-bridge","ok":False,
                "auth_mode":"disabled","policy":"manual_approval_required"}

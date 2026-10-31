@@ -1,3 +1,7 @@
+<!-- RETIRED_SOURCE_DOC_AUDIT_20261029 -->
+> **Revisão de documentação de 2026-10-29:** registros de `shopvivaliz-free-a1` abaixo são HISTÓRICOS. O proprietário confirmou a exclusão da VM de origem. Nenhum agente deve tentar restabelecer, conectar, monitorar, operar, descomissionar novamente ou criar aliases para esse host. Produção web/DB/workers = `marina-a1-4c24g`; backend/controller/browser = `always-free-arm-1787907847-26`. Leia `docs/knowledge/current-topology-and-access-2026-10-29.md` antes de agir. **A exclusão não prova** migração integral, paridade, segredos migrados, autorização sudo, MCP independente ou E2E. Instruções de manutenção legadas contra origem não são executáveis; corrigir workflow/runbook próprio antes de qualquer automação.
+<!-- /RETIRED_SOURCE_DOC_AUDIT_20261029 -->
+
 # Sentinela de provedores gratuitos — duas VMs
 
 A política de continuidade de IA prioriza Gemini Flash e Ollama local. Codex
@@ -10,7 +14,7 @@ disponíveis sem iniciar uma geração.
 O código versionado em scripts/ai-free-provider-sentinel.py é instalado em
 /usr/local/lib/shopvivaliz/ por scripts/install-ai-free-provider-sentinel.sh
 e roda pelo timer shopvivaliz-ai-free-guard.timer, aproximadamente a cada
-cinco minutos, em shopvivaliz-free-a1 e always-free-arm-1787907847-26.
+cinco minutos nos hosts previstos na instalação histórica. A execução na VM excluída é impossível e proibida; auditar primeiro se o timer está realmente instalado na Marina e no backend, sem inferir migração ou ativar jobs duplicados.
 
 Verifica, sem gerar texto com modelos:
 
@@ -157,3 +161,15 @@ Validar com testes offline tests.test_ai_free_provider_sentinel_deadline
 (inclusive timeout real, morte inesperada e recuperacao), testes gerais
 e a UI real de status/monitoramento. Confirmar que o estado indica
 HEALTHY apenas apos uma rodada completa e que o timestamp e recente.
+
+
+## Monitor passivo na Marina (2026-10-28)
+
+A VM marina-a1-4c24g hospeda uma release web e workers de negocios,
+mas nao hospeda controlador de geracao IA nem servidor Ollama. O sentinela
+deve ficar instalado para detectar novos processos pagos, contadores Codex,
+atividades Claude e cron/systemd de geracao nao autorizada, sem exigir
+servicos inexistentes ou alterar bridges interativos. A ausencia de Ollama
+na Marina nao autoriza fallback para Codex ou Claude: trabalhos persistentes
+de IA permanecem roteados somente nos hosts que possuem modelo gratuito.
+O monitor e somente leitura e nao executa inferencia.

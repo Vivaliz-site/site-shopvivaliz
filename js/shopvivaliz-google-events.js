@@ -95,17 +95,16 @@ function ga4ClientIdFromCookie() {
 }
 
 function ga4SessionIdFromCookies() {
-  var cookies = String(document.cookie || '').split(';');
-  for (var i = 0; i < cookies.length; i++) {
-    var pair = cookies[i].trim();
-    if (pair.indexOf('_ga_') !== 0 || pair.indexOf('=') < 0) continue;
-    var value = decodeURIComponent(pair.slice(pair.indexOf('=') + 1));
-    var modern = value.match(/(?:^|[.\$])s(\d+)(?:\$|$)/);
-    if (modern) return modern[1];
-    var legacy = value.match(/^GS\d+(?:\.\d+)?\.(\d+)(?:\.|$)/);
-    if (legacy) return legacy[1];
-  }
-  return '';
+  var config = window.ShopVivalizTrackingConfig || {};
+  var measurementId = String(config.ga4MeasurementId || config.ga4Id || 'G-1H55K1TZ5D').trim();
+  if (!/^G-[A-Z0-9]+$/i.test(measurementId)) return '';
+  // Retired streams can leave cookies behind. Only the configured stream's
+  // session belongs to the purchase sent to that measurement ID.
+  var value = readCookie('_ga_' + measurementId.slice(2));
+  var modern = value.match(/(?:^|[.\$])s(\d+)(?:\$|$)/);
+  if (modern) return modern[1];
+  var legacy = value.match(/^GS\d+(?:\.\d+)?\.(\d+)(?:\.|$)/);
+  return legacy ? legacy[1] : '';
 }
 
 function funnelClientId() {
@@ -121,7 +120,9 @@ function funnelClientId() {
       }
     }
     var existing = String(localStorage.getItem(key) || '');
-    if (/^\d+\.\d+(?:\|\d+)?$/.test(existing) || /^[a-f0-9-]{16,64}$/i.test(existing)) return existing;
+    // A stored GA identity can outlive consent or the browser cookies. Reuse
+    // it only when freshly recovered above from consented browser cookies.
+    if (/^[a-f0-9-]{16,64}$/i.test(existing)) return existing;
     var created = randomId();
     localStorage.setItem(key, created);
     return created;

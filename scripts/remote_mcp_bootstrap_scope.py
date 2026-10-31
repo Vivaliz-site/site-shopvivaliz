@@ -67,8 +67,9 @@ def is_backend_controller_only(paths: list[str]) -> bool:
         return False
     if any(not name or name.startswith('/') or '\\' in name or '..' in name.split('/') for name in clean):
         return False
-    # Require the actual restricted handler AND its implementation together.
-    mandatory = {'remote-control-mcp/server.py', 'scripts/continuity/checkpoint_update_atomic.py'}
+    # The retired-host safety fix changes the MCP handler without modifying the
+    # unrelated checkpoint writer; never fall through to legacy full bootstrap.
+    mandatory = {'remote-control-mcp/server.py'}
     return mandatory.issubset(clean) and set(clean).issubset(BACKEND_CONTROLLER_FILES)
 
 

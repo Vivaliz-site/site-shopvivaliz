@@ -1,3 +1,11 @@
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Estado de runtime posterior, prevalente (2026-10-29):** o MCP central do backend agora anuncia **somente backend, Fred-Win e KOCEPSV**; a origem `shopvivaliz-free-a1` foi removida da allowlist (PRs #3391/#3392) e nunca e alvo. Marina permanece fora do MCP central, mas RDC direto e SSH privado foram comprovados; o tunel SSH do MEI para Marina esta ativo (HTTP 200), separado do MCP independente Marina que continua nao instalado. O PR #3395 bloqueou 20 jobs antigos sem migrar automaticamente seus objetivos. Controlador 24x7 ainda precisa de lease valido e recuperacao de checkpoints; CI `mei-ci-a1` segue sem registro. Declaracoes de "MCP ainda inclui origem" abaixo sao apenas historicas. Referencia: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Regra vigente para todos os agentes (2026-10-29):** ler no `main` `docs/knowledge/current-topology-and-access-2026-10-29.md`, `docs/knowledge/host-access.md` e `docs/knowledge/agent-rules.md` antes de qualquer tarefa/retomada; registrar SHA e comprovar identidade/autorizações. **Web/deploy/DB/workers na Marina (`marina-a1-4c24g`, OCI ESPOSA), RDC direto validado; backend/MCP/controller/browser em `always-free-arm-1787907847-26` (OCI PRINCIPAL). `shopvivaliz-free-a1` foi excluída: nunca acessar, testar, reativar ou recriar, nem reutilizar seu alias.** O MCP central ainda anuncia a origem e não roteia Marina; o MCP independente/túnel da Marina está inativo e sem app registrado. RDC 2, SSH privado, OCI e privilégios exigem validação própria. Scripts/workflows históricos com destino antigo ficam proibidos para execução até correção e teste, sem troca cega por Marina.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 # AI Agents Map
 
 ## Mandatory preflight for every agent

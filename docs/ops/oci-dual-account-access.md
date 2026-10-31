@@ -1,3 +1,7 @@
+## Arquitetura verificada em hosts — 2026-10-29
+
+O destino de producao web/deploy e `marina-a1-4c24g` na tenancy `ESPOSA`; o backend/controller e `always-free-arm-1787907847-26` na tenancy `PRINCIPAL`. O proprietario informou exclusao de `shopvivaliz-free-a1`; a rota SSH da origem falhou, mas o lifecycle OCI `TERMINATED` nao foi consultado nessa rodada. A prova de login nas duas tenancies em Actions em 2026-10-16 abaixo nao prova inventario atual, permissao sudo/MCP, custo nem estado de instancias. Rotas e MCPs atualizados: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+
 ## Verified independent access (2026-10-16, 13:35 UTC)
 
 GitHub Actions workflow `.github/workflows/oci-dual-api-validation.yml` executed successfully without requiring the laptop after PRs #2979, #2980 and #2981. Verified run: https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/38908995411

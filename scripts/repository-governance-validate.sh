@@ -15,9 +15,13 @@ python3 scripts/validate-final-response-deploy-gate.py
 python3 scripts/validate-audit-governance.py
 bash tests/disk-hygiene-policy-contract-test.sh
 bash tests/backend-disk-hygiene-reconcile-contract-test.sh
+python3 tests/test_retired_source_workflow_guards.py
 python3 tests/test_workspace_housekeeper_safety.py
 python3 tests/test_production_functional_audit_security.py
 python3 scripts/validate-task-continuity-enforcement.py
+# Agent docs preflight is a merge gate, not an optional README instruction.
+python3 scripts/check-agent-docs-enforcement.py
+python3 -m unittest tests.test_agent_docs_gate tests.test_agent_operations_docs_scope -v
 bash tests/chatgpt-account-diagnostic-contract-test.sh
 if python3 -c 'import fcntl' >/dev/null 2>&1; then
   python3 -m unittest tests.test_task_continuity_enforcement -v

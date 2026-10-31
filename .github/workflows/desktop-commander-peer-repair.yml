@@ -22,6 +22,8 @@ permissions:
 
 jobs:
   repair-peer:
+    # RETIRED_SOURCE_JOB_GUARD_20261029: host deleted; do not execute legacy SSH/OCI/runner route.
+    if: ${{ false }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     steps:

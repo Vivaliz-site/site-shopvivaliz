@@ -1,3 +1,11 @@
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Verificacao posterior, prevalente (2026-10-29):** o MCP central do backend foi corrigido e implantado (PRs #3391/#3392): `hosts_list` agora divulga **somente backend, Fred-Win e KOCEPSV**; `shopvivaliz-free-a1` foi excluida e rejeitada. Marina segue fora da allowlist MCP central; seu MCP proprio OpenAI esta inativo, embora haja RDC direto, SSH privado verificado e tunel SSH do **MEI** ativo para Marina (HTTP 200). O PR #3395 bloqueou 20 jobs legados na origem, sem certificar as funcoes substitutas. O controlador 24x7 ainda exige reconciliacao sob lease valido e o runner `mei-ci-a1` permanece sem registro. **Toda afirmacao mais antiga de "MCP central ainda inclui a origem" neste arquivo e um snapshot anterior, agora superado.** Ver `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Regra vigente para todos os agentes (2026-10-29):** ler no `main` `docs/knowledge/current-topology-and-access-2026-10-29.md`, `docs/knowledge/host-access.md` e `docs/knowledge/agent-rules.md` antes de qualquer tarefa/retomada; registrar SHA e comprovar identidade/autorizações. **Web/deploy/DB/workers na Marina (`marina-a1-4c24g`, OCI ESPOSA), RDC direto validado; backend/MCP/controller/browser em `always-free-arm-1787907847-26` (OCI PRINCIPAL). `shopvivaliz-free-a1` foi excluída: nunca acessar, testar, reativar ou recriar, nem reutilizar seu alias.** O MCP central ainda anuncia a origem e não roteia Marina; o MCP independente/túnel da Marina está inativo e sem app registrado. RDC 2, SSH privado, OCI e privilégios exigem validação própria. Scripts/workflows históricos com destino antigo ficam proibidos para execução até correção e teste, sem troca cega por Marina.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 <!-- RESUME_EXECUTION_GATE_V1 -->
 ## Execução obrigatória ao receber Retome / Continue / Prossiga / Siga
 

@@ -1036,6 +1036,7 @@ if ($notFound) {
         }
     })();
     </script>
+    <?php if (!$notFound && $priceRaw > 0 && $stockRaw > 0): ?>
     <div class="sticky-buy-wrapper">
         <div class="sticky-buy-info">
             <span class="sticky-buy-title"><?= sv_esc($name) ?></span>
@@ -1043,6 +1044,7 @@ if ($notFound) {
         </div>
         <button class="btn btn-primary btn-comprar" onclick="document.getElementById('buy-now').click()">Comprar</button>
     </div>
+    <?php endif; ?>
 
     <script>
     (function() {
@@ -1165,10 +1167,11 @@ if ($notFound) {
     })();
     </script>
 
-    <script src="/js/product-conversion-v5.js?v=2026-07-26-v3"></script>
+    <script src="/js/product-conversion-v5.js?v=2026-10-29-direct-checkout"></script>
     <script src="/js/cro-interactions.js?v=<?= filemtime(__DIR__ . '/js/cro-interactions.js') ?: '1' ?>"></script>
     <script src="/js/first-purchase-popup-v1.js?v=<?= filemtime(__DIR__ . '/js/first-purchase-popup-v1.js') ?: '1' ?>" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260811-1"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
+<script src="/js/shipping-postcode-session-v1.js?v=20261030" defer></script>
 </body>
 </html>
