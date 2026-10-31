@@ -195,6 +195,11 @@ def _write_registry(path: Path, content: dict) -> None:
             json.dump(content, fp, sort_keys=True)
             fp.flush()
             os.fsync(fp.fileno())
+            # The cleanup timer runs as the registry directory's owner (ubuntu).
+            # A privileged task registering clones must not leave root-owned
+            # 0600 manifests unreadable to that timer.
+            owner = path.parent.stat()
+            os.fchown(fp.fileno(), owner.st_uid, owner.st_gid)
         os.chmod(filename, 0o600)
         os.replace(filename, path)
     finally:
