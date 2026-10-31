@@ -210,10 +210,12 @@
       name: product.name || sku,
       image_url: image,
       price: Number(product.price || 0),
-      olist_product_id: product.olist_product_id || ''
+      olist_product_id: product.olist_product_id || '',
+      stock: Math.max(0, Math.floor(Number(product.stock) || 0))
     };
     const encoded = encodeURIComponent(JSON.stringify(payload));
-    const hasPrice = payload.price > 0;
+    const stock = payload.stock;
+    const canBuy = payload.price > 0 && stock > 0;
     const productUrl = slug
       ? '/produto/' + encodeURIComponent(slug)
       : '/produto?sku=' + encodeURIComponent(payload.sku)
@@ -227,9 +229,10 @@
     const imagesJson = encodeURIComponent(JSON.stringify(images));
     const productIdAttr = product.olist_product_id || sku;
     return `
-      <article class="product-card" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
+      <article class="product-card${stock <= 0 ? ' is-out-of-stock' : ''}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
         <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
           <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
+          ${stock <= 0 ? '<span class="out-of-stock-badge">Esgotado</span>' : ''}
         </a>
         <div class="product-info">
           ${category ? `<div class="product-category">${esc(category)}</div>` : ''}
@@ -237,9 +240,11 @@
           <div class="product-price">${esc(money(product.price))}</div>
           <div class="card-actions">
             <a class="btn btn-secondary card-link" href="${esc(productUrl)}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">Ver detalhes</a>
-            ${hasPrice
+            ${canBuy
               ? `<button class="buy-button" type="button" data-product="${encoded}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}" data-add-to-cart="1">Comprar agora</button>`
-              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">Falar com vendas</a>`}
+              : stock <= 0
+                ? '<button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>'
+                : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">Falar com vendas</a>`}
           </div>
         </div>
       </article>`;
@@ -314,6 +319,7 @@
       </div>
     `.repeat(6);
     const url = '/api/catalog/products.php?limit=' + GRID_PAGE_SIZE
+      + '&available=1'
       + '&page=' + encodeURIComponent(String(Number(page || 1)))
       + '&ordem=' + encodeURIComponent(activeSort)
       + (query ? '&q=' + encodeURIComponent(query) : '')

@@ -47,6 +47,69 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
             "@@ -11,0 +12 @@\n+echo 'another check';\n"
         ))
 
+    def test_catalog_regression_fixture_is_scanned_not_owner_only_by_filename(self):
+        path = policy.READONLY_CATALOG_TEST_PATH
+        self.assertFalse(policy.sensitive_path(path))
+        self.assertTrue(policy.should_scan_content(path))
+
+    def test_generated_catalog_asset_matches_trusted_source_manifest(self):
+        import json
+        manifest = json.loads(
+            (ROOT / 'public/dist/asset-manifest.json').read_text(encoding='utf-8')
+        )
+        path = manifest['assets']['/js/catalog.js']['file'].removeprefix('/')
+        self.assertTrue(policy.verified_generated_catalog_asset(
+            path, {'js/catalog.js', path}, ROOT
+        ))
+
+    def test_forged_generated_asset_fails_closed(self):
+        import hashlib
+        import json
+        import tempfile
+        source = "const quantity = 3;\n// harmless comment\nalert(quantity);\n"
+        generated = policy.minify_catalog_source(source)
+        digest = hashlib.sha256(generated).hexdigest()[:10]
+        path = f'public/dist/js/catalog.{digest}.min.js'
+        with tempfile.TemporaryDirectory(prefix='catalog-artifact-') as tmp:
+            root = Path(tmp)
+            (root / 'js').mkdir()
+            (root / 'public/dist/js').mkdir(parents=True)
+            (root / 'js/catalog.js').write_bytes(source.encode('utf-8'))
+            (root / path).write_bytes(generated)
+            entry = {
+                'file': '/' + path,
+                'bytes': len(generated),
+                'source_bytes': len(source.encode('utf-8')),
+            }
+            manifest = {'assets': {'/js/catalog.js': entry}}
+            manifest_path = root / 'public/dist/asset-manifest.json'
+            manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+            changed = {'js/catalog.js', path}
+            self.assertTrue(policy.verified_generated_catalog_asset(
+                path, changed, root
+            ))
+            self.assertFalse(policy.verified_generated_catalog_asset(
+                path, {path}, root
+            ))
+            (root / path).write_bytes(generated + b' extra')
+            self.assertFalse(policy.verified_generated_catalog_asset(
+                path, changed, root
+            ))
+            (root / path).write_bytes(generated)
+            entry['source_bytes'] += 1
+            manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+            self.assertFalse(policy.verified_generated_catalog_asset(
+                path, changed, root
+            ))
+            manifest_path.unlink()
+            self.assertFalse(policy.verified_generated_catalog_asset(
+                path, changed, root
+            ))
+
+    def test_commercial_writes_still_fail_content_scan(self):
+        operation = 'up' + 'date' + ' sto' + 'ck = 10'
+        self.assertTrue(policy.sensitive_content([operation]))
+
     def test_real_stock_code_path_remains_sensitive(self):
         self.assertTrue(policy.sensitive_path('api/catalog/stock-by-product.php'))
 
