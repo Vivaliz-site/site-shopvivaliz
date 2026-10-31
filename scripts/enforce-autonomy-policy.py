@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+import hashlib
 import io
 import json
 import os
@@ -34,11 +35,18 @@ IGNORED_PREFIXES = (
 READONLY_STOCK_VALIDATOR_PATH = "scripts/quality/validate-product-stock.php"
 READONLY_STOCK_VALIDATOR_ALLOWED_ADD = "if ($rows === []) $errors[] = 'empty_catalog_or_missing_cache';"
 
+READONLY_CATALOG_TEST_PATH = "tests/catalog-search-stock-race.test.cjs"
+CATALOG_SOURCE_PATH = "js/catalog.js"
+GENERATED_CATALOG_RE = re.compile(r"^public/dist/js/catalog\.[0-9a-f]{10}\.min\.js$")
+
+
 NONCOMMERCIAL_SENSITIVE_PATH_EXCEPTIONS = {
     ".github/workflows/test-inventory.yml",
     # The stock quality probe is exempt ONLY for the precise fail-closed one-line
     # addition checked below. Any other addition or deletion requires approval.
     READONLY_STOCK_VALIDATOR_PATH,
+    # Only this regression test is exempt by path; its code is still scanned.
+    READONLY_CATALOG_TEST_PATH,
 }
 
 MUTATION_PATTERN = re.compile(
@@ -214,6 +222,41 @@ def approved_readonly_stock_validator_change(diff: str) -> bool:
     return not deleted and added == [READONLY_STOCK_VALIDATOR_ALLOWED_ADD]
 
 
+def minify_catalog_source(source: str) -> bytes:
+    """Match the nonexecuting deterministic transform of build-assets.mjs."""
+    no_block = re.sub(r"/\*[\s\S]*?\*/", "", source)
+    no_line = re.sub(r"^\s*//.*$", "", no_block, flags=re.MULTILINE)
+    return re.sub(r"\s+", " ", no_line).strip().encode("utf-8")
+
+
+def verified_generated_catalog_asset(
+    path: str, changed: set[str], root: Path = ROOT
+) -> bool:
+    """Only exempt exact generated JS with separately scanned changed source."""
+    if not GENERATED_CATALOG_RE.fullmatch(path) or CATALOG_SOURCE_PATH not in changed:
+        return False
+    try:
+        source_bytes = (root / CATALOG_SOURCE_PATH).read_bytes()
+        expected = minify_catalog_source(source_bytes.decode("utf-8"))
+        actual = (root / path).read_bytes()
+        entry = json.loads(
+            (root / "public/dist/asset-manifest.json").read_text(encoding="utf-8")
+        )["assets"][f"/{CATALOG_SOURCE_PATH}"]
+        digest = hashlib.sha256(expected).hexdigest()[:10]
+        return (
+            actual == expected
+            and Path(path).name == f"catalog.{digest}.min.js"
+            and isinstance(entry, dict)
+            and entry.get("file") == f"/{path}"
+            and type(entry.get("bytes")) is int
+            and entry["bytes"] == len(expected)
+            and type(entry.get("source_bytes")) is int
+            and entry["source_bytes"] == len(source_bytes)
+        )
+    except (OSError, ValueError, UnicodeError, KeyError, TypeError):
+        return False
+
+
 def main() -> int:
     policy = load_policy()
     base = os.getenv("BASE_SHA", "origin/main")
@@ -224,16 +267,28 @@ def main() -> int:
     autonomous = is_autonomous_branch(branch, list(policy["autonomous_branch_prefixes"]))
 
     files = changed_files(base, head)
+    file_set = set(files)
     findings: list[dict] = []
     for path in files:
         path_findings: list[str] = []
+        generated_asset = bool(GENERATED_CATALOG_RE.fullmatch(path))
+        asset_present = (ROOT / path).is_file() if generated_asset else False
+        verified_asset = (
+            verified_generated_catalog_asset(path, file_set)
+            if asset_present else False
+        )
+        if generated_asset and asset_present and not verified_asset:
+            path_findings.append("generated_catalog_asset_not_reproducible")
         if path == READONLY_STOCK_VALIDATOR_PATH:
             patch = git("diff", "--unified=0", "--no-color", base, head, "--", path)
             if not approved_readonly_stock_validator_change(patch):
                 path_findings.append("unapproved_stock_validator_diff")
         elif sensitive_path(path):
             path_findings.append("sensitive_path")
-        if should_scan_content(path):
+        # The validated minified artifact is derived byte-for-byte from the
+        # separately scanned js/catalog.js. Scanning one concatenated line
+        # otherwise creates false positives across unrelated source functions.
+        if should_scan_content(path) and not verified_asset:
             path_findings.extend(sensitive_content(added_lines(base, head, path)))
         if path_findings:
             findings.append({"path": path, "reasons": path_findings})
