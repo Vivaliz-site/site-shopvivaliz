@@ -37,15 +37,9 @@ Este documento é o bootstrap canônico, **não secreto**, da conta corporativa 
 
 ## Leitura obrigatória ao iniciar uma sessão
 
-Nesta ordem:
+**Preflight canônico e prevalente, antes de qualquer alteração e em toda retomada**: ler no `main` de `Vivaliz-site/site-shopvivaliz`, nesta ordem: (1) este `docs/knowledge/atendimento-chatgpt-bootstrap.md`; (2) `docs/knowledge/host-access.md`; (3) `docs/knowledge/README.md`; (4) `docs/knowledge/agent-rules.md`; depois `AGENTS.md`, `AUDIT_POLICY.md`, instruções do agente e documentos do projeto. Registrar `rules_loaded` com revisão/hash e preflight aplicável. A ordem suplementar antiga abaixo foi substituída, **não** é uma segunda ordem concorrente.
 
-1. `docs/knowledge/host-access.md`;
-2. `docs/knowledge/agent-rules.md`;
-3. `docs/knowledge/project.md`;
-4. `docs/knowledge/chatgpt-account-migration-curated.md` quando a sessão depender de contexto vindo de outra conta ou de histórico migrado;
-5. `docs/knowledge/dev-agent-briefing.md` quando houver trabalho de engenharia;
-6. documento específico da rotina;
-7. este arquivo para o perfil e checklist da conta Atendimento.
+Para o contexto complementar da conta Atendimento, consultar `docs/knowledge/project.md`, `docs/knowledge/chatgpt-account-migration-curated.md` quando houver migração, `docs/knowledge/dev-agent-briefing.md` para engenharia e o documento específico da rotina. Em conflito, respeitar controles de segurança e as instruções canônicas explícitas mais recentes; sem precedência demonstrada, não executar a ação contraditória até reconciliar os textos.
 
 ## Mapa operacional de hosts
 
