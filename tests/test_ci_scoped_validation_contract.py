@@ -70,6 +70,17 @@ class ScopedGateContractTests(unittest.TestCase):
         self.assertIn('validate-audit-governance.py', text)
         self.assertIn('check-agent-docs-enforcement.py', text)
 
+    def test_storefront_qa_does_not_repeat_heavy_continuity_bridge(self):
+        # The 114s browser-worker test is relevant to the continuity runtime,
+        # not to ordinary CSS/JS/site changes (measured 2026-10-31).
+        qa = (ROOT / ".github/workflows/shopvivaliz-qa.yml").read_text(encoding="utf-8")
+        continuity = (ROOT / ".github/workflows/task-continuity-fast-gate.yml").read_text(encoding="utf-8")
+        self.assertNotIn("node tests/chatgpt-continuity-bridge-worker-test.mjs", qa)
+        self.assertIn("node tests/chatgpt-continuity-bridge-worker-test.mjs", continuity)
+        self.assertIn("'scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'", continuity)
+        # Unknown/shared impact still runs the mandatory full regression.
+        self.assertIn("bash scripts/repository-governance-validate.sh ci", WORKFLOW.read_text(encoding="utf-8"))
+
     def test_cloudflare_preflight_is_not_removed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Cloudflare admin staging preflight regression (when present)", text)
