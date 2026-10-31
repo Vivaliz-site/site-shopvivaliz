@@ -8,6 +8,7 @@ on:
       - 'scripts/maintenance/validate_sanitized_history.py'
       - 'tests/test_ci_latency_contract.py'
       - 'scripts/check_pr_completion_policy.py'
+      - 'docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md'
       - 'scripts/pr_conflict_gemini_healer.py'
       - 'scripts/pr_gate_replay.py'
       - 'scripts/pr_conflict_vm_heal.sh'
