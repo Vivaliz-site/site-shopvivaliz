@@ -33,6 +33,21 @@ class SchedulerTests(unittest.TestCase):
                 pr(5, head={"repo": {"full_name": "elsewhere/fork"}})]
         self.assertEqual(mod.select_prs(rows, REPO, 0, 4), [1])
 
+    def test_live_workflow_scheduled_sweep_rotates_and_paginates(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/pr-completion-enforcer.yml").read_text(encoding="utf-8")
+        self.assertIn("gh api --paginate", workflow, "do not miss PRs after page 1")
+        self.assertIn("trusted/scripts/pr_completion_scheduler.py", workflow,
+                      "scheduler cannot remain uncalled/dead code")
+        self.assertIn("schedule_fair_slot", workflow, "each 15-minute sweep must rotate")
+        self.assertIn("--batch 1", workflow, "retain bounded one-PR schedule budget")
+        self.assertIn("test \"$(hostname -s)\" = 'marina-a1-4c24g'", workflow)
+
+    def test_batch_one_rotation_reaches_all_not_just_oldest(self):
+        rows = [pr(x) for x in (25, 50, 75, 100)]
+        seen = [mod.select_prs(rows, REPO, slot, 1)[0] for slot in range(4)]
+        self.assertEqual(seen, [25, 50, 75, 100])
+
     def test_no_prs_graceful_and_bad_inputs_fail_closed(self):
         self.assertEqual(mod.select_prs([], REPO, 0, 4), [])
         with self.assertRaises(ValueError):
