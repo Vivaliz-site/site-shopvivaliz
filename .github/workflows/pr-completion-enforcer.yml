@@ -133,6 +133,23 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Load canonical V5 rules and verify SHA-bound receipt before mutation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RULES_RECEIPT="$RUNNER_TEMP/v5-rules-loaded.json"
+          python3 trusted/scripts/quality/agent_rules_preflight.py capture \
+            --repo trusted --ref HEAD --receipt "$RULES_RECEIPT" \
+            --agent pr-completion-enforcer --ack V5_ACKNOWLEDGED_READ_VERIFIED
+          python3 trusted/scripts/quality/agent_rules_preflight.py verify \
+            --repo trusted --ref HEAD --receipt "$RULES_RECEIPT" \
+            --agent pr-completion-enforcer || { echo RULES_NOT_LOADED; exit 43; }
+          test "$(git -C trusted rev-parse HEAD)" = \
+            "$(gh api "repos/${REPO}/commits/main" --jq .sha)" || {
+              echo RULES_NOT_LOADED_STALE_MAIN
+              exit 43
+            }
+
       - name: Validate trusted finalizer syntax
         shell: bash
         run: |
@@ -171,6 +188,15 @@ jobs:
               -f description='Falha corrigível: reparar na mesma branch e concluir o merge agora'
             echo 'repair_label=created'
           fi
+
+      - name: Recheck canonical rules just before PR mutation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RULES_RECEIPT="$RUNNER_TEMP/v5-rules-loaded.json"
+          python3 trusted/scripts/quality/agent_rules_preflight.py verify \
+            --repo trusted --ref HEAD --receipt "$RULES_RECEIPT" \
+            --agent pr-completion-enforcer || { echo RULES_NOT_LOADED; exit 43; }
 
       - name: Repair and finalize triggering PR or scheduled sweep
         id: finalize
