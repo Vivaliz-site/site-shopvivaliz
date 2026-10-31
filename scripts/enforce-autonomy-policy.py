@@ -14,6 +14,9 @@ import textwrap
 import tokenize
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from quality.verify_commercial_review import approval_from_environment
+
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "config" / "autonomy-policy.json"
 REPORT_PATH = ROOT / "artifacts" / "autonomy-policy" / "report.json"
@@ -295,12 +298,16 @@ def main() -> int:
 
     allowed = True
     decision = "allowed"
-    if findings and autonomous:
-        allowed = False
-        decision = "blocked_autonomous_price_or_stock_change"
-    elif findings and approval_label not in labels:
-        allowed = False
-        decision = "human_approval_label_required"
+    # The PR label, auto-merge, and comments are not independent approvals.
+    approval_reason = "not_required"
+    if findings:
+        approved, approval_reason = approval_from_environment()
+        if not approved:
+            allowed = False
+            decision = (
+                "human_approval_required_on_autonomous_branch"
+                if autonomous else "verified_human_pr_review_required"
+            )
 
     payload = {
         "ok": allowed,
@@ -309,6 +316,7 @@ def main() -> int:
         "autonomous": autonomous,
         "approval_label": approval_label,
         "labels": sorted(labels),
+        "commercial_review_verdict": approval_reason,
         "base": base,
         "head": head,
         "changed_files": files,
