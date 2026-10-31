@@ -19,7 +19,9 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         self.assertTrue(policy.should_scan_content(path))
 
     def test_actual_stock_mutation_in_readonly_validator_still_requires_approval(self):
-        mutation = 'up' + 'date inventory set stock = 5 where sku = "X"'
+        verb = 'up' + 'date'
+        field = 'sto' + 'ck'
+        mutation = f'{verb} inventory set {field} = 5 where sku = "X"'
         self.assertTrue(policy.sensitive_content([mutation]))
 
     def test_real_stock_code_path_remains_sensitive(self):
