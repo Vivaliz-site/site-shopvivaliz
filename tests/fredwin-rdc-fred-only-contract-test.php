@@ -26,6 +26,7 @@ foreach ([
     '-MultipleInstances IgnoreNew',
     'RDC_FRED_DEVICE_BINDING=VERIFIED',
     '@wonderwhy-er/desktop-commander@0.3.1',
+    '--persist-session',
 ] as $required) {
     if (strpos($script, $required) === false) {
         fwrite(STDERR, "REQUIRED_MARKER_MISSING: {$required}\n");
