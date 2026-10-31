@@ -16,6 +16,8 @@ on:
       - 'scripts/certify-audit-manifest.py'
       - 'tests/test_certify_audit_manifest.py'
       - 'tests/test_v5_no_diagnostic_only.py'
+      - 'scripts/validate-owner-pr-grant.py'
+      - 'tests/test_validate_owner_pr_grant.py'
       - 'scripts/absolute-audit-governance-validate.sh'
       - 'scripts/validate-main-merge-provenance.py'
       - 'scripts/repository-governance-validate.sh'
@@ -38,6 +40,8 @@ on:
       - 'scripts/certify-audit-manifest.py'
       - 'tests/test_certify_audit_manifest.py'
       - 'tests/test_v5_no_diagnostic_only.py'
+      - 'scripts/validate-owner-pr-grant.py'
+      - 'tests/test_validate_owner_pr_grant.py'
       - 'scripts/absolute-audit-governance-validate.sh'
       - 'scripts/validate-main-merge-provenance.py'
       - 'scripts/repository-governance-validate.sh'
@@ -92,6 +96,11 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 tests/test_v5_no_diagnostic_only.py
+      - name: Enforce owner PR authorization verification
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/validate-owner-pr-grant.py
+          python3 tests/test_validate_owner_pr_grant.py
       - name: Self-test audit governance
         run: |
           set -Eeuo pipefail
