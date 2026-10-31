@@ -11,4 +11,11 @@ for f in AGENTS.md AGENTS.override.md CLAUDE.md GEMINI.md .github/copilot-instru
   test -f "$f" || { echo "missing agent entrypoint: $f" >&2; exit 1; }
   grep -Fq 'AI-TO-CLI-PROTOCOL.md' "$f" || { echo "$f does not reference canonical protocol" >&2; exit 1; }
 done
+# Fail closed on the actual backend if the active release lacks V5 guards.
+# Hosted CI does not have the production controller mount.
+if [[ "$(hostname)" == "always-free-arm-1787907847-26" ]]; then
+  python3 scripts/audit-controller-runtime-parity.py \
+    --reference scripts/agent_task_state.py \
+    --active /home/ubuntu/shopvivaliz-deploy/current/scripts/agent_task_state.py
+fi
 echo 'agent continuity contract: OK'
