@@ -61,11 +61,35 @@ function Assert-LegacyTasksDisabled {
 }
 
 function Get-RemoteLaunchers {
-    return @(Get-CimInstance Win32_Process -Filter "name = 'node.exe'" -ErrorAction Stop |
-        Where-Object {
-            $cmd = [string]$_.CommandLine
-            $cmd -match '(?i)desktop-commander' -and $cmd -match '(?i)\bremote\b'
-        })
+    # One remote client may have both an npx wrapper and an underlying node
+    # process. Count independent process-tree roots, not both nodes.
+    $all = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+    $byPid = @{}
+    foreach ($p in $all) { $byPid[[int]$p.ProcessId] = $p }
+    $candidate = @{}
+    foreach ($p in $all) {
+        $cmd = [string]$p.CommandLine
+        if ($p.Name -eq 'node.exe' -and
+            $cmd -match '(?i)desktop-commander' -and
+            $cmd -match '(?i)\bremote\b') {
+            $candidate[[int]$p.ProcessId] = $p
+        }
+    }
+    $roots = @()
+    foreach ($p in $candidate.Values) {
+        $parentPid = [int]$p.ParentProcessId
+        $hasRemoteAncestor = $false
+        for ($depth = 0; $depth -lt 20 -and $parentPid -gt 0; $depth++) {
+            if ($candidate.ContainsKey($parentPid)) {
+                $hasRemoteAncestor = $true
+                break
+            }
+            if (-not $byPid.ContainsKey($parentPid)) { break }
+            $parentPid = [int]$byPid[$parentPid].ParentProcessId
+        }
+        if (-not $hasRemoteAncestor) { $roots += $p }
+    }
+    return @($roots)
 }
 
 function Assert-ApprovedBinding {
@@ -132,7 +156,10 @@ if ($Mode -eq 'Status') {
 }
 
 # Safe idempotent recovery: do not kill, replace, log out or re-pair a session.
-if ($launchers.Count -gt 0) {
+if ($launchers.Count -gt 1) {
+    throw ('RDC_MULTIPLE_REMOTE_TREES=' + $launchers.Count + ': investigate before any recovery')
+}
+if ($launchers.Count -eq 1) {
     Write-Output ('RDC_LAUNCHER_ALREADY_RUNNING=true COUNT=' + $launchers.Count)
     return
 }
