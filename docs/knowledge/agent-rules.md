@@ -1,3 +1,12 @@
+<!-- PR_RELEVANT_GATES_ONLY_V1 -->
+## Regra permanente: gates somente por impacto comprovado da PR
+Para qualquer PR da ShopVivaliz, os agentes devem relacionar arquivos alterados, dependencias, contratos compartilhados, superficies de seguranca e areas de impacto **antes** de escolher testes e workflows. **Gates especializados de site, API, worker, catalogo, estoque, precos, carrinho, MCP, agentes ou continuidade so podem executar quando houver relacao tecnica demonstravel com a mudanca.** Testes de um subsistema nao relacionado nao devem ser acionados apenas por existir uma PR ou por alteracao generica de AGENTS.md.
+
+O seletor deve usar comparacao verificavel base...head com delecoes incluidas, criterios positivos estritos por path/dependencia e evidencias. Escopo vazio, diff indisponivel, caminho desconhecido, politica transversal, alteracao de CI/seguranca, dependencia compartilhada ou qualquer ambiguidade exigem *fail-closed* e suite ampliada; nunca omitir um check que possa comprovar regressao material. **Mandatory Validation Gate, Repository Governance, bridge Absolute Audit V5 e Main Guard permanecem obrigatorios conforme a fase** (PR/main); sua validacao interna pode escolher testes pertinentes com guardrails universais preservados.
+
+Implementacao inicial no repositorio site: `scripts/ci_impact_selection.py`, `scripts/ci_continuity_impact.py`, `scripts/ci_scoped_validate.sh` e `tests/test_ci_relevant_specialized_gates.py`. Bloquear regressao de workflow especializado sem filtro `paths`; gates globais de seguranca sao excecao expressa. Registrar no PR quais gates foram selecionados e por que; comparar duracao de fila vs job e evitar reexecutar suites caras duplicadas sem relacao com o diff. Proibido trocar conclusao de teste por warning, enfraquecer check requerido, contornar branch protection ou alegar APTO sem certificador.
+<!-- /PR_RELEVANT_GATES_ONLY_V1 -->
+
 <!-- TASK_SESSION_CONTINUITY_V1 -->
 ## Regra operacional: concluir a tarefa nao depende do fim da sessao (2026-10-30)
 

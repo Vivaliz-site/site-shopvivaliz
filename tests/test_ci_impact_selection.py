@@ -19,6 +19,31 @@ class ImpactSelectionTests(unittest.TestCase):
         self.assertEqual(r["groups"], ["shopee"])
         self.assertFalse(r["needs_php"])
 
+    def test_chatgpt_dispatcher_isolated_does_not_run_unrelated_worker_or_site(self):
+        paths = [
+            "scripts/chatgpt_continuity_nudge_dispatcher.py",
+            "tests/test_chatgpt_continuity_nudge_dispatcher.py",
+        ]
+        actual = module.classify(paths)
+        self.assertEqual(actual["mode"], "scoped")
+        self.assertEqual(actual["groups"], ["chatgpt-dispatcher"])
+        self.assertFalse(actual["needs_php"])
+
+    def test_chatgpt_dispatcher_combined_with_security_or_worker_is_full(self):
+        for path in (
+            "AGENTS.md",
+            ".github/workflows/absolute-audit-governance.yml",
+            "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
+            "scripts/ci_impact_selection.py",
+            "api/chatgpt-continuity/action.php",
+        ):
+            with self.subTest(path=path):
+                actual = module.classify([
+                    "scripts/chatgpt_continuity_nudge_dispatcher.py",
+                    path,
+                ])
+                self.assertEqual(actual["mode"], "full")
+
     def test_docs_only_runs_core(self):
         r = module.classify(["docs/knowledge/unrelated-runbook.md", "README.md"])
         self.assertEqual(r["groups"], ["docs"])

@@ -63,6 +63,13 @@ class ScopedGateContractTests(unittest.TestCase):
         self.assertEqual(mod.classify(got)["mode"], "full")
         self.assertNotIn("--diff-filter=ACMRT", call.call_args.args[0])
 
+    def test_dispatcher_scoped_validation_still_runs_crosscutting_guards(self):
+        text = SCOPED_VALIDATOR.read_text(encoding="utf-8")
+        self.assertIn('chatgpt-dispatcher)', text)
+        self.assertIn('tests.test_chatgpt_continuity_nudge_dispatcher', text)
+        self.assertIn('validate-audit-governance.py', text)
+        self.assertIn('check-agent-docs-enforcement.py', text)
+
     def test_cloudflare_preflight_is_not_removed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Cloudflare admin staging preflight regression (when present)", text)

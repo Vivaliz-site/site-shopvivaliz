@@ -158,8 +158,8 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
                     monotonic=lambda: clock[0], sleep=pause,
                     run=lambda *a, **k: self.fail("installer must not run while locked"),
                 )
-        self.assertEqual([5, 5, 2], waits)
-        self.assertEqual(4, runtime.attempts)
+        self.assertEqual([0.5] * 24, waits)
+        self.assertEqual(25, runtime.attempts)
         self.assertEqual([], runtime.events)
         self.assertFalse(runtime.live)
 
@@ -189,7 +189,7 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
                 monotonic=lambda: clock[0], sleep=pause, run=run,
             )
         self.assertEqual(SHA, result["promoted_sha"])
-        self.assertEqual([5, 5], waits)
+        self.assertEqual([0.5, 0.5], waits)
         self.assertEqual(3, runtime.attempts)
         self.assertEqual(["acquire", "assert", "release"], runtime.events)
         self.assertFalse(runtime.live)
@@ -200,7 +200,7 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "lock_wait_seconds_out_of_range"):
             helper.promote(Path("/tmp/fake"), SHA, runtime=runtime, lock_wait_seconds=3600)
         self.assertEqual(0, runtime.attempts)
-        self.assertIn("lock_wait_seconds=120", HELPER.read_text(encoding="utf-8"))
+        self.assertIn("lock_wait_seconds=420", HELPER.read_text(encoding="utf-8"))
 
     def test_stale_main_ref_rejected_without_install(self):
         helper = load_helper()
