@@ -105,5 +105,116 @@ class OwnerAuthorizationTests(unittest.TestCase):
         self.assertTrue(grant_module.decide(pr, grant, **opts)[0])
 
 
+
+class GrantOriginBindingTests(unittest.TestCase):
+    """Regression: approving an unrelated PR must never activate old grants."""
+
+    def execute_gate(self, *, status="modified", diff_sha=None, files=None):
+        import base64
+        from contextlib import redirect_stdout
+        from io import StringIO
+        import json
+        import os
+        import sys
+        from unittest.mock import patch
+
+        pr, grant, opts = fixture()
+        grant["expires_at_utc"] = "2099-01-01T00:00:00Z"
+        path = "security/owner-approvals/123.json"
+        blob_sha = "c" * 40
+        blob = {
+            "path": path, "sha": blob_sha, "encoding": "base64",
+            "content": base64.b64encode(json.dumps(grant).encode("utf-8")).decode("ascii"),
+        }
+        if files is None:
+            files = [{"filename": path, "sha": diff_sha or blob_sha, "status": status}]
+
+        def read_github(url, _token):
+            if url.endswith("/pulls/123"):
+                return pr
+            if url.endswith("/pulls/123/files?per_page=100"):
+                return files
+            if "/contents/" in url and "?ref=" in url:
+                return dict(blob)
+            raise AssertionError("unexpected GitHub endpoint in fixture")
+
+        argv = [
+            "validate-owner-pr-grant.py", "--repository", REPO,
+            "--pr-number", "123", "--merge-sha", MERGE, "--head-sha", HEAD,
+            "--resource", "mcp:marina", "--principal", "marina-mcp-service",
+            "--capability", "file_write",
+        ]
+        output = StringIO()
+        with patch.dict(os.environ, {
+                "SHOPVIVALIZ_SECURITY_OWNER_LOGIN": "verified-owner",
+                "GITHUB_TOKEN": "test-token-not-valid",
+             }), patch.object(sys, "argv", argv), patch.object(
+                grant_module, "github_json", side_effect=read_github
+             ), redirect_stdout(output):
+            exit_code = grant_module.main()
+        return exit_code, output.getvalue()
+
+    def test_preexisting_grant_in_unrelated_owner_pr_is_denied(self):
+        exit_code, output = self.execute_gate(status="modified")
+        self.assertEqual(exit_code, 1)
+        self.assertIn("grant_not_added_by_reviewed_pr", output)
+
+    def test_unlisted_grant_is_denied(self):
+        exit_code, _ = self.execute_gate(files=[])
+        self.assertEqual(exit_code, 1)
+
+    def test_mismatched_head_blob_is_denied(self):
+        exit_code, _ = self.execute_gate(status="added", diff_sha="d" * 40)
+        self.assertEqual(exit_code, 1)
+
+    def test_new_exact_grant_preserves_legitimate_authorization(self):
+        exit_code, output = self.execute_gate(status="added")
+        self.assertEqual(exit_code, 0, output)
+        self.assertIn("OWNER_PR_GRANT=AUTHORIZED", output)
+
+    def test_pr_file_list_at_pagination_boundary_fails_closed(self):
+        files = [
+            {"filename": f"docs/{i}.md", "status": "added", "sha": "f" * 40}
+            for i in range(99)
+        ]
+        files.append({
+            "filename": "security/owner-approvals/123.json",
+            "status": "added", "sha": "c" * 40,
+        })
+        exit_code, output = self.execute_gate(files=files)
+        self.assertEqual(exit_code, 1, output)
+
+    def test_renamed_or_duplicate_grant_entries_are_rejected(self):
+        path = "security/owner-approvals/123.json"
+        blob = {"path": path, "sha": "c" * 40}
+        entry = {"filename": path, "status": "added", "sha": blob["sha"]}
+        self.assertFalse(grant_module.grant_added_in_reviewed_pr(
+            [entry, entry], path, blob))
+        self.assertFalse(grant_module.grant_added_in_reviewed_pr(
+            [{**entry, "previous_filename": "old.json"}], path, blob))
+        self.assertFalse(grant_module.grant_added_in_reviewed_pr(
+            [{**entry, "status": "renamed"}], path, blob))
+
+    def test_reject_wrong_blob_metadata_and_incomplete_diff(self):
+        path = "security/owner-approvals/123.json"
+        entry = {"filename": path, "status": "added", "sha": "c" * 40}
+        self.assertFalse(grant_module.grant_added_in_reviewed_pr(
+            [entry], path, {"path": "wrong.json", "sha": "c" * 40}))
+        self.assertFalse(grant_module.grant_added_in_reviewed_pr(
+            [entry], path, {"path": path}))
+        self.assertFalse(grant_module.grant_added_in_reviewed_pr(
+            "not-an-array", path, {"path": path, "sha": "c" * 40}))
+
+    def test_99_files_with_exact_grant_remain_allowed(self):
+        path = "security/owner-approvals/123.json"
+        files = [
+            {"filename": f"docs/{i}.md", "status": "added", "sha": "f" * 40}
+            for i in range(98)
+        ]
+        files.append({"filename": path, "status": "added", "sha": "c" * 40})
+        self.assertTrue(grant_module.grant_added_in_reviewed_pr(
+            files, path, {"path": path, "sha": "c" * 40}))
+
+
 if __name__ == "__main__":
     unittest.main()
