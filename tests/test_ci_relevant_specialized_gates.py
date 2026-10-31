@@ -5,6 +5,7 @@ governance gates; they are not a reason to launch unrelated functional suites.
 """
 from __future__ import annotations
 
+from fnmatch import fnmatchcase
 from pathlib import Path
 import re
 import unittest
@@ -29,7 +30,27 @@ class OnlyRelevantGatesTest(unittest.TestCase):
     def test_cart_contract_only_for_mcp_cart_paths(self):
         paths = event_paths("marina-cart-maintenance-ci.yml")
         self.assertIsNotNone(paths, "cart contract may not run on every PR")
-        self.assertIn("remote-control-mcp/**", paths)
+        self.assertNotIn("remote-control-mcp/**", paths)
+        for source in (
+            "remote-control-mcp/server.py",
+            "remote-control-mcp/maintenance_cart.py",
+            "remote-control-mcp/retire-origin-abandoned-cart.py",
+        ):
+            self.assertIn(source, paths)
+        for unrelated in (
+            "remote-control-mcp/SPEC.md",
+            "remote-control-mcp/ACTION_PLAN.md",
+            "remote-control-mcp/CHECKPOINT.md",
+        ):
+            self.assertFalse(any(fnmatchcase(unrelated, pattern) for pattern in paths),
+                             f"unrelated MCP documentation triggered cart gate: {unrelated}")
+        for related in (
+            "remote-control-mcp/server.py",
+            "remote-control-mcp/maintenance_cart.py",
+            "remote-control-mcp/retire-origin-abandoned-cart.py",
+        ):
+            self.assertTrue(any(fnmatchcase(related, pattern) for pattern in paths),
+                            f"shared cart runtime was not covered: {related}")
         self.assertIn("tests/test_marina_cart_signed_maintenance.py", paths)
         self.assertIn(".github/workflows/marina-cart-maintenance-ci.yml", paths)
         self.assertNotIn("AGENTS.md", paths)
