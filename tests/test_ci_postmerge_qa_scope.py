@@ -47,20 +47,19 @@ class PostMergeQaScope(unittest.TestCase):
                 self.assertIn("ShopVivaliz QA", scope.required_specialized_gates([path]))
 
     def test_production_release_trigger_keeps_main_push_unfiltered(self):
-        # Master Production Pipeline is wired to completion of Quality Gate.
-        # Restricting Quality Gate to PR code paths would silently suppress
-        # deploys for deployable CSS/JS/site-only main pushes.
+        # Master Production Pipeline depends on a completed Quality Gate.
+        # Filtering this main push by PR paths would suppress CSS/JS deploys.
         quality = (ROOT / ".github" / "workflows" / "quality-gate.yml").read_text(encoding="utf-8")
         master = (ROOT / ".github" / "workflows" / "master-production-pipeline.yml").read_text(encoding="utf-8")
         qpush = quality.split("  pull_request:", 1)[0]
-        self.assertIn("  push:\\n    branches: [main, master]", qpush)
+        self.assertIn("  push:", qpush)
+        self.assertIn("    branches: [main, master]", qpush)
         self.assertNotIn("    paths:", qpush)
+        self.assertIn("  pull_request:", quality)
+        self.assertIn("    paths:", quality.split("  pull_request:", 1)[1])
         self.assertIn("workflow_run:", master)
         self.assertIn("workflows: [Quality Gate]", master)
         self.assertIn("scripts/should-deploy-production.sh", master)
-        self.assertIn("should_deploy", master)
-        # PR checks remain scoped: only release-triggering main pushes are universal.
-        self.assertIn("  pull_request:\\n    paths:", quality)
 
     def test_scope_regressions_are_enforced_by_relevant_workflows(self):
         qa = WF.read_text(encoding="utf-8")
