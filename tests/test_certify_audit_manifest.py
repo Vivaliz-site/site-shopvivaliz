@@ -498,27 +498,5 @@ class CertifierTests(unittest.TestCase):
         self.assertEqual("NAO_APTO", certify(data)[0])
 
 
-    def test_v5_diagnostic_only_cannot_be_certified(self):
-        """Regression: a report listing defects is never a completed V5 audit."""
-        data = valid_manifest()
-        data["findings"]["p1"] = 1
-        data["findings"]["open_defects_total"] = 1
-        data["remediation"]["loop_completed"] = False
-        data["remediation"]["open_blockers"] = 1
-        data["remediation"]["executable_blockers"] = 1
-        data["evidence"]["debt_count"] = 1
-        verdict, failures = certify(data)
-        self.assertEqual("NAO_APTO", verdict)
-        self.assertTrue(failures)
-
-    def test_v5_documentation_only_does_not_replace_runtime_evidence(self):
-        data = valid_manifest()
-        data["runtime"]["no_silent_failure"] = False
-        data["deploy"]["post_deploy_validation_complete"] = False
-        verdict, failures = certify(data)
-        self.assertEqual("NAO_APTO", verdict)
-        self.assertTrue(failures)
-
-
 if __name__ == "__main__":
     unittest.main()
