@@ -17,6 +17,11 @@ Verificacoes obrigatorias e fail-closed antes de conceder permissoes: identidade
 
 **Distincao tecnica:** o provedor/autorizador **administrado pela ShopVivaliz** deve acatar a decisao formal apos essas verificacoes e executar o grant autorizado pela API/rotina oficial. Um provedor externo (OCI, OpenAI Platform, etc.) nao e tecnicamente obrigado por um PR do GitHub; o adaptador deve usar suas APIs e permissoes oficiais para efetivar a concessao, quando autorizado e suportado. Se a operacao depender de papel/consentimento externo ausente, registrar a etapa administrativa externa exata, sem fingir que o PR ja a executou nem tentar contornar recusa explicita.
 
+### Integridade da aprovacao exclusivamente humana
+A identidade que comprova o merge deve ser **exclusiva do proprietario humano** e protegida de todos os agentes, bots, conectores e runners. Se as credenciais de GitHub acessiveis a um agente puderem agir como o mesmo usuario, `merged_by.login` isoladamente nao prova intervencao humana; nesse caso a integracao deve falhar fechada ate existir uma identidade human-only ou uma atestacao formal independente que o agente nao possa produzir. Nao configurar a conta do agente como aprovador exclusivo apenas porque ela e a conta autenticada na API.
+
+A configuracao protegida deve relacionar o login do proprietario ao inventario de identidades de automacao e negar qualquer sobreposicao. A etapa de verificacao do login do agente e de atestacao exclusiva precisa estar implementada e testada no executor antes que se declare o autorizador apto a conceder funcoes administrativas. A API GitHub e o proprio PR nao permitem distinguir uma pessoa de uma automacao que compartilhe as mesmas credenciais.
+
 ### Contrato tecnico verificavel para a aceitacao
 O prototipo de verificador `scripts/validate-owner-pr-grant.py` usa a API oficial do GitHub com token de leitura e a identidade do proprietario configurada exclusivamente em `SHOPVIVALIZ_SECURITY_OWNER_LOGIN` na configuracao protegida do autorizador. Nao inferir o proprietario a partir do usuario GitHub usado pelo agente.
 
