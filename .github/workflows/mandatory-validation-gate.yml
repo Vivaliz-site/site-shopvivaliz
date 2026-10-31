@@ -21,7 +21,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Select fail-closed impact scope
+        id: impact
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+            python3 scripts/ci_impact_selection.py \
+              --base "$BASE_SHA" --head "$HEAD_SHA" --github-output "$GITHUB_OUTPUT"
+          else
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+            echo "groups=full" >> "$GITHUB_OUTPUT"
+            echo "needs_php=true" >> "$GITHUB_OUTPUT"
+            echo "push_full_validation_required=true"
+          fi
+      - name: Validate fail-closed impact-selection contract
+        run: python3 -m unittest tests.test_ci_impact_selection tests.test_ci_scoped_validation_contract -v
       - name: Set up PHP 8.4
+        if: steps.impact.outputs.needs_php != 'false'
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -39,12 +59,18 @@ jobs:
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: python3 scripts/enforce-autonomy-policy.py
       - name: Validate repository change
+        if: steps.impact.outputs.mode != 'scoped'
         env:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: bash scripts/repository-governance-validate.sh ci
+      - name: Validate isolated impact with mandatory security guardrails
+        if: steps.impact.outputs.mode == 'scoped'
+        env:
+          IMPACT_GROUPS: ${{ steps.impact.outputs.groups }}
+        run: bash scripts/ci_scoped_validate.sh "$IMPACT_GROUPS"
 
       - name: Cloudflare admin staging preflight regression (when present)
-        if: ${{ hashFiles('scripts/cloudflare-admin-preflight.py') != '' }}
+        if: ${{ steps.impact.outputs.mode != 'scoped' && hashFiles('scripts/cloudflare-admin-preflight.py') != '' }}
         run: |
           python3 -m unittest discover -s tests -p 'test_cloudflare_admin_*.py' -v
           bash -n scripts/cloudflare-admin-stage-unit.sh

@@ -41,10 +41,6 @@ SCOPED = {
 }
 DOCS = (
     "README.md",
-    "AGENTS.md",
-    "CLAUDE.md",
-    "GEMINI.md",
-    "REGRAS-AGENTES-CENTRALIZADAS.md",
     "docs/knowledge/*.md",
     "docs/ops/*.md",
     "docs/audits/*.md",
@@ -55,6 +51,15 @@ DOCS = (
 # deliberately do not appear in the fast whitelist.
 ALWAYS_FULL = (
     "AUDIT_POLICY.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "REGRAS-AGENTES-CENTRALIZADAS.md",
+    "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+    "docs/knowledge/agent-rules.md",
+    "docs/knowledge/host-access.md",
+    "docs/knowledge/README.md",
+    "docs/ops/cloudflare*",
     "docs/quality/*",
     ".github/*",
     ".github/**/*",
@@ -105,7 +110,9 @@ def changed_files(base: str, head: str) -> list[str] | None:
         return None
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", "--diff-filter=ACMRT", "-z", f"{base}...{head}"],
+            # All statuses, including deletions: deleted policy files can never
+            # be silently ignored when mixed with scoped documentation changes.
+            ["git", "diff", "--name-only", "-z", f"{base}...{head}"],
             check=True, capture_output=True, timeout=30,
         )
         return [p.decode("utf-8", errors="replace") for p in result.stdout.split(b"\x00") if p]

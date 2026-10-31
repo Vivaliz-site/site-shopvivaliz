@@ -20,7 +20,7 @@ class ImpactSelectionTests(unittest.TestCase):
         self.assertFalse(r["needs_php"])
 
     def test_docs_only_runs_core(self):
-        r = module.classify(["docs/knowledge/agent-rules.md", "AGENTS.md"])
+        r = module.classify(["docs/knowledge/unrelated-runbook.md", "README.md"])
         self.assertEqual(r["groups"], ["docs"])
 
     def test_shared_site_api_requires_full(self):
@@ -29,12 +29,12 @@ class ImpactSelectionTests(unittest.TestCase):
                 self.assertEqual(module.classify([path])["mode"], "full")
 
     def test_workflow_or_security_policy_always_full(self):
-        for path in (".github/workflows/mandatory-validation-gate.yml", "AUDIT_POLICY.md", "docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md", "composer.lock"):
+        for path in ("AGENTS.md", "docs/knowledge/agent-rules.md", "docs/ops/cloudflare-admin.md", ".github/workflows/mandatory-validation-gate.yml", "AUDIT_POLICY.md", "docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md", "composer.lock"):
             with self.subTest(path=path):
                 self.assertEqual(module.classify([path])["mode"], "full")
 
     def test_mixed_scoped_groups_are_unioned(self):
-        r = module.classify(["scripts/shopee_logistics_worker.py", "docs/knowledge/README.md", "scripts/task_resume_queue.py"])
+        r = module.classify(["scripts/shopee_logistics_worker.py", "docs/knowledge/independent-runbook.md", "scripts/task_resume_queue.py"])
         self.assertEqual(r["groups"], ["continuity", "docs", "shopee"])
 
     def test_mixed_unknown_file_fails_closed(self):
