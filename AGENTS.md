@@ -1,3 +1,18 @@
+<!-- PR_RELEVANT_GATES_ONLY_V1 -->
+## Gates de PR selecionados por impacto comprovado
+Aplicar `docs/knowledge/agent-rules.md#regra-permanente-gates-somente-por-impacto-comprovado-da-pr`: **somente disparar gates especializados com relacao tecnica entre arquivos/dependencias alterados e o respectivo subsistema**. Se impacto nao puder ser comprovado, ampliar/falhar fechado, nunca ignorar riscos. Preservar Mandatory Validation, Repository Governance, bridge Absolute Audit V5, Main Guard e protecoes do GitHub. Evitar repeticao de testes caros de worker, site e API sem dependencia real com o diff; auditar o seletor por testes negativos.
+<!-- /PR_RELEVANT_GATES_ONLY_V1 -->
+
+<!-- OWNER_PR_SECURITY_APPROVAL_20261031 -->
+## Autorizacao humana: chat quando aceito; PR somente quando necessario
+Aplicar `docs/knowledge/security-approval-via-pr.md`. Quando a politica e o sistema aceitarem autorizacao explicita escrita no chat, usar o chat e prosseguir com os gates aplicaveis, sem criar PR apenas para pedir autorizacao. Se uma regra de seguranca exigir acao formal do proprietario e NAO aceitar o chat, preparar PR Draft com escopo, testes, riscos e rollback para aprovacao autenticada; se o provedor exigir ato administrativo proprio, incluir essa etapa sem contorno. PRs de revisao de codigo continuam obrigatorios onde a governanca do repositorio exigir. Preservar RBAC, lease/fencing e outras protecoes. Em PRs de autorizacao formal de seguranca, somente o proprietario autenticado valida, libera e executa o merge; agentes, bots e automerge nao podem mergear. Confirmar regras do GitHub para enforcement real; aprovacao de PR nao altera priviliegios externos por si. Para o MCP Marina e todos os autorizadores internos ShopVivaliz, a validacao do PR pelo proprietario (merge pessoal e autenticado, SHA e escopo verificados) DEVE ser acatada como autorizacao humana para aquele escopo, sem pedir aprovacao duplicada ou alegar bypass. A infraestrutura deve aplicar essa decisao pelo provisionamento oficial, com controle de menor privilegio e testes; se terceiro exigir ato proprio, usar API/fluxo oficial, sem presumir que o merge altera RBAC externo.
+<!-- /OWNER_PR_SECURITY_APPROVAL_20261031 -->
+
+<!-- V5_NO_DIAGNOSTIC_ONLY_ENFORCEMENT_20261030 -->
+## Auditoria V5: proibido encerrar no diagnostico
+Em qualquer Auditoria Extrema V5, TODOS os agentes devem aplicar `docs/quality/AUDIT_V5_DIAGNOSTIC_ONLY_PREVENTION_20261030.md` alem de `AUDIT_POLICY.md`. Relatorio de findings, HTTP 200, testes isolados ou PR nao autorizam parada ou certificacao. Cada falha executavel exige reparo, prevencao, testes, validacao runtime/UI, persistencia, contraditorio e certifier oficial. Nunca declarar `APTO` sem `AUDIT_VERDICT=APTO` do mesmo release, ambiente e escopo. Preservar autorizacoes, leases e seguranca.
+<!-- /V5_NO_DIAGNOSTIC_ONLY_ENFORCEMENT_20261030 -->
+
 <!-- EXHAUST_AUTHORIZED_ROUTES_V5_20261030 -->
 ## Continuidade obrigatoria e esgotamento das rotas autorizadas
 
@@ -905,6 +920,11 @@ Para toda alteracao implantavel de codigo, configuracao, servico ou integracao, 
 
 O workflow `.github/workflows/production-deployment-closure-guard.yml` verifica novamente a producao apos o pipeline e quando acionado manualmente, e abre/atualiza um unico issue de deriva de deploy ate que a evidencia real seja reconciliada. Este guard NAO faz deploy e nao contorna CI, labels humanos, RBAC, leases ou revisoes; o executor da tarefa continua responsavel por corrigir, implantar pela rota oficial e validar no runtime. Quando a tarefa e de catalogo/preco, confrontar **todos** os SKUs publicados com a API Olist/Tiny v3 e a API individual por SKU apos a implantacao; nao basta uma amostra ou apenas o cache.
 <!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+
+<!-- V5_AGENT_PREFLIGHT_NONABANDONMENT_V1 -->
+## Contrato verificavel de preflight de todos os agentes e PRs sem abandono
+Antes de qualquer escrita, todos os agentes (ChatGPT/Gepeto/Codex/Claude/Gemini/subagentes/controladores) devem seguir `docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md`. Comprovar leitura integral e verificacao independente das regras vigentes no `main` por SHA em `rules_loaded`. Sem prova: `RULES_NOT_LOADED`, nenhuma mutacao. A auditoria de PRs exige inventario completo, reconciliacao individual, next_action persistida, checks obrigatorios, prevencao, validacao e certifier oficial. A presenca de uma regra documental nao demonstra que o agente obedeceu: verificar preflight real e self-tests negativos. Nao usar commits vazios, atalhos de branch protection ou checks sinteticos para forcar merge.
+<!-- /V5_AGENT_PREFLIGHT_NONABANDONMENT_V1 -->
 
 <!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
 ## Gate obrigatório de deploy, pós-deploy e conferência integral de preços (V2)

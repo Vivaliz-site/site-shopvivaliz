@@ -21,7 +21,7 @@ class GovernedBackendRunnerProvisionTests(unittest.TestCase):
         self.assertIn("github.event.issue.number == 1586", text)
         self.assertIn("github.event.comment.user.login == 'fredmourao-ai'", text)
         self.assertIn("github.event.comment.body == '/provision-governed-backend-ci-runners-v1'", text)
-        self.assertIn("ubuntu@10.0.1.38", text)
+        self.assertIn("ubuntu@100.66.174.74", text)
         self.assertIn("persist-credentials: false", text)
         self.assertNotIn("pull_request:", text)
         self.assertIn("workflow_call:", text)
@@ -34,6 +34,19 @@ class GovernedBackendRunnerProvisionTests(unittest.TestCase):
         dispatcher = (ROOT / '.github/workflows/issue-comment-dispatcher.yml').read_text()
         self.assertIn('uses: ./.github/workflows/provision-governed-backend-ci-runners.yml', dispatcher)
         self.assertIn("if: needs.classify.outputs.route == 'provision_backend_runners'", dispatcher)
+
+    def test_scheduled_and_dispatch_runner_routes_are_tailscale_and_hostkey_pinned(self):
+        for name in ("provision-governed-backend-ci-runners.yml", "provision-governed-backend-ci-runners-once.yml"):
+            text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+            with self.subTest(name=name):
+                self.assertIn("ubuntu@100.66.174.74", text)
+                self.assertIn("100.66.174.74 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMB4WoE2zIDGh8n1OdlgNpTJuYzzln/qHiX6wUAyqnRL", text)
+                self.assertIn('UserKnownHostsFile="$HOME/.ssh/shopvivaliz_backend_known_hosts"', text)
+                self.assertIn('StrictHostKeyChecking=yes', text)
+                self.assertNotIn("ubuntu@10.0.1.38", text)
+                self.assertNotIn("StrictHostKeyChecking=no", text)
+                self.assertIn('rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts" "$HOME/.ssh/shopvivaliz_backend_known_hosts"', text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@ import unittest
 
 WORKFLOWS = Path('.github/workflows')
 LEGACY_PUBLIC_IPS = ('163.176.103.253', '144.22.157.209')
-PRIVATE_TARGETS = ('127.0.0.1', '10.0.1.38')
+PRIVATE_TARGETS = ('127.0.0.1', '10.0.1.38', '100.66.174.74')
 SITE_RUNNER = 'shopvivaliz-a1-deploy'
 
 

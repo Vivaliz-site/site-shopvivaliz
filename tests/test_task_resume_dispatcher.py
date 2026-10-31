@@ -155,6 +155,63 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["executed"], 0)
         self.assertEqual(result["deferred_unbound_session"], 1)
 
+    def test_bound_browser_probe_requires_exact_corporate_identity(self) -> None:
+        dispatcher = load_dispatcher()
+        fixture = self.root / "readonly_browser_probe.py"
+        dispatcher.CORPORATE_AUTH_PROBE_MODULE = fixture
+        fixture.write_text(
+            "def browser_auth_status(args):\n"
+            "    session = args['session']\n"
+            "    return {'ok': True, 'session': session, 'state': 'AUTHENTICATED', "
+            "'identity_match': True, 'cdp_accessible': True, 'user_present': True, 'session_http': 200}\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(dispatcher._bound_session_authenticated("dev"))
+        self.assertTrue(dispatcher._bound_session_authenticated("atendimento"))
+        self.assertFalse(dispatcher._bound_session_authenticated("fred"))
+        fixture.write_text(
+            "def browser_auth_status(args):\n"
+            "    return {'ok': True, 'session': 'dev', 'state': 'AUTHENTICATED', "
+            "'identity_match': True, 'cdp_accessible': True, 'user_present': True, 'session_http': 200}\n",
+            encoding="utf-8",
+        )
+        self.assertFalse(dispatcher._bound_session_authenticated("atendimento"))
+        fixture.unlink()
+        self.assertFalse(dispatcher._bound_session_authenticated("dev"))
+
+    def test_durable_handoff_never_claims_logged_out_atendimento(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "atendimento_conversation_123456"
+        state["browser_session"] = "atendimento"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        original_auth = dispatcher._bound_session_authenticated
+        original_claim = dispatcher._claim_resume_ownership
+        dispatcher._bound_session_authenticated = lambda session: session == "dev"
+        dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("logged-out Atendimento must not acquire a recovery lease")
+        )
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            dispatcher._claim_resume_ownership = original_claim
+            dispatcher._bound_session_authenticated = original_auth
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["deferred_bound_session_auth"], 1)
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(list(self.runtime.glob("_resume-execution-*.json")), [])
+        self.assertEqual(json.loads((self.runtime / "resume-e2e.json").read_text()), state)
+
     def test_durable_handoff_supports_dedicated_dev_browser_session(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
@@ -163,6 +220,8 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
         self._request(state)
         original_claim = dispatcher._claim_resume_ownership
+        original_auth = dispatcher._bound_session_authenticated
+        dispatcher._bound_session_authenticated = lambda session: session == "dev"
         dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: state
         previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
         os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
@@ -173,6 +232,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
             )
         finally:
             dispatcher._claim_resume_ownership = original_claim
+            dispatcher._bound_session_authenticated = original_auth
             if previous is None:
                 os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
             else:
@@ -185,12 +245,14 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         dispatcher = load_dispatcher()
         state = self._state()
         state["conversation_id"] = "conversation_busy123"
-        state["browser_session"] = "fred"
+        state["browser_session"] = "dev"
         (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
         self._request(state)
         previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
         os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
         original_claim = dispatcher._claim_resume_ownership
+        original_auth = dispatcher._bound_session_authenticated
+        dispatcher._bound_session_authenticated = lambda session: session == "dev"
         dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: (_ for _ in ()).throw(
             dispatcher.continuity_state.TaskStateError("conversation recovery ownership is busy")
         )
@@ -201,6 +263,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
             )
         finally:
             dispatcher._claim_resume_ownership = original_claim
+            dispatcher._bound_session_authenticated = original_auth
             if previous is None:
                 os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
             else:

@@ -55,6 +55,17 @@ class PrGateScopeTests(unittest.TestCase):
         self.assertIn("PR Policy Enforcement", gates)
         self.assertNotIn("Policy Engine", gates)
 
+    def test_scope_mapping_changes_trigger_pr_policy_enforcement(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "pr-policy-enforcement.yml").read_text(encoding="utf-8")
+        pr_part = workflow.split("  push:", 1)[0]
+        self.assertIn("'scripts/pr_gate_scope.py'", pr_part)
+        self.assertIn("'tests/test_pr_gate_scope.py'", pr_part)
+        mapping = load_scope()
+        for path in ("css/catalog.css", "js/catalog.js", "assets/products/image.webp"):
+            with self.subTest(path=path):
+                self.assertIn("ShopVivaliz QA", mapping.required_specialized_gates([path]))
+        self.assertNotIn("ShopVivaliz QA", mapping.required_specialized_gates(["AGENTS.md"]))
+
     def test_completion_enforcer_uses_scope_helper_before_replaying_missing_gate(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
         self.assertIn("pr_gate_scope.py", workflow)

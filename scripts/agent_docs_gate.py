@@ -18,6 +18,7 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_ID = "AGENT_DOCS_PREFLIGHT_V1"
+MAX_RECEIPT_AGE_SECONDS = 24 * 60 * 60  # stale sessions must re-read
 REQUIRED_DOCS = (
     "REGRAS-AGENTES-CENTRALIZADAS.md",
     "AGENTS.md",
@@ -32,6 +33,14 @@ REQUIRED_DOCS = (
     "docs/knowledge/README.md",
     "docs/knowledge/agent-rules.md",
     "docs/knowledge/task-continuity.md",
+    # Auditoria Extrema V5 must be delivered to GPT, Gemini, Claude, Codex
+    # and every agent using the canonical worker before state mutation.
+    "AUDIT_POLICY.md",
+    "docs/quality/EXTREME_AUDIT_PROTOCOL.md",
+    "docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md",
+    "docs/quality/AUDIT_ABSOLUTE_GATE_V1.md",
+    "docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md",
+    "docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md",
     "GEPETO-POLICY.md",
 )
 RUNTIME_DIR = ROOT / "storage" / "private" / "agent-docs-read"
@@ -207,6 +216,18 @@ def verify_receipt(agent: str, task: str, extra_docs: Iterable[str] | None = Non
         return False, "receipt identity mismatch", receipt
     if receipt.get("acknowledged") is not True or not receipt.get("acknowledged_at"):
         return False, "docs were delivered but not acknowledged after reading", receipt
+
+    # A digest can remain unchanged across sessions. Expire old receipts
+    # even when files have not changed; reject future timestamps too.
+    try:
+        acknowledged_at = datetime.fromisoformat(str(receipt["acknowledged_at"]).replace("Z", "+00:00"))
+        if acknowledged_at.tzinfo is None:
+            raise ValueError("timezone missing")
+        elapsed = (datetime.now(timezone.utc) - acknowledged_at).total_seconds()
+        if elapsed < -30 or elapsed > MAX_RECEIPT_AGE_SECONDS:
+            return False, "docs receipt expired or future-dated; read and acknowledge again", receipt
+    except (ValueError, TypeError, KeyError):
+        return False, "invalid docs receipt acknowledgement timestamp", receipt
 
     current = build_manifest(extra_docs)
     if receipt.get("digest") != current["digest"]:
