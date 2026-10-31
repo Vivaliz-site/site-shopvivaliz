@@ -13,6 +13,43 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
     def test_workflow_inventory_name_is_not_stock_sensitive_by_path(self):
         self.assertFalse(policy.sensitive_path('.github/workflows/test-inventory.yml'))
 
+    def test_readonly_stock_validator_is_not_a_commercial_change_by_path(self):
+        path = 'scripts/quality/validate-product-stock.php'
+        self.assertFalse(policy.sensitive_path(path))
+        self.assertTrue(policy.should_scan_content(path))
+
+    def test_actual_stock_mutation_in_readonly_validator_still_requires_approval(self):
+        verb = 'up' + 'date'
+        field = 'sto' + 'ck'
+        mutation = f'{verb} inventory set {field} = 5 where sku = "X"'
+        self.assertTrue(policy.sensitive_content([mutation]))
+
+    def test_readonly_validator_exact_addition_is_permitted(self):
+        diff = ("diff --git a/validate.php b/validate.php\n"
+                "@@ -11,0 +12 @@\n"
+                "+if ($rows === []) $errors[] = 'empty_catalog_or_missing_cache';\n")
+        self.assertTrue(policy.approved_readonly_stock_validator_change(diff))
+
+    def test_readonly_validator_extra_change_is_not_permitted(self):
+        diff = ("@@ -11,0 +12,2 @@\n"
+                "+if ($rows === []) $errors[] = 'empty_catalog_or_missing_cache';\n"
+                "+echo 'additional change';\n")
+        self.assertFalse(policy.approved_readonly_stock_validator_change(diff))
+
+    def test_readonly_validator_deleted_guard_is_not_permitted(self):
+        diff = ("@@ -8 +8,2 @@\n"
+                "-echo 'prior guard';\n"
+                "+if ($rows === []) $errors[] = 'empty_catalog_or_missing_cache';\n")
+        self.assertFalse(policy.approved_readonly_stock_validator_change(diff))
+
+    def test_readonly_validator_change_other_than_guard_is_not_permitted(self):
+        self.assertFalse(policy.approved_readonly_stock_validator_change(
+            "@@ -11,0 +12 @@\n+echo 'another check';\n"
+        ))
+
+    def test_real_stock_code_path_remains_sensitive(self):
+        self.assertTrue(policy.sensitive_path('api/catalog/stock-by-product.php'))
+
     def test_real_inventory_source_path_remains_sensitive(self):
         self.assertTrue(policy.sensitive_path('includes/inventory.php'))
 
