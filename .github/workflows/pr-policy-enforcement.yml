@@ -9,6 +9,8 @@ on:
       - 'tests/test_ci_latency_contract.py'
       - 'scripts/check_pr_completion_policy.py'
       - 'docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md'
+      - 'scripts/quality/agent_rules_preflight.py'
+      - 'tests/test_agent_rules_preflight.py'
       - 'scripts/pr_conflict_gemini_healer.py'
       - 'scripts/pr_gate_replay.py'
       - 'scripts/pr_conflict_vm_heal.sh'
@@ -71,6 +73,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m unittest tests.test_ci_latency_contract -v
+
+      - name: Verify V5 agent preflight rejects missing and stale rules
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/quality/agent_rules_preflight.py tests/test_agent_rules_preflight.py
+          python3 -m unittest tests.test_agent_rules_preflight -v
 
       - name: Verify policy enforcement surfaces
         shell: bash
