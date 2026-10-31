@@ -2,6 +2,8 @@
 
 Este contrato e obrigatorio para ChatGPT, Gepeto, Codex, Claude, Gemini, subagentes, controladores e automacoes. Nao basta reconhecer o nome da regra.
 
+Nota operacional: os checks de **governance** devem usar o bridge absoluto obrigatorio, nao apenas aprovar a existencia dos textos. O verificador de instrucoes deve provar leitura real e rejeitar recibos vencidos e SHA divergente.
+
 ## Preflight fail-closed antes de qualquer escrita
 1. Ler realmente no main vigente AGENTS.md, AUDIT_POLICY.md, docs/knowledge/atendimento-chatgpt-bootstrap.md, docs/knowledge/host-access.md, docs/knowledge/README.md e docs/knowledge/agent-rules.md; depois ler os protocolos de qualidade vinculados, o overlay e as regras locais do repositorio alvo.
 2. Persistir rules_loaded por arquivo com path, ref main, blob SHA, instante, identidade da sessao/agente, finalidade, e resultado read -> acknowledge -> verify. Nao reaproveitar recibos antigos se o SHA mudou.
