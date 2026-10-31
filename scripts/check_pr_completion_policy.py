@@ -174,6 +174,9 @@ REQUIRED["docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md"] = [
     "next_action",
     "head SHA",
     "sem bypass",
+    "Somente PRs cujo proposito",
+    "Todas as outras PRs devem ter desfecho efetivo",
+    "tambem drafts e labels held",
 ]
 
 REQUIRED["scripts/quality/agent_rules_preflight.py"] = [
