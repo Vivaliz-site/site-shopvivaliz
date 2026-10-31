@@ -28,6 +28,14 @@ jobs:
       should_run: ${{ steps.gate.outputs.should_run }}
       target_pr: ${{ steps.gate.outputs.target_pr }}
     steps:
+      - name: Checkout trusted fair scheduler from main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Check production deploy queue after event fan-out settles
         id: gate
         shell: bash
@@ -39,17 +47,11 @@ jobs:
           set -Eeuo pipefail
           target_pr="${TRIGGER_PR:-}"
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
-            target_pr="$(
-              gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" |
-                jq -r --arg repo "$GITHUB_REPOSITORY" '
-                  [.[] | select(.head.repo.full_name == $repo and (.draft | not))]
-                  | sort_by(
-                      (if ([.labels[].name] | index("repair-required-now")) then 0 else 1 end),
-                      .updated_at
-                    )
-                  | .[0].number // empty
-                '
-            )"
+            # Fair queue rotation; a stuck PR must not starve newer PRs.
+            open_prs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" | jq -s 'add')"
+            slot="$(( $(date -u +%s) / 900 ))"
+            target_pr="$(printf '%s\n' "$open_prs" | python3 trusted/scripts/pr_completion_scheduler.py --repo "$GITHUB_REPOSITORY" --slot "$slot" --batch 1)"
+            echo "schedule_fair_slot=$slot"
             echo 'schedule_target_budget=1'
             if [[ -z "$target_pr" ]]; then
               echo "target_pr=" >> "$GITHUB_OUTPUT"
@@ -133,6 +135,23 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Load canonical V5 rules and verify SHA-bound receipt before mutation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RULES_RECEIPT="$RUNNER_TEMP/v5-rules-loaded.json"
+          python3 trusted/scripts/quality/agent_rules_preflight.py capture \
+            --repo trusted --ref HEAD --receipt "$RULES_RECEIPT" \
+            --agent pr-completion-enforcer --ack V5_ACKNOWLEDGED_READ_VERIFIED
+          python3 trusted/scripts/quality/agent_rules_preflight.py verify \
+            --repo trusted --ref HEAD --receipt "$RULES_RECEIPT" \
+            --agent pr-completion-enforcer || { echo RULES_NOT_LOADED; exit 43; }
+          test "$(git -C trusted rev-parse HEAD)" = \
+            "$(gh api "repos/${REPO}/commits/main" --jq .sha)" || {
+              echo RULES_NOT_LOADED_STALE_MAIN
+              exit 43
+            }
+
       - name: Validate trusted finalizer syntax
         shell: bash
         run: |
@@ -171,6 +190,15 @@ jobs:
               -f description='Falha corrigível: reparar na mesma branch e concluir o merge agora'
             echo 'repair_label=created'
           fi
+
+      - name: Recheck canonical rules just before PR mutation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RULES_RECEIPT="$RUNNER_TEMP/v5-rules-loaded.json"
+          python3 trusted/scripts/quality/agent_rules_preflight.py verify \
+            --repo trusted --ref HEAD --receipt "$RULES_RECEIPT" \
+            --agent pr-completion-enforcer || { echo RULES_NOT_LOADED; exit 43; }
 
       - name: Repair and finalize triggering PR or scheduled sweep
         id: finalize

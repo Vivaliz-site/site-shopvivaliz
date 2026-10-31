@@ -920,3 +920,8 @@ Para toda alteracao implantavel de codigo, configuracao, servico ou integracao, 
 
 O workflow `.github/workflows/production-deployment-closure-guard.yml` verifica novamente a producao apos o pipeline e quando acionado manualmente, e abre/atualiza um unico issue de deriva de deploy ate que a evidencia real seja reconciliada. Este guard NAO faz deploy e nao contorna CI, labels humanos, RBAC, leases ou revisoes; o executor da tarefa continua responsavel por corrigir, implantar pela rota oficial e validar no runtime. Quando a tarefa e de catalogo/preco, confrontar **todos** os SKUs publicados com a API Olist/Tiny v3 e a API individual por SKU apos a implantacao; nao basta uma amostra ou apenas o cache.
 <!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+
+<!-- V5_AGENT_PREFLIGHT_NONABANDONMENT_V1 -->
+## Contrato verificavel de preflight de todos os agentes e PRs sem abandono
+Antes de qualquer escrita, todos os agentes (ChatGPT/Gepeto/Codex/Claude/Gemini/subagentes/controladores) devem seguir `docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md`. Comprovar leitura integral e verificacao independente das regras vigentes no `main` por SHA em `rules_loaded`. Sem prova: `RULES_NOT_LOADED`, nenhuma mutacao. A auditoria de PRs exige inventario completo, reconciliacao individual, next_action persistida, checks obrigatorios, prevencao, validacao e certifier oficial. A presenca de uma regra documental nao demonstra que o agente obedeceu: verificar preflight real e self-tests negativos. Nao usar commits vazios, atalhos de branch protection ou checks sinteticos para forcar merge.
+<!-- /V5_AGENT_PREFLIGHT_NONABANDONMENT_V1 -->

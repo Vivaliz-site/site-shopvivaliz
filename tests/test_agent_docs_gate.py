@@ -61,6 +61,43 @@ class AgentDocsGateTests(unittest.TestCase):
         self.assertIn("nao** prazo de encerramento", continuity)
         self.assertIn("TASK_SESSION_CONTINUITY_V1", continuity)
 
+    def test_v5_audit_rules_are_in_all_agent_read_packets(self) -> None:
+        for path in (
+            "AUDIT_POLICY.md",
+            "docs/quality/EXTREME_AUDIT_PROTOCOL.md",
+            "docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md",
+            "docs/quality/AUDIT_ABSOLUTE_GATE_V1.md",
+            "docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md",
+            "docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, self.original_required)
+
+    def test_previous_session_receipt_expires_even_without_changes(self) -> None:
+        import json
+        packet = gate.deliver_read_packet("gpt", "outdated-v5")
+        gate.acknowledge("gpt", "outdated-v5", packet["digest"])
+        path = gate._receipt_path("gpt", "outdated-v5")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for stamped in ("2000-01-01T00:00:00Z", "2999-01-01T00:00:00Z"):
+            data["acknowledged_at"] = stamped
+            path.write_text(json.dumps(data), encoding="utf-8")
+            verified, reason, _ = gate.verify_receipt("gpt", "outdated-v5")
+            self.assertFalse(verified)
+            self.assertIn("expired or future", reason)
+
+    def test_v5_policy_change_invalidates_agent_receipt(self) -> None:
+        path = self.root / "docs/quality/AUDIT_ABSOLUTE_GATE_V1.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("AUDIT_VERDICT=APTO guarded by certifier\\n", encoding="utf-8")
+        gate.REQUIRED_DOCS = (*gate.REQUIRED_DOCS, "docs/quality/AUDIT_ABSOLUTE_GATE_V1.md")
+        packet = gate.deliver_read_packet("claude", "v5-policy")
+        gate.acknowledge("claude", "v5-policy", packet["digest"])
+        path.write_text("AUDIT_VERDICT=APTO guarded by modified certifier\\n", encoding="utf-8")
+        valid, reason, _ = gate.verify_receipt("claude", "v5-policy")
+        self.assertFalse(valid)
+        self.assertIn("changed", reason)
+
     def test_changed_topology_invalidates_receipt(self) -> None:
         topo_name = "docs/knowledge/current-topology-and-access-2026-10-29.md"
         gate.REQUIRED_DOCS = (*gate.REQUIRED_DOCS, topo_name)
