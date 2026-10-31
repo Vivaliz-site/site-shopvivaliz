@@ -176,6 +176,31 @@ REQUIRED["docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md"] = [
     "sem bypass",
 ]
 
+REQUIRED["scripts/quality/agent_rules_preflight.py"] = [
+    "V5_RULES_LOADED_V1",
+    "RULES_NOT_LOADED",
+    "def collect(",
+    "def capture(",
+    "def verify(",
+    "ACKNOWLEDGED_READ_VERIFIED",
+    "utc_epoch",
+    "sha256",
+]
+REQUIRED["tests/test_agent_rules_preflight.py"] = [
+    "test_no_ack_rejected",
+    "test_missing_rule_prevents_receipt",
+    "test_removed_marker_prevents_receipt",
+    "test_changed_main_sha_invalidates_receipt",
+    "test_tampered_hash_invalidates_receipt",
+    "test_attestation_expiration_and_future_rejected",
+]
+REQUIRED[".github/workflows/pr-completion-enforcer.yml"].extend([
+    "agent_rules_preflight.py capture",
+    "agent_rules_preflight.py verify",
+    "RULES_RECEIPT",
+    "RULES_NOT_LOADED",
+])
+
 FORBIDDEN = {
     ".github/workflows/pr-conflict-auto-healer.yml": [
         "GH_REPO_TOKEN",
