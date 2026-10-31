@@ -55,6 +55,15 @@ class CloneLifecycleTests(unittest.TestCase):
     def cleanup(self):
         return lifecycle.cleanup_task(self.task_id, state_dir=self.state, allowed_roots=(self.allowed,))
 
+    def test_atomic_registry_owner_matches_parent(self):
+        """Root-initiated registrations must remain readable by the timer user."""
+        manifest = self.state / "registry-owner-test.json"
+        lifecycle._write_registry(manifest, {"task_id": "owner-test", "paths": []})
+        parent = self.state.stat()
+        actual = manifest.stat()
+        self.assertEqual((actual.st_uid, actual.st_gid), (parent.st_uid, parent.st_gid))
+        self.assertEqual(actual.st_mode & 0o777, 0o600)
+
     def test_terminal_task_deletes_clean_pushed_clone(self):
         self.register()
         self.assertEqual(self.cleanup()["removed"], 0)

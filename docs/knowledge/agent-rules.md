@@ -1,3 +1,25 @@
+<!-- PR_RELEVANT_GATES_ONLY_V1 -->
+## Regra permanente: gates somente por impacto comprovado da PR
+Para qualquer PR da ShopVivaliz, os agentes devem relacionar arquivos alterados, dependencias, contratos compartilhados, superficies de seguranca e areas de impacto **antes** de escolher testes e workflows. **Gates especializados de site, API, worker, catalogo, estoque, precos, carrinho, MCP, agentes ou continuidade so podem executar quando houver relacao tecnica demonstravel com a mudanca.** Testes de um subsistema nao relacionado nao devem ser acionados apenas por existir uma PR ou por alteracao generica de AGENTS.md.
+
+O seletor deve usar comparacao verificavel base...head com delecoes incluidas, criterios positivos estritos por path/dependencia e evidencias. Escopo vazio, diff indisponivel, caminho desconhecido, politica transversal, alteracao de CI/seguranca, dependencia compartilhada ou qualquer ambiguidade exigem *fail-closed* e suite ampliada; nunca omitir um check que possa comprovar regressao material. **Mandatory Validation Gate, Repository Governance, bridge Absolute Audit V5 e Main Guard permanecem obrigatorios conforme a fase** (PR/main); sua validacao interna pode escolher testes pertinentes com guardrails universais preservados.
+
+Implementacao inicial no repositorio site: `scripts/ci_impact_selection.py`, `scripts/ci_continuity_impact.py`, `scripts/ci_scoped_validate.sh` e `tests/test_ci_relevant_specialized_gates.py`. Bloquear regressao de workflow especializado sem filtro `paths`; gates globais de seguranca sao excecao expressa. Registrar no PR quais gates foram selecionados e por que; comparar duracao de fila vs job e evitar reexecutar suites caras duplicadas sem relacao com o diff. Proibido trocar conclusao de teste por warning, enfraquecer check requerido, contornar branch protection ou alegar APTO sem certificador.
+<!-- /PR_RELEVANT_GATES_ONLY_V1 -->
+
+<!-- TASK_SESSION_CONTINUITY_V1 -->
+## Regra operacional: concluir a tarefa nao depende do fim da sessao (2026-10-30)
+
+**Ordem do proprietario:** uma tarefa autorizada e ainda executavel nao pode ser pausada ou declarada concluida por habito do agente, termino da resposta, troca de conversa, timeout, diagnostico, entrega de relatorio, abertura de PR ou sucesso de CI isoladamente. O agente executa o proximo passo permitido, corrige as causas, testa, valida e registra o resultado. O controlador de continuidade e contingencia para travamentos, **nao substitui a obrigacao de execucao do agente principal**.
+
+- **Tarefa diferente de sessao:** limites de duracao da sessao, cotas de IA paga e politicas de anti-loop controlam execucoes abandonadas, repetitivas, sem progresso ou de custo indevido. Nao sao prazo de validade nem autorizacao para abandonar uma tarefa com progresso verificavel. Quando a sessao legitima precisar terminar, preservar `RUNNING`, evidencias, ownership/lease valido, `next_action` especifica e destino de retomada efetivamente comprovado; nao prometer atividade em segundo plano sem executor real.
+- **Estado terminal exige prova:** `CONCLUIDO` somente apos correcoes persistidas, testes GREEN, regressao e E2E/UI real quando aplicavel, no SHA/ambiente efetivo. Se houver impedimento externo comprovado, manter a pendencia documentada em `BLOCKED_EXTERNAL` ou `AWAITING_APPROVAL` com autorizacao exata faltante, sem tratar o bloqueio como sucesso. PR em rascunho, checks verdes ou proposta administrativa nao equivalem a aplicacao em `main`.
+- **Leitura de instrucoes antes de executar:** ler `AGENTS.md`, `docs/knowledge/atendimento-chatgpt-bootstrap.md`, `host-access.md`, `README.md`, este `agent-rules.md` e os documentos especificos da tarefa no `main` vigente. Registrar `rules_loaded` com caminho/ref/SHA/instante e obter `read -> acknowledge -> verify` do preflight real quando aplicavel. Um recibo de entrega ou simples ACK nao substitui leitura e interpretacao; falta de prova bloqueia a mutacao, nao a investigacao segura somente-leitura.
+- **Revisao humana especifica:** quando o proprietario determinar que ele mesmo fara o merge, deixar a branch/PR em revisao, sem auto-merge e sem deploy; continuar os testes, reparos e atividades independentes autorizadas sem fechar a tarefa artificialmente.
+- **Protecoes preservadas:** nenhuma exigencia de continuidade dispensa MFA, RBAC, segredos, aprovacoes externas, branch protection, leases/fencing, custos ou recusas explicitas. Nao criar segundo executor para substituir um controlador existente nem repetir por outra ferramenta uma acao expressamente recusada.
+
+<!-- /TASK_SESSION_CONTINUITY_V1 -->
+
 <!-- EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
 ## Regra obrigatoria: continuidade ate esgotamento comprovado de rotas autorizadas (2026-10-30)
 
@@ -49,6 +71,19 @@ Para cada erro, executar e evidenciar: (1) RED/reproducao observavel e impacto, 
 
 Auditorias extremas, completas, V5 ou de aptidao de qualquer sistema com interface exigem **execucao do proprio agente na UI real publicada**, percorrendo as jornadas e casos aplicaveis de ponta a ponta. Logs, API, SQL, codigo, mocks, simples HTTP 200, screenshot isolado ou execucao somente headless nao substituem interacao visual. Para cada fluxo: entrar na tela real, navegar, acionar controles, observar erros, gravar provas de antes/depois, recarregar/revisitar, confirmar persistencia e reconciliar efeitos. Investigar, corrigir, prevenir e reauditar pela UI apos cada correcao aplicavel. Sem evidencias reais: `NAO_VALIDADO_UI` e nunca `APTO`/`CONCLUIDO`. Proibido esconder UI existente em `browser.required=false` ou `journey.ui=false`; a ausencia real de UI requer inventario negativo documentado e evidencias. Usar hosts, perfis e leases autorizados, sem bypass de MFA ou acoes irreversiveis sem permissao exata. Ver `AGENTS.md`, `AUDIT_POLICY.md` e `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md`.
 <!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+
+<!-- REMOTE_EXHAUSTION_EVIDENCE_V2_20261030 -->
+## Retomada obrigatoria: esgotamento comprovado de rotas (RDC/MCP/tunel)
+
+Para qualquer agente ShopVivaliz (ChatGPT, Codex, Claude, Gemini, controlador e subagentes), `retome`, `continue`, `prossiga` e equivalentes significam executar ate o aceite validado ou impedimento externo comprovado, nao encerrar no primeiro erro, timeout ou diagnostico.
+
+- Inventariar e testar, conforme o host e o runbook, **ShopVivaliz Remote Control MCP e Orquestrador, Remote Desktop Commander (RDC 1 e RDC 2), desktop bridge/RustDesk, SSH privado/Tailscale, tunel documentado e acesso via laptop como ponte**, bem como controles OCI/GitHub de recuperacao autorizados. Rota de aplicacao nao equivale a canal SSH/MCP; comprovar capacidades reais.
+- Nao presumir indisponibilidade: testar identidade, conectividade, autorizacao, escopo da ferramenta, lease/fencing e capacidade da acao. Se uma rota falhar, diagnosticar e corrigir falhas tecnicas permitidas, tentar a proxima rota independente e evitar repetir indefinidamente a mesma tentativa.
+- Antes de anunciar `BLOCKED_EXTERNAL`, registrar por rota: data, host, objetivo, teste, resultado verificavel, motivo de exclusao, proxima acao e evidencias. Quando houver proxima acao executavel, continuar em `RUNNING`.
+- Em rede/impressoras, identificar equipamento por MAC, modelo, interface fisica/Wi-Fi e porta USB antes de alterar IP. Preservar configuracoes que funcionam; validar conectividade, impressao real e estabilidade apos correcao.
+- Nenhuma diretriz autoriza contornar bloqueio explicito de plataforma, MFA, acesso RBAC, aprovacoes, ownership, locks/leases/fencing ou extrair credenciais. Sem permissao, registrar impedimento e usar somente outro caminho legitimamente autorizado.
+- Nunca declarar `APTO` apenas por ping, HTTP 200, API ou logs: exigir teste funcional e, quando houver UI, validacao grafica conforme Auditoria Extrema V5.
+<!-- /REMOTE_EXHAUSTION_EVIDENCE_V2_20261030 -->
 
 <!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
 ## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear

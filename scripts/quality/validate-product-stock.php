@@ -11,6 +11,7 @@ foreach ($rows as $row) {
 }
 $required = ['api/catalog/stock-health.php','api/catalog/products-in-stock.php','api/catalog/stock-by-product.php','js/catalog-stock-integrity-v82.js','js/product-stock-integrity-v83.js','css/stock-integrity-v83.css'];
 $errors = [];
+if ($rows === []) $errors[] = 'empty_catalog_or_missing_cache';
 foreach ($required as $file) if (!is_file(__DIR__ . '/../../' . $file)) $errors[] = "missing: $file";
 if ($negative > 0) $errors[] = "negative stock records: $negative";
 if ($errors) { fwrite(STDERR, implode(PHP_EOL, $errors) . PHP_EOL); exit(1); }

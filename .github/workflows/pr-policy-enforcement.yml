@@ -7,9 +7,18 @@ on:
       - '.github/workflows/history-integrity.yml'
       - 'scripts/maintenance/validate_sanitized_history.py'
       - 'tests/test_ci_latency_contract.py'
+      - 'scripts/pr_completion_scheduler.py'
+      - 'tests/test_pr_completion_scheduler.py'
       - 'scripts/check_pr_completion_policy.py'
+      - 'docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md'
+      - 'scripts/quality/agent_rules_preflight.py'
+      - 'scripts/agent_docs_gate.py'
+      - 'tests/test_agent_docs_gate.py'
+      - 'tests/test_agent_rules_preflight.py'
       - 'scripts/pr_conflict_gemini_healer.py'
       - 'scripts/pr_gate_replay.py'
+      - 'scripts/pr_gate_scope.py'
+      - 'tests/test_pr_gate_scope.py'
       - 'scripts/pr_conflict_vm_heal.sh'
       - 'scripts/merge_green_pr_via_vm.sh'
       - 'tests/test_pr_conflict_gemini_healer.py'
@@ -49,7 +58,9 @@ jobs:
             scripts/pr_gate_replay.py \
             tests/test_pr_conflict_gemini_healer.py \
             tests/test_pr_gate_replay.py \
-            tests/test_ci_latency_contract.py
+            tests/test_ci_latency_contract.py \
+            scripts/pr_completion_scheduler.py \
+            tests/test_pr_completion_scheduler.py
           bash -n scripts/pr_conflict_vm_heal.sh
           bash -n scripts/merge_green_pr_via_vm.sh
 
@@ -63,13 +74,21 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest tests.test_pr_gate_replay -v
+          python3 -m unittest tests.test_pr_gate_replay tests.test_pr_gate_scope -v
 
       - name: Run CI latency regression tests
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest tests.test_ci_latency_contract -v
+          python3 -m unittest tests.test_ci_latency_contract tests.test_pr_completion_scheduler -v
+
+      - name: Verify V5 agent preflight rejects missing and stale rules
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/quality/agent_rules_preflight.py tests/test_agent_rules_preflight.py
+          python3 -m unittest tests.test_agent_rules_preflight -v
+          python3 -m unittest tests.test_agent_docs_gate -v
 
       - name: Verify policy enforcement surfaces
         shell: bash
