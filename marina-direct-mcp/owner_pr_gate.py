@@ -51,6 +51,7 @@ def authorize_owner_pr(
             or not isinstance(merge_sha, str)
             or not SHA40.fullmatch(head_sha)
             or not SHA40.fullmatch(merge_sha)
+            or not isinstance(capability, str)
             or capability not in CAPABILITIES):
         return False, "invalid_pr_or_scope"
 
