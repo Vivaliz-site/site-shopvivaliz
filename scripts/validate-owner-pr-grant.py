@@ -72,6 +72,23 @@ def immutable_grant_still_active(approved_blob: object, current_blob: object) ->
                 and approved_blob.get("path") == current_blob.get("path"))
 
 
+def grant_added_in_reviewed_pr(changed_files: object, path: str, approved_blob: object) -> bool:
+    """A grant must originate in the reviewed PR, not a preexisting main file.
+
+    The API is requested with per_page=100. Refuse a saturated first page
+    rather than silently trusting an incomplete PR diff. The blob at the
+    merged commit must exactly match the file introduced by that PR.
+    """
+    if (not isinstance(changed_files, list) or not 0 < len(changed_files) < 100
+            or not isinstance(approved_blob, dict) or not approved_blob.get("sha")
+            or approved_blob.get("path") != path):
+        return False
+    matches = [f for f in changed_files if isinstance(f, dict) and f.get("filename") == path]
+    return (len(matches) == 1 and matches[0].get("status") == "added"
+            and matches[0].get("sha") == approved_blob["sha"]
+            and not matches[0].get("previous_filename"))
+
+
 def github_json(path: str, token: str) -> object:
     request = Request("https://api.github.com" + path, headers={
         "Accept": "application/vnd.github+json",
@@ -109,13 +126,17 @@ def main() -> int:
         current = github_json(f"/repos/{repo}/contents/{path}?ref=main", token)
         if not immutable_grant_still_active(encoded, current):
             raise ValueError("authorization_revoked_or_replaced")
-        raw = base64.b64decode(encoded["content"].replace("\n", ""), validate=True)
-        grant = json.loads(raw.decode("utf-8"))
-        ok, reason = decide(pr, grant, repository=args.repository,
-                            pr_number=args.pr_number, owner_login=owner,
-                            merge_sha=args.merge_sha, head_sha=args.head_sha,
-                            resource=args.resource, principal=args.principal,
-                            capability=args.capability)
+        changed = github_json(f"/repos/{repo}/pulls/{args.pr_number}/files?per_page=100", token)
+        if not grant_added_in_reviewed_pr(changed, path, encoded):
+            ok, reason = False, "grant_not_added_by_reviewed_pr"
+        else:
+            raw = base64.b64decode(encoded["content"].replace("\n", ""), validate=True)
+            grant = json.loads(raw.decode("utf-8"))
+            ok, reason = decide(pr, grant, repository=args.repository,
+                                pr_number=args.pr_number, owner_login=owner,
+                                merge_sha=args.merge_sha, head_sha=args.head_sha,
+                                resource=args.resource, principal=args.principal,
+                                capability=args.capability)
     except Exception:
         ok, reason = False, "verification_unavailable"
     print(f"OWNER_PR_GRANT={'AUTHORIZED' if ok else 'DENIED'} reason={reason}")
