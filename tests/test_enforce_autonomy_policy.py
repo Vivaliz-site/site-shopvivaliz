@@ -13,6 +13,17 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
     def test_workflow_inventory_name_is_not_stock_sensitive_by_path(self):
         self.assertFalse(policy.sensitive_path('.github/workflows/test-inventory.yml'))
 
+    def test_readonly_stock_validator_is_not_a_commercial_change_by_path(self):
+        path = 'scripts/quality/validate-product-stock.php'
+        self.assertFalse(policy.sensitive_path(path))
+        self.assertTrue(policy.should_scan_content(path))
+
+    def test_actual_stock_mutation_in_readonly_validator_still_requires_approval(self):
+        self.assertTrue(policy.sensitive_content(['update inventory set stock = 5 where sku = "X"']))
+
+    def test_real_stock_code_path_remains_sensitive(self):
+        self.assertTrue(policy.sensitive_path('api/catalog/stock-by-product.php'))
+
     def test_real_inventory_source_path_remains_sensitive(self):
         self.assertTrue(policy.sensitive_path('includes/inventory.php'))
 
