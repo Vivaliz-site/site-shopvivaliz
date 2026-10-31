@@ -143,6 +143,47 @@ t_assert(($quotes[0]['codigo'] ?? '') === '1', 'cotacoes devem ser ordenadas por
 t_assert((float)($quotes[0]['preco'] ?? 0) === 15.50, 'preco de frete incorreto');
 t_assert((int)($quotes[0]['prazo'] ?? -1) === 5, 'prazo de frete incorreto');
 
+
+// Price-only updates must preserve inventory even if ERP /estoque is down.
+$priced = $product;
+$priced['id'] = '350339';
+$priced['precos'] = ['preco' => 1299.00, 'precoPromocional' => 0.0];
+$priced['_erp_base_prices'] = ['preco' => 199.90, 'precoPromocional' => 179.90];
+$priced['_price_source'] = 'olist_tiny_amazon';
+$priced['_price_list_id'] = 991;
+svoei_apply_amazon_price_snapshot($tmp, $priced);
+$afterPrice = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35039');
+t_assert((float)$afterPrice['precos']['preco'] === 1299.0, 'Amazon 991 price snapshot not applied');
+t_assert((int)$afterPrice['estoque_disponivel'] === 11, 'price update must preserve stock');
+t_assert(($afterPrice['_price_list_id'] ?? null) === 991, 'Amazon 991 provenance missing');
+t_assert((float)$afterPrice['_erp_base_prices']['preco'] === 199.90, 'original ERP price not retained');
+
+// Duplicate SKU must be disambiguated by exact ERP product ID.
+$duplicate = $priced;
+$duplicate['id'] = '350340';
+$duplicate['precos'] = ['preco' => 10.0, 'precoPromocional' => 0.0];
+$duplicate['estoque_disponivel'] = 3;
+svoei_upsert_catalog_product($tmp, $duplicate);
+$priced['precos'] = ['preco' => 1400.0, 'precoPromocional' => 0.0];
+svoei_apply_amazon_price_snapshot($tmp, $priced);
+$byId = [];
+foreach (t_items($tmp . '/storage/products-cache-ativos.json') as $candidate) {
+    $byId[(string)($candidate['id'] ?? '')] = $candidate;
+}
+t_assert((float)$byId['350339']['precos']['preco'] === 1400.0, 'exact ERP ID price not applied');
+t_assert((float)$byId['350340']['precos']['preco'] === 10.0, 'duplicate SKU: unrelated price changed');
+t_assert((int)$byId['350340']['estoque_disponivel'] === 3, 'duplicate SKU: unrelated stock changed');
+
+// Price-only new ERP IDs must never invent sellable inventory.
+$new = $priced;
+$new['id'] = '350341';
+$new['sku'] = 'PRICE-ONLY-NEW';
+$new['precos'] = ['preco' => 80.0, 'precoPromocional' => 0.0];
+svoei_apply_amazon_price_snapshot($tmp, $new);
+$newItem = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), 'PRICE-ONLY-NEW');
+t_assert((int)($newItem['estoque_disponivel'] ?? -1) === 0, 'new price-only item must start with zero stock');
+t_assert((float)$newItem['precos']['preco'] === 80.0, 'price-only new item must retain Amazon price');
+
 $iterator = new RecursiveIteratorIterator(
     new RecursiveDirectoryIterator($tmp, FilesystemIterator::SKIP_DOTS),
     RecursiveIteratorIterator::CHILD_FIRST
