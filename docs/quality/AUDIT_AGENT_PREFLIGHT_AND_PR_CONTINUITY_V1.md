@@ -22,5 +22,10 @@ Nota operacional: os checks de **governance** devem usar o bridge absoluto obrig
 - Aplicar gates proporcionais ao mapa de impacto e dependencias indiretas; evitar testes de sistemas sem impacto comprovado. A decisao de exclusao deve ter evidencia.
 - A auditoria da auditoria deve demonstrar falha em casos deliberados: rules_loaded ausente/desatualizado, PR sem owner/next_action, check obrigatorio ausente, conflito, evidencias de outro SHA, tentativa de APTO sem certifier e exclusao indevida de dependencia.
 
+## Politica do proprietario: unica excecao de PR pendente
+- **Somente PRs cujo proposito e formalizar um mecanismo de autorizacao humana** podem permanecer abertas aguardando exclusivamente o ato pessoal do proprietario. Sao Draft/owner-only, sem auto-merge por agentes, e o merge pessoal autenticado exige escopo, SHA e trilha de auditoria. A aprovacao nao suprime controles externos do provedor.
+- **Todas as outras PRs devem ter desfecho efetivo**: corrigir e validar a contribuicao util para integra-la pelo fluxo oficial, ou encerrar com prova individual de redundancia/regressao e rastreio da alternativa ja integrada. CI pendente, conflito, workflow cancelado, draft comum e idade nao tornam uma PR elegivel a ficar indefinidamente aberta; reparar a causa e retomar o mesmo trabalho.
+- Nenhum agente pode reduzir contagens encerrando PRs com alteracoes validas ainda nao portadas. Manter o problema original aberto e registrado ate comprovacao no main/runtime. A fila do finalizador deve inventariar **tambem drafts e labels held** para triagem supervisionada, embora nunca tente merge nelas. Diferenciar excecao de autorizacao de impedimento tecnico, sem bypass de gates/reviews.
+
 ## Estado e certificacao
 Nenhuma alegacao de 100%, zero PRs, APTO ou CONCLUIDO sem inventario atual, evidencia por PR, checks e veredito oficial no SHA/ambiente/escopo real. Bloqueios externos devem conter evidencia de esgotamento de rotas autorizadas, sem bypass.
