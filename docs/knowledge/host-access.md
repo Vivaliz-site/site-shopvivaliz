@@ -43,13 +43,9 @@ Este documento é a referência canônica de **como localizar e acessar os hosts
 
 ## Regra zero
 
-Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
+A leitura deste documento ocorre **após** o `atendimento-chatgpt-bootstrap.md` e **antes** de `docs/knowledge/README.md` e `docs/knowledge/agent-rules.md`, no preflight canônico. A lista de verificação seguinte não substitui essa ordem nem autoriza pular documentação.
 
-1. ler `docs/knowledge/README.md` e `docs/knowledge/agent-rules.md`;
-2. identificar o host correto pelo papel atual;
-3. confirmar o acesso com evidência (`hostname`, `whoami`, diretório e, quando aplicável, `git status`);
-4. nunca assumir que um IP antigo continua sendo produção;
-5. usar o **Remote Control MCP** como rota operacional primaria; recorrer a SSH privado/Tailscale apenas quando a capacidade necessaria nao existir no MCP ou ele estiver comprovadamente indisponivel; RustDesk fica para GUI.
+Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve confirmar o host pelo papel atual, identificar `hostname`/`whoami`/diretório/`git status` quando aplicável, validar permissões e usar Remote Control MCP como rota primária. SSH privado/Tailscale são alternativas somente nas condições permitidas; RustDesk apenas para GUI. Não presumir que IP antigo é produção.
 
 ## Hosts operacionais atuais — verificados em 2026-10-29
 
@@ -254,3 +250,7 @@ A conta `atendimento@shopvivaliz.com.br` possui senha própria já configurada. 
 <!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
 **GUI RustDesk backend:** seguir `docs/knowledge/shopvivaliz-graphical-session-recovery.md`. Login LightDM `:1` nao prova perda de sessao Linux: examinar `loginctl` e o XFCE de `fredconsole/:0`; Chromium corporativo permanece separado em `fredrdp/:99`. Uma troca `loginctl activate c1` precisa ser validada por estabilidade e pela imagem real do RustDesk. Nao redefinir senha nem confundir GUI com sessao ChatGPT autenticada.
 <!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+
+## Git remoto sob a identidade proprietaria (prevencao root/ubuntu)
+
+O transporte `ShopVivaliz Remote Control` pode iniciar comandos administrativos como `root`, mas os worktrees e a autenticacao GitHub pertencem ao usuario `ubuntu`. Nao execute Git inicialmente como root, nao acrescente `safe.directory` global e nao copie credenciais entre identidades. Use `python3 scripts/maintenance/git_as_repo_owner.py --repo /caminho/absoluto/do/worktree -- status --short` para selecionar o proprietario real do worktree e executar Git com esse usuario, preservando seu perfil e autenticacao. O utilitario recusa caminhos que nao sejam raizes de worktrees, repositorios root-owned e chamadores sem permissao. Quando a operacao precisar de `gh`, execute com a identidade autorizada documentada (`runuser -u ubuntu -- gh ...` no backend), verificando permissao antes da escrita. Os testes `tests/test_git_as_repo_owner.py` devem passar no gate. Nunca interpretar `dubious ownership` como falta de acesso ao GitHub.
