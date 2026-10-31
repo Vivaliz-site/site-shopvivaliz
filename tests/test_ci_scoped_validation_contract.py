@@ -81,6 +81,25 @@ class ScopedGateContractTests(unittest.TestCase):
         # Unknown/shared impact still runs the mandatory full regression.
         self.assertIn("bash scripts/repository-governance-validate.sh ci", WORKFLOW.read_text(encoding="utf-8"))
 
+    def test_postmerge_quality_gate_is_limited_to_pr_relevant_paths(self):
+        # Generic CI-only commits must not launch the storefront Quality Gate,
+        # but every previously tested relevant path must remain in the allowlist.
+        import re
+        text = (ROOT / ".github/workflows/quality-gate.yml").read_text(encoding="utf-8")
+        self.assertIn("  push:\n", text)
+        self.assertIn("  pull_request:\n", text)
+        push = text.split("  push:\n", 1)[1].split("  pull_request:\n", 1)[0]
+        pull_request = text.split("  pull_request:\n", 1)[1].split("  workflow_dispatch:\n", 1)[0]
+        pattern = r"(?m)^      - '([^']+)'$"
+        push_paths = re.findall(pattern, push)
+        pull_paths = re.findall(pattern, pull_request)
+        self.assertTrue(push_paths)
+        self.assertEqual(push_paths, pull_paths)
+        self.assertIn("includes/**", push_paths)
+        self.assertIn(".github/workflows/quality-gate.yml", push_paths)
+        self.assertNotIn("AGENTS.md", push_paths)
+        self.assertNotIn(".github/workflows/mandatory-validation-gate.yml", push_paths)
+
     def test_cloudflare_preflight_is_not_removed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Cloudflare admin staging preflight regression (when present)", text)
