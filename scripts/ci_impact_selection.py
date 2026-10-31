@@ -31,6 +31,10 @@ SCOPED = {
         "tests/test_task_resume_dispatcher.py",
         "docs/knowledge/task-continuity.md",
     ),
+    "chatgpt-dispatcher": (
+        "scripts/chatgpt_continuity_nudge_dispatcher.py",
+        "tests/test_chatgpt_continuity_nudge_dispatcher.py",
+    ),
     "mail": (
         "tests/shopvivaliz-mail-legacy-provider-guard-test.py",
         "tests/shopvivaliz-brevo-mailer-contract-test.php",
