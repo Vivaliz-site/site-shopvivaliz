@@ -81,24 +81,22 @@ class ScopedGateContractTests(unittest.TestCase):
         # Unknown/shared impact still runs the mandatory full regression.
         self.assertIn("bash scripts/repository-governance-validate.sh ci", WORKFLOW.read_text(encoding="utf-8"))
 
-    def test_postmerge_quality_gate_is_limited_to_pr_relevant_paths(self):
-        # Generic CI-only commits must not launch the storefront Quality Gate,
-        # but every previously tested relevant path must remain in the allowlist.
-        import re
-        text = (ROOT / ".github/workflows/quality-gate.yml").read_text(encoding="utf-8")
-        self.assertIn("  push:\n", text)
-        self.assertIn("  pull_request:\n", text)
-        push = text.split("  push:\n", 1)[1].split("  pull_request:\n", 1)[0]
-        pull_request = text.split("  pull_request:\n", 1)[1].split("  workflow_dispatch:\n", 1)[0]
-        pattern = r"(?m)^      - '([^']+)'$"
-        push_paths = re.findall(pattern, push)
-        pull_paths = re.findall(pattern, pull_request)
-        self.assertTrue(push_paths)
-        self.assertEqual(push_paths, pull_paths)
-        self.assertIn("includes/**", push_paths)
-        self.assertIn(".github/workflows/quality-gate.yml", push_paths)
-        self.assertNotIn("AGENTS.md", push_paths)
-        self.assertNotIn(".github/workflows/mandatory-validation-gate.yml", push_paths)
+    def test_postmerge_quality_gate_keeps_release_trigger_without_unrelated_pr_gate(self):
+        # Master Production Pipeline is workflow_run-triggered by Quality Gate.
+        # Its main-push event must remain unconditional until a separately
+        # reviewed release trigger replaces that dependency.
+        quality = (ROOT / ".github/workflows/quality-gate.yml").read_text(encoding="utf-8")
+        release = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn("  push:\n", quality)
+        self.assertIn("  pull_request:\n", quality)
+        push = quality.split("  push:\n", 1)[1].split("  pull_request:\n", 1)[0]
+        pull_request = quality.split("  pull_request:\n", 1)[1].split("  workflow_dispatch:\n", 1)[0]
+        self.assertIn("branches: [main, master]", push)
+        self.assertNotIn("    paths:", push)
+        self.assertIn("    paths:", pull_request)
+        self.assertIn("  workflow_run:", release)
+        self.assertIn("workflows: [Quality Gate]", release)
+        self.assertIn("Classify production impact", release)
 
     def test_cloudflare_preflight_is_not_removed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
