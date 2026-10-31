@@ -53,7 +53,7 @@ class PostMergeQaScope(unittest.TestCase):
         policy_pr = policy.split("  push:", 1)[0]
         for name in ("tests/test_pr_gate_scope.py", "tests/test_ci_feedback_optimization.py"):
             with self.subTest(name=name):
-                self.assertNotIn(f"'{{name}}'", continuity_pr)
+                self.assertNotIn(f"'{name}'", continuity_pr)
         self.assertIn("'tests/test_pr_gate_scope.py'", policy_pr)
         self.assertIn("'scripts/pr_gate_scope.py'", policy_pr)
 
