@@ -86,6 +86,19 @@ class OwnerAuthorizationTests(unittest.TestCase):
         grant["capabilities"] = ["file_write", "file_write"]
         self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
+    def test_authorization_replacement_denied(self):
+        original = {"sha": "a" * 40, "path": "security/owner-approvals/123.json"}
+        current = {"sha": "b" * 40, "path": "security/owner-approvals/123.json"}
+        self.assertFalse(grant_module.immutable_grant_still_active(original, current))
+
+    def test_authorization_removal_denied(self):
+        original = {"sha": "a" * 40, "path": "security/owner-approvals/123.json"}
+        self.assertFalse(grant_module.immutable_grant_still_active(original, None))
+
+    def test_unchanged_authorization_can_be_checked(self):
+        original = {"sha": "a" * 40, "path": "security/owner-approvals/123.json"}
+        self.assertTrue(grant_module.immutable_grant_still_active(original, dict(original)))
+
     def test_case_insensitive_owner_match(self):
         pr, grant, opts = fixture()
         opts["owner_login"] = "Verified-Owner"
