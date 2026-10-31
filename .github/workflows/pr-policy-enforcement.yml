@@ -65,7 +65,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest tests.test_pr_gate_replay -v
+          python3 -m unittest tests.test_pr_gate_replay tests.test_pr_gate_scope -v
 
       - name: Run CI latency regression tests
         shell: bash
