@@ -55,6 +55,21 @@ class OnlyRelevantGatesTest(unittest.TestCase):
             self.assertIn("scripts/chatgpt_continuity_nudge_dispatcher.py", paths)
             self.assertIn("docs/knowledge/task-continuity.md", paths)
 
+    def test_all_specialized_pr_workflows_are_diff_scoped(self):
+        # Global security gates are intentionally invoked for every PR.
+        always_required = {"mandatory-validation-gate.yml", "repository-governance.yml"}
+        unfiltered = []
+        for path in sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml")):
+            source = path.read_text(encoding="utf-8")
+            event = re.search(r"(?m)^  pull_request:\\s*(?:#.*)?$", source)
+            if event is None:
+                continue
+            end = re.search(r"(?m)^  [a-z_]+:", source[event.end():])
+            body = source[event.end():event.end() + end.start() if end else len(source)]
+            if not re.search(r"(?m)^    paths(?:-ignore)?:\\s*(?:\\[|$)", body):
+                unfiltered.append(path.name)
+        self.assertEqual(sorted(unfiltered), sorted(always_required))
+
     def test_general_agent_policy_still_has_fail_closed_required_gates(self):
         mandatory = (WORKFLOWS / "mandatory-validation-gate.yml").read_text()
         repository = (WORKFLOWS / "repository-governance.yml").read_text()
