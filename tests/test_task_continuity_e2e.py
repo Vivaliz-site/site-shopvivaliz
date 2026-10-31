@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -420,7 +421,7 @@ class DurableHandoffDisconnectE2ETest(unittest.TestCase):
                 "verification": None,
                 "blocker": None,
                 "conversation_id": conversation_id,
-                "browser_session": "fred",
+                "browser_session": "dev",
                 "checkpoint_version": 7,
                 "created_at": now,
                 "updated_at": now,
@@ -460,7 +461,12 @@ p=runtime/f'{task_id}.json'; state=json.loads(p.read_text()); state['next_action
             os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
             os.environ["CAPTURE_PATH"] = str(capture)
             try:
-                result = dispatcher.run_once(runtime_dir=runtime, project_dir=project, executor=[sys.executable, str(executor)], timeout_seconds=30, max_requests=1)
+                with mock.patch.object(dispatcher, "_bound_session_authenticated", return_value=True) as auth_probe:
+                    result = dispatcher.run_once(
+                        runtime_dir=runtime, project_dir=project,
+                        executor=[sys.executable, str(executor)], timeout_seconds=30, max_requests=1,
+                    )
+                    auth_probe.assert_called_once_with("dev")
             finally:
                 for key, value in old.items():
                     if value is None: os.environ.pop(key, None)

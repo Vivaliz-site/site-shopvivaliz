@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -93,6 +94,43 @@ def _safe_repository(value: str) -> str:
 
 def _durable_handoff_enabled() -> bool:
     return os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip() == "1"
+
+
+CORPORATE_AUTH_PROBE_MODULE = Path("/opt/shopvivaliz-remote-control-browser/server.py")
+
+
+def _bound_session_authenticated(session: str) -> bool:
+    """Verify the bound corporate profile before acquiring any recovery lease.
+
+    Aggregate controller browser health may reflect Dev while Atendimento is
+    logged out. The read-only probe checks the exact isolated CDP profile.
+    A historic 'fred' binding must not impersonate either corporate account.
+    The worker still verifies conversation provenance after ownership.
+    """
+    if session not in {"dev", "atendimento"}:
+        return False
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "shopvivaliz_corporate_auth_preclaim", CORPORATE_AUTH_PROBE_MODULE,
+        )
+        if spec is None or spec.loader is None:
+            return False
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        status = module.browser_auth_status({"session": session})
+        return bool(
+            isinstance(status, dict)
+            and status.get("ok") is True
+            and status.get("session") == session
+            and status.get("state") == "AUTHENTICATED"
+            and status.get("identity_match") is True
+            and status.get("cdp_accessible") is True
+            and status.get("user_present") is True
+            and status.get("session_http") == 200
+        )
+    except Exception:
+        # An unavailable/unverified profile is not proof of login.
+        return False
 
 
 def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any]) -> dict[str, Any] | None:
@@ -764,6 +802,7 @@ def run_once(
         "deferred_browser_probe": 0,
         "deferred_unbound": 0,
         "deferred_unbound_session": 0,
+        "deferred_bound_session_auth": 0,
         "deferred_ownership_busy": 0,
         "generated_at": utc_now(),
     }
@@ -828,6 +867,11 @@ def run_once(
                 continue
             if _durable_handoff_enabled() and str(state.get("browser_session", "")).strip() not in {"fred", "atendimento", "dev"}:
                 summary["deferred_unbound_session"] += 1
+                continue
+            if _durable_handoff_enabled() and not _bound_session_authenticated(str(state.get("browser_session", "")).strip()):
+                # Do not create RECOVERY_CLAIMED for logged-out or unknown
+                # profiles; this must precede conversation/runtime fencing.
+                summary["deferred_bound_session_auth"] += 1
                 continue
 
             try:
