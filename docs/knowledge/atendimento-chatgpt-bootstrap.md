@@ -1,3 +1,7 @@
+<!-- TWO_VM_TOPOLOGY_GATE_20261031 -->
+> **Topologia operacional obrigatoria (confirmacao do proprietario em 2026-10-31): existem somente DUAS VMs OCI em operacao.** `marina-a1-4c24g` (conta ESPOSA/Marina) hospeda web, deploy, banco e workers; `always-free-arm-1787907847-26` (conta PRINCIPAL) hospeda backend, MCP central, controller, browser de agentes e integracoes. **`shopvivaliz-free-a1` foi encerrada: host RETIRADO, nao consultar, procurar, reconectar, restaurar, monitorar, acionar por workflow, nem recriar.** Referencias abaixo a essa VM, a seus IPs, a `hosts_list` antigos ou a allowlists antigas sao **historicas e nao autorizam nenhuma operacao**. Nao mapear o alias antigo para Marina. A confirmacao de encerramento e do proprietario; nao constitui verificacao independente de lifecycle OCI. Nao confundir as duas VMs com PCs de apoio Fred-Win/KOCEPSV. Antes de qualquer operacao, verificar identidade, permissoes, leases e rota autorizada do host vigente.
+<!-- /TWO_VM_TOPOLOGY_GATE_20261031 -->
+
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 ## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
 
