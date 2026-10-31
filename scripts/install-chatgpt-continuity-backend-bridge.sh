@@ -14,8 +14,8 @@ legacy_browser_healthcheck_script='/usr/local/sbin/shopvivaliz-browser-healthche
 legacy_continuity_atendimento_override="$HOME/.config/systemd/user/$unit.d/90-atendimento-cdp.conf"
 legacy_guardian_atendimento_override="/etc/systemd/system/$browser_guardian_service.d/90-atendimento-browser.conf"
 tunnel_key="${CHATGPT_CONTINUITY_TUNNEL_KEY:-/home/ubuntu/.ssh/oci-marina-a1-2026}"
-tunnel_host="${CHATGPT_CONTINUITY_TUNNEL_HOST:-137.131.173.240}"
-tunnel_known_hosts="${CHATGPT_CONTINUITY_TUNNEL_KNOWN_HOSTS:-/home/ubuntu/.ssh/known_hosts.old}"
+tunnel_host="${CHATGPT_CONTINUITY_TUNNEL_HOST:-100.118.170.46}"
+tunnel_known_hosts="${CHATGPT_CONTINUITY_TUNNEL_KNOWN_HOSTS:-/home/ubuntu/.ssh/known_hosts_marina_verified}"
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 worker_source="${CHATGPT_CONTINUITY_WORKER_SOURCE:-$script_dir/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
@@ -129,7 +129,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$ssh_bin -NT -i $tunnel_key -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$tunnel_known_hosts -L 127.0.0.1:18081:127.0.0.1:8080 ubuntu@$tunnel_host
+ExecStart=$ssh_bin -NT -i $tunnel_key -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$tunnel_known_hosts -L 127.0.0.1:18081:127.0.0.1:8080 ubuntu@$tunnel_host
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
