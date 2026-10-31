@@ -20,7 +20,8 @@ TIME = datetime(2026, 10, 31, tzinfo=timezone.utc)
 def fixture():
     pr = {"merged": True, "state": "closed", "number": 123,
           "merged_by": {"login": "verified-owner"}, "merge_commit_sha": MERGE,
-          "head": {"sha": HEAD}, "base": {"ref": "main", "repo": {"full_name": REPO}}}
+          "head": {"sha": HEAD}, "base": {"ref": "main", "repo": {"full_name": REPO}},
+          "auto_merge": None}
     grant = {"schema": grant_module.SCHEMA, "repository": REPO, "pr_number": 123,
              "resource": "mcp:marina", "principal": "marina-mcp-service",
              "capabilities": ["file_write", "deployment_manage"],
@@ -35,6 +36,25 @@ class OwnerAuthorizationTests(unittest.TestCase):
     def test_owner_merged_exact_scope_is_accepted(self):
         pr, grant, opts = fixture()
         self.assertEqual((True, "owner_authorization_verified"), grant_module.decide(pr, grant, **opts))
+
+    def test_auto_merge_enabled_by_owner_is_not_human_only_grant(self):
+        pr, grant, opts = fixture()
+        pr["auto_merge"] = {
+            "merge_method": "squash",
+            "enabled_by": {"login": "verified-owner"},
+        }
+        self.assertEqual(
+            (False, "owner_only_merge_not_proven_manual"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_missing_auto_merge_metadata_fails_closed(self):
+        pr, grant, opts = fixture()
+        pr.pop("auto_merge")
+        self.assertEqual(
+            (False, "owner_only_merge_not_proven_manual"),
+            grant_module.decide(pr, grant, **opts),
+        )
 
     def test_unmerged_pr_denied(self):
         pr, grant, opts = fixture()
@@ -214,6 +234,19 @@ class GrantOriginBindingTests(unittest.TestCase):
         files.append({"filename": path, "status": "added", "sha": "c" * 40})
         self.assertTrue(grant_module.grant_added_in_reviewed_pr(
             files, path, {"path": path, "sha": "c" * 40}))
+
+
+# The existing Absolute Audit Governance workflow invokes this security suite.
+# Reuse it to exercise every Marina adapter negative test without changing
+# protected workflow YAML or enabling any runtime tool/permission.
+MARINA_GATE_TEST_PATH = Path(__file__).resolve().parent / "test_marina_owner_pr_gate.py"
+MARINA_GATE_SPEC = importlib.util.spec_from_file_location(
+    "marina_owner_pr_security_tests", MARINA_GATE_TEST_PATH
+)
+assert MARINA_GATE_SPEC and MARINA_GATE_SPEC.loader
+marina_gate_tests = importlib.util.module_from_spec(MARINA_GATE_SPEC)
+MARINA_GATE_SPEC.loader.exec_module(marina_gate_tests)
+MarinaOwnerPrGateTests = marina_gate_tests.OwnerPrGateTests
 
 
 if __name__ == "__main__":
