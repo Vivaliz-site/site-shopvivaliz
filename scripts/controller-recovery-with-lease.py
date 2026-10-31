@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +28,15 @@ def promote(
     runtime: Any,
     run: Any = subprocess.run,
     repo: Path = CONTROLLER_REPO,
+    lock_wait_seconds: float = 0,
+    monotonic: Any = time.monotonic,
+    sleep: Any = time.sleep,
 ) -> dict[str, Any]:
     """Fail closed on another writer or on a stale GitHub main commit."""
     if not SHA_PATTERN.fullmatch(expected_sha):
         raise ValueError("invalid_expected_sha")
+    if not 0 <= lock_wait_seconds <= 180:
+        raise ValueError("lock_wait_seconds_out_of_range")
     release_dir = Path(release_dir)
     if not release_dir.is_absolute():
         raise ValueError("release_dir_must_be_absolute")
@@ -38,12 +44,26 @@ def promote(
     if not installer.is_file():
         raise ValueError("canonical_controller_installer_missing")
 
-    lease = runtime.acquire_runtime_lock(
-        "maintenance",
-        "github-actions-controller:" + expected_sha,
-        1080,
-        ["controller_promote"],
-    )
+    # Wait briefly for a legitimate writer to finish. Never release, extend,
+    # replace or steal another owner's lease; the runtime lock performs the
+    # final atomic acquisition and fencing check.
+    deadline = monotonic() + lock_wait_seconds
+    while True:
+        try:
+            lease = runtime.acquire_runtime_lock(
+                "maintenance",
+                "github-actions-controller:" + expected_sha,
+                1080,
+                ["controller_promote"],
+            )
+            break
+        except runtime.RuntimeLockConflict as exc:
+            if str(exc) != "runtime lock already held":
+                raise
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise
+            sleep(min(5.0, remaining))
     try:
         runtime.assert_runtime_lock(
             lease["lease_id"], lease["fencing_token"], "controller_promote"
@@ -103,7 +123,9 @@ def main() -> int:
     import runtime_lock
 
     try:
-        result = promote(Path(sys.argv[1]), sys.argv[2], runtime=runtime_lock)
+        # Bounded wait on existing legitimate browser/recovery writers; the
+        # workflow still exits nonzero when contention persists.
+        result = promote(Path(sys.argv[1]), sys.argv[2], runtime=runtime_lock, lock_wait_seconds=120)
     except Exception as exc:
         # No lease IDs, fencing tokens, API credentials or OTP are logged.
         print("CONTROLLER_RECOVERY=FAILED:" + type(exc).__name__, file=sys.stderr)
