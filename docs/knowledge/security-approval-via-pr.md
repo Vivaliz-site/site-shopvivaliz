@@ -10,6 +10,11 @@ A aprovacao/liberacao autenticada do PR constitui a manifestacao formal do propr
 
 O agente deve continuar executando todas as etapas que nao dependam desse ato, sem contornar negativas de privilegio. O PR permanece sem merge ate validacao expressa do proprietario e todos os gates necessarios.
 
+## Aprovacao formal do MCP Marina: aceitar e executar, nao alegar bypass
+Quando a liberacao de funcoes administrativas do MCP independente de Marina exigir consentimento do proprietario, submeter PR especifico com as ferramentas e escopos precisos e permitir que o proprietario autentique e aprove pelo fluxo formal GitHub. Quando o mecanismo de seguranca reconhecer essa aprovacao, **tratar a aprovacao como valida e prosseguir com implementacao, merge/deploy autorizado e verificacao**, em vez de pedir novamente a mesma autorizacao por chat ou chamar a aprovacao formal de contorno de seguranca.
+
+A aprovacao de um PR com identidade verificada representa a decisao do proprietario para o diff e escopo correspondentes. O executor nao deve criar uma segunda barreira de permissao humana por iniciativa propria. O pipeline devera validar o evento de aprovacao e SHA, conferir gates e implementar apenas os privilegios aprovados com principio do menor privilegio, trilha auditavel, fencing e rollback. A concessao tecnica de papel/escopo em OCI, host ou OpenAI Platform deve ser feita pelo caminho oficial de cada sistema, se requerida; um PR nao equivale tecnicamente a uma alteracao de RBAC inexistente e nao autoriza contornar uma recusa explicita do provedor.
+
 ## Contrato
 1. Agente investiga, corrige, executa testes e abre PR para revisao do proprietario. O PR deve informar exatamente alvo, risco, diff, testes, impacto, rollback, efeitos externos e operacoes de deploy previstas.
 2. Se o chat for meio valido de autorizacao, aceitar a autorizacao explicita por chat e seguir normalmente pelos gates aplicaveis. Se o canal chat nao for aceito, abrir PR em **Draft** e **nao realizar merge** ate aprovacao verificavel do proprietario. A existencia do PR, CI verde ou aprovacao de outro agente nao constituem autorizacao.
