@@ -223,6 +223,21 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("cdp_ready", body)
         self.assertIn("CDP endpoint did not become ready", body)
 
+    def test_canonical_continuity_repair_requires_verified_private_marina_route(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        action = workflow.split("            chatgpt_continuity_repair)", 1)[1].split("            chatgpt_continuity_diagnostic)", 1)[0]
+        self.assertIn('test "$(hostname -s)" = "always-free-arm-1787907847-26"', action)
+        self.assertIn("/home/ubuntu/.ssh/oci-marina-a1-2026", action)
+        self.assertIn("/home/ubuntu/.ssh/known_hosts_marina_verified", action)
+        self.assertIn("-o BatchMode=yes", action)
+        self.assertIn("-o StrictHostKeyChecking=yes", action)
+        self.assertIn('-o UserKnownHostsFile="$marina_private_known_hosts"', action)
+        self.assertIn("-o ConnectTimeout=10", action)
+        self.assertIn("ubuntu@100.118.170.46", action)
+        self.assertIn('"${MARINA_SSH[@]}"', action)
+        for forbidden in ("137.131.173.240", "$MARINA_PUBLIC_IP", '"$MARINA_VM_KEY"', '"$MARINA_VM_KNOWN_HOSTS"'):
+            self.assertNotIn(forbidden, action, f"unexpected legacy/public bootstrap: {forbidden}")
+
     def test_remote_workflows_copy_canonical_browser_unit(self) -> None:
         for rel in [
             ".github/workflows/shopvivaliz-remote-access.yml",
