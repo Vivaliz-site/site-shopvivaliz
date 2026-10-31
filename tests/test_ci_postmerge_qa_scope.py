@@ -46,6 +46,16 @@ class PostMergeQaScope(unittest.TestCase):
                 self.assertTrue(any(fnmatchcase(path, pattern) for pattern in paths))
                 self.assertIn("ShopVivaliz QA", scope.required_specialized_gates([path]))
 
+    def test_scope_regressions_are_enforced_by_relevant_workflows(self):
+        qa = WF.read_text(encoding="utf-8")
+        self.assertIn("tests.test_ci_postmerge_qa_scope", qa)
+        self.assertIn("tests.test_ci_relevant_specialized_gates", qa)
+        self.assertIn("'tests/test_ci_postmerge_qa_scope.py'", qa)
+        policy = (ROOT / ".github" / "workflows" / "pr-policy-enforcement.yml").read_text(encoding="utf-8")
+        self.assertIn("tests.test_pr_gate_replay tests.test_pr_gate_scope", policy)
+        self.assertIn("'scripts/pr_gate_scope.py'", policy)
+        self.assertIn("'tests/test_pr_gate_scope.py'", policy)
+
     def test_generic_pr_mapping_tests_do_not_trigger_continuity_worker(self):
         continuity = (ROOT / ".github" / "workflows" / "task-continuity-fast-gate.yml").read_text(encoding="utf-8")
         continuity_pr = continuity.split("  push:", 1)[0]
