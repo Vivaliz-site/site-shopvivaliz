@@ -20,6 +20,8 @@
   let activeCategory = initialCategory;
   let activeSort = initialSort;
   let searchTimer;
+  let catalogRequestSequence = 0;
+  let catalogAbortController = null;
 
   function esc(value) {
     return String(value || '').replace(/[&<>"']/g, function (char) {
@@ -284,6 +286,10 @@
 
   async function loadCatalog(query, category, page) {
     if (!grid || !status) return;
+    const requestSequence = ++catalogRequestSequence;
+    if (catalogAbortController) catalogAbortController.abort();
+    const controller = new AbortController();
+    catalogAbortController = controller;
     activeCategory = String(category || '').trim();
     syncPageState(query, activeCategory, activeSort, Number(page || 1), Number(page || 1) === 1);
     status.textContent = 'Preparando as melhores opções para você...';
@@ -313,8 +319,9 @@
       + (query ? '&q=' + encodeURIComponent(query) : '')
       + (activeCategory ? '&category=' + encodeURIComponent(activeCategory) : '');
     try {
-      const response = await fetch(url, { cache: 'no-store' });
+      const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
       const data = await response.json();
+      if (requestSequence !== catalogRequestSequence) return;
       if (!response.ok || data.ok === false) throw new Error(data.error || 'catalog_error');
       const products = Array.isArray(data.products) ? data.products : [];
       if (!products.length) {
@@ -337,11 +344,14 @@
       bindBuyButtons(grid);
       renderGridPage(Number(page || 1));
     } catch (error) {
+      if (requestSequence !== catalogRequestSequence || (error && error.name === 'AbortError')) return;
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
       grid.innerHTML = '';
       setCount(0);
       gridTotalPages = 1;
       gridTotalProducts = 0;
+    } finally {
+      if (requestSequence === catalogRequestSequence) catalogAbortController = null;
     }
   }
 

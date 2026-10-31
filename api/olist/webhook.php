@@ -59,8 +59,11 @@ try {
             exit;
 
         case 'precos':
+            // ERP product ID wins over SKU: multiple active product IDs can
+            // share a SKU with different Amazon-list prices (issue #3271).
+            $productId = svoei_first_text([$data['idProduto'] ?? '', $data['id'] ?? '']);
             $erpSku = svoei_first_text([$data['codigo'] ?? '', $data['sku'] ?? '', $data['skuMapeamento'] ?? '']);
-            $product = svoei_refresh_product_from_v3($root, '', $erpSku);
+            $product = svoei_refresh_product_from_v3($root, $productId, $erpSku);
             svoei_log($root, 'price_synced', ['tipo' => $tipo, 'sku' => (string)($product['sku'] ?? $erpSku)]);
             svoei_response(200, ['ok' => true, 'tipo' => $tipo, 'sku' => (string)($product['sku'] ?? $erpSku)]);
 

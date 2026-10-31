@@ -41,7 +41,12 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
     for attachment in item.get("anexos", []) if isinstance(item.get("anexos"), list) else []:
         if isinstance(attachment, dict) and str(attachment.get("url", "")).startswith("https://"):
             attachments.append({"url": str(attachment["url"])})
-    quantity = max(0, int(item.get("estoque_disponivel") or stock.get("quantidade") or 0))
+    # Numeric zero is a valid authoritative ERP available-stock value.
+    # Never fall back to the gross physical quantity when available is 0.
+    source_quantity = (item["estoque_disponivel"]
+                       if item.get("estoque_disponivel") is not None
+                       else stock.get("quantidade", 0))
+    quantity = max(0, int(source_quantity or 0))
     kit_composition = []
     for component in item.get("kit", []) if isinstance(item.get("kit"), list) else []:
         if not isinstance(component, dict):
@@ -315,51 +320,80 @@ def detail_cache_is_fresh(cached: dict[str, Any], current_marker: str, now: date
     return age <= DETAIL_CACHE_MAX_AGE_SECONDS
 
 
+def authoritative_stock_quantity(stock_detail: dict[str, Any]) -> int:
+    """Only the ERP /estoque/{id}.disponivel field is sellable inventory.
+
+    A gross 'saldo' can include reserved units; using it can oversell stock.
+    Unavailable or malformed authoritative data must fail closed.
+    """
+    if not isinstance(stock_detail, dict) or "disponivel" not in stock_detail:
+        raise RuntimeError("erp_sellable_stock_unavailable")
+    value = stock_detail["disponivel"]
+    if isinstance(value, bool):
+        raise RuntimeError("erp_sellable_stock_invalid")
+    try:
+        quantity = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise RuntimeError("erp_sellable_stock_invalid") from None
+    if not quantity.is_finite():
+        raise RuntimeError("erp_sellable_stock_invalid")
+    # Negative quantities are valid ERP responses for oversold/reserved
+    # products. There are zero units available to sell, not an API failure.
+    return max(0, int(quantity))
+
+
 def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 4) -> tuple[list[dict[str, Any]], int]:
     previous = load_previous_cache()
     enriched: dict[str, dict[str, Any]] = {}
     failures = 0
     pending: list[dict[str, Any]] = []
+    reusable_count = 0
 
     for summary in summaries:
         product_id = str(summary.get("id", ""))
         if not product_id:
             failures += 1
             continue
-        cached = previous.get(product_id)
-        current_marker = str(summary.get("dataAlteracao") or "").strip()
-        if (isinstance(cached, dict) and isinstance(cached.get("_erp_base_prices"), dict)
-            and detail_cache_is_fresh(cached, current_marker)):
-            enriched[product_id] = dict(cached)
-            continue
         pending.append(summary)
+        cached = previous.get(product_id)
+        marker = str(summary.get("dataAlteracao") or "").strip()
+        if (isinstance(cached, dict) and isinstance(cached.get("_erp_base_prices"), dict)
+            and detail_cache_is_fresh(cached, marker)):
+            reusable_count += 1
 
-    reused = len(summaries) - len(pending) - failures
-    if reused:
-        print(f"[+] Detalhes reaproveitados do cache: {reused}; pendentes={len(pending)}")
+    if reusable_count:
+        print(f"[+] Detalhes reutilizaveis: {reusable_count}; estoque sera consultado no ERP para todos")
 
     def fetch(summary: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         product_id = str(summary.get("id", ""))
         if not product_id:
             raise RuntimeError("product_id_missing")
-        detail = api_get(f"produtos/{product_id}", token)
-        merged = dict(summary)
-        merged.update(detail)
-        stock = merged.get("estoque") if isinstance(merged.get("estoque"), dict) else {}
-        quantity = max(0, int(stock.get("quantidade") or 0))
-        try:
-            stock_detail = api_get(f"estoque/{product_id}", token, attempts=2)
-            if "disponivel" in stock_detail:
-                quantity = max(0, int(stock_detail.get("disponivel") or 0))
-        except RuntimeError:
-            pass
+        cached = previous.get(product_id)
+        current_marker = str(summary.get("dataAlteracao") or "").strip()
+        reuse_detail = (isinstance(cached, dict) and isinstance(cached.get("_erp_base_prices"), dict)
+                        and detail_cache_is_fresh(cached, current_marker))
 
-        merged["estoque_disponivel"] = quantity
-        marker = str(summary.get("dataAlteracao") or merged.get("dataAlteracao") or "").strip()
-        if marker:
-            merged["_olist_updated_at"] = marker
-        merged["_detail_synced_at"] = datetime.now(timezone.utc).isoformat()
-        return product_id, public_product(merged)
+        if reuse_detail:
+            product = dict(cached)
+        else:
+            detail = api_get(f"produtos/{product_id}", token)
+            merged = dict(summary)
+            merged.update(detail)
+            product = public_product(merged)
+            marker = str(summary.get("dataAlteracao") or merged.get("dataAlteracao") or "").strip()
+            if marker:
+                product["_olist_updated_at"] = marker
+            product["_detail_synced_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Even if product registration/price has not changed, a new reservation
+        # can change available stock. Never reuse inventory for two hours.
+        stock_detail = api_get(f"estoque/{product_id}", token, attempts=2)
+        quantity = authoritative_stock_quantity(stock_detail)
+        product["estoque_disponivel"] = quantity
+        product["estoque"] = {"quantidade": quantity}
+        product["_stock_synced_at"] = datetime.now(timezone.utc).isoformat()
+        product.pop("_stock_sync_status", None)
+        return product_id, product
 
     if pending:
         with ThreadPoolExecutor(max_workers=max(1, min(workers, 8))) as executor:
@@ -374,12 +408,18 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
                     failures += 1
                     cached = previous.get(product_id)
                     if isinstance(cached, dict):
-                        enriched[product_id] = dict(cached)
-                        print(f"[!] Detalhe {product_id} falhou; cache anterior preservado ({type(exc).__name__})")
+                        # Keep the previous verified Amazon price/identity but
+                        # fail CLOSED for commerce: unknown sellable stock = 0.
+                        fallback = dict(cached)
+                        fallback["estoque_disponivel"] = 0
+                        fallback["estoque"] = {"quantidade": 0}
+                        fallback["_stock_sync_status"] = "unavailable"
+                        enriched[product_id] = fallback
+                        print(f"[!] Estoque {product_id} indisponivel; venda bloqueada ({type(exc).__name__})")
                     else:
-                        print(f"[!] Produto novo {product_id} adiado apos falha de detalhe ({type(exc).__name__})")
+                        print(f"[!] Produto novo {product_id} adiado sem estoque autoritativo ({type(exc).__name__})")
                 if index % 25 == 0 or index == len(pending):
-                    print(f"[+] Detalhes processados: {index}/{len(pending)}; falhas={failures}")
+                    print(f"[+] Produtos com estoque ERP verificado: {index}/{len(pending)}; falhas={failures}")
 
     ordered = [enriched[str(item.get("id", ""))] for item in summaries if str(item.get("id", "")) in enriched]
     return ordered, failures
@@ -392,11 +432,15 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
     dos kits como o minimo, entre os componentes, de estoque_do_componente
     dividido pela quantidade exigida por kit.
     """
-    stock_by_sku = {
-        str(item.get("sku") or ""): int(item.get("estoque_disponivel") or 0)
-        for item in products
-        if item.get("sku")
-    }
+    stock_by_sku: dict[str, int] = {}
+    for item in products:
+        sku = str(item.get("sku") or "").strip()
+        if not sku:
+            continue
+        stock = max(0, int(item.get("estoque_disponivel") or 0))
+        # Duplicate SKUs are ambiguous in kits; using the last row can
+        # overstate stock if another product ID is already out of stock.
+        stock_by_sku[sku] = min(stock_by_sku[sku], stock) if sku in stock_by_sku else stock
     updated = 0
     for item in products:
         if item.get("tipo") != "K":

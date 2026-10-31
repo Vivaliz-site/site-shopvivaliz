@@ -36,12 +36,16 @@ jobs:
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+          # Backend ED25519 key verified independently by MCP and Tailscale probe on 2026-10-30.
+          # Use a dedicated pinned known-hosts file; fail closed on a backend key change.
+          printf '%s\n' '100.66.174.74 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMB4WoE2zIDGh8n1OdlgNpTJuYzzln/qHiX6wUAyqnRL' > "$HOME/.ssh/shopvivaliz_backend_known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_backend_known_hosts"
 
       - name: Provision allowlisted repo runners on backend
         shell: bash
         run: |
           set -Eeuo pipefail
-          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
+          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/shopvivaliz_backend_known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@100.66.174.74)
           remote_script="/tmp/install-governed-repo-runner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/install-governed-repo-runner.sh
           "${SSH[@]}" "REMOTE_SCRIPT='$remote_script' bash -s" <<'REMOTE'
@@ -88,4 +92,4 @@ jobs:
       - name: Cleanup SSH material
         if: always()
         shell: bash
-        run: rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+        run: rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts" "$HOME/.ssh/shopvivaliz_backend_known_hosts"

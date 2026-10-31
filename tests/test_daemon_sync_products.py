@@ -9,32 +9,47 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(daemon)
 
 
-def test_enrich_products_uses_detail_stock_and_attachments(monkeypatch):
+def test_enrich_products_uses_authoritative_availability_and_detail_attachments(monkeypatch):
     monkeypatch.setattr(daemon, "load_previous_cache", lambda: {})
-    monkeypatch.setattr(
-        daemon,
-        "api_get",
-        lambda path, token, **kwargs: {
-            "id": 10,
-            "sku": "SKU-10",
-            "situacao": "A",
-            "estoque": {"quantidade": 7},
-            "anexos": [{"url": "https://cdn.example.test/image.jpg"}],
-        },
-    )
+    calls = []
+
+    def api(path, token, **kwargs):
+        calls.append(path)
+        if path == "produtos/10":
+            return {
+                "id": 10, "sku": "SKU-10", "situacao": "A",
+                "estoque": {"quantidade": 7},
+                "anexos": [{"url": "https://cdn.example.test/image.jpg"}],
+            }
+        if path == "estoque/10":
+            return {"saldo": 7, "reservado": 2, "disponivel": 5}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(daemon, "api_get", api)
     products, failures = daemon.enrich_products([{"id": 10, "situacao": "A"}], "token", workers=1)
     assert failures == 0
-    assert products[0]["estoque_disponivel"] == 7
+    assert calls == ["produtos/10", "estoque/10"]
+    assert products[0]["estoque_disponivel"] == 5
     assert products[0]["anexos"][0]["url"].startswith("https://")
 
 
-def test_enrich_products_preserves_previous_detail_on_failure(monkeypatch):
-    previous = {"10": {"id": 10, "sku": "SKU-10", "estoque_disponivel": 4}}
+def test_enrich_products_preserves_metadata_but_blocks_sales_when_availability_fails(monkeypatch):
+    previous = {"10": {"id": 10, "sku": "SKU-10", "estoque_disponivel": 4,
+                       "precos": {"preco": 25.0},
+                       "anexos": [{"url": "https://cdn.example.test/image.jpg"}]}}
     monkeypatch.setattr(daemon, "load_previous_cache", lambda: previous)
-    monkeypatch.setattr(daemon, "api_get", lambda path, token: (_ for _ in ()).throw(RuntimeError("offline")))
+
+    def offline(path, token, **kwargs):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(daemon, "api_get", offline)
     products, failures = daemon.enrich_products([{"id": 10, "situacao": "A"}], "token", workers=1)
     assert failures == 1
-    assert products[0]["estoque_disponivel"] == 4
+    assert products[0]["estoque_disponivel"] == 0
+    assert products[0]["_stock_sync_status"] == "unavailable"
+    assert products[0]["sku"] == "SKU-10"
+    assert products[0]["precos"] == previous["10"]["precos"]
+    assert products[0]["anexos"] == previous["10"]["anexos"]
 
 
 def test_public_product_removes_internal_cost_and_supplier_data():

@@ -251,10 +251,10 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
         <h2 class="checkout-title">Resumo</h2>
         <div id="cart-items" class="summary-items"></div>
 
-        <div class="sv-coupon-box" style="display:flex; gap:8px; margin:14px 0;">
-            <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1; text-transform:uppercase;" aria-label="Código do cupom de desconto">
-            <button type="button" id="coupon-apply-btn" class="btn btn-secondary">Aplicar</button>
-            <button type="button" id="coupon-remove-btn" class="btn btn-secondary" hidden>Remover</button>
+        <div class="sv-coupon-box" style="display:flex; flex-wrap:wrap; gap:8px; margin:14px 0;">
+            <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1 1 100%; min-width:0; min-height:44px!important; font-size:16px; text-transform:uppercase;" aria-label="Código do cupom de desconto">
+            <button type="button" id="coupon-apply-btn" class="btn btn-secondary" style="flex:1; min-height:44px!important;">Aplicar</button>
+            <button type="button" id="coupon-remove-btn" class="btn btn-secondary" style="flex:1; min-height:44px!important;" hidden>Remover</button>
         </div>
         <div id="coupon-status" class="sv-checkout-note" hidden></div>
 
@@ -650,7 +650,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                 if (city && d.localidade) city.value = d.localidade;
                 if (state && d.uf) state.value = d.uf;
                 var number = document.getElementById('street-number-input');
-                if (number) number.focus();
+                if (number && document.activeElement === cepInput) number.focus();
             }).catch(function(){});
     }
     /* Cotacao de frete automatica: antes, o checkout so lia a cotacao ja
@@ -1118,5 +1118,6 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
 <script src="/js/cart-erp-price-reconciliation-v1.js?v=20261029" defer></script>
 <!-- Purchase e conversao de Ads sao emitidos somente apos pagamento
      confirmado pelo webhook, nunca na simples criacao do pedido. -->
+<script src="/js/shipping-postcode-session-v1.js?v=20261030" defer></script>
 </body>
 </html>
