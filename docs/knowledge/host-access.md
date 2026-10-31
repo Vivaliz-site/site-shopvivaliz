@@ -1,3 +1,9 @@
+<!-- CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
+> **Regra vigente (31/10/2026, confirmada pelo proprietario):** existem apenas duas VMs OCI operacionais: `marina-a1-4c24g` (web/deploy/banco/workers) e `always-free-arm-1787907847-26` (backend/MCP/controller/browser). `shopvivaliz-free-a1` foi encerrada: NAO acessar, pesquisar como destino, monitorar, recuperar, recriar ou redirecionar aliases para ela. Referencias historicas abaixo nao representam destino ativo.
+>
+> **Continuidade obrigatoria contra bloqueios:** uma falha isolada de terminal, usuario de execucao, GitHub CLI, SSH, plugin, runner ou browser NAO comprova ausencia de acesso e NAO encerra a tarefa. Ler documentacao de acesso vigente, conferir usuario/contexto correto e fontes protegidas ja provisionadas, testar rotas alternativas independentemente autorizadas (MCP, RDC 1/2, SSH privado/Tailscale, GitHub via perfil autorizado, runner/OCI apenas para recuperacao), corrigir falhas tecnicas, preservar checkpoints e prosseguir ate teste, merge, deploy automatico aplicavel e validacao posterior. Exemplo confirmado: `gh` estava autenticado sob `ubuntu`, nao sob `root`; executar via identidade autorizada sem revelar tokens. Proibido contornar MFA, RBAC, recusas explicitas, controles de branch ou leases. Se todas as rotas legitimas falharem, registrar evidencia e proxima acao, sem declarar sucesso.
+<!-- /CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
+
 <!-- EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
 ## Regra obrigatoria: continuidade ate esgotamento comprovado de rotas autorizadas (2026-10-30)
 
