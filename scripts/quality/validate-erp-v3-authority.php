@@ -47,7 +47,7 @@ foreach ($publicFiles as $file) {
     }
 }
 
-foreach (['olist/sync-products.php', 'olist/sync-on-webhook.php'] as $file) {
+foreach (['olist/sync-products.php', 'daemon-sync-products.py'] as $file) {
     $text = is_file($root . '/' . $file) ? (string)file_get_contents($root . '/' . $file) : '';
     if ($text === '') {
         $failures[] = "$file missing";
@@ -59,6 +59,15 @@ foreach (['olist/sync-products.php', 'olist/sync-on-webhook.php'] as $file) {
     if (preg_match('~api2/|produtos\\.pesquisa\\.php|TOKEN' . '_API_' . 'OLIST~i', $text) === 1) {
         $failures[] = "$file contains executable legacy API/legacy-static-token reference";
     }
+}
+
+// The historical PHP entrypoint is an alias only: a second product-price
+// writer could overwrite Amazon-list exceptions after a successful sync.
+$legacy = (string)file_get_contents($root . '/olist/sync-on-webhook.php');
+if (!str_contains($legacy, 'daemon-sync-products.py')
+    || !str_contains($legacy, "PHP_SAPI !== 'cli'")
+    || str_contains($legacy, "file_put_contents(")) {
+    $failures[] = 'legacy sync must only invoke the canonical ERP Amazon daemon from CLI';
 }
 
 if ($failures !== []) {

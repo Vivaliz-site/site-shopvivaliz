@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 require_once dirname(__DIR__) . '/includes/product-price-enrich.php';
+require_once __DIR__ . '/order-payment-amounts.php';
 
 final class SvInfinitePayApiException extends RuntimeException
 {
@@ -81,39 +82,23 @@ function svip_phone_digits(string $phone): string
 function svip_link_payload(array $order): array
 {
     $customer = is_array($order['customer'] ?? null) ? $order['customer'] : [];
+    $amounts = svopa_payment_lines($order);
     $items = [];
-    foreach ((array)($order['items'] ?? []) as $item) {
-        if (!is_array($item)) {
-            continue;
-        }
+    foreach ($amounts['items'] as $line) {
+        $item = $line['item'];
         $description = trim((string)($item['name'] ?? $item['sku'] ?? 'Produto ShopVivaliz'));
-        $quantity = max(1, (int)($item['quantity'] ?? 1));
-        $priceCents = svip_money_to_cents((float)($item['price'] ?? 0));
-        if ($description === '' || $priceCents <= 0) {
-            continue;
-        }
         $items[] = [
-            'description' => $description,
-            'quantity' => $quantity,
-            'price' => $priceCents,
+            'description' => $description !== '' ? $description : 'Produto ShopVivaliz',
+            'quantity' => $line['quantity'],
+            'price' => $line['unit_cents'],
         ];
     }
 
-    $shippingTotal = (float)($order['shipping_total'] ?? 0);
-    if ($shippingTotal > 0) {
+    if ($amounts['shipping_cents'] > 0) {
         $items[] = [
             'description' => trim((string)($order['shipping_label'] ?? 'Frete')) ?: 'Frete',
             'quantity' => 1,
-            'price' => svip_money_to_cents($shippingTotal),
-        ];
-    }
-
-    $couponDiscount = (float)($order['coupon_discount'] ?? 0);
-    if ($couponDiscount > 0) {
-        $items[] = [
-            'description' => 'Desconto',
-            'quantity' => 1,
-            'price' => -svip_money_to_cents($couponDiscount),
+            'price' => $amounts['shipping_cents'],
         ];
     }
 

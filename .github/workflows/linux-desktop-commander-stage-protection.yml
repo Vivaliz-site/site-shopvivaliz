@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   stage:
+    # RETIRED_SOURCE_JOB_GUARD_20261029: host deleted; do not execute legacy SSH/OCI/runner route.
+    if: ${{ false }}
     strategy:
       fail-fast: false
       matrix:

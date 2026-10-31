@@ -4,13 +4,19 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from google.ads.googleads.client import GoogleAdsClient
+from google_ads_legacy_budget_policy import refuse_legacy_ads_execution
+
+if TYPE_CHECKING:
+    from google.ads.googleads.client import GoogleAdsClient
 
 CONFIG_PATH = Path(__file__).with_name("google_ads_campaign_live_ready.json")
 
 
 def client_from_env() -> GoogleAdsClient:
+    from google.ads.googleads.client import GoogleAdsClient
+
     refresh = os.getenv("GOOGLE_ADS_REFRESH_TOKEN", "").strip() or os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "").strip()
     cfg = {
         "developer_token": os.environ["GOOGLE_ADS_DEVELOPER_TOKEN"],
@@ -30,6 +36,7 @@ def norm(value: str) -> str:
 
 
 def main() -> int:
+    refuse_legacy_ads_execution("google_ads_sales_round1_delivery.py")
     required = [
         "GOOGLE_OAUTH_CLIENT_ID",
         "GOOGLE_OAUTH_CLIENT_SECRET",

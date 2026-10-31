@@ -1,0 +1,778 @@
+name: OCI Marina Cloudflare admin tunnel
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Inspect or provision the independent Marina admin tunnel"
+        required: true
+        type: choice
+        options:
+          - inspect
+          - inspect_vm
+          - restart_plugin
+          - enable_plugin
+          - provision
+        default: inspect
+      confirmation:
+        description: "For provision, enter PROVISION_MARINA_ADMIN_TUNNEL"
+        required: true
+        type: string
+        default: "inspect"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-marina-cloudflare-admin-tunnel
+  cancel-in-progress: false
+
+jobs:
+  marina-admin:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 30
+    env:
+      OCI_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
+      OCI_USER: ${{ secrets.OCI_ESPOSA_USER }}
+      OCI_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_MARINA_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_MARINA_TUNNEL_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 0afb7d99f708b9455598df9fa1035164
+      OCI_INSTANCE_NAME: marina-a1-4c24g
+      OCI_PROFILE: DEFAULT
+      MARINA_TUNNEL_NAME: shopvivaliz-oci-marina-admin
+      MARINA_HOSTNAME: admin-marina.shopvivaliz.com.br
+      MARINA_ACCESS_POLICY_NAME: ShopVivaliz OCI Marina Admin Owner Only
+      MARINA_ADMIN_EMAIL: fredmourao@gmail.com
+      ACTION: ${{ inputs.action }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Install OCI CLI and JSON tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          command -v oci >/dev/null
+          command -v jq >/dev/null
+
+      - name: Discover Marina and the no-quota Bastion path
+        env:
+          OCI_KEY_MATERIAL: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          key="$RUNNER_TEMP/oci-marina.pem"
+          config="$RUNNER_TEMP/oci-marina-config"
+          printf '%s\n' "$OCI_KEY_MATERIAL" > "$key"
+          chmod 600 "$key"
+          cat > "$config" <<EOF
+          [DEFAULT]
+          user=$OCI_USER
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY
+          region=$OCI_REGION
+          key_file=$key
+          EOF
+          chmod 600 "$config"
+          echo "OCI_CONFIG_FILE=$config" >> "$GITHUB_ENV"
+          echo "OCI_KEY_FILE=$key" >> "$GITHUB_ENV"
+
+          OCI=(oci --config-file "$config" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$OCI_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1 || { echo "::error::Expected exactly one Marina instance, found $count"; exit 2; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$lifecycle" = RUNNING || { echo "::error::Marina lifecycle is $lifecycle"; exit 2; }
+          attachment_id="$("${OCI[@]}" compute vnic-attachment list --compartment-id "$compartment_id" --instance-id "$instance_id" --query 'data[?"lifecycle-state"==`ATTACHED`]|[0].id' --raw-output)"
+          test -n "$attachment_id" && test "$attachment_id" != null
+          vnic_id="$("${OCI[@]}" compute vnic-attachment get --vnic-attachment-id "$attachment_id" --query 'data."vnic-id"' --raw-output)"
+          private_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."private-ip"' --raw-output)"
+          public_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."public-ip"' --raw-output)"
+          vnic_nsg_count="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'length(data."nsg-ids")' --raw-output)"
+          subnet_id="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."subnet-id"' --raw-output)"
+          bastion_json="$RUNNER_TEMP/marina-bastions.json"
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$bastion_json"
+          bastion_count="$(jq -r '[(.data // [])[] | select(."lifecycle-state" == "ACTIVE")] | length' "$bastion_json")"
+          bastion_id=""
+          if [ "$bastion_count" = 1 ]; then
+            bastion_id="$(jq -r '.data[] | select(."lifecycle-state" == "ACTIVE") | .id' "$bastion_json")"
+          fi
+          if [ "$ACTION" = provision ] && [ "$CONFIRMATION" = PROVISION_MARINA_ADMIN_TUNNEL ] && [ -z "$bastion_id" ]; then
+            if [ -n "$bastion_count" ] && [ "$bastion_count" != 0 ]; then
+              echo "::error::Ambiguous active Marina Bastion inventory count=$bastion_count"
+              exit 2
+            fi
+            runner_ip="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+            create_bastion="$("${OCI[@]}" bastion bastion create \
+              --bastion-type STANDARD \
+              --compartment-id "$compartment_id" \
+              --target-subnet-id "$subnet_id" \
+              --client-cidr-list "[\"$runner_ip/32\"]" \
+              --name shopvivaliz-marina-admin-bastion)"
+            bastion_id="$(jq -r '.data.id // empty' <<<"$create_bastion")"
+            test -n "$bastion_id"
+            for _ in $(seq 1 36); do
+              bastion_state="$("${OCI[@]}" bastion bastion get --bastion-id "$bastion_id" --query 'data."lifecycle-state"' --raw-output)"
+              [ "$bastion_state" = ACTIVE ] && break
+              case "$bastion_state" in FAILED|DELETED) echo "::error::Created Marina Bastion entered $bastion_state"; exit 2;; esac
+              sleep 5
+            done
+            test "$bastion_state" = ACTIVE || { echo "::error::Created Marina Bastion did not become ACTIVE"; exit 2; }
+            echo "MARINA_BASTION=CREATED_NO_QUOTA"
+          fi
+          {
+            echo "MARINA_INSTANCE_ID=$instance_id"
+            echo "MARINA_COMPARTMENT_ID=$compartment_id"
+            echo "MARINA_PRIVATE_IP=$private_ip"
+            echo "MARINA_PUBLIC_IP=$public_ip"
+            echo "MARINA_SUBNET_ID=$subnet_id"
+            echo "MARINA_BASTION_ID=$bastion_id"
+          } >> "$GITHUB_ENV"
+          echo "MARINA_IDENTITY=PASS lifecycle=$lifecycle public_ip=$public_ip private_ip=$private_ip nsg_count=$vnic_nsg_count"
+          if [ -n "$bastion_id" ]; then
+            echo "MARINA_BASTION=PASS"
+          else
+            echo "MARINA_BASTION=NOT_FOUND active_count=$bastion_count"
+          fi
+
+      - name: Inspect Cloudflare objects without changing state
+        if: inputs.action == 'inspect'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cf_api() {
+            local method="$1" path="$2"
+            curl --fail-with-body --silent --show-error --retry 2 \
+              -X "$method" "https://api.cloudflare.com/client/v4$path" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H 'Content-Type: application/json'
+          }
+          test -n "$CLOUDFLARE_API_TOKEN"
+          tunnels="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel?is_deleted=false&per_page=100")"
+          tunnel_count="$(jq --arg n "$MARINA_TUNNEL_NAME" '[.result[] | select(.name == $n)] | length' <<<"$tunnels")"
+          echo "MARINA_TUNNEL_FOUND=$([ "$tunnel_count" = 1 ] && echo true || echo false)"
+          if [ "$tunnel_count" = 1 ]; then
+            jq -r --arg n "$MARINA_TUNNEL_NAME" '.result[] | select(.name == $n) | "MARINA_TUNNEL_STATUS=" + (.status // "unknown") + " MARINA_TUNNEL_ID=" + .id' <<<"$tunnels"
+          fi
+          apps="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps?per_page=100")"
+          app_count="$(jq --arg d "$MARINA_HOSTNAME" '[.result[] | select(.domain == $d)] | length' <<<"$apps")"
+          echo "MARINA_ACCESS_APP_FOUND=$([ "$app_count" = 1 ] && echo true || echo false)"
+          policies="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/access/policies?per_page=100")"
+          policy_count="$(jq --arg n "$MARINA_ACCESS_POLICY_NAME" '[.result[] | select(.name == $n)] | length' <<<"$policies")"
+          echo "MARINA_ACCESS_POLICY_FOUND=$([ "$policy_count" = 1 ] && echo true || echo false)"
+          echo "OCI_MARINA_CLOUDFLARE_ADMIN=INSPECT_ONLY"
+
+      - name: Restart Marina Run Command plugin through OCI control plane
+        if: inputs.action == 'restart_plugin' && inputs.confirmation == 'RESTART_MARINA_AGENT_PLUGIN'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          agent_config_raw="$RUNNER_TEMP/marina-agent-config.json"
+          agent_config_disabled="$RUNNER_TEMP/marina-agent-config-disabled.json"
+          agent_config_enabled="$RUNNER_TEMP/marina-agent-config-enabled.json"
+          "${OCI[@]}" compute instance get --instance-id "$MARINA_INSTANCE_ID" --query 'data."agent-config"' > "$agent_config_raw"
+          jq 'def normalized: {
+                areAllPluginsDisabled: (."are-all-plugins-disabled" // false),
+                isManagementDisabled: (."is-management-disabled" // false),
+                isMonitoringDisabled: (."is-monitoring-disabled" // false),
+                pluginsConfig: ((."plugins-config" // []) | map({name, desiredState: ."desired-state"}))
+              };
+              normalized
+              | .pluginsConfig = (if any(.pluginsConfig[]; .name == "Compute Instance Run Command")
+                  then .pluginsConfig | map(if .name == "Compute Instance Run Command" then .desiredState = "DISABLED" else . end)
+                  else .pluginsConfig + [{name: "Compute Instance Run Command", desiredState: "DISABLED"}] end)' \
+            "$agent_config_raw" > "$agent_config_disabled"
+          jq '.pluginsConfig |= map(if .name == "Compute Instance Run Command" then .desiredState = "ENABLED" else . end)' \
+            "$agent_config_disabled" > "$agent_config_enabled"
+          restore_enabled() {
+            if [ "${restore_required:-false}" = true ]; then
+              "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_enabled" --force >/dev/null || echo "::error::Failed to restore Marina Run Command plugin enabled state"
+            fi
+          }
+          restore_required=true
+          trap restore_enabled EXIT
+          "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_disabled" --force >/dev/null
+          plugin_status=''
+          for _ in $(seq 1 60); do
+            plugin_status="$("${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+            [ "$plugin_status" = STOPPED ] && break
+            sleep 10
+          done
+          test "$plugin_status" = STOPPED
+          echo "MARINA_AGENT_PLUGIN_RESTART=DISABLED"
+          "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_enabled" --force >/dev/null
+          plugin_status=''
+          for _ in $(seq 1 60); do
+            plugin_status="$("${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+            [ "$plugin_status" = RUNNING ] && break
+            sleep 10
+          done
+          test "$plugin_status" = RUNNING
+          echo "MARINA_AGENT_PLUGIN_RESTART=ENABLED"
+          echo "OCI_MARINA_AGENT_PLUGIN_RESTART=PASS"
+          restore_required=false
+
+      - name: Ensure Marina Run Command plugin is enabled through OCI control plane
+        if: inputs.action == 'enable_plugin' && inputs.confirmation == 'ENABLE_MARINA_AGENT_PLUGIN'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          agent_config_raw="$RUNNER_TEMP/marina-agent-config-enable-raw.json"
+          agent_config_enabled="$RUNNER_TEMP/marina-agent-config-enable.json"
+          "${OCI[@]}" compute instance get --instance-id "$MARINA_INSTANCE_ID" --query 'data."agent-config"' > "$agent_config_raw"
+          jq '{
+                areAllPluginsDisabled: (."are-all-plugins-disabled" // false),
+                isManagementDisabled: (."is-management-disabled" // false),
+                isMonitoringDisabled: (."is-monitoring-disabled" // false),
+                pluginsConfig: ((."plugins-config" // []) | map({name, desiredState: ."desired-state"}))
+              }
+              | .pluginsConfig = (if any(.pluginsConfig[]; .name == "Compute Instance Run Command")
+                  then .pluginsConfig | map(if .name == "Compute Instance Run Command" then .desiredState = "ENABLED" else . end)
+                  else .pluginsConfig + [{name: "Compute Instance Run Command", desiredState: "ENABLED"}] end)' \
+            "$agent_config_raw" > "$agent_config_enabled"
+          "${OCI[@]}" compute instance update --instance-id "$MARINA_INSTANCE_ID" --agent-config "file://$agent_config_enabled" --force >/dev/null
+          plugin_status=''
+          for _ in $(seq 1 30); do
+            plugin_status="$("${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+            [ "$plugin_status" = RUNNING ] && break
+            sleep 10
+          done
+          test "$plugin_status" = RUNNING
+          echo "MARINA_AGENT_PLUGIN_ENABLED=RUNNING"
+          echo "OCI_MARINA_AGENT_PLUGIN_ENABLE=PASS"
+
+      - name: Inspect Marina SSH runtime through OCI Agent without changing state
+        if: inputs.action == 'inspect_vm'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          agent_script="$RUNNER_TEMP/marina-agent-readonly.sh"
+          agent_content="$RUNNER_TEMP/marina-agent-readonly-content.json"
+          agent_target="$RUNNER_TEMP/marina-agent-readonly-target.json"
+          cat > "$agent_script" <<'REMOTE'
+          set -Eeuo pipefail
+          printf 'MARINA_AGENT_UID=%s\n' "$(id -u)"
+          printf 'MARINA_AGENT_HOST=%s\n' "$(hostname)"
+          printf 'MARINA_SSH_UNIT=%s\n' "$(systemctl is-active ssh.service 2>/dev/null || systemctl is-active sshd.service 2>/dev/null || echo unknown)"
+          printf 'MARINA_SSH_LISTEN_COUNT=%s\n' "$(ss -ltnH 2>/dev/null | awk '$4 ~ /(^|:)22$/ {c++} END {print c+0}')"
+          printf 'MARINA_IPTABLES_22_DROP_COUNT=%s\n' "$(iptables-save 2>/dev/null | awk '/(--dport 22|dpt:22)/ && /DROP/ {c++} END {print c+0}')"
+          printf 'MARINA_IPTABLES_22_ACCEPT_COUNT=%s\n' "$(iptables-save 2>/dev/null | awk '/(--dport 22|dpt:22)/ && /ACCEPT/ {c++} END {print c+0}')"
+          printf 'MARINA_NFT_22_DROP_COUNT=%s\n' "$(nft list ruleset 2>/dev/null | awk '/(dport 22|tcp dport 22)/ && /drop/ {c++} END {print c+0}')"
+          if command -v ufw >/dev/null 2>&1; then
+            printf 'MARINA_UFW_ACTIVE=%s\n' "$(ufw status 2>/dev/null | awk 'NR==1 {print $2}' || true)"
+          else
+            printf 'MARINA_UFW_ACTIVE=absent\n'
+          fi
+          echo MARINA_AGENT_READONLY_DIAGNOSTIC=PASS
+          REMOTE
+          jq -n --rawfile text "$agent_script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$agent_content"
+          jq -n --arg instanceId "$MARINA_INSTANCE_ID" '{instanceId:$instanceId}' > "$agent_target"
+          plugin_json="$RUNNER_TEMP/marina-agent-plugins.json"
+          "${OCI[@]}" instance-agent plugin list --compartment-id "$MARINA_COMPARTMENT_ID" --instanceagent-id "$MARINA_INSTANCE_ID" --all > "$plugin_json"
+          plugin_status="$(jq -r '.data[] | select(.name == "Compute Instance Run Command") | .status // empty' "$plugin_json")"
+          plugin_message="$(jq -r '.data[] | select(.name == "Compute Instance Run Command") | .message // empty' "$plugin_json" | tr '\n' ' ' | cut -c1-160)"
+          instance_agent_config="$("${OCI[@]}" compute instance get --instance-id "$MARINA_INSTANCE_ID" --query 'data."agent-config"')"
+          desired_state="$(jq -r '."plugins-config"[]? | select(.name == "Compute Instance Run Command") | ."desired-state" // empty' <<<"$instance_agent_config")"
+          echo "MARINA_AGENT_PLUGIN_STATUS=$plugin_status"
+          echo "MARINA_AGENT_PLUGIN_MESSAGE=$plugin_message"
+          echo "MARINA_AGENT_PLUGIN_DESIRED_STATE=$desired_state"
+          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$MARINA_COMPARTMENT_ID" --display-name "Inspect Marina SSH runtime" --content "file://$agent_content" --target "file://$agent_target" --timeout-in-seconds 120 --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 36); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$MARINA_INSTANCE_ID")"
+            state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS|'') sleep 5 ;;
+              *) exit 31 ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution")"
+          echo "MARINA_AGENT_EXECUTION_STATE=$state"
+          echo "MARINA_AGENT_DELIVERY_STATE=$(jq -r '.data."delivery-state" // empty' <<<"$execution")"
+          echo "MARINA_AGENT_CONTENT_PRESENT=$([ -n "$(jq -r '.data.content.text // empty' <<<"$execution")" ] && echo true || echo false)"
+          body="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$body" | awk '/^MARINA_/ {print}'
+          test "$state" = SUCCEEDED
+          echo OCI_MARINA_AGENT_INSPECT=PASS
+
+      - name: Provision the independent tunnel, Access policy, DNS and VM connector
+        if: inputs.action == 'provision'
+        env:
+          OCI_VM_KEY_MATERIAL: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          OCI_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$CONFIRMATION" = PROVISION_MARINA_ADMIN_TUNNEL || { echo "::error::Provision confirmation is required"; exit 2; }
+          test -n "$MARINA_BASTION_ID" || { echo "::error::No active OCI Bastion in Marina compartment; refusing public SSH bootstrap"; exit 2; }
+          test -n "$OCI_VM_KEY_MATERIAL" && test -n "$OCI_VM_KNOWN_HOSTS"
+
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          session_id=""
+          session_id_file="$RUNNER_TEMP/marina-bastion-session-id"
+          original_cidrs="$RUNNER_TEMP/marina-bastion-cidrs.json"
+          expanded_cidrs="$RUNNER_TEMP/marina-bastion-cidrs-expanded.json"
+          security_list_id=""
+          security_list_id_file="$RUNNER_TEMP/marina-security-list-id"
+          security_list_original="$RUNNER_TEMP/marina-marina-security-list-ingress.json"
+          security_list_expanded="$RUNNER_TEMP/marina-marina-security-list-ingress-expanded.json"
+          bastion_ssh_config="$RUNNER_TEMP/marina-bastion-ssh-config"
+          bastion_key="$RUNNER_TEMP/marina-bastion-key"
+          vm_key="$RUNNER_TEMP/marina-vm-key"
+          vm_known_hosts="$RUNNER_TEMP/marina-vm-known-hosts"
+          local_port=42222
+          cleanup() {
+            if [ -n "${session_id:-}" ]; then
+              "${OCI[@]}" bastion session delete --session-id "$session_id" --force >/dev/null
+              rm -f "$session_id_file"
+            fi
+            if [ -s "$original_cidrs" ] && [ -n "$MARINA_BASTION_ID" ]; then
+              "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$original_cidrs" --force >/dev/null
+            fi
+            if [ -n "$security_list_id" ] && [ -s "$security_list_original" ]; then
+              if ! "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_original" --force >/dev/null; then
+                echo "::error::Failed to restore Marina security-list ingress rules"
+                return 1
+              fi
+            fi
+            rm -f "$bastion_key" "$bastion_key.pub" "$vm_key" "$vm_known_hosts" "$original_cidrs" "$expanded_cidrs" "$security_list_original" "$security_list_expanded" "$bastion_ssh_config" "$security_list_id_file"
+            rm -f "$OCI_KEY_FILE" "$OCI_CONFIG_FILE"
+          }
+          trap cleanup EXIT
+          umask 077
+          printf '%s\n' "$OCI_VM_KEY_MATERIAL" > "$vm_key"
+          printf '%s\n' "$OCI_VM_KNOWN_HOSTS" > "$vm_known_hosts"
+          chmod 600 "$vm_key" "$vm_known_hosts"
+          ssh-keygen -q -t rsa -b 3072 -N '' -f "$bastion_key" >/dev/null
+
+          "${OCI[@]}" bastion bastion get --bastion-id "$MARINA_BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$original_cidrs"
+          bastion_json="$("${OCI[@]}" bastion bastion get --bastion-id "$MARINA_BASTION_ID")"
+          bastion_private_ip="$(jq -r '.data."private-endpoint-ip-address" // empty' <<<"$bastion_json")"
+          test -n "$bastion_private_ip"
+          bastion_source_cidr="$bastion_private_ip/32"
+          subnet_json="$("${OCI[@]}" network subnet get --subnet-id "$MARINA_SUBNET_ID")"
+          security_list_id="$(jq -r '.data."security-list-ids"[0] // empty' <<<"$subnet_json")"
+          subnet_cidr="$(jq -r '.data."cidr-block" // empty' <<<"$subnet_json")"
+          test -n "$security_list_id" && test -n "$subnet_cidr"
+          printf '%s\n' "$security_list_id" > "$security_list_id_file"
+          "${OCI[@]}" network security-list get --security-list-id "$security_list_id" --query 'data."ingress-security-rules"' --output json > "$security_list_original"
+          security_rule_state="$(python3 - "$bastion_source_cidr" "$security_list_original" "$security_list_expanded" <<'PY'
+          import ipaddress, json, sys
+          cidr = str(ipaddress.ip_network(sys.argv[1], strict=False))
+          rules = json.load(open(sys.argv[2], encoding="utf-8"))
+          if not isinstance(rules, list):
+              raise SystemExit("Marina security-list ingress rules are not a JSON list")
+          marker = "shopvivaliz-temporary-bastion-bootstrap"
+          present = any(str(rule.get("description", "")) == marker for rule in rules)
+          if not present:
+              rules.append({
+                  "description": marker,
+                  "isStateless": False,
+                  "protocol": "6",
+                  "source": cidr,
+                  "sourceType": "CIDR_BLOCK",
+                  "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}},
+              })
+          json.dump(rules, open(sys.argv[3], "w", encoding="utf-8"))
+          print("PRESENT" if present else "ADDED")
+          PY
+          )"
+          if [ "$security_rule_state" = ADDED ]; then
+            "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$security_list_expanded" --force >/dev/null
+            echo "MARINA_BOOTSTRAP_NETWORK_RULE=APPLIED source=$bastion_source_cidr"
+            # OCI security-list changes are eventually consistent before a Bastion
+            # session can reach the private target. Give propagation a bounded window.
+            sleep 45
+          else
+            echo "MARINA_BOOTSTRAP_NETWORK_RULE=ALREADY_PRESENT source=$bastion_source_cidr"
+          fi
+          runner_ip="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$runner_ip" "$original_cidrs" "$expanded_cidrs" <<'PY'
+          import ipaddress, json, sys
+          runner = str(ipaddress.ip_address(sys.argv[1])) + "/32"
+          current = json.load(open(sys.argv[2], encoding="utf-8"))
+          if not isinstance(current, list):
+              raise SystemExit("Bastion allow-list is not a JSON list")
+          json.dump(list(dict.fromkeys([str(x) for x in current] + [runner])), open(sys.argv[3], "w", encoding="utf-8"))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$expanded_cidrs" --force >/dev/null
+
+          session_id="$("${OCI[@]}" bastion session create-port-forwarding \
+            --bastion-id "$MARINA_BASTION_ID" \
+            --target-private-ip "$MARINA_PRIVATE_IP" \
+            --target-port 22 \
+            --session-ttl 1800 \
+            --display-name shopvivaliz-marina-cloudflare-admin \
+            --ssh-public-key-file "$bastion_key.pub" \
+            --query 'data.id' --raw-output)"
+          test -n "$session_id"
+          printf '%s\n' "$session_id" > "$session_id_file"
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$session_id" --query 'data."lifecycle-state"' --raw-output)"
+            [ "$state" = ACTIVE ] && break
+            case "$state" in FAILED|DELETED) echo "::error::Bastion session entered $state"; exit 2;; esac
+            sleep 5
+          done
+          test "$state" = ACTIVE || { echo "::error::Bastion session did not become ACTIVE"; exit 2; }
+          metadata="$("${OCI[@]}" bastion session get --session-id "$session_id" --query 'data."ssh-metadata".command' --raw-output)"
+          test -n "$metadata"
+          cat > "$bastion_ssh_config" <<EOF
+          Host *
+            BatchMode yes
+            IdentitiesOnly yes
+            IdentityFile $bastion_key
+            ConnectTimeout 30
+            HostKeyAlgorithms +ssh-rsa
+            PubkeyAcceptedAlgorithms +ssh-rsa
+            PubkeyAcceptedKeyTypes +ssh-rsa
+            StrictHostKeyChecking accept-new
+            UserKnownHostsFile $RUNNER_TEMP/marina-bastion-known-hosts
+          EOF
+          tunnel_command="${metadata//<privateKey>/$bastion_key}"
+          tunnel_command="${tunnel_command//<localPort>/$local_port}"
+          tunnel_command="${tunnel_command//ssh /ssh -F $bastion_ssh_config }"
+          tunnel_command="${tunnel_command/ssh -F $bastion_ssh_config /ssh -F $bastion_ssh_config -f -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 }"
+          tunnel_command="${tunnel_command//ssh /ssh -v -o IdentitiesOnly=yes -o PreferredAuthentications=publickey }"
+          debug_tunnel_command="${tunnel_command//$bastion_key/<private-key>}"
+          echo "MARINA_BASTION_TUNNEL_COMMAND=$debug_tunnel_command"
+          tunnel_ready=0
+          for attempt in 1 2 3; do
+            if bash -lc "$tunnel_command"; then
+              tunnel_ready=1
+              break
+            fi
+            echo "MARINA_BASTION_TUNNEL_RETRY=$attempt"
+            sleep 5
+          done
+          test "$tunnel_ready" = 1 || { echo "::error::OCI Bastion port-forward did not authenticate after bounded retries"; exit 255; }
+          sleep 2
+          forwarded_host_key="$RUNNER_TEMP/marina-forwarded-host-key"
+          ssh-keyscan -T 15 -p "$local_port" -t ed25519 127.0.0.1 > "$forwarded_host_key" 2>/dev/null || true
+          test -s "$forwarded_host_key"
+          python3 - "$vm_known_hosts" "$forwarded_host_key" <<'PY'
+          import sys
+
+          def key_material(line):
+              fields = line.split()
+              for index, field in enumerate(fields[:-1]):
+                  if field.startswith(("ssh-", "ecdsa-", "sk-")):
+                      return field, fields[index + 1]
+              return None
+
+          known = {key_material(line) for line in open(sys.argv[1], encoding="utf-8") if key_material(line)}
+          scanned = [key_material(line) for line in open(sys.argv[2], encoding="utf-8") if key_material(line)]
+          if not scanned or any(key not in known for key in scanned):
+              raise SystemExit("Marina SSH host key does not match approved OCI host-key material")
+          PY
+          sed -E "s/^\\[127\\.0\\.0\\.1\\]:${local_port} /127.0.0.1 /" "$forwarded_host_key" > "$vm_known_hosts"
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$vm_known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$vm_key" -o HostKeyAlias=127.0.0.1)
+          VM_SSH=(timeout --signal=TERM --kill-after=10s 180s ssh "${SSH_COMMON[@]}" -p "$local_port" ubuntu@127.0.0.1)
+          private_ssh_ready=0
+          for attempt in 1 2 3; do
+            if "${VM_SSH[@]}" 'test "$(hostname)" = "marina-a1-4c24g"; id -u; sudo -n true'; then
+              private_ssh_ready=1
+              break
+            fi
+            echo "MARINA_PRIVATE_SSH_RETRY=$attempt"
+            if [ "$attempt" -lt 3 ]; then
+              bash -lc "$tunnel_command" >/dev/null 2>&1 || true
+              sleep 5
+            fi
+          done
+          test "$private_ssh_ready" = 1 || { echo "::error::Marina private SSH did not become available through bounded Bastion retries"; exit 255; }
+          echo "MARINA_PRIVATE_SSH=PASS"
+
+          create_instance_agent_command() {
+            printf '%s' 'sudo -n systemctl is-enabled shopvivaliz-cloudflared-admin.service'
+          }
+          echo "INSTANCE_AGENT_SAFE_PROBE_AVAILABLE=$(create_instance_agent_command | sed 's/ /_/g')"
+
+          cf_secret="${CLOUDFLARE_MARINA_TUNNEL_TOKEN:-}"
+          if [ -n "$cf_secret" ]; then
+            echo "MARINA_CLOUDFLARE_PRECONFIGURED=PASS"
+          else
+          cf_api() {
+            local method="$1" path="$2" body="${3:-}"
+            if [ -n "$body" ]; then
+              curl --fail-with-body --silent --show-error --retry 2 -X "$method" "https://api.cloudflare.com/client/v4$path" \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data "$body"
+            else
+              curl --fail-with-body --silent --show-error --retry 2 -X "$method" "https://api.cloudflare.com/client/v4$path" \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json'
+            fi
+          }
+          test -n "$CLOUDFLARE_API_TOKEN"
+          tunnel_json="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel?is_deleted=false&per_page=100")"
+          tunnel_count="$(jq --arg n "$MARINA_TUNNEL_NAME" '[.result[] | select(.name == $n)] | length' <<<"$tunnel_json")"
+          [ "$tunnel_count" -le 1 ] || { echo "::error::Duplicate Marina tunnels found"; exit 2; }
+          tunnel_id=""
+          if [ "$tunnel_count" = 1 ]; then
+            tunnel_id="$(jq -r --arg n "$MARINA_TUNNEL_NAME" '.result[] | select(.name == $n) | .id' <<<"$tunnel_json")"
+          else
+            tunnel_secret="$(openssl rand -base64 32 | tr -d '\n')"
+            tunnel_json="$(cf_api POST "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel" "$(jq -nc --arg n "$MARINA_TUNNEL_NAME" --arg s "$tunnel_secret" '{name:$n,tunnel_secret:$s,config_src:"cloudflare"}')")"
+            tunnel_id="$(jq -r '.result.id' <<<"$tunnel_json")"
+          fi
+          test "$tunnel_id" != null && test -n "$tunnel_id"
+          cf_api PUT "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$tunnel_id/configurations" "$(jq -nc --arg h "$MARINA_HOSTNAME" '{config:{ingress:[{hostname:$h,service:"ssh://localhost:22"},{service:"http_status:404"}]}}')" >/dev/null
+
+          zones="$(cf_api GET '/zones?name=shopvivaliz.com.br&status=active&per_page=20')"
+          zone_id="$(jq -r '.result | if length == 1 then .[0].id else empty end' <<<"$zones")"
+          test -n "$zone_id" || { echo "::error::ShopVivaliz zone is not uniquely available"; exit 2; }
+          dns="$(cf_api GET "/zones/$zone_id/dns_records?type=CNAME&name=$MARINA_HOSTNAME&per_page=20")"
+          dns_count="$(jq '.result | length' <<<"$dns")"
+          tunnel_target="$tunnel_id.cfargotunnel.com"
+          if [ "$dns_count" = 1 ]; then
+            dns_content="$(jq -r '.result[0].content' <<<"$dns")"
+            dns_proxied="$(jq -r '.result[0].proxied' <<<"$dns")"
+            [ "$dns_content" = "$tunnel_target" ] && [ "$dns_proxied" = true ] || { echo "::error::Existing Marina DNS record conflicts with the dedicated tunnel"; exit 2; }
+          elif [ "$dns_count" = 0 ]; then
+            cf_api POST "/zones/$zone_id/dns_records" "$(jq -nc --arg n "$MARINA_HOSTNAME" --arg c "$tunnel_target" '{type:"CNAME",name:$n,content:$c,ttl:1,proxied:true}')" >/dev/null
+          else
+            echo "::error::Duplicate Marina DNS records found"
+            exit 2
+          fi
+
+          policies="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/access/policies?per_page=100")"
+          policy_id="$(jq -r --arg n "$MARINA_ACCESS_POLICY_NAME" --arg e "$MARINA_ADMIN_EMAIL" '
+            [.result[] | select(.name == $n and .decision == "allow" and ([.include[]? | .email.email?] | index($e) != null) and ([.require[]? | .auth_method.auth_method?] | index("mfa") != null))] | if length == 1 then .[0].id else empty end
+          ' <<<"$policies")"
+          if [ -z "$policy_id" ]; then
+            policy_json="$(cf_api POST "/accounts/$CLOUDFLARE_ACCOUNT_ID/access/policies" "$(jq -nc --arg n "$MARINA_ACCESS_POLICY_NAME" --arg e "$MARINA_ADMIN_EMAIL" '{name:$n,decision:"allow",include:[{email:{email:$e}}],require:[{auth_method:{auth_method:"mfa"}}],session_duration:"1h"}')")"
+            policy_id="$(jq -r '.result.id' <<<"$policy_json")"
+          fi
+          test -n "$policy_id" && test "$policy_id" != null
+
+          apps="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps?per_page=100")"
+          app_count="$(jq --arg d "$MARINA_HOSTNAME" '[.result[] | select(.domain == $d)] | length' <<<"$apps")"
+          [ "$app_count" -le 1 ] || { echo "::error::Duplicate Access applications for Marina hostname"; exit 2; }
+          app_id=""
+          if [ "$app_count" = 1 ]; then
+            app_id="$(jq -r --arg d "$MARINA_HOSTNAME" '.result[] | select(.domain == $d) | .id' <<<"$apps")"
+            app_current="$(jq -r --arg d "$MARINA_HOSTNAME" '.result[] | select(.domain == $d)' <<<"$apps")"
+            [ "$(jq -r '.type' <<<"$app_current")" = self_hosted ] || { echo "::error::Marina Access app has the wrong type"; exit 2; }
+            app_body="$(jq -nc --arg n 'ShopVivaliz Marina OCI Admin SSH' --arg d "$MARINA_HOSTNAME" --arg p "$policy_id" '{type:"self_hosted",name:$n,domain:$d,session_duration:"1h",policies:[{id:$p,precedence:1}]}')"
+            cf_api PUT "/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps/$app_id" "$app_body" >/dev/null
+          else
+            app_body="$(jq -nc --arg n 'ShopVivaliz Marina OCI Admin SSH' --arg d "$MARINA_HOSTNAME" --arg p "$policy_id" '{type:"self_hosted",name:$n,domain:$d,session_duration:"1h",policies:[{id:$p,precedence:1}]}')"
+            app_json="$(cf_api POST "/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps" "$app_body")"
+            app_id="$(jq -r '.result.id' <<<"$app_json")"
+          fi
+          test -n "$app_id" && test "$app_id" != null
+          echo "MARINA_ACCESS_POLICY=PASS"
+          echo "MARINA_ACCESS_APP=PASS"
+          echo "MARINA_DNS=PASS"
+
+          token_json="$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$tunnel_id/token")"
+          cf_secret="$(jq -r '.result' <<<"$token_json")"
+          test -n "$cf_secret" && test "$cf_secret" != null
+          fi
+          if ! "${VM_SSH[@]}" 'sudo -n true' >/dev/null; then
+            forward_recovered=0
+            for attempt in 1 2 3; do
+              if bash -lc "$tunnel_command" && "${VM_SSH[@]}" 'sudo -n true' >/dev/null; then
+                forward_recovered=1
+                echo "MARINA_FORWARD_RECONNECTED=$attempt"
+                break
+              fi
+              echo "MARINA_FORWARD_RECONNECT_RETRY=$attempt"
+              sleep 5
+            done
+            test "$forward_recovered" = 1 || { echo "::error::Marina SSH forward unavailable before token transfer"; exit 255; }
+          fi
+          if ! printf '%s' "$cf_secret" | "${VM_SSH[@]}" "sudo -n sh -c 'install -d -o root -g root -m 700 /etc/shopvivaliz/cloudflare-admin; cat > /etc/shopvivaliz/cloudflare-admin/token; chown root:root /etc/shopvivaliz/cloudflare-admin/token; chmod 600 /etc/shopvivaliz/cloudflare-admin/token'"; then
+            echo "::error::Marina token transfer failed after SSH and sudo probe passed"
+            exit 1
+          fi
+          echo "MARINA_TOKEN_INSTALL=PASS"
+          unset cf_secret token_json
+
+          cloudflared_source="$("${VM_SSH[@]}" 'set -eu; p="$(command -v cloudflared 2>/dev/null || true)"; if [ -z "$p" ]; then for candidate in "$HOME/cloudflared" "$HOME/bin/cloudflared" "$HOME/.local/bin/cloudflared" "$HOME/.local/lib/shopvivaliz/cloudflared"; do if [ -x "$candidate" ]; then p="$candidate"; break; fi; done; fi; if [ -z "$p" ]; then p="$(find -L /home/ubuntu -maxdepth 10 -type f -name cloudflared -perm -111 -print -quit 2>/dev/null || true)"; fi; printf "%s" "$p"')"
+          cloudflared_download=""
+          if [ -z "$cloudflared_source" ]; then
+            cloudflared_download="$RUNNER_TEMP/cloudflared-linux-arm64"
+            curl --fail-with-body --silent --show-error --location --retry 3 --connect-timeout 20 --max-time 120 \
+              "https://github.com/cloudflare/cloudflared/releases/download/2026.10.4/cloudflared-linux-arm64" \
+              -o "$cloudflared_download"
+            printf '%s  %s\n' '2b7203b4fb0ba28a0c1e12f8855ce2c25f76d266a8d5edafac5540b6812acff6' "$cloudflared_download" | sha256sum --check --strict
+            chmod 0755 "$cloudflared_download"
+            cloudflared_source="/tmp/shopvivaliz-cloudflared-arm64-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            cat "$cloudflared_download" | "${VM_SSH[@]}" "cat > '$cloudflared_source' && chmod 700 '$cloudflared_source'"
+            echo "MARINA_CLOUDFLARED_SOURCE=OFFICIAL_RELEASE"
+          else
+            case "$cloudflared_source" in
+              /home/ubuntu/*|/usr/local/bin/cloudflared) ;;
+              *) echo "::error::Unexpected Marina cloudflared source path"; exit 1 ;;
+            esac
+            echo "MARINA_CLOUDFLARED_SOURCE=EXISTING"
+          fi
+          cloudflared_source_file="/tmp/shopvivaliz-cloudflared-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "$cloudflared_source" | "${VM_SSH[@]}" "cat > '$cloudflared_source_file' && chmod 600 '$cloudflared_source_file'"
+          {
+            printf '%s\n' "cloudflared_source_file=$cloudflared_source_file"
+            cat <<'REMOTE_INSTALL'
+          set -Eeuo pipefail
+          cloudflared_source="$(cat "$cloudflared_source_file")"
+          case "$cloudflared_source" in
+            /home/ubuntu/*) : ;;
+            /usr/local/bin/cloudflared) : ;;
+            /tmp/shopvivaliz-cloudflared-arm64-*) : ;;
+            *) exit 1 ;;
+          esac
+          install -o root -g root -m 0755 "$cloudflared_source" /usr/local/bin/cloudflared
+          test -x /usr/local/bin/cloudflared
+          rm -f "$cloudflared_source_file"
+          REMOTE_INSTALL
+          } | "${VM_SSH[@]}" 'sudo -n bash -s'
+          "${VM_SSH[@]}" "rm -f '$cloudflared_source_file'"
+          if [ -n "$cloudflared_download" ]; then
+            "${VM_SSH[@]}" "rm -f '$cloudflared_source'"
+            rm -f "$cloudflared_download"
+          fi
+          echo "MARINA_CLOUDFLARED_INSTALL=PASS"
+
+          unit="$RUNNER_TEMP/marina-cloudflared-admin-unit.sh"
+          cat > "$unit" <<'REMOTE'
+          set -Eeuo pipefail
+          remote_step=preflight
+          trap 'rc=$?; echo "MARINA_REMOTE_STEP_FAILED=$remote_step rc=$rc"' ERR
+          test -f /etc/shopvivaliz/cloudflare-admin/token
+          test -f /etc/shopvivaliz/cloudflare-admin/access-approved || install -d -o root -g root -m 700 /etc/shopvivaliz/cloudflare-admin
+          touch /etc/shopvivaliz/cloudflare-admin/access-approved
+          chown root:root /etc/shopvivaliz/cloudflare-admin/access-approved
+          chmod 600 /etc/shopvivaliz/cloudflare-admin/access-approved
+          cloudflared_bin=/usr/local/bin/cloudflared
+          test -x "$cloudflared_bin"
+          remote_step=firewall
+          echo "MARINA_REMOTE_STEP=$remote_step"
+          public_iface="$(ip -4 route get 1.1.1.1 | awk 'NR==1 {for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}')"
+          test -n "$public_iface"
+          iptables -C INPUT -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP 2>/dev/null || \
+            iptables -I INPUT 1 -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP
+          ip6tables -C INPUT -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP 2>/dev/null || \
+            ip6tables -I INPUT 1 -i "$public_iface" -p tcp --dport 22 -m comment --comment shopvivaliz-cloudflare-only-ssh -j DROP
+          if command -v netfilter-persistent >/dev/null 2>&1; then timeout 20s netfilter-persistent save >/dev/null; fi
+          remote_step=systemd_unit
+          echo "MARINA_REMOTE_STEP=$remote_step"
+          cat > /etc/systemd/system/shopvivaliz-cloudflared-admin.service <<UNIT
+          [Unit]
+          Description=ShopVivaliz independent Cloudflare admin tunnel for Marina OCI
+          Wants=network-online.target
+          After=network-online.target
+          ConditionPathExists=/etc/shopvivaliz/cloudflare-admin/access-approved
+
+          [Service]
+          Type=simple
+          DynamicUser=yes
+          NoNewPrivileges=yes
+          LoadCredential=tunnel-token:/etc/shopvivaliz/cloudflare-admin/token
+          ExecStart=$cloudflared_bin tunnel --no-autoupdate run --token-file=%d/tunnel-token
+          Restart=on-failure
+          RestartSec=5s
+          PrivateTmp=yes
+          ProtectSystem=strict
+          ProtectHome=yes
+          ReadWritePaths=/run
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          remote_step=systemd_start
+          echo "MARINA_REMOTE_STEP=$remote_step"
+          timeout 30s systemctl daemon-reload
+          timeout 90s systemctl enable --now shopvivaliz-cloudflared-admin.service
+          timeout 15s systemctl is-enabled --quiet shopvivaliz-cloudflared-admin.service || {
+            timeout 15s systemctl status --no-pager shopvivaliz-cloudflared-admin.service || true
+            exit 1
+          }
+          timeout 15s systemctl is-active --quiet shopvivaliz-cloudflared-admin.service || {
+            timeout 15s systemctl status --no-pager shopvivaliz-cloudflared-admin.service || true
+            timeout 15s journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 40 || true
+            exit 1
+          }
+          test "$(stat -c '%U:%G:%a' /etc/shopvivaliz/cloudflare-admin/token)" = root:root:600
+          test "$(timeout 15s iptables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
+          test "$(timeout 15s ip6tables-save | grep -c 'shopvivaliz-cloudflare-only-ssh')" -ge 1
+          remote_step=cloudflared_registration
+          echo "MARINA_REMOTE_STEP=$remote_step"
+          registered=0
+          for _ in $(seq 1 18); do
+            if timeout 15s journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | grep -q 'Registered tunnel connection'; then
+              registered=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$registered" = 1 ]; then
+            echo CLOUDFLARED_REGISTERED=PASS
+          else
+            timeout 15s journalctl -u shopvivaliz-cloudflared-admin.service --no-pager -n 80 | tail -n 20
+            echo '::error::Cloudflare connector did not register'
+            exit 2
+          fi
+          echo MARINA_REMOTE_UNIT=PASS
+          REMOTE
+          "${VM_SSH[@]}" 'sudo -n bash -s' < "$unit"
+          rm -f "$unit"
+          echo "MARINA_CONNECTOR=PASS"
+          echo "OCI_MARINA_CLOUDFLARE_ADMIN=PROVISIONED"
+
+      - name: Restore private Bastion state
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/marina-bastion-cidrs.json"
+          original_ingress="$RUNNER_TEMP/marina-marina-security-list-ingress.json"
+          session_file="$RUNNER_TEMP/marina-bastion-session-id"
+          security_file="$RUNNER_TEMP/marina-security-list-id"
+          # A completed EXIT trap already restored and removed both backups.
+          if [[ ! -s "$ORIGINAL_CIDRS_FILE" && ! -s "$original_ingress" ]]; then exit 0; fi
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          restore_status=0
+          if [[ -s "$session_file" ]]; then
+            IFS= read -r session_id < "$session_file"
+            if "${OCI[@]}" bastion session delete --session-id "$session_id" --force >/dev/null 2>&1; then
+              rm -f "$session_file"
+            else
+              restore_status=1
+            fi
+          fi
+          if [[ -s "$ORIGINAL_CIDRS_FILE" ]]; then
+            if [[ -n "${MARINA_BASTION_ID:-}" ]]; then
+              "${OCI[@]}" bastion bastion update --bastion-id "$MARINA_BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || restore_status=1
+            else
+              restore_status=1
+            fi
+          fi
+          if [[ -s "$original_ingress" ]]; then
+            if [[ -s "$security_file" ]]; then
+              IFS= read -r security_list_id < "$security_file"
+              "${OCI[@]}" network security-list update --security-list-id "$security_list_id" --ingress-security-rules "file://$original_ingress" --force >/dev/null 2>&1 || restore_status=1
+            else
+              restore_status=1
+            fi
+          fi
+          if [[ "$restore_status" == 0 ]]; then
+            rm -f "$ORIGINAL_CIDRS_FILE" "$original_ingress" "$session_file" "$security_file"
+          else
+            echo '::error::Private Bastion cleanup did not restore every resource'
+          fi
+          exit "$restore_status"
+
+      - name: Remove OCI material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "${OCI_KEY_FILE:-}" "${OCI_CONFIG_FILE:-}" "$RUNNER_TEMP/marina-cloudflared-admin-unit.sh" "$RUNNER_TEMP/marina-bastions.json"
+          rm -f "$RUNNER_TEMP/marina-bastion-key" "$RUNNER_TEMP/marina-bastion-key.pub" "$RUNNER_TEMP/marina-vm-key" "$RUNNER_TEMP/marina-vm-known-hosts" "$RUNNER_TEMP/marina-bastion-ssh-config"

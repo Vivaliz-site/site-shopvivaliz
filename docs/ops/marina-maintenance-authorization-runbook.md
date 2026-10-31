@@ -1,3 +1,7 @@
+<!-- RETIRED_SOURCE_DOC_AUDIT_20261029 -->
+> **Revisão de documentação de 2026-10-29:** registros de `shopvivaliz-free-a1` abaixo são HISTÓRICOS. O proprietário confirmou a exclusão da VM de origem. Nenhum agente deve tentar restabelecer, conectar, monitorar, operar, descomissionar novamente ou criar aliases para esse host. Produção web/DB/workers = `marina-a1-4c24g`; backend/controller/browser = `always-free-arm-1787907847-26`. Leia `docs/knowledge/current-topology-and-access-2026-10-29.md` antes de agir. **A exclusão não prova** migração integral, paridade, segredos migrados, autorização sudo, MCP independente ou E2E. Instruções de manutenção legadas contra origem não são executáveis; corrigir workflow/runbook próprio antes de qualquer automação.
+<!-- /RETIRED_SOURCE_DOC_AUDIT_20261029 -->
+
 # Runbook — Autorização de manutenção Marina
 
 ## Objetivo

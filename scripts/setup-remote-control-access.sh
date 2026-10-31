@@ -10,7 +10,7 @@ CONTINUITY_SOURCE_DIR="${5:-}"
 SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}
 HOST="$(hostname)"
 BACKEND_HOST="always-free-arm-1787907847-26"
-SITE_HOST="shopvivaliz-free-a1"
+RETIRED_SITE_HOST="shopvivaliz-free-a1"
 STATE_DIR="/var/lib/shopvivaliz-remote-control"
 INSTALL_DIR="/opt/shopvivaliz-remote-control"
 SERVICE="shopvivaliz-remote-control-mcp.service"
@@ -209,8 +209,10 @@ install_controller_code_only() {
 
 
 install_target() {
+  # Source VM has been permanently removed. No account/ssh/sudo provisioning.
+  die retired_source_install_forbidden 41
   require_root
-  [ "$HOST" = "$SITE_HOST" ] || die target_host_mismatch 31
+  [ "$HOST" = "$RETIRED_SITE_HOST" ] || die target_host_mismatch 31
   [ -n "$PUBKEY" ] || die public_key_required 32
   printf '%s' "$PUBKEY" | grep -Eq '^ssh-(ed25519|rsa) ' || die invalid_public_key 33
 
@@ -260,7 +262,8 @@ status() {
     systemctl is-enabled "$SERVICE"
     systemctl is-active "$SERVICE"
     curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health
-  elif [ "$HOST" = "$SITE_HOST" ]; then
+  elif [ "$HOST" = "$RETIRED_SITE_HOST" ]; then
+    die retired_source_status_forbidden 42
     id "$REMOTE_USER" >/dev/null 2>&1 && echo "REMOTE_CONTROL_USER_PRESENT=true" || echo "REMOTE_CONTROL_USER_PRESENT=false"
     [ -s "/home/$REMOTE_USER/.ssh/authorized_keys" ] && echo "REMOTE_CONTROL_KEY_PRESENT=true" || echo "REMOTE_CONTROL_KEY_PRESENT=false"
     visudo -cf /etc/sudoers.d/shopvivaliz-remote-control >/dev/null 2>&1 && echo "REMOTE_CONTROL_SUDO_VALID=true" || echo "REMOTE_CONTROL_SUDO_VALID=false"

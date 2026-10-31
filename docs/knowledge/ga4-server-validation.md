@@ -8,7 +8,9 @@ O runtime de producao ainda reportou `GA4_SECRET` ausente. A gravacao dessa chav
 
 ## Etapa pendente exata
 
-Um operador ou mecanismo de provisionamento autorizado precisa vincular a chave JA EXISTENTE do stream acima a `GA4_SECRET` no armazenamento persistente de producao (`shopvivaliz-free-a1`). A capacidade atual de chat nao expoe uma acao write-only por referencia para esse provisionamento. Nao enviar o valor no chat, em argumentos CLI, logs, arquivos versionados ou screenshots.
+**Atualização de destino (2026-10-29):** a referência de produção `shopvivaliz-free-a1` abaixo é histórica: a VM foi excluída conforme confirmação do proprietário. O destino atual para eventuais mudanças de `GA4_SECRET` é a **Marina** (`marina-a1-4c24g`, OCI ESPOSA), mas **não há prova nesta auditoria de que a credencial GA4 tenha sido migrada ou esteja ausente no destino**. Antes de alterar qualquer secret, confirmar a existência por metadados, o ambiente e o mecanismo write-only autorizado na Marina, sem revelar o valor ou contornar a recusa anterior. Não tentar recuperar o segredo a partir da VM removida.
+
+Em 2026-10-04, um operador ou mecanismo de provisionamento autorizado ainda precisava vincular a chave JA EXISTENTE do stream acima a `GA4_SECRET` no armazenamento persistente da então produção (`shopvivaliz-free-a1`). **Esta instrução é histórico, não um destino executável.** Não enviar valor em chat, argumentos CLI, logs, arquivos versionados ou screenshots.
 
 O repositorio possui `scripts/update-production-env.py`, que aceita `GA4_SECRET` entre as configuracoes estaticas e recebe JSON por stdin. Sua existencia nao concede permissao para contornar o bloqueio da plataforma e nao significa que a chave foi instalada. Preservar todas as demais chaves, permissoes, ownership e o guard monotonic; nunca editar `current/` ou a release ativa.
 

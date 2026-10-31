@@ -1,3 +1,11 @@
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 # @dev — onboarding canônico de engenharia
 
 **Efetivo:** 2026-09-21  
@@ -122,13 +130,14 @@ Antes de trabalhar em qualquer um deles, ler `AGENTS.md`, `CLAUDE.md`, README e 
 
 | Host | Papel |
 |---|---|
-| `shopvivaliz-free-a1` | produção web e deploy do ShopVivaliz |
-| `always-free-arm-1787907847-26` | backend, MEI, M365, relay e VM de navegação |
-| `shopvivaliz-ai` | DEV/e-mail/testes legado; **não é produção web** |
+| `marina-a1-4c24g` (OCI ESPOSA) | **producao web/deploy** do ShopVivaliz, MySQL, workers e runner; acesso direto RDC 1/2 comprovado |
+| `always-free-arm-1787907847-26` (OCI PRINCIPAL) | backend, MCP central, MEI/M365, relay e VM de navegacao |
+| `shopvivaliz-free-a1` | **origem excluida** segundo proprietario; jamais usar como alvo, nem criar aliases |
+| `shopvivaliz-ai` | legado E2; nao e producao |
 | Fred-Win | apoio/acesso remoto Windows |
 | KOCEPSV | apoio/acesso remoto Windows |
 
-Fonte canônica: `docs/knowledge/host-access.md`.
+Fontes canonicas: `docs/knowledge/host-access.md` e `docs/knowledge/current-topology-and-access-2026-10-29.md`. O MCP central ainda inclui a origem excluida e nao inclui Marina; nao tentar comandos da Marina nele. O MCP independente Marina e codigo staged/read-only, inativo e sem vinculo ChatGPT comprovado. Cloudflare admin ativo nao significa MCP ativo.
 
 ### Regra crítica
 

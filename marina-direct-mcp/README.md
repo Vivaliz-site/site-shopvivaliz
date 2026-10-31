@@ -1,3 +1,7 @@
+<!-- RETIRED_SOURCE_SUPERSEDES_HISTORICAL_GATES_20261029 -->
+**AVISO OPERACIONAL (2026-10-29):** a VM de origem `shopvivaliz-free-a1` foi excluída conforme confirmação do proprietário. As etapas históricas abaixo que requerem **manter, acessar, monitorar, validar, interromper ou recriar** essa VM (incluindo `NO_DECOMMISSION` e critérios dos "quatro hosts") **não são instruções executáveis atuais**. A produção web está em `marina-a1-4c24g`, o backend/controller em `always-free-arm-1787907847-26`. Não substituir aliases/SSH/tenancy da origem por Marina. Preservar backups e evidência acessível, rever gates ainda pertinentes e seguir `docs/knowledge/current-topology-and-access-2026-10-29.md`. A exclusão não prova `APTO`, integração de MCP novo, paridade de dados ou passagem de E2E; `GLOBAL_MIGRATION_STATUS=NAO_APTO` enquanto houver gates pendentes.
+<!-- /RETIRED_SOURCE_SUPERSEDES_HISTORICAL_GATES_20261029 -->
+
 # Marina independent MCP (read-only staging only)
 
 **Status: source/staging candidate only. NOT INSTALLED, NOT CONNECTED, NOT AUTHORIZED FOR PRODUCTION.**
@@ -76,3 +80,51 @@ Do **not** claim successful installation or ChatGPT connectivity from passing
 the unit tests or from the working RDC connection. Pricing/SAFE-T ownership,
 database volumes, backups, security groups and certificates remain independent
 migration gates.
+
+
+## Official operator-only staging helper (not deployment)
+
+A fail-closed helper, `operator_stage_service.sh`, stages reviewed source and systemd unit files
+only. It never downloads/installs the tunnel-client, generates or reads
+credentials, registers a ChatGPT plugin, runs a tunnel, enables/starts a unit,
+changes DNS, or modifies workers. It does not provide shell or sudo tools.
+
+This is **not** permission to bypass a refused `NoNewPrivileges` or RBAC action.
+An independently authorized Marina host administrator must first obtain the
+legitimate privileged maintenance capability, then use a **root-owned clean
+checkout of a reviewed SHA**, placed beneath an entirely root-owned, non-writable
+ancestor chain (for example a protected root-owned staging tree). A checkout
+under an ubuntu-owned `/home/ubuntu` parent is not safe for privileged staging
+because that parent can rename the checked directory between verification and copy. The `.git` metadata MUST be a root-owned, non-group/other-writable directory (not an external worktree pointer); `.git/config` MUST be a root-owned, non-writable regular file. The helper runs Git with a clean environment, fixed executable path, and `core.fsmonitor=false`/hooks disabled, because `git status` could otherwise execute a repository-configured fsmonitor hook with operator privileges. These protections only authenticate local staging inputs; they do not substitute for a signed or reviewed release. Do not launch it via RDC, SSH, OCI Run Command,
+GitHub Actions or another MCP to evade an express privilege denial.
+
+On the *actual Marina* through that officially authorized operator context:
+
+```sh
+# Inspect is non-mutating and requires the Marina hostname.
+bash marina-direct-mcp/operator_stage_service.sh --inspect
+
+# Stage only from an approved, clean, root-owned checkout. No activation.
+export SHOPVIVALIZ_MARINA_APPROVED_SHA=<reviewed-40-character-main-commit>
+bash marina-direct-mcp/operator_stage_service.sh --stage
+```
+
+Staging refuses wrong host, wrong UID, `NoNewPrivs: 1`, unknown commit,
+dirty/non-root-owned sources, unexpected symlinks, conflicting units or
+another active release. It also refuses to shadow a preexisting disabled
+vendor/runtime systemd unit and refuses any effective systemd drop-in. A
+disabled unit is not an empty slot: after daemon-reload, an /etc unit could
+silently replace it, and drop-ins could alter the approved service contract.
+Idempotent restaging accepts only an exact matching /etc unit with no drop-ins;
+otherwise an authorized host operator must reconcile the conflict separately.
+It holds a host-local stage lock and fails closed
+instead of restarting any running daemon. A successful output is
+`MARINA_MCP_STAGE=CODE_AND_UNITS_ONLY`, **not** `APTO`.
+
+The approved operator must still provision a separate service identity's
+secrets and a verified official ARM64 tunnel-client; use
+[the independent Secure MCP Tunnel runbook](../docs/ops/marina-independent-secure-mcp-tunnel.md)
+for permissions, workspace association, protected runtime key, authentication
+tests and actual ChatGPT connector verification. An admin-capable mutation
+surface additionally requires RBAC, maintenance leases, fencing, CAS,
+idempotency and real E2E validation. No `sudo` is granted by a tunnel.

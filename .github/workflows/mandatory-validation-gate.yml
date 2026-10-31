@@ -2,6 +2,7 @@ name: Mandatory Validation Gate
 on:
   pull_request:
     branches: [main, master]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
   push:
     branches: [main, master]
 permissions:
@@ -29,6 +30,14 @@ jobs:
       - name: Validate current PR history lineage
         run: python3 scripts/maintenance/validate_current_history_lineage.py
 
+      - name: Enforce commercial approval in required gate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: python3 scripts/enforce-autonomy-policy.py
       - name: Validate repository change
         env:
           PUSH_BEFORE_SHA: ${{ github.event.before }}

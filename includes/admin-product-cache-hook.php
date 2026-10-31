@@ -33,14 +33,14 @@ function sv_admin_invalidate_product_cache(): void
 
 function sv_admin_clear_product_cache(): void
 {
-    $cacheFile = dirname(__DIR__) . '/storage/products-cache-ativos.json';
+    // This catalog contains validated prices from Amazon table 991 in Olist.
+    // An admin-side status update is NOT an authoritative ERP notification.
+    // Deleting the live catalog used to take every priced product offline
+    // until the next reconciliation. Keep it intact and rely on the official
+    // ERP webhook/reconciliation to publish changes with the shared lock.
+    error_log('[sv-cache] Admin status changed; authoritative ERP Amazon catalog preserved');
 
-    if (is_file($cacheFile)) {
-        @unlink($cacheFile);
-        error_log('[sv-cache] Product cache cleared due to status change: ' . date('Y-m-d H:i:s'));
-    }
-
-    // Clear Cloudflare cache if configured
+    // Only invalidate derived/public page caches if configured
     sv_admin_purge_cloudflare();
 }
 

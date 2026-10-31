@@ -1,3 +1,23 @@
+<!-- EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
+## Regra obrigatoria: continuidade ate esgotamento comprovado de rotas autorizadas (2026-10-30)
+
+Quando o usuario disser "retome", "continue", "nao pare" ou solicitar conclusao integral, **nao encerrar por falha de uma unica ferramenta, autenticacao, pagina ou transporte**. Antes de classificar qualquer tarefa como bloqueada, o agente deve verificar, para o host e operacao especificos, cada rota REALMENTE instalada, acessivel e autorizada: (1) conectores oficiais do servico e MCP ShopVivaliz/controlador; (2) RDC/Remote Desktop Commander 1 e 2, com identificacao atual do dispositivo e privilegios efetivos; (3) SSH privado/Tailscale e tuneis Cloudflare/MCP independentes comprovados; (4) navegador/sessao grafica corporativa ja autenticada e respectivo controle de interface autorizado; (5) OCI Bastion, runner e GitHub Actions apenas nas funcoes de bootstrap e recuperacao oficialmente autorizadas. Nao pressupor que um tunel concede permissao administrativa, que uma sessao grafica permite cliques por MCP ou que uma credencial valida para leitura autoriza escrita.
+
+**Para cada rota:** obter evidencia do estado real, identidade, autorizacao, lease/fencing, resultado da acao e motivo de indisponibilidade; distinguir NOT_PROVISIONED, DENIED_BY_PROVIDER, AUTH_EXPIRED, RUNTIME_LOCKED, NOT_REACHABLE e VERIFIED_OK. Reutilizar credenciais e sessoes protegidas ja provisionadas sem expor segredos nem pedir credenciais repetidas. Se uma rota falhar por motivo tecnico reparavel, corrigir, testar novamente e prosseguir para as demais rotas permitidas. Registrar checkpoint duravel e proxima acao acionavel; manter o incidente aberto e a continuidade pelo controlador existente, sem duplicar workers ou automacoes. Nao afirmar APTO/CONCLUIDO antes de validacao de escrita, persistencia, regressao e UI E2E quando houver interface.
+
+**Limite inegociavel:** a exaustao de caminhos nao autoriza contornar um 401/403 ou recusa explicita do provedor, RBAC, CAPTCHA/MFA, protecoes de plataforma, runtime_lock_required, approvacao obrigatoria ou delimitacao do escopo comercial. Outra rota so pode ser utilizada para finalidade INDEPENDENTEMENTE autorizada; nunca como bypass da mesma acao negada. Preservar dados, precos, estoques, publicacoes organicas e terceiros. Se depender de permissao externa, identificar o provedor, capacidade faltante, evidencias, fluxo oficial de liberacao e status NAO_CONCLUIDO/BLOCKED_EXTERNAL, continuando por tarefas seguras executaveis e sem prometer execucao em segundo plano inexistente.
+
+**Exemplo Mercado Ads #3416:** advertiser 20098, token com leitura de Product Ads mas escrita explicitamente recusada pelo Mercado Livre HTTP 401. A UI autenticada no laptop nao equivale a ferramenta de clique autorizada, e o agrupamento por variantes impede pausar toda campanha/grupo misto quando anuncios ROAS >=12x devem permanecer ativos. Conferir oficialmente permissao de escrita e operacao individual sem alterar publicacoes organicas. Evidencia: https://github.com/Vivaliz-site/site-shopvivaliz/issues/3416 .
+<!-- /EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
+
+<!-- ACCESS_ROUTE_PRIORITY_V2_20261030 -->
+> **Obrigacao de retomada:** antes de declarar bloqueio ou encerrar, esgotar as rotas autorizadas e realmente provisionadas de MCP central/Orquestrador, RDC 1 e RDC 2, SSH/Tailscale, tuneis privados documentados e GUI real. OCI/GitHub Actions sao apenas para recuperacao/bootstrap. Testar identidade/permissoes/leases e registrar evidencias por rota; corrigir falhas de transporte e usar o proximo caminho seguro. Nao confundir tunel de aplicacao com MCP de comandos. Nunca reutilizar a VM de origem excluida, contornar recusas de seguranca ou executar fora das permissoes existentes. O criterio completo esta em `agent-rules.md`.
+<!-- /ACCESS_ROUTE_PRIORITY_V2_20261030 -->
+
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
 <!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
 ## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
 
@@ -25,23 +45,38 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 4. nunca assumir que um IP antigo continua sendo produção;
 5. usar o **Remote Control MCP** como rota operacional primaria; recorrer a SSH privado/Tailscale apenas quando a capacidade necessaria nao existir no MCP ou ele estiver comprovadamente indisponivel; RustDesk fica para GUI.
 
-## Hosts operacionais atuais
+## Hosts operacionais atuais — verificados em 2026-10-29
 
-| Host | IP | Papel |
-|---|---:|---|
-| `shopvivaliz-free-a1` | origin `137.131.149.55`, privado `10.0.1.112` | site/web/deploy de produção |
-| `always-free-arm-1787907847-26` | privado `10.0.1.38`, sem IP publico | backend, controller do Remote Control MCP, navegador, MEI, M365 e relay Windows |
-| `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** |
+**Inventario completo, rota por host e matriz dos MCPs:** [current-topology-and-access-2026-10-29.md](current-topology-and-access-2026-10-29.md). Antes de qualquer operacao, confirmar disponibilidade e identidade no runtime; nomes/IPs nao sao prova de acesso.
+
+| Host | Endereco documentado | Papel |
+|---|---|---|
+| `marina-a1-4c24g` (OCI ESPOSA) | privado `10.80.1.116` (doc OCI); Tailscale observado `100.118.170.46` | **producao web/deploy**, Apache, MySQL, workers, runner e Cloudflare admin |
+| `always-free-arm-1787907847-26` (OCI PRINCIPAL) | privado `10.0.1.38`; Tailscale observado `100.66.174.74` | backend/controller do Remote Control MCP, browser corporativo, MEI/M365 e relay Windows |
+| `Fred-Win` / `LAPTOP-NIG4IFUU` | RDC direto, dispositivo descoberto por nome | suporte Windows, OCI de contingencia |
+| `KOCEPSV` / `DESKTOP-KOCEPSV` | rota individual a validar | apoio Windows; RDC offline no ultimo inventario |
+
+**Origem retirada:** `shopvivaliz-free-a1` (`10.0.1.112`, origin `137.131.149.55`) foi **excluida segundo o proprietario** em 2026-10-29 e nao tem rota SSH (`No route to host`). A ausencia de rota nao prova `TERMINATED` na OCI sem consulta de lifecycle. **Nunca usar origem como alvo de comandos, workflow, health ou deploy; nao recriar automaticamente.** `shopvivaliz-ai` e outras E2 sao legadas e nao operacionais.
 
 <!-- MARINA_DIRECT_RDC_V1 -->
-## Marina: acesso direto pelo RDC, sem depender de outra VM (verificado em 2026-10-19)
+## Marina: acesso direto pelo RDC, sem depender de outra VM (revalidado em 2026-10-29)
 
 - **Identidade OCI:** a conta `ESPOSA` autenticou na API Oracle Cloud por chave de API já protegida no laptop Fred-Win; `marina-a1-4c24g` aparece `RUNNING`, VNIC privada `10.80.1.116`. Isto comprova identidade cloud, não privilegio root no Linux.
-- **Transporte DIRETO JA OPERANTE:** o bridge de desktop vinculado ao ChatGPT lista `marina-a1-4c24g` **online**, e `start_process` executou `hostname -s`, `id -un` e `systemctl show` diretamente na Marina como `ubuntu`, **sem passar pela controladora** `always-free-arm-1787907847-26`. Para tarefas na Marina, buscar no `list_devices` o ID atual desse dispositivo e usar suas ferramentas de host/terminal (sem adivinhar ID estavel). O status deve ser confirmado em cada sessao; RDC 2 depende de vinculo/quota propria e nao equivale a RDC 1.
-- **Limite comprovado:** a unidade `shopvivaliz-desktop-commander.service` esta ativa e aplica `NoNewPrivileges=yes`. `blockedCommands=[]` nao concede root/sudo; manutencao privilegiada ja sofreu recusa expressa. **Nao contornar** a negativa por GitHub Actions, OCI Run Command, MCP da controladora, outra conta, SSH ou tunel alternativo. O operador autorizado deve obter a aprovacao/capacidade oficial, independentemente do dispositivo RDC.
-- **ShopVivaliz Remote Control (outro MCP):** o catalogo operacional central ainda tem quatro hosts executaveis; seu transporte SSH para `10.80.1.116:22` a partir da controladora nao respondeu no ultimo teste, e a host key nao estava inscrita no inventario seguro. Um servidor **ShopVivaliz Remote Control dedicado na Marina** continua **nao provisionado** (sem `shopvivaliz-remote-control-mcp.service`, sem `cloudflared`/tunel seguro proprio). O PR #3149 prepara apenas inventario nao executavel; nunca confundir inventario com conexao MCP direta.
+- **Transporte DIRETO JA OPERANTE (Remote Desktop Commander):** o bridge de desktop vinculado ao ChatGPT lista `marina-a1-4c24g` **online**, e `start_process` executou `hostname -s`, `id -un` e `systemctl show` diretamente na Marina como `ubuntu`, **sem passar pela controladora** `always-free-arm-1787907847-26`. Para tarefas na Marina, buscar no `list_devices` o ID atual desse dispositivo e usar suas ferramentas de host/terminal (sem adivinhar ID estavel). O status deve ser confirmado em cada sessao; RDC 2 depende de vinculo/quota propria e nao equivale a RDC 1.
+- **Historico de limite de privilegio:** em 2026-10-19 a unidade `shopvivaliz-desktop-commander.service` aplicava `NoNewPrivileges=yes`; em **2026-10-29** o `systemctl show` direto na Marina retornou **`NoNewPrivileges=no`**. Nenhum desses valores concede root/sudo, e a recusa expressa anterior nao pode ser contornada. **Nao contornar** a negativa por GitHub Actions, OCI Run Command, MCP da controladora, outra conta, SSH ou tunel alternativo. O operador autorizado deve obter a aprovacao/capacidade oficial, independentemente do dispositivo RDC.
+- **ShopVivaliz Remote Control (outro MCP):** em 2026-10-29 o catalogo operacional central ainda expunha quatro hosts, incluindo a origem excluida, mas **nao incluia Marina**; seu transporte SSH para `10.80.1.116:22` a partir da controladora nao respondeu no ultimo teste, e a host key nao estava inscrita no inventario seguro. Um servidor **ShopVivaliz Remote Control dedicado na Marina** continua **nao provisionado** (sem `shopvivaliz-remote-control-mcp.service`, sem `cloudflared`/tunel seguro proprio). O PR #3149 prepara apenas inventario nao executavel; nunca confundir inventario com conexao MCP direta.
 - **Configuracao futura do MCP direto:** requer daemon proprio na Marina, credenciais separadas e protegidas, conexao autenticada propria por HTTPS/tunel seguro independente, comprovacao de ownership, auditoria, leases/fencing, testes de conexao e autorizacao efetiva antes de habilitar comandos administrativos. Nao reaproveitar tokens/SSH do MCP central e nao expor uma porta MCP administrativa sem autenticao e controle de rede.
 - **Uso imediato:** o caminho direto que ja funciona e o bridge de desktop da Marina para operacoes na capacidade efetivamente aprovada. Se uma acao exigir root nao disponivel, registrar o impedimento para manutencao oficial sem substituir a rota autorizada por uma indireta.
+
+### Gate de encaminhamento administrativo da Marina — 2026-10-27
+
+**Autorização do proprietário já expressa:** o proprietário solicitou repetidamente conclusão da migração, acesso administrativo com `sudo` e túneis independentes por VM. **Nunca atribuir a ele a exigência `NoNewPrivileges=yes` nem solicitar novamente autorização genérica.** O valor `NoNewPrivileges=true` foi introduzido no template técnico `ops/systemd/shopvivaliz-desktop-commander.service` (plano de 2026-08-23) para isolar o **agente RDC**; não é uma proibição de `sudo` desejada pelo proprietário, nem prova de indisponibilidade de `sudo` no login SSH do próprio Linux.
+
+**Interromper a repetição do erro:** ao receber uma tarefa que exige root em Marina, verificar primeiro **sem elevação** a identidade efetiva, o tipo de sessão e o `NoNewPrivs` do processo. Se `NoNewPrivs: 1` no agente `shopvivaliz-desktop-commander.service`, registrar `PRIVILEGED_ACTION_ROUTE_UNAVAILABLE=RDC_NO_NEW_PRIVS` e **não repetir `sudo` nesse agente**, pois a mesma falha será determinística. `blockedCommands=[]`, grupo Linux `sudo` e token OCI não anulam a restrição do processo. A existência de `NoNewPrivs: 1` no agente não determina o resultado de uma sessão SSH administrativa independente.
+
+**Encaminhamento válido:** distinguir a autorização operacional reiterada do proprietário de (a) credenciais/autenticação de cada provedor, (b) capacidade privilegiada do host, e (c) concessão/lease efetivo da plataforma para a ação concreta. Utilizar o **mecanismo oficial de manutenção administrativa separado do RDC**, quando autenticado, provisionado, aprovado e testado pelo operador do host. A recusa explícita de manutenção privilegiada permanece vinculante: jamais executar a **mesma ação recusada** por OCI Run Command, GitHub Actions, SSH alternativo, túnel, outro MCP, desativação de `NoNewPrivileges`, alteração de `sudoers` ou mudança de identidade como atalho. Não converter um túnel Cloudflare em shell root genérico. O serviço de transporte `cloudflared` pode continuar não privilegiado; o acesso `sudo` pertence à conta SSH administradora verificada e às regras UNIX aprovadas.
+
+**Condição exata de retomada:** o operador/plataforma responsável deve disponibilizar, pelo fluxo oficialmente aceito, uma sessão de manutenção com capacidade privilegiada efetiva e escopo da instalação do conector/admin da Marina. Atestar `hostname`, identidade, `sudo -l` e uma ação administrativa inofensiva permitida **somente nessa sessão oficialmente habilitada**; preservar autenticação, audit trail, leases/fencing, rollback e negativas de acesso. Sem isso, declarar `NAO_APTO` e `BLOCKED_EXTERNAL: HOST_PRIVILEGED_CAPABILITY_NOT_GRANTED` com evidência, sem repetir tentativas da sessão RDC e sem transferir essa etapa ao usuário como se faltasse sua autorização.
 
 <!-- /MARINA_DIRECT_RDC_V1 -->
 
@@ -99,19 +134,19 @@ Exemplos:
 ```bash
 ssh -i ~/.ssh/id_rsa ubuntu@127.0.0.1  # somente no runner self-hosted do site
 ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.38  # somente dentro da VCN
-ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17
+## Alvo historico aposentado: nao conectar ao antigo DEV/E2
 ```
 
 ### iPhone / cliente SSH humano
 
-O acesso humano pelas conexoes SSH do iPhone deve permanecer privado:
+O acesso humano pelas conexoes SSH do iPhone deve permanecer privado. **O perfil/relay da antiga VM web foi aposentado e nao deve ser utilizado nem como fallback**; para Marina, confirmar a identidade na rede Tailscale e a autenticacao SSH antes de criar perfil novo:
 
 | Perfil | Host | Porta | Usuario | Destino real |
 |---|---|---:|---|---|
 | Backend A1 | `100.66.174.74` | `22` | `ubuntu` | backend A1 pela rede Tailscale |
-| shopvivaliz A1 | `100.66.174.74` | `2224` | `ubuntu` | relay Tailscale-only no backend -> `10.0.1.112:22` |
+| Marina (nao provisionado como perfil iPhone) | `100.118.170.46` (observado, dinamico) | `22` (a validar) | `ubuntu` (a validar) | acesso SSH privado somente se autenticacao/host key forem comprovadas; nao herdar chave/relay da origem |
 
-O relay do site e provisionado por `scripts/setup-iphone-private-ssh-relay.sh` e deve escutar somente no IPv4 Tailscale atual do backend. Nao usar os IPs publicos das VMs como fallback no iPhone. A chave privada continua armazenada apenas no cliente autorizado e nunca deve ser copiada para Git, logs ou chat.
+O antigo relay do site era provisionado por `scripts/setup-iphone-private-ssh-relay.sh`; e historico e nao deve ser iniciado/reutilizado para a origem excluida. Nao usar os IPs publicos das VMs como fallback no iPhone. A chave privada continua armazenada apenas no cliente autorizado e nunca deve ser copiada para Git, logs ou chat.
 
 
 ## Prioridade operacional
@@ -173,7 +208,9 @@ Este arquivo é público no repositório. Por isso contém somente endereços, p
 <!-- REMOTE_CONTROL_MCP_HOST_ROUTES_V2 -->
 ## Remote Control MCP — rotas atuais e estado comprovado
 
-Esta e a rota operacional prioritaria para agentes. O uso de rotas alternativas exige necessidade tecnica concreta ou indisponibilidade comprovada do MCP.
+**Advertencia de 2026-10-29:** `hosts_list` ainda divulga `shopvivaliz-free-a1` excluida e nao divulga `marina-a1-4c24g`. Tratar essa allowlist como **DESATUALIZADA**, sem tentar chamadas ao host retirado e sem fazer alias para a Marina. Na Marina, RDC 1/2 direto sao as rotas **comprovadas** para operacoes permitidas; MCP direto e tunnel-client OpenAI da Marina seguem **INATIVOS/NAO CONECTADOS**. `shopvivaliz-cloudflared-admin.service` estava ativo, mas isso nao comprova MCP. Consultar [inventario atualizado](current-topology-and-access-2026-10-29.md) e [runbook do MCP independente](../ops/marina-independent-secure-mcp-tunnel.md). O controlador de backend continuava acessivel, com continuidade degradada.
+
+Esta e a rota operacional prioritaria para agentes **nos hosts atualmente incluidos e validos**. O uso de rotas alternativas exige necessidade tecnica concreta ou indisponibilidade comprovada do MCP.
 
 Controller canônico:
 
@@ -192,7 +229,7 @@ Os relays `5557/5558` são apenas bootstrap/recovery. Nunca tratá-los como tran
 
 Até existir evidência fresca de `2223` + identidade administrativa correta no KOCEPSV, o host deve ser considerado **indisponível para o E2E final do control plane**. Não inferir Administrator apenas porque a porta SSH abriu.
 
-Ao validar os quatro hosts, exigir evidência real de:
+Ao validar os hosts **ainda existentes e autorizados**, exigir evidência real de:
 
 1. rota de rede/SSH disponível;
 2. `hostname` correto;

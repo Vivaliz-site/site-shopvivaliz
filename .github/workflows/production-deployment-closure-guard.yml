@@ -1,0 +1,35 @@
+name: Production Deployment Closure Guard
+
+on:
+  workflow_run:
+    workflows: [Master Production Pipeline 24/7]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: shopvivaliz-deployment-closure-guard
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    name: Verify deployed SHA and prevent false completion
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Unit test closure verifier
+        run: python3 tests/test_deployment_closure_guard.py
+      - name: Reconcile official deploy evidence, live public SHA and main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 scripts/quality/deployment_closure_guard.py --sync-issue

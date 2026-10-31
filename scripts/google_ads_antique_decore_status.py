@@ -8,10 +8,14 @@ import urllib.request
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
-from google.ads.googleads.client import GoogleAdsClient
+from google_ads_legacy_budget_policy import refuse_legacy_ads_execution
+
+if TYPE_CHECKING:
+    from google.ads.googleads.client import GoogleAdsClient
 
 CAMPAIGN_NAME = "ShopVivaliz-Search-Vasos-Antique-Decore-2026-08"
 CAMPAIGN_LAUNCH_DATE = "2026-08-15"
@@ -63,6 +67,9 @@ def visible_text(html: str) -> str:
 
 
 def client_from_env() -> GoogleAdsClient:
+    # Keep the retired CLI able to refuse before installing/loading the SDK.
+    from google.ads.googleads.client import GoogleAdsClient
+
     cfg = {
         "developer_token": os.environ["GOOGLE_ADS_DEVELOPER_TOKEN"],
         "client_id": os.environ["GOOGLE_OAUTH_CLIENT_ID"],
@@ -77,6 +84,7 @@ def client_from_env() -> GoogleAdsClient:
 
 
 def set_status(client, customer_id: str, service_name: str, operation_name: str, resource_names: list[str], status) -> None:
+    refuse_legacy_ads_execution("antique_decore.set_status")
     if not resource_names:
         return
     operations = []
@@ -141,6 +149,7 @@ def enable_everything(client, customer_id: str, campaign_rn: str, campaign_statu
 
 
 def ensure_budget(client, customer_id: str, budget_rn: str, actual_micros: int) -> bool:
+    refuse_legacy_ads_execution("antique_decore.ensure_budget")
     if actual_micros == EXPECTED_DAILY_BUDGET_MICROS:
         return False
     op = client.get_type("CampaignBudgetOperation")
@@ -308,6 +317,7 @@ def derived(perf: dict, conversions: float, conversion_value: float) -> dict:
 
 
 def main() -> int:
+    refuse_legacy_ads_execution("google_ads_antique_decore_status.py")
     required = [
         "GOOGLE_OAUTH_CLIENT_ID",
         "GOOGLE_OAUTH_CLIENT_SECRET",

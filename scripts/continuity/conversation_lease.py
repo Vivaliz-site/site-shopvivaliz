@@ -29,7 +29,16 @@ def _load(path:Path):
 def _write_atomic(path:Path,payload:dict[str,Any])->None:
     fd,name=tempfile.mkstemp(prefix=path.name+".",dir=str(path.parent))
     try:
-        with os.fdopen(fd,"w") as h: json.dump(payload,h,sort_keys=True,separators=(",",":")); h.write("\n"); h.flush(); os.fsync(h.fileno())
+        with os.fdopen(fd,"w") as h:
+            # A privileged recovery process must not strand the ubuntu
+            # continuity daemon with a root-owned mode-0600 lease after replace.
+            if os.name != "nt" and os.geteuid() == 0:
+                owner = path.parent.stat()
+                os.fchown(h.fileno(), owner.st_uid, owner.st_gid)
+            json.dump(payload,h,sort_keys=True,separators=(",",":"))
+            h.write("\n")
+            h.flush()
+            os.fsync(h.fileno())
         os.replace(name,path)
     finally:
         if os.path.exists(name): os.unlink(name)
@@ -37,7 +46,19 @@ def _write_atomic(path:Path,payload:dict[str,Any])->None:
 def _locked(conversation_id:str):
     class Lock:
         def __enter__(self):
-            self.state_path,lock_path=_paths(conversation_id); self.context=locked_file(lock_path); self.handle=self.context.__enter__(); return self.state_path
+            self.state_path,lock_path=_paths(conversation_id)
+            self.context=locked_file(lock_path)
+            self.handle=self.context.__enter__()
+            try:
+                # Lock files need the same owner as their shared state directory
+                # when initialized by an authorized privileged recovery writer.
+                if os.name != "nt" and os.geteuid() == 0:
+                    owner=lock_path.parent.stat()
+                    os.fchown(self.handle.fileno(), owner.st_uid, owner.st_gid)
+            except BaseException:
+                self.context.__exit__(*sys.exc_info())
+                raise
+            return self.state_path
         def __exit__(self,*args): return self.context.__exit__(*args)
     return Lock()
 

@@ -68,6 +68,7 @@ jobs:
           if len(items) != 1:
               raise SystemExit(f"MARINA_INSTANCE_NOT_UNIQUE={len(items)}")
           instance = compute.get_instance(items[0].identifier).data
+          print(f"MARINA_LIFECYCLE_STATE={instance.lifecycle_state}", flush=True)
           if instance.display_name != os.environ["INSTANCE_NAME"] or instance.lifecycle_state != "RUNNING":
               raise SystemExit("MARINA_INSTANCE_IDENTITY_OR_STATE_INVALID")
           attachments = [

@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   recover:
+    # RETIRED_SOURCE_JOB_GUARD_20261029: old VM deleted, fail closed.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:

@@ -22,6 +22,9 @@ from pathlib import Path
 EXPECTED_HOST = "marina-a1-4c24g"
 PROTOCOL_VERSION = "2025-06-18"
 MAX_BODY = 16384
+# A local or tunneled slow client must not exhaust the read-only MCP's threads.
+REQUEST_TIMEOUT_SECONDS = 5.0
+MAX_OPEN_CONNECTIONS = 16
 ALLOWED_SERVICES = frozenset({
     "shopvivaliz-desktop-commander.service",
     "shopvivaliz-queue-worker.service",
@@ -258,6 +261,29 @@ def create_server(
             self.send_json(200, payload)
 
     class RedactedHTTPServer(ThreadingHTTPServer):
+        def __init__(self, *args, **kwargs):
+            self._open_connections = threading.BoundedSemaphore(MAX_OPEN_CONNECTIONS)
+            super().__init__(*args, **kwargs)
+
+        def process_request(self, request, client_address):
+            # Reject excess sockets before creating another handler thread.
+            if not self._open_connections.acquire(blocking=False):
+                self.shutdown_request(request)
+                return
+            try:
+                super().process_request(request, client_address)
+            except BaseException:
+                self._open_connections.release()
+                raise
+
+        def process_request_thread(self, request, client_address):
+            try:
+                # Covers incomplete HTTP headers AND partial JSON bodies.
+                request.settimeout(REQUEST_TIMEOUT_SECONDS)
+                super().process_request_thread(request, client_address)
+            finally:
+                self._open_connections.release()
+
         def handle_error(self, request, client_address):
             failure = sys.exc_info()[1]
             if isinstance(failure, (BrokenPipeError, ConnectionResetError, TimeoutError)):

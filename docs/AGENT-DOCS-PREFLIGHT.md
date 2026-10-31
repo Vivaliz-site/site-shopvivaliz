@@ -1,3 +1,7 @@
+<!-- CURRENT_TOPOLOGY_PREFLIGHT_20261029 -->
+**Topologia atual é pré-requisito de todos os agentes:** o recibo de `scripts/agent_docs_gate.py` inclui `docs/knowledge/current-topology-and-access-2026-10-29.md` e invalida automaticamente leituras antigas quando esse inventário muda. Não executar rotas que apontem para a VM excluída `shopvivaliz-free-a1`. Os caminhos históricos de Fred-Win descritos abaixo exigem verificação contra `docs/knowledge/host-access.md`; não tratá-los como endpoints atuais sem prova no runtime.
+<!-- /CURRENT_TOPOLOGY_PREFLIGHT_20261029 -->
+
 # Agent Docs Preflight
 
 **Policy ID:** `AGENT_DOCS_PREFLIGHT_V1`
@@ -17,6 +21,7 @@ The required base documents are:
 3. `AGENTS-ACCESS-INDEX.md`
 4. `docs/ai-agents-map.md`
 5. this file: `docs/AGENT-DOCS-PREFLIGHT.md`
+6. `docs/knowledge/current-topology-and-access-2026-10-29.md` (também exigido pelo manifesto automatizado, além dos demais documentos base)
 
 The agent MUST also read scope-specific documentation referenced by the task or discovered while investigating it before changing that scope.
 

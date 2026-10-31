@@ -1,3 +1,11 @@
+<!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+<!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
+
+<!-- ACTIVE_MARINA_ROUTING_20261029 -->
+> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+<!-- /ACTIVE_MARINA_ROUTING_20261029 -->
+
 # Claude VM — bootstrap operacional global
 
 Este documento é o bootstrap persistente do Claude Code usado nos projetos ShopVivaliz. Ele deve ser carregado em toda nova sessão na VM pelo `~/.claude/CLAUDE.md`.
@@ -6,10 +14,10 @@ Este documento é o bootstrap persistente do Claude Code usado nos projetos Shop
 
 Antes de diagnosticar, editar, testar, operar infraestrutura ou responder sobre estado atual:
 
-1. leia `/home/ubuntu/shopvivaliz-deploy/current/docs/knowledge/host-access.md`;
-2. leia `/home/ubuntu/shopvivaliz-deploy/current/docs/knowledge/README.md`;
-3. leia `/home/ubuntu/shopvivaliz-deploy/current/docs/knowledge/agent-rules.md`;
-4. leia `/home/ubuntu/shopvivaliz-deploy/current/REGRAS-AGENTES-CENTRALIZADAS.md`;
+1. leia no `main` atual `docs/knowledge/host-access.md`;
+2. leia no `main` atual `docs/knowledge/current-topology-and-access-2026-10-29.md`;
+3. leia no `main` atual `docs/knowledge/README.md` e `docs/knowledge/agent-rules.md`;
+4. leia no `main` atual `REGRAS-AGENTES-CENTRALIZADAS.md`; nunca usar somente a copia de uma release ativa como fonte de estado atual;
 5. leia o `CLAUDE.md`, `AGENTS.md`, README/runbook e documentação específica do repositório alvo;
 6. confirme evidência viva antes de assumir host, branch, release, serviço, modelo, credencial configurada ou estado operacional.
 
@@ -17,17 +25,18 @@ A documentação orienta, mas código, logs, banco, workflows e probes reais pre
 
 ## Mapa de hosts
 
-- `shopvivaliz-free-a1`: produção web e deploy do ShopVivaliz; privado `10.0.1.112`.
-- `always-free-arm-1787907847-26`: backend/MEI/M365/relay e VM de navegação; privado `10.0.1.38`, sem IP público.
-- `shopvivaliz-ai` / `137.131.156.17`: legado DEV/e-mail/testes; nunca produção web.
+- `marina-a1-4c24g` (OCI ESPOSA): **producao web/deploy**, MySQL, workers e runner; privado `10.80.1.116` (doc anterior), Tailscale observado `100.118.170.46`.
+- `always-free-arm-1787907847-26` (OCI PRINCIPAL): backend/MCP central/MEI/M365/relay e VM de navegacao; privado `10.0.1.38`, Tailscale observado `100.66.174.74`.
+- `shopvivaliz-free-a1`: origem **excluida segundo proprietario** e sem rota SSH em 2026-10-29. Nunca usar no runtime nem recriar automaticamente.
+- `shopvivaliz-ai` e E2 antigas: apenas historico.
 - `Fred-Win` e `KOCEPSV`: hosts Windows de apoio/acesso; não são o local padrão para navegador de agentes.
 
 Use a fonte canônica `docs/knowledge/host-access.md` antes de qualquer operação, pois endereços e papéis podem mudar.
 
 ## Ordem de acesso remoto do Claude
 
-1. **Remote Control MCP** é a primeira rota para host, serviço, diagnóstico, arquivos e tarefas duráveis.
-2. Use **SSH privado/Tailscale** somente para shell direto que o MCP não exponha ou quando o control plane estiver comprovadamente indisponível.
+1. **Remote Control MCP** e primeira rota para o backend e hosts validos na sua allowlist, **nao** para Marina: hosts_list ainda divulga origem excluida.
+2. Para **Marina**, usar RDC 1/2 direto com descoberta do device e identidade validada; SSH privado/Tailscale somente quando autenticado e autorizado. MCP Marina independente inativo/nao registrado; Cloudflare admin ativo nao prova MCP.
 3. Use **GitHub Actions/OCI Bastion** para bootstrap, recovery ou reparo do MCP.
 4. Use **RustDesk** para GUI. Navegador de agente continua exclusivamente na backend.
 
