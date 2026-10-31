@@ -39,6 +39,8 @@ de criar um novo checkpoint.
 ## Janela de análise do controlador
 
 O controlador de continuidade deve analisar somente tarefas cujo `created_at` esteja dentro dos **últimos 10 dias**. Tarefas criadas antes dessa janela, ou com timestamp de criação ausente/inválido, não entram no watchdog, no nudge do ChatGPT nem no dispatcher detached, mesmo que recebam uma atualização posterior. Isso limita reprocessamento de histórico antigo sem desabilitar a continuidade das tarefas recentes.
+
+**Escopo dessa janela:** dez dias e apenas filtro antirreprocessamento do controlador, **nao** prazo de encerramento, expiracao do objetivo ou indicacao de que a tarefa foi concluida. Tarefas antigas sem recuperacao automatica continuam pendentes ate revalidacao e conclusao efetiva ou impedimento externo comprovado; exigem triagem/renovacao autorizada de binding e checkpoint, sem inventar conversa nem criar clones ou concorrencia. Uma sessao curta e controles contra loops abandonados ou sem progresso tambem nao encerram a tarefa. Ver `docs/knowledge/agent-rules.md` (`TASK_SESSION_CONTINUITY_V1`).
 <!-- /CONTINUITY_TASK_LOOKBACK_V1 -->
 
 ## Limpeza de clones temporários ao concluir uma tarefa

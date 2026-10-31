@@ -251,10 +251,10 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
         <h2 class="checkout-title">Resumo</h2>
         <div id="cart-items" class="summary-items"></div>
 
-        <div class="sv-coupon-box" style="display:flex; gap:8px; margin:14px 0;">
-            <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1; text-transform:uppercase;" aria-label="Código do cupom de desconto">
-            <button type="button" id="coupon-apply-btn" class="btn btn-secondary">Aplicar</button>
-            <button type="button" id="coupon-remove-btn" class="btn btn-secondary" hidden>Remover</button>
+        <div class="sv-coupon-box" style="display:flex; flex-wrap:wrap; gap:8px; margin:14px 0;">
+            <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1 1 100%; min-width:0; min-height:44px!important; font-size:16px; text-transform:uppercase;" aria-label="Código do cupom de desconto">
+            <button type="button" id="coupon-apply-btn" class="btn btn-secondary" style="flex:1; min-height:44px!important;">Aplicar</button>
+            <button type="button" id="coupon-remove-btn" class="btn btn-secondary" style="flex:1; min-height:44px!important;" hidden>Remover</button>
         </div>
         <div id="coupon-status" class="sv-checkout-note" hidden></div>
 
