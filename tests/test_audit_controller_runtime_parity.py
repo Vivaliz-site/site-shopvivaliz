@@ -31,6 +31,10 @@ class AuditControllerRuntimeParityTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("AUDIT_CONTROLLER_PARITY=FAIL", result.stderr)
 
+    def test_shared_continuity_gate_remains_executable(self):
+        gate = ROOT / "scripts" / "agent-continuity-validate.sh"
+        self.assertTrue(gate.stat().st_mode & 0o111, "continuity validator lost executable permission")
+
     def test_missing_active_release_fails_closed(self):
         result = self.run_check(Path("/nonexistent/audit-v5-active-controller.py"))
         self.assertNotEqual(result.returncode, 0)
