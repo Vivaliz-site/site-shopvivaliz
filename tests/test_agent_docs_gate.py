@@ -43,6 +43,24 @@ class AgentDocsGateTests(unittest.TestCase):
             self.original_required,
         )
 
+    def test_task_continuity_directives_are_mandatory_and_unambiguous(self) -> None:
+        for relative in (
+            "docs/knowledge/agent-rules.md",
+            "docs/knowledge/task-continuity.md",
+        ):
+            with self.subTest(required_doc=relative):
+                self.assertIn(relative, self.original_required)
+
+        rules = (ROOT / "docs/knowledge/agent-rules.md").read_text(encoding="utf-8")
+        self.assertIn("TASK_SESSION_CONTINUITY_V1", rules)
+        self.assertIn("controlador de continuidade e contingencia", rules.lower())
+        self.assertIn("nao sao prazo de validade", rules.lower())
+        self.assertIn("read -> acknowledge -> verify", rules)
+
+        continuity = (ROOT / "docs/knowledge/task-continuity.md").read_text(encoding="utf-8")
+        self.assertIn("nao** prazo de encerramento", continuity)
+        self.assertIn("TASK_SESSION_CONTINUITY_V1", continuity)
+
     def test_changed_topology_invalidates_receipt(self) -> None:
         topo_name = "docs/knowledge/current-topology-and-access-2026-10-29.md"
         gate.REQUIRED_DOCS = (*gate.REQUIRED_DOCS, topo_name)

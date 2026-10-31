@@ -228,12 +228,25 @@ def task_id_for(task: dict[str, Any]) -> str:
 
 
 def task_scope_docs(task: dict[str, Any]) -> list[str]:
-    raw = task.get("required_docs") or task.get("scope_docs") or []
-    if isinstance(raw, str):
-        raw = [raw]
-    if not isinstance(raw, list):
-        return []
-    return [str(item).strip() for item in raw if str(item).strip()]
+    """Collect every scope document; never discard one list for another.
+
+    Both keys are independently meaningful. The ordering is stable so that
+    receipt digests and preflight commands describe the same document set.
+    """
+    documents: list[str] = []
+    for field in ("required_docs", "scope_docs"):
+        raw = task.get(field) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list):
+            raise ValueError(f"{field} must be a string or list of strings")
+        for item in raw:
+            if not isinstance(item, str):
+                raise ValueError(f"{field} entries must be strings")
+            name = item.strip()
+            if name and name not in documents:
+                documents.append(name)
+    return documents
 
 
 def persist_task_continuity(
@@ -286,13 +299,21 @@ def docs_preflight(agent_id: str, task: dict[str, Any]) -> tuple[bool, str]:
     task_id = task_id_for(task)
     if not task_id:
         return False, "tarefa sem identificador; preflight de documentação não pode ser vinculado"
-    valid, reason, _ = verify_receipt(agent_id, task_id, task_scope_docs(task))
+    try:
+        documents = task_scope_docs(task)
+    except ValueError as exc:
+        return False, f"invalid task-specific documentation: {exc}"
+    valid, reason, _ = verify_receipt(agent_id, task_id, documents)
     return valid, reason
 
 
 def docs_read_command(agent_id: str, task: dict[str, Any]) -> str:
     task_id = task_id_for(task) or "task-sem-id"
-    extras = "".join(f" --doc {json.dumps(path)}" for path in task_scope_docs(task))
+    try:
+        documents = task_scope_docs(task)
+    except ValueError as exc:
+        return f"TASK_SCOPE_DOCS_INVALID: correct task documentation metadata before preflight ({exc})"
+    extras = "".join(f" --doc {json.dumps(path)}" for path in documents)
     return f"python scripts/agent-docs-gate.py read --agent {agent_id} --task {task_id}{extras}"
 
 

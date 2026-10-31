@@ -1,3 +1,16 @@
+<!-- TASK_SESSION_CONTINUITY_V1 -->
+## Regra operacional: concluir a tarefa nao depende do fim da sessao (2026-10-30)
+
+**Ordem do proprietario:** uma tarefa autorizada e ainda executavel nao pode ser pausada ou declarada concluida por habito do agente, termino da resposta, troca de conversa, timeout, diagnostico, entrega de relatorio, abertura de PR ou sucesso de CI isoladamente. O agente executa o proximo passo permitido, corrige as causas, testa, valida e registra o resultado. O controlador de continuidade e contingencia para travamentos, **nao substitui a obrigacao de execucao do agente principal**.
+
+- **Tarefa diferente de sessao:** limites de duracao da sessao, cotas de IA paga e politicas de anti-loop controlam execucoes abandonadas, repetitivas, sem progresso ou de custo indevido. Nao sao prazo de validade nem autorizacao para abandonar uma tarefa com progresso verificavel. Quando a sessao legitima precisar terminar, preservar `RUNNING`, evidencias, ownership/lease valido, `next_action` especifica e destino de retomada efetivamente comprovado; nao prometer atividade em segundo plano sem executor real.
+- **Estado terminal exige prova:** `CONCLUIDO` somente apos correcoes persistidas, testes GREEN, regressao e E2E/UI real quando aplicavel, no SHA/ambiente efetivo. Se houver impedimento externo comprovado, manter a pendencia documentada em `BLOCKED_EXTERNAL` ou `AWAITING_APPROVAL` com autorizacao exata faltante, sem tratar o bloqueio como sucesso. PR em rascunho, checks verdes ou proposta administrativa nao equivalem a aplicacao em `main`.
+- **Leitura de instrucoes antes de executar:** ler `AGENTS.md`, `docs/knowledge/atendimento-chatgpt-bootstrap.md`, `host-access.md`, `README.md`, este `agent-rules.md` e os documentos especificos da tarefa no `main` vigente. Registrar `rules_loaded` com caminho/ref/SHA/instante e obter `read -> acknowledge -> verify` do preflight real quando aplicavel. Um recibo de entrega ou simples ACK nao substitui leitura e interpretacao; falta de prova bloqueia a mutacao, nao a investigacao segura somente-leitura.
+- **Revisao humana especifica:** quando o proprietario determinar que ele mesmo fara o merge, deixar a branch/PR em revisao, sem auto-merge e sem deploy; continuar os testes, reparos e atividades independentes autorizadas sem fechar a tarefa artificialmente.
+- **Protecoes preservadas:** nenhuma exigencia de continuidade dispensa MFA, RBAC, segredos, aprovacoes externas, branch protection, leases/fencing, custos ou recusas explicitas. Nao criar segundo executor para substituir um controlador existente nem repetir por outra ferramenta uma acao expressamente recusada.
+
+<!-- /TASK_SESSION_CONTINUITY_V1 -->
+
 <!-- EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
 ## Regra obrigatoria: continuidade ate esgotamento comprovado de rotas autorizadas (2026-10-30)
 
