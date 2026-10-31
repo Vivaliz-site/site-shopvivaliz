@@ -15,6 +15,7 @@ on:
       - 'scripts/validate-global-audit-policy-authenticated.py'
       - 'scripts/certify-audit-manifest.py'
       - 'tests/test_certify_audit_manifest.py'
+      - 'tests/test_v5_no_diagnostic_only.py'
       - 'scripts/absolute-audit-governance-validate.sh'
       - 'scripts/validate-main-merge-provenance.py'
       - 'scripts/repository-governance-validate.sh'
@@ -36,6 +37,7 @@ on:
       - 'scripts/validate-global-audit-policy.py'
       - 'scripts/certify-audit-manifest.py'
       - 'tests/test_certify_audit_manifest.py'
+      - 'tests/test_v5_no_diagnostic_only.py'
       - 'scripts/absolute-audit-governance-validate.sh'
       - 'scripts/validate-main-merge-provenance.py'
       - 'scripts/repository-governance-validate.sh'
@@ -86,6 +88,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m unittest tests/test_certify_audit_manifest.py tests/test_validate_main_merge_provenance.py
+      - name: Reject diagnostic-only V5 regression
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_v5_no_diagnostic_only.py
       - name: Self-test audit governance
         run: |
           set -Eeuo pipefail
