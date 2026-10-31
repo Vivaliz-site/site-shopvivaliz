@@ -31,11 +31,14 @@ IGNORED_PREFIXES = (
     "docs/", "release-notes/", "reports/", "artifacts/", "tests/fixtures/",
 )
 
+READONLY_STOCK_VALIDATOR_PATH = "scripts/quality/validate-product-stock.php"
+READONLY_STOCK_VALIDATOR_ALLOWED_ADD = "if ($rows === []) $errors[] = 'empty_catalog_or_missing_cache';"
+
 NONCOMMERCIAL_SENSITIVE_PATH_EXCEPTIONS = {
     ".github/workflows/test-inventory.yml",
-    # This is a read-only fail-closed quality probe, not an ERP/stock writer.
-    # Keep content scanning active so actual stock mutations still require approval.
-    "scripts/quality/validate-product-stock.php",
+    # The stock quality probe is exempt ONLY for the precise fail-closed one-line
+    # addition checked below. Any other addition or deletion requires approval.
+    READONLY_STOCK_VALIDATOR_PATH,
 }
 
 MUTATION_PATTERN = re.compile(
@@ -193,6 +196,24 @@ def sensitive_content(lines: list[str]) -> list[str]:
     return findings
 
 
+def approved_readonly_stock_validator_change(diff: str) -> bool:
+    """Accept only the one known fail-closed assertion; other deltas stay human-only.
+
+    In particular, a deletion must never silently lose stock protections merely
+    because the filename itself describes a read-only validator.
+    """
+    added = []
+    deleted = []
+    for line in diff.splitlines():
+        if line.startswith(("+++", "---")):
+            continue
+        if line.startswith("+"):
+            added.append(line[1:].strip())
+        elif line.startswith("-"):
+            deleted.append(line[1:].strip())
+    return not deleted and added == [READONLY_STOCK_VALIDATOR_ALLOWED_ADD]
+
+
 def main() -> int:
     policy = load_policy()
     base = os.getenv("BASE_SHA", "origin/main")
@@ -206,7 +227,11 @@ def main() -> int:
     findings: list[dict] = []
     for path in files:
         path_findings: list[str] = []
-        if sensitive_path(path):
+        if path == READONLY_STOCK_VALIDATOR_PATH:
+            patch = git("diff", "--unified=0", "--no-color", base, head, "--", path)
+            if not approved_readonly_stock_validator_change(patch):
+                path_findings.append("unapproved_stock_validator_diff")
+        elif sensitive_path(path):
             path_findings.append("sensitive_path")
         if should_scan_content(path):
             path_findings.extend(sensitive_content(added_lines(base, head, path)))
