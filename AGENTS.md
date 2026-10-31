@@ -1,3 +1,8 @@
+<!-- OWNER_PR_SECURITY_APPROVAL_20261031 -->
+## Aprovacao humana de mudancas sensiveis por Pull Request
+Para toda mudanca sensivel, aplicar `docs/knowledge/security-approval-via-pr.md`: abrir PR Draft para revisao e liberacao explicita do proprietario, vinculada ao SHA. Nao efetuar merge ou deploy antes dos gates e autorizacao. Aprovacao humana nao substitui lease/fencing, RBAC, credenciais ou protecoes operacionais independentes.
+<!-- /OWNER_PR_SECURITY_APPROVAL_20261031 -->
+
 <!-- V5_NO_DIAGNOSTIC_ONLY_ENFORCEMENT_20261030 -->
 ## Auditoria V5: proibido encerrar no diagnostico
 Em qualquer Auditoria Extrema V5, TODOS os agentes devem aplicar `docs/quality/AUDIT_V5_DIAGNOSTIC_ONLY_PREVENTION_20261030.md` alem de `AUDIT_POLICY.md`. Relatorio de findings, HTTP 200, testes isolados ou PR nao autorizam parada ou certificacao. Cada falha executavel exige reparo, prevencao, testes, validacao runtime/UI, persistencia, contraditorio e certifier oficial. Nunca declarar `APTO` sem `AUDIT_VERDICT=APTO` do mesmo release, ambiente e escopo. Preservar autorizacoes, leases e seguranca.
