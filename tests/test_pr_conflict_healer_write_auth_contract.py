@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import subprocess
+import tempfile
 
 root = Path(__file__).resolve().parents[1]
 script = (root / 'scripts' / 'pr_conflict_vm_heal.sh').read_text()
@@ -35,4 +37,45 @@ if 'external_github_auth_used=true' not in script:
     raise SystemExit('GitHub auth telemetry is not set on publication path')
 if 'external_github_auth_used=${external_github_auth_used}' not in script:
     raise SystemExit('GitHub auth telemetry does not report the real state')
+# clean merge no-op regression: avoid bot-authored merge commits when GitHub
+# already considers the PR mergeable; preserve the exact last-green head.
+if 'git merge --no-edit --no-commit --no-ff origin/main' not in script:
+    raise SystemExit('healer must probe merge without creating a commit')
+if 'git merge --abort' not in script or 'pr_clean_merge_no_push=true' not in script:
+    raise SystemExit('healer must abort a clean probe and avoid a bot push')
+if 'if git merge --no-edit --no-ff origin/main' in script:
+    raise SystemExit('healer still auto-commits clean merges')
+
+with tempfile.TemporaryDirectory() as tmp:
+    local = Path(tmp) / 'repo'
+    local.mkdir()
+    def git(*args, ok=True):
+        result = subprocess.run(['git', '-C', str(local), *args],
+                                capture_output=True, text=True, check=False)
+        if ok and result.returncode != 0:
+            raise SystemExit(f'local git probe failed: {result.stderr}')
+        return result
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.name', 'CI Regression')
+    git('config', 'user.email', 'ci@example.invalid')
+    (local / 'README').write_text('base\n')
+    git('add', 'README')
+    git('commit', '-qm', 'base')
+    git('branch', 'fix')
+    (local / 'main.txt').write_text('main-only\n')
+    git('add', 'main.txt')
+    git('commit', '-qm', 'main advance')
+    git('checkout', '-q', 'fix')
+    (local / 'feature.txt').write_text('feature-only\n')
+    git('add', 'feature.txt')
+    git('commit', '-qm', 'PR feature')
+    original = git('rev-parse', 'HEAD').stdout.strip()
+    # Test exactly the merge flags used by the live script, then abort.
+    git('merge', '--no-edit', '--no-commit', '--no-ff', 'main')
+    git('merge', '--abort')
+    if git('rev-parse', 'HEAD').stdout.strip() != original:
+        raise SystemExit('clean probe changed PR HEAD')
+    if git('status', '--porcelain').stdout.strip():
+        raise SystemExit('clean probe left repository dirty')
+
 print('pr-conflict-healer-write-auth-contract: ok')
