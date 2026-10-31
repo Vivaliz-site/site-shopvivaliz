@@ -71,6 +71,15 @@ class OnlyRelevantGatesTest(unittest.TestCase):
                 unfiltered.append(path.name)
         self.assertEqual(sorted(unfiltered), sorted(always_required))
 
+    def test_ready_for_review_does_not_repeat_full_required_gate(self):
+        gate = (WORKFLOWS / "mandatory-validation-gate.yml").read_text(encoding="utf-8")
+        trigger = gate.split("permissions:", 1)[0]
+        self.assertIn("types: [opened, synchronize, reopened, labeled, unlabeled]", trigger)
+        self.assertNotIn("ready_for_review", trigger)
+        self.assertIn("branches: [main, master]", trigger)
+        # Labels can alter commercial authorization, so they still rerun security.
+        self.assertIn("labeled, unlabeled", trigger)
+
     def test_general_agent_policy_still_has_fail_closed_required_gates(self):
         mandatory = (WORKFLOWS / "mandatory-validation-gate.yml").read_text()
         repository = (WORKFLOWS / "repository-governance.yml").read_text()
