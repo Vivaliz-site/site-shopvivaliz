@@ -140,7 +140,7 @@ $npx = Join-Path $env:ProgramFiles 'nodejs\npx.cmd'
 if (-not (Test-Path -LiteralPath $npx)) {
     throw 'RUNTIME_MISSING: Node npx.cmd unavailable'
 }
-Start-Process -FilePath $npx -ArgumentList @('--yes', '@wonderwhy-er/desktop-commander@0.3.1', 'remote') -WorkingDirectory 'C:\site-shopvivaliz' -WindowStyle Hidden
+Start-Process -FilePath $npx -ArgumentList @('--yes', '@wonderwhy-er/desktop-commander@0.3.1', 'remote', '--persist-session') -WorkingDirectory 'C:\site-shopvivaliz' -WindowStyle Hidden
 Start-Sleep -Seconds 3
 if (@(Get-RemoteLaunchers).Count -eq 0) {
     throw 'RDC_RECOVERY_FAILED: remote launcher did not start'
