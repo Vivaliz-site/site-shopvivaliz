@@ -21,6 +21,7 @@ on:
       - 'tests/*.js'
       - 'remote-control-browser-mcp/**'
       - 'tests/test_dev_aux_adoption_deploy.py'
+      - 'tests/test_ci_postmerge_qa_scope.py'
       - 'scripts/adopt-verified-dev-aux-browser.sh'
       - 'tests/remote-control-browser-mcp-test.py'
       - 'docs/knowledge/browser-sessions.md'
@@ -62,6 +63,7 @@ on:
       - 'tests/*.js'
       - 'remote-control-browser-mcp/**'
       - 'tests/test_dev_aux_adoption_deploy.py'
+      - 'tests/test_ci_postmerge_qa_scope.py'
       - 'scripts/adopt-verified-dev-aux-browser.sh'
       - 'tests/remote-control-browser-mcp-test.py'
       - 'docs/knowledge/browser-sessions.md'
@@ -165,6 +167,8 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.12
         with:
           args: -color -shellcheck=
+      - name: Verify storefront QA impact scope and global PR-gate contracts
+        run: python3 -m unittest tests.test_ci_postmerge_qa_scope tests.test_ci_relevant_specialized_gates -v
 
   php-lint:
     runs-on: ubuntu-latest
