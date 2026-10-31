@@ -46,6 +46,17 @@ class PostMergeQaScope(unittest.TestCase):
                 self.assertTrue(any(fnmatchcase(path, pattern) for pattern in paths))
                 self.assertIn("ShopVivaliz QA", scope.required_specialized_gates([path]))
 
+    def test_generic_pr_mapping_tests_do_not_trigger_continuity_worker(self):
+        continuity = (ROOT / ".github" / "workflows" / "task-continuity-fast-gate.yml").read_text(encoding="utf-8")
+        continuity_pr = continuity.split("  push:", 1)[0]
+        policy = (ROOT / ".github" / "workflows" / "pr-policy-enforcement.yml").read_text(encoding="utf-8")
+        policy_pr = policy.split("  push:", 1)[0]
+        for name in ("tests/test_pr_gate_scope.py", "tests/test_ci_feedback_optimization.py"):
+            with self.subTest(name=name):
+                self.assertNotIn(f"'{{name}}'", continuity_pr)
+        self.assertIn("'tests/test_pr_gate_scope.py'", policy_pr)
+        self.assertIn("'scripts/pr_gate_scope.py'", policy_pr)
+
     def test_unrelated_agent_ci_changes_never_trigger_storefront_qa(self):
         paths = event_paths("push")
         for file in ("AGENTS.md", "docs/knowledge/agent-rules.md",
