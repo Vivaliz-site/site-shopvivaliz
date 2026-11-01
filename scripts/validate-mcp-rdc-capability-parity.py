@@ -27,7 +27,11 @@ VALID_HOSTS = frozenset({
     "Fred-Win", "KOCEPSV",
 })
 RETIRED = "shopvivaliz-free-a1"
-READ_ONLY_STAGE = frozenset({"host_health", "service_status"})
+READ_ONLY_STAGE = frozenset({"marina_host_health", "marina_service_status"})
+INDEPENDENT_STAGED = frozenset({
+    "marina_host_health", "marina_service_status", "marina_processes_list",
+    "marina_system_usage", "marina_kernel_telemetry", "marina_kernel_telemetry_batch",
+})
 
 
 def validate(document: object) -> tuple[bool, str]:
@@ -45,21 +49,25 @@ def validate(document: object) -> tuple[bool, str]:
     if not isinstance(state, dict) or not isinstance(state.get("central"), dict):
         return False, "central_state_missing"
     central = state["central"]
-    if set(central.get("hosts", [])) != VALID_HOSTS - {"marina-a1-4c24g"}:
+    if set(central.get("hosts", [])) != VALID_HOSTS:
         return False, "active_host_truth_violation"
     marina_central = central.get("marina", {})
     if not isinstance(marina_central, dict) or (
         marina_central.get("host") != "marina-a1-4c24g"
         or marina_central.get("route") != "private_ssh_read_only"
-        or marina_central.get("code_state") != "STAGED_ONLY"
-        or marina_central.get("runtime_state") != "NOT_ENABLED"
-        or marina_central.get("authorization_state") != "OWNER_PR_AND_RUNTIME_GRANT_REQUIRED"
+        or marina_central.get("code_state") != "INSTALLED_RESTRICTED"
+        or marina_central.get("runtime_state") != "READ_ONLY_ROUTE_FLAG_ENABLED"
+        or marina_central.get("authorization_state") != "OWNER_GRANT_APPROVED_ATTESTED"
+        or marina_central.get("chatgpt_tool_catalog") != "STALE_REFRESH_REQUIRED"
         or marina_central.get("e2e") != "NOT_TESTED"
-        or set(marina_central.get("capabilities_implemented_in_branch", [])) != READ_ONLY_STAGE
+        or set(marina_central.get("server_tools", [])) != READ_ONLY_STAGE
     ):
         return False, "central_marina_route_not_certified"
     independent = state.get("marina", {})
-    if not isinstance(independent, dict) or independent.get("state") != "OFFLINE_NOT_CONNECTED":
+    if (not isinstance(independent, dict)
+            or independent.get("state") != "OFFLINE_NOT_CONNECTED"
+            or independent.get("local_staging_status") != "LOCAL_E2E_PASS_NOT_INSTALLED_NOT_CONNECTED"
+            or set(independent.get("local_staging_tools", [])) != INDEPENDENT_STAGED):
         return False, "independent_marina_unverified"
     requirements = document.get("requirements", {})
     if not isinstance(requirements, dict):
