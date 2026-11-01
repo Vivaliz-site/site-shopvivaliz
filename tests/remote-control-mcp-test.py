@@ -213,6 +213,54 @@ class RemoteControlMcpTests(unittest.TestCase):
                 })
             executor.assert_not_called()
 
+    def test_marina_explicit_tools_have_no_caller_host_selection(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertEqual(specs["marina_host_health"]["inputSchema"]["properties"], {})
+        schema = specs["marina_service_status"]["inputSchema"]
+        self.assertEqual(list(schema["properties"]), ["service"])
+        self.assertEqual(set(schema["properties"]["service"]["enum"]), m.MARINA_READONLY_SERVICES)
+        self.assertEqual(schema["required"], ["service"])
+        for name, args in (
+            ("marina_host_health", {"host": m.MARINA_HOST}),
+            ("marina_host_health", {"host": "shopvivaliz-free-a1"}),
+            ("marina_service_status", {"host": m.MARINA_HOST, "service": "docker.service"}),
+            ("marina_service_status", {"service": "docker.service", "command": "id"}),
+            ("marina_service_status", {}),
+        ):
+            with self.subTest(name=name, args=args):
+                with mock.patch.object(m, "run_host_command") as runner:
+                    with self.assertRaises(ValueError):
+                        m.execute_tool(name, args)
+                    runner.assert_not_called()
+
+    def test_marina_explicit_readonly_aliases_preserve_pinned_transport_and_denial(self):
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": ""}):
+            for name, args in (
+                ("marina_host_health", {}),
+                ("marina_service_status", {"service": "ml-pricing-worker.service"}),
+            ):
+                with self.subTest(name=name):
+                    with self.assertRaisesRegex(PermissionError, "marina_central_route_not_approved"):
+                        m.execute_tool(name, args)
+        with mock.patch.object(m, "run_host_command", return_value={
+            "host": m.MARINA_HOST, "exit_code": 0, "stdout": "ActiveState=active",
+            "stderr": "", "duration_ms": 1,
+        }) as runner:
+            self.assertTrue(m.execute_tool("marina_host_health", {})["ok"])
+            self.assertEqual(runner.call_args.args[0], m.MARINA_HOST)
+            self.assertEqual(runner.call_args.args[1], m.health_command("linux"))
+            runner.reset_mock()
+            self.assertTrue(m.execute_tool("marina_service_status", {
+                "service": "ml-pricing-worker.service"
+            })["ok"])
+            self.assertEqual(runner.call_args.args[0], m.MARINA_HOST)
+            self.assertEqual(runner.call_args.args[1],
+                             m.marina_readonly_service_command("ml-pricing-worker.service"))
+        with mock.patch.object(m, "run_host_command") as runner:
+            with self.assertRaisesRegex(ValueError, "marina_service_not_allowlisted"):
+                m.execute_tool("marina_service_status", {"service": "ssh.service; sudo id"})
+            runner.assert_not_called()
+
     def test_marina_status_builds_only_fixed_unprivileged_command(self):
         with mock.patch.object(m, "run_host_command", return_value={
             "host": m.MARINA_HOST, "exit_code": 0, "stdout": "ActiveState=active",

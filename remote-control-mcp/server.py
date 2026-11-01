@@ -2494,6 +2494,18 @@ def execute_tool(
     args: dict[str, Any],
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
+    # Stable aliases avoid the host enum cached before Marina was registered.
+    # The caller cannot select a host, user, route or command.
+    if name == "marina_host_health":
+        if args:
+            raise ValueError("marina_health_arguments_not_allowed")
+        return execute_tool("host_health", {"host": MARINA_HOST}, cancel_check)
+    if name == "marina_service_status":
+        if set(args) != {"service"}:
+            raise ValueError("marina_service_status_arguments_invalid")
+        return execute_tool("service_status", {
+            "host": MARINA_HOST, "service": args["service"]
+        }, cancel_check)
     host = args.get("host")
     # Retired hosts are denied even before lease checks, transports and handlers.
     if isinstance(host, str) and host in RETIRED_HOSTS:
@@ -2847,6 +2859,8 @@ TOOLS = [
         "signature_b64": {"type": "string", "maxLength": 128},
     }, False, True),
     ("hosts_list", "List approved hosts including Marina as a separately gated private read-only candidate; retired VMs are excluded.", {}, True, False),
+    ("marina_host_health", "Read Marina identity through fixed owner-approved private route. No caller-selected host and no permission without a valid owner grant.", {}, True, False),
+    ("marina_service_status", "Inspect an allowlisted Marina systemd unit through pinned owner-approved private route, never a caller-selected host.", {"service": {"type": "string", "enum": sorted(MARINA_READONLY_SERVICES)}}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("service_status", "Inspect a service on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}}, True, False),
