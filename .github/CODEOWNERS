@@ -1,7 +1,5 @@
-# Default human reviewer for all pull requests. Agents cannot approve on behalf of this account.
-* @shopvivaliz-human
-
-# Human-only security approval: reviewer is the exclusive owner, never an agent.
+# `shopvivaliz-human` has repository access to view every PR; visibility is not a review request.
+# Request exclusive human approval only for explicit security authorization grants.
 /security/owner-approvals/ @shopvivaliz-human
 /docs/knowledge/security-approval-via-pr.md @shopvivaliz-human
 /scripts/validate-owner-pr-grant.py @shopvivaliz-human
