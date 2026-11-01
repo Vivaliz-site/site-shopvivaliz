@@ -1442,7 +1442,12 @@ def remote_invocation(host: str, command: str) -> list[str]:
         payload = base64.b64encode(command.encode()).decode()
         remote = f"printf %s {payload} | base64 -d | sudo -n bash"
         return base + [remote]
-    encoded = base64.b64encode(command.encode("utf-16le")).decode()
+    # PowerShell forwards automatic module-initialization progress as CLIXML
+    # on SSH stderr, even for successful read-only calls. Silence only the
+    # progress stream: errors, warnings and exit codes remain observable.
+    # Preserve script-level param(...) by placing user code in its own block.
+    script = "$ProgressPreference='SilentlyContinue'; & {\n" + command + "\n}"
+    encoded = base64.b64encode(script.encode("utf-16le")).decode()
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
 

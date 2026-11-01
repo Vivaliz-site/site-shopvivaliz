@@ -1684,6 +1684,9 @@ systemctl() {
         for inv in (fred, desk):
             self.assertIn("powershell.exe", inv)
             self.assertIn("-EncodedCommand", inv)
+            script = base64.b64decode(inv[inv.index("-EncodedCommand") + 1]).decode("utf-16le")
+            self.assertTrue(script.startswith("$ProgressPreference='SilentlyContinue';"))
+            self.assertIn("Get-Date", script)
             self.assertNotIn("tailscale", " ".join(inv).lower())
         self.assertIn("FRED@127.0.0.1", fred)
         self.assertIn("-p", fred)
