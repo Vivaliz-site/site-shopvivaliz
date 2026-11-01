@@ -10,12 +10,14 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  actions: read
 
 env:
   GITHUB_TOKEN: ${{ github.token }}
 concurrency:
   group: mandatory-validation-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # A review does not cancel an already-running code validation.
+  cancel-in-progress: ${{ github.event_name != 'pull_request_review' }}
 jobs:
   validation-gate:
     runs-on: ubuntu-latest
@@ -26,15 +28,58 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Checkout trusted review reuse validator from protected base
+        if: github.event_name == 'pull_request_review'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-review
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify completed code validation before reusing it on review
+        if: github.event_name == 'pull_request_review'
+        id: review_reuse
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -Eeuo pipefail
+          # If the trusted validator or API is unavailable, rerun all code tests.
+          if [[ ! -f trusted-review/scripts/ci_review_reuse_gate.py ]]; then
+            echo 'reuse=false' >> "$GITHUB_OUTPUT"
+            echo 'review_code_validation_reuse=trusted_validator_unavailable_full_required'
+            exit 0
+          fi
+          if ! runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" 2>/dev/null)"; then
+            echo 'reuse=false' >> "$GITHUB_OUTPUT"
+            echo 'review_code_validation_reuse=github_api_unavailable_full_required'
+            exit 0
+          fi
+          if ! printf '%s' "$runs" | python3 trusted-review/scripts/ci_review_reuse_gate.py \
+              --pr "$GH_PR_NUMBER" --head "$HEAD_SHA" --base "$BASE_SHA" \
+              --head-ref "$HEAD_REF" --current-run "$GITHUB_RUN_ID" \
+              --github-output "$GITHUB_OUTPUT"; then
+            echo 'reuse=false' >> "$GITHUB_OUTPUT"
+            echo 'review_code_validation_reuse=validation_error_full_required'
+          fi
       - name: Select fail-closed impact scope
         id: impact
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REVIEW_REUSE: ${{ steps.review_reuse.outputs.reuse }}
         run: |
           set -Eeuo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' || "$GITHUB_EVENT_NAME" == 'pull_request_review' ]]; then
+          if [[ "$REVIEW_REUSE" == 'true' && "$GITHUB_EVENT_NAME" == 'pull_request_review' ]]; then
+            echo 'mode=review-reuse' >> "$GITHUB_OUTPUT"
+            echo 'groups=review-reuse' >> "$GITHUB_OUTPUT"
+            echo 'needs_php=false' >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == 'pull_request' || "$GITHUB_EVENT_NAME" == 'pull_request_review' ]]; then
             python3 scripts/ci_impact_selection.py \
               --base "$BASE_SHA" --head "$HEAD_SHA" --github-output "$GITHUB_OUTPUT"
           else
@@ -44,7 +89,7 @@ jobs:
             echo "push_full_validation_required=true"
           fi
       - name: Validate fail-closed impact-selection contract
-        run: python3 -m unittest tests.test_ci_impact_selection tests.test_ci_scoped_validation_contract -v
+        run: python3 -m unittest tests.test_ci_impact_selection tests.test_ci_scoped_validation_contract tests.test_ci_review_reuse_gate -v
       - name: Set up PHP 8.4
         if: steps.impact.outputs.needs_php != 'false'
         uses: shivammathur/setup-php@v2
@@ -75,7 +120,7 @@ jobs:
           SHOPVIVALIZ_COMMERCIAL_AUTOMATION_LOGINS: ${{ secrets.SHOPVIVALIZ_COMMERCIAL_AUTOMATION_LOGINS }}
         run: python3 scripts/enforce-autonomy-policy.py
       - name: Validate repository change
-        if: steps.impact.outputs.mode != 'scoped'
+        if: steps.impact.outputs.mode != 'scoped' && steps.impact.outputs.mode != 'review-reuse'
         env:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: bash scripts/repository-governance-validate.sh ci
@@ -86,7 +131,7 @@ jobs:
         run: bash scripts/ci_scoped_validate.sh "$IMPACT_GROUPS"
 
       - name: Cloudflare admin staging preflight regression (when present)
-        if: ${{ steps.impact.outputs.mode != 'scoped' && hashFiles('scripts/cloudflare-admin-preflight.py') != '' }}
+        if: ${{ steps.impact.outputs.mode != 'scoped' && steps.impact.outputs.mode != 'review-reuse' && hashFiles('scripts/cloudflare-admin-preflight.py') != '' }}
         run: |
           python3 -m unittest discover -s tests -p 'test_cloudflare_admin_*.py' -v
           bash -n scripts/cloudflare-admin-stage-unit.sh
