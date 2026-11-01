@@ -63,15 +63,26 @@ class RemoteControlMcpTests(unittest.TestCase):
             db.execute("SELECT 1")
 
     def test_only_active_hosts_are_advertised(self):
-        self.assertEqual(set(m.HOSTS), {"always-free-arm-1787907847-26", "Fred-Win", "KOCEPSV"})
+        self.assertEqual(set(m.HOSTS), {
+            "always-free-arm-1787907847-26", "Fred-Win", "KOCEPSV", m.MARINA_HOST
+        })
         self.assertNotIn("shopvivaliz-free-a1", m.HOSTS)
-        self.assertNotIn("marina-a1-4c24g", m.HOSTS)
-        advertised = {item["name"] for item in m.execute_tool("hosts_list", {})["hosts"]}
-        self.assertEqual(advertised, set(m.HOSTS))
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": ""}):
+            listed = m.execute_tool("hosts_list", {})["hosts"]
+            advertised = {item["name"] for item in listed}
+            self.assertEqual(advertised, set(m.HOSTS))
+            marina = next(item for item in listed if item["name"] == m.MARINA_HOST)
+            self.assertEqual(marina["transport"], "private_ssh_read_only")
+            self.assertFalse(marina["route_enabled"])
+        excluded = {"processes_list", "service_action", "file_read", "file_list",
+                    "logs_tail", "admin_command_run", "task_submit"}
         for spec in m.tool_specs():
             host = spec["inputSchema"]["properties"].get("host", {})
             self.assertNotIn("shopvivaliz-free-a1", host.get("enum", []))
-            self.assertNotIn("marina-a1-4c24g", host.get("enum", []))
+            if spec["name"] in excluded:
+                self.assertNotIn(m.MARINA_HOST, host.get("enum", []))
+            if spec["name"] in {"host_health", "service_status"}:
+                self.assertIn(m.MARINA_HOST, host.get("enum", []))
 
     def test_retired_source_rejected_before_network_or_mutation(self):
         for name, args in (
@@ -85,8 +96,73 @@ class RemoteControlMcpTests(unittest.TestCase):
                         m.execute_tool(name, args)
                     execution.run.assert_not_called()
                     execution.Popen.assert_not_called()
-        with self.assertRaisesRegex(ValueError, "unsupported_host"):
-            m.validate_host("marina-a1-4c24g")
+        self.assertEqual(m.validate_host(m.MARINA_HOST)["transport"], "private_ssh_read_only")
+
+    def test_marina_requires_explicit_route_enablement_and_pinned_identity(self):
+        health = m.health_command("linux")
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": ""}):
+            with self.assertRaisesRegex(PermissionError, "marina_central_route_not_approved"):
+                m.remote_invocation(m.MARINA_HOST, health)
+        key = Path(self.tmp.name) / "marina-identity"
+        known_hosts = Path(self.tmp.name) / "known_hosts_marina"
+        key.write_text("dummy-test-private-key", encoding="utf-8")
+        known_hosts.write_text("dummy pinned host metadata", encoding="utf-8")
+        key.chmod(0o600)
+        known_hosts.chmod(0o600)
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": "approved-v1"}), \
+             mock.patch.object(m, "MARINA_SSH_KEY", key), \
+             mock.patch.object(m, "MARINA_PINNED_HOSTS", known_hosts):
+            invoked = m.remote_invocation(m.MARINA_HOST, health)
+            self.assertEqual(invoked[:5], ["/usr/sbin/runuser", "-u", "ubuntu", "--", "/usr/bin/ssh"])
+            self.assertIn("StrictHostKeyChecking=yes", invoked)
+            self.assertIn("IdentitiesOnly=yes", invoked)
+            self.assertIn("ForwardAgent=no", invoked)
+            self.assertIn("ubuntu@100.118.170.46", invoked)
+            self.assertNotIn("sudo", " ".join(invoked))
+            self.assertNotIn("shopvivaliz-free-a1", " ".join(invoked))
+            for command in ("id", "sudo -n bash", "systemctl restart docker.service",
+                            m.processes_command("linux")):
+                with self.subTest(command=command):
+                    with self.assertRaisesRegex(ValueError, "marina_central_command_not_allowlisted"):
+                        m.remote_invocation(m.MARINA_HOST, command)
+            key.chmod(0o666)
+            with self.assertRaisesRegex(PermissionError, "marina_central_pinned_identity_not_ready"):
+                m.remote_invocation(m.MARINA_HOST, health)
+
+    def test_marina_mutation_and_unlisted_services_deny_before_execution(self):
+        blocked = [
+            ("admin_command_run", {"host": m.MARINA_HOST, "command": "id"}),
+            ("admin_command_run", {"host": m.MARINA_HOST, "command": "id", "durable": True}),
+            ("task_submit", {"host": m.MARINA_HOST, "command": "id"}),
+            ("service_action", {"host": m.MARINA_HOST, "service": "docker.service", "action": "restart"}),
+            ("file_read", {"host": m.MARINA_HOST, "path": "/tmp/nonsecret"}),
+            ("processes_list", {"host": m.MARINA_HOST}),
+        ]
+        for name, args in blocked:
+            with self.subTest(name=name), mock.patch.object(m, "run_host_command") as executor:
+                with self.assertRaisesRegex(PermissionError, "marina_central_read_only_requires_owner_grant"):
+                    m.execute_tool(name, args)
+                executor.assert_not_called()
+        with mock.patch.object(m, "run_host_command") as executor:
+            with self.assertRaisesRegex(ValueError, "marina_service_not_allowlisted"):
+                m.execute_tool("service_status", {
+                    "host": m.MARINA_HOST, "service": "ssh.service; sudo id",
+                })
+            executor.assert_not_called()
+
+    def test_marina_status_builds_only_fixed_unprivileged_command(self):
+        with mock.patch.object(m, "run_host_command", return_value={
+            "host": m.MARINA_HOST, "exit_code": 0, "stdout": "ActiveState=active",
+            "stderr": "", "duration_ms": 1,
+        }) as executor:
+            result = m.execute_tool("service_status", {
+                "host": m.MARINA_HOST, "service": "ml-pricing-worker.service",
+            })
+        self.assertTrue(result["ok"])
+        command = executor.call_args.args[1]
+        self.assertIn("systemctl show --no-pager", command)
+        self.assertNotIn("sudo", command)
+        self.assertNotIn("restart", command)
 
     def test_mcp_startup_filters_legacy_queued_tasks_before_worker(self):
         source = SERVER_PATH.read_text(encoding="utf-8")
