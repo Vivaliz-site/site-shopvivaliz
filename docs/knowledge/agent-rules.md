@@ -10,6 +10,58 @@ Os agendamentos legados `ShopVivaliz Desktop Commander 24h`, `ShopVivaliz Deskto
 **Continuidade:** esgotar os canais REALMENTE disponiveis (MCP central e seus hosts permitidos, RDC 1/2, SSH privado/Tailscale, tuneis independentes autorizados, UI e rotas oficiais de recovery) conforme `host-access.md`. Um bloqueio nao autoriza contornar negacao explicita de seguranca por outro canal. Preservar o RDC Fred online, reportar bloqueios exatos, manter checkpoints e nunca declarar 'estavel para sempre' sem testes de reconexao, logon, persistencia e uso real. PC desligado/suspenso nao pode ser tratado como online.
 <!-- /RDC_FRED_ONLY_IDENTITY_GATE_20261030 -->
 
+<!-- MANDATORY_AGENT_CHECKLIST_V1 -->
+## Checklist transacional obrigatorio: todos os agentes e todas as IAs
+
+A cada tarefa material, consultar e atualizar o checklist duravel ANTES de agir, DEPOIS de cada etapa e ANTES de escolher a proxima acao. Esta regra vale para ChatGPT/Gepeto, Codex, Claude, Gemini, Copilot, workers e subagentes. A sessao ou o controlador nao substituem a responsabilidade de cada agente em executar a proxima etapa permitida.
+
+Usar o registro canonico `scripts/agent_task_state.py`: iniciar o checkpoint com identidade/autorizacao reais; `plan-checklist --task ID --step "..." --step "..."` antes de qualquer progresso; `next-step --task ID` para consultar o item aberto; `check-step --task ID --step-id N --evidence "prova concreta" --verification "validacao independente"` ao completar CADA item; `add-checklist-step` para nova descoberta sem apagar etapas ja comprovadas. Somente passar ao proximo item depois de verificar a conclusao do anterior. `ready` e `complete` nao substituem testes finais, E2E/UI, gates, deploy e merge.
+
+Checklists iniciados nao podem ser sobrescritos para apagar pendencias, pular etapas, inventar provas, ou transformar bloqueios em conclusoes. Nos novos checkpoints do runtime canonico a falta de plano ou de qualquer item comprovado bloqueia `READY_TO_COMPLETE` e `CONCLUIDO`. Checkpoints legados exigem migracao explicita, preservando historico, leases, ownership, next_action e prova existente; nao criar tarefa duplicada. Falhas de ferramenta exigem rota alternativa autorizada e estado aberto, nao falsificacao de check. Todos os repositorios/agentes devem adotar o mesmo contrato ou um mecanismo equivalente com testes negativos; documento presente sozinho nao certifica adesao operacional.
+
+Protecoes do GitHub, MFA, RBAC, segredos, gates comerciais e aprovacoes humanas continuam vigentes. Registro de check nao prova, por si, o comportamento real: confirmar os resultados nos sistemas alvo e nos certificadores independentes aplicaveis.
+<!-- /MANDATORY_AGENT_CHECKLIST_V1 -->
+
+## Regra universal de continuidade e esgotamento de rotas — todos os agentes e repositorios (2026-10-31)
+
+**Obrigatoria para toda execucao e todo agente, independentemente do fornecedor, modelo ou interface:** ChatGPT, Codex, Claude, Gemini, agentes autonomos, bots, workers, scripts, GitHub Actions, ferramentas MCP e futuros agentes. Aplica-se a todos os repositorios e organizacoes GitHub sob gestao da ShopVivaliz, nao apenas a este repositorio.
+
+**Nao abandonar tarefas por um bloqueio tecnico isolado.** Investigar a causa raiz, corrigir o que for seguro e autorizado, testar novamente e inventariar sistematicamente todas as rotas REALMENTE provisionadas e independentemente autorizadas antes de alegar bloqueio: MCP/Remote Control, conectores, Cloudflare/cloudflared e tuneis, GitHub CLI/API com identidade correta e credenciais protegidas, SSH privado/Tailscale, RDC 1/2, navegadores de agentes no host permitido, VMs ativas, runners/Actions, OCI, Superpowers quando disponivel e outros recursos identificados na documentacao vigente. Nao assumir disponibilidade, permissao ou sucesso sem teste e evidencia. Nao expor segredos nem criar credenciais paralelas.
+
+Para cada rota registrar disponibilidade, identidade, escopo de permissao, lease/fencing quando aplicavel, tentativa, resultado, causa da falha, reparo e proxima alternativa. Nao repetir indefinidamente a mesma tentativa. Prosseguir nas etapas independentes, preservar checkpoints duraveis e retomada automatica autorizada. A tarefa so termina com correcao, prevencao, testes, validacao runtime/E2E real e merge apos gates quando aplicavel, ou bloqueio externo comprovado apos esgotamento de todas as rotas legitimas. Nenhum status RUNNING antigo comprova execucao ativa.
+
+**Limites absolutos:** nao contornar MFA, CAPTCHA, RBAC, 401/403, recusa expressa, branch protection, aprovacoes, leases, isolamento de hosts ou politicas do provedor. Rota alternativa nunca pode ser usada para burlar uma negativa. Manter pendencias abertas com evidencia e proxima acao quando existir impedimento legitimo.
+
+**Propagacao:** manter esta regra nos arquivos de instrucoes de agentes de cada repositorio ativo (AGENTS.md, CLAUDE.md, GEMINI.md, instrucoes Codex e equivalentes existentes), respeitando a governanca local; verificar aplicacao por inventario e testes, nao por presuncao.
+
+<!-- CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
+> **Regra vigente (31/10/2026, confirmada pelo proprietario):** existem apenas duas VMs OCI operacionais: `marina-a1-4c24g` (web/deploy/banco/workers) e `always-free-arm-1787907847-26` (backend/MCP/controller/browser). `shopvivaliz-free-a1` foi encerrada: NAO acessar, pesquisar como destino, monitorar, recuperar, recriar ou redirecionar aliases para ela. Referencias historicas abaixo nao representam destino ativo.
+>
+> **Continuidade obrigatoria contra bloqueios:** uma falha isolada de terminal, usuario de execucao, GitHub CLI, SSH, plugin, runner ou browser NAO comprova ausencia de acesso e NAO encerra a tarefa. Ler documentacao de acesso vigente, conferir usuario/contexto correto e fontes protegidas ja provisionadas, testar rotas alternativas independentemente autorizadas (MCP, RDC 1/2, SSH privado/Tailscale, GitHub via perfil autorizado, runner/OCI apenas para recuperacao), corrigir falhas tecnicas, preservar checkpoints e prosseguir ate teste, merge, deploy automatico aplicavel e validacao posterior. Exemplo confirmado: `gh` estava autenticado sob `ubuntu`, nao sob `root`; executar via identidade autorizada sem revelar tokens. Proibido contornar MFA, RBAC, recusas explicitas, controles de branch ou leases. Se todas as rotas legitimas falharem, registrar evidencia e proxima acao, sem declarar sucesso.
+<!-- /CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
+
+<!-- PR_RELEVANT_GATES_ONLY_V1 -->
+## Regra permanente: gates somente por impacto comprovado da PR
+Para qualquer PR da ShopVivaliz, os agentes devem relacionar arquivos alterados, dependencias, contratos compartilhados, superficies de seguranca e areas de impacto **antes** de escolher testes e workflows. **Gates especializados de site, API, worker, catalogo, estoque, precos, carrinho, MCP, agentes ou continuidade so podem executar quando houver relacao tecnica demonstravel com a mudanca.** Testes de um subsistema nao relacionado nao devem ser acionados apenas por existir uma PR ou por alteracao generica de AGENTS.md.
+
+O seletor deve usar comparacao verificavel base...head com delecoes incluidas, criterios positivos estritos por path/dependencia e evidencias. Escopo vazio, diff indisponivel, caminho desconhecido, politica transversal, alteracao de CI/seguranca, dependencia compartilhada ou qualquer ambiguidade exigem *fail-closed* e suite ampliada; nunca omitir um check que possa comprovar regressao material. **Mandatory Validation Gate, Repository Governance, bridge Absolute Audit V5 e Main Guard permanecem obrigatorios conforme a fase** (PR/main); sua validacao interna pode escolher testes pertinentes com guardrails universais preservados.
+
+Implementacao inicial no repositorio site: `scripts/ci_impact_selection.py`, `scripts/ci_continuity_impact.py`, `scripts/ci_scoped_validate.sh` e `tests/test_ci_relevant_specialized_gates.py`. Bloquear regressao de workflow especializado sem filtro `paths`; gates globais de seguranca sao excecao expressa. Registrar no PR quais gates foram selecionados e por que; comparar duracao de fila vs job e evitar reexecutar suites caras duplicadas sem relacao com o diff. Proibido trocar conclusao de teste por warning, enfraquecer check requerido, contornar branch protection ou alegar APTO sem certificador.
+<!-- /PR_RELEVANT_GATES_ONLY_V1 -->
+
+<!-- TASK_SESSION_CONTINUITY_V1 -->
+## Regra operacional: concluir a tarefa nao depende do fim da sessao (2026-10-30)
+
+**Ordem do proprietario:** uma tarefa autorizada e ainda executavel nao pode ser pausada ou declarada concluida por habito do agente, termino da resposta, troca de conversa, timeout, diagnostico, entrega de relatorio, abertura de PR ou sucesso de CI isoladamente. O agente executa o proximo passo permitido, corrige as causas, testa, valida e registra o resultado. O controlador de continuidade e contingencia para travamentos, **nao substitui a obrigacao de execucao do agente principal**.
+
+- **Tarefa diferente de sessao:** limites de duracao da sessao, cotas de IA paga e politicas de anti-loop controlam execucoes abandonadas, repetitivas, sem progresso ou de custo indevido. Nao sao prazo de validade nem autorizacao para abandonar uma tarefa com progresso verificavel. Quando a sessao legitima precisar terminar, preservar `RUNNING`, evidencias, ownership/lease valido, `next_action` especifica e destino de retomada efetivamente comprovado; nao prometer atividade em segundo plano sem executor real.
+- **Estado terminal exige prova:** `CONCLUIDO` somente apos correcoes persistidas, testes GREEN, regressao e E2E/UI real quando aplicavel, no SHA/ambiente efetivo. Se houver impedimento externo comprovado, manter a pendencia documentada em `BLOCKED_EXTERNAL` ou `AWAITING_APPROVAL` com autorizacao exata faltante, sem tratar o bloqueio como sucesso. PR em rascunho, checks verdes ou proposta administrativa nao equivalem a aplicacao em `main`.
+- **Leitura de instrucoes antes de executar:** ler `AGENTS.md`, `docs/knowledge/atendimento-chatgpt-bootstrap.md`, `host-access.md`, `README.md`, este `agent-rules.md` e os documentos especificos da tarefa no `main` vigente. Registrar `rules_loaded` com caminho/ref/SHA/instante e obter `read -> acknowledge -> verify` do preflight real quando aplicavel. Um recibo de entrega ou simples ACK nao substitui leitura e interpretacao; falta de prova bloqueia a mutacao, nao a investigacao segura somente-leitura.
+- **Revisao humana especifica:** quando o proprietario determinar que ele mesmo fara o merge, deixar a branch/PR em revisao, sem auto-merge e sem deploy; continuar os testes, reparos e atividades independentes autorizadas sem fechar a tarefa artificialmente.
+- **Protecoes preservadas:** nenhuma exigencia de continuidade dispensa MFA, RBAC, segredos, aprovacoes externas, branch protection, leases/fencing, custos ou recusas explicitas. Nao criar segundo executor para substituir um controlador existente nem repetir por outra ferramenta uma acao expressamente recusada.
+
+<!-- /TASK_SESSION_CONTINUITY_V1 -->
+
 <!-- EXHAUST_ALL_AUTHORIZED_ROUTES_GATE_20261030 -->
 ## Regra obrigatoria: continuidade ate esgotamento comprovado de rotas autorizadas (2026-10-30)
 
