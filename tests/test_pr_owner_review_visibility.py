@@ -28,7 +28,7 @@ class ReviewVisibilityTests(unittest.TestCase):
         gate = REVIEW_GATE.read_text(encoding="utf-8")
         self.assertIn("python3 scripts/enforce-autonomy-policy.py", gate)
         self.assertIn("pull_request_review:", gate)
-        self.assertIn("cancel-in-progress: \${{ github.event_name != 'pull_request_review' }}", gate)
+        self.assertIn("cancel-in-progress: ${{ github.event_name != 'pull_request_review' }}", gate)
 
 
 if __name__ == "__main__":
