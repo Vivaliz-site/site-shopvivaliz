@@ -10,7 +10,7 @@ A PR de seguranca #3478 foi revisada no HEAD `0fd80338283a41cd61affa2ce31116d773
 
 ## Substituicao formal
 
-Esta PR deve **remover** `security/owner-approvals/3478.json` e **adicionar**, como arquivo novo imutavel, `security/owner-approvals/<numero_nesta_pr>.json` com escopo identico:
+Esta PR deve **expirar/revogar** `security/owner-approvals/3478.json` alterando o prazo para uma data passada (modificacao invalida tambem o blob imutavel anterior) e **adicionar**, como arquivo novo imutavel, `security/owner-approvals/3485.json` com escopo identico:
 - recurso `mcp:central:marina`, principal `shopvivaliz-central-mcp`;
 - origem `always-free-arm-1787907847-26`, destino `marina-a1-4c24g`;
 - unica capacidade `marina_readonly`;
