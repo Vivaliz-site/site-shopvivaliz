@@ -8,6 +8,13 @@
 Tracking: Vivaliz-site/site-shopvivaliz issues #3152 and #3156. The working direct
 ChatGPT route remains the separately connected Remote Desktop Commander.
 
+
+## Cobertura administrativa em todos os projetos (nova exigencia 2026-11-01)
+
+O proprietario exige que a experiencia MCP recupere as **rotinas administrativas historicas de todos os 11 repositorios**, nao apenas o restart Olist. Ver especificacao `docs/superpowers/specs/2026-11-01-mcp-admin-cross-repository-parity.md`, plano e inventario `docs/ops/mcp-admin-repositories-2026-11-01.json`.
+
+**Limite desta release:** este servidor permanece read-only, isolado em Marina e NAO esta conectado ao ChatGPT. O inventario lista candidatos, nao executores autorizados ou ferramentas disponiveis. A cobertura global usa MCPs separados por host e ChatGPT como superficie de orquestracao; nao usa backend/RDC como relay da Marina. Ferramentas administrativas so serao anunciadas e acionadas depois de grant especifico, autorizacao real do host e do provedor, lease/fence/auditoria e E2E.
+
 ## Security contract
 
 * Runs **only on marina-a1-4c24g**; refuses a different hostname.

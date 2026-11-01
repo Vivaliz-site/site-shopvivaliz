@@ -37,7 +37,7 @@ class MarinaOperatorAdminRouteTests(unittest.TestCase):
     def test_positive_fixed_olist_restart_with_complete_trusted_guards(self):
         self.assertEqual(self.decide(), (True, "restart_requested"))
         self.operator.restart_service.assert_called_once_with("amazon-returns-olist-erp-browser.service")
-        self.operator.owner_pr_grant_is_valid.assert_called_once_with(9999, HEAD, MERGE, "deployment_manage", "olist_browser_restart")
+        self.operator.owner_pr_grant_is_valid.assert_called_once_with(9999, HEAD, MERGE, "deployment_manage", "olist_browser_restart", "Vivaliz-site/amazon-returns-safet")
         self.operator.lease_reserve_once.assert_called_once_with(
             "olist_browser_restart", "request-20261101-0001", 31,
         )
