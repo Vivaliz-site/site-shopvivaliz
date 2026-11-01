@@ -11,6 +11,7 @@ import argparse
 import base64
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import socket
@@ -77,7 +78,7 @@ def github(endpoint: str, token: str) -> object:
 def validate_metadata(path: Path, *, key: bool = False) -> None:
     try:
         st = path.lstat()
-        if (not stat.S_ISREG(st.st_mode) or st.st_uid != 1000 or
+        if (not stat.S_ISREG(st.st_mode) or st.st_uid != pwd.getpwnam("ubuntu").pw_uid or
                 st.st_mode & (0o077 if key else 0o022) or st.st_size <= 0):
             raise ActivationDenied("ssh_identity_or_host_key_metadata_invalid")
     except OSError as exc:
