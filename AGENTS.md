@@ -1,3 +1,7 @@
+<!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
+> O MCP ShopVivaliz **central** tambem deve alcancar `marina-a1-4c24g`, alem do MCP proprio da Marina, que deve permanecer independente do backend/RDC. Paridade com RDC exige capacidades por host e operacao comprovadas por E2E, sem shell/root universal. Rota central read-only em PR nao equivale a runtime conectado; nunca ativar sem grant oficial, lease e autorizacao. Fonte: `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
+<!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
+
 <!-- MANDATORY_AGENT_CHECKLIST_V1 -->
 ## Checklist transacional obrigatorio: todos os agentes e todas as IAs
 
