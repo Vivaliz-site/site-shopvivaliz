@@ -1,3 +1,8 @@
+<!-- PR_HUMAN_VISIBILITY_ROUTING_V1 -->
+## Regra de PRs: visibilidade nao exige revisao humana
+A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso nativo ao repositorio. **Nao adicionar shopvivaliz-human como CODEOWNER global, revisor padrao, nem solicitar revisao humana automatica para toda PR.** PRs tecnicas comuns seguem testes e gates pertinentes, com correcao e merge por agente autorizado quando permitido. Solicitar aprovacao/merge exclusivo da conta humana somente quando a PR representar autorizacao humana formal de seguranca, privilegio, controle de acesso ou decisao comercial protegida, e manter os fluxos oficiais de grant, SHA, checks e RBAC. Visibilidade, ser informado e permissao de consulta nao equivalem a pedido de aprovacao. Nunca substituir CODEOWNERS sensiveis por regra universal; manter o owner nos escopos de grant. Antes de criar/editar CODEOWNERS ou workflows de revisores, executar o gate scripts/check_pr_review_routing.py. Nao contornar protecoes de branch ou recusas de provedores.
+<!-- /PR_HUMAN_VISIBILITY_ROUTING_V1 -->
+
 <!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_PARITY_20261101 -->
 ## Cobertura MCP central e MCP Marina independente (decisao 2026-11-01)
 
