@@ -4,6 +4,20 @@
 
 # Estado da Auditoria
 
+## 2026-11-01 — P0: entrada legada Olist desprotegida e escritores comerciais fora do ERP v3
+
+**AUDIT_VERDICT=NAO_APTO** ate concluir CI, merge autorizado, deploy imutavel e teste externo negativo. Escopo desta PR: apenas impedir escrita insegura pelo endpoint obsoleto; nao ajustar tabelas, anuncios, preco, estoque, ERP nem outbox.
+
+**RED concreto:** fonte de `api/olist/webhook-processor.php` aceitava eventos de preco/estoque/exclusao enviados sem `sv_webhook_secret_gate`, conectava MySQL local e executava `UPDATE/DELETE products` a partir de campos do solicitante. `.htaccess` bloqueava `api/sync/full-sync.php`, mas nao esse legado. Um POST externo **sem credenciais** com corpo JSON **vazio** (sem SKU nem operacao) chegou ao PHP real e retornou `HTTP 400 error=empty_payload` em `/api/olist/webhook-processor.php`, confirmando ausencia de protecao de borda sem mutacao. O endpoint canonico `/api/olist/webhook.php` ja autentica `sv_webhook_secret_gate('olist', false)` e reconcilia preços/estoque pela API oficial Olist/Tiny v3 (tabela Amazon 991). O script raiz `setup-webhooks.php` podia reinserir a inclusao legada no endpoint canonico em execucao manual.
+
+**Correcao / prevencao:** apos o deploy, regra Apache `RewriteRule ^api/olist/webhook-processor\\.php$ - [F,L,NC]` deve negar HTTP antes de PHP, e um tombstone PHP separado retorna `410 legacy_webhook_retired` mesmo fora da borda; nao ha mais SQL/banco no processador legado. `setup-webhooks.php` torna-se tombstone `410 legacy_setup_retired`, sem tocar em arquivos. `/api/olist/webhook.php` permanece intacto e autenticado. Regressao estendida em `tests/olist-erp-webhook-entrypoint-test.php` e inserida no job PHP relevante de `ShopVivaliz QA`, sem acionar verificacoes de serviços não alterados.
+
+**GREEN isolado antes de PR:** clone efêmero e separado na Marina do HEAD `1556472e9d1e19e6bafa061dcf7536646a5a252a`: 3/3 arquivos `php -l` PASS; `php tests/olist-erp-webhook-entrypoint-test.php` = `olist-erp-webhook-entrypoint: ok`; execução CLI do tombstone do processador = `legacy_webhook_retired` e do instalador = `legacy_setup_retired`; nenhum SQL executado, nenhuma credencial extraída ou produto modificado. **Não** confundir estes testes com protecao em produção: ainda falta `HTTP 403` ou equivalente em POST vazio, `HTTP 401` no webhook canônico sem segredo, readback do SHA da release e invariância do catálogo/ERP.
+
+**Rollback:** reverter somente os arquivos após reavaliar risco; não reativar o processador antigo. Migração de integração legada deve apontar apenas para endpoint canônico com segredo válido, sem fallback ao SQL local. Verificar consumidores de `includes/products-cache.php` e `includes/marketplace/MarketplaceRuntime.php` separadamente, porque ainda consultam MySQL derivado (PR comercial #3476 depende de merge humano formal).
+
+---
+
 ## 2026-11-01 — corrigir carrinho legado que consulta MySQL comercial defasado
 
 **Escopo:** `api/cart/add.php`, apenas referência de produto e validação de carrinho; não edita tabela de preço Amazon 991 nem estoque ERP. **AUDIT_VERDICT=NAO_APTO** enquanto novo SHA não estiver aprovado/deployado e o fluxo UI não for repetido.
