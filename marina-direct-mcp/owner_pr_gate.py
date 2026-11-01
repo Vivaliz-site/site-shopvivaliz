@@ -21,6 +21,8 @@ REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 RESOURCE = "mcp:marina"
 PRINCIPAL = "marina-mcp-service"
 CAPABILITIES = frozenset({"file_write", "deployment_manage", "database_admin"})
+DEPLOYMENT_OPERATIONS = frozenset({"olist_browser_restart"})
+OLIST_REPOSITORY = "Vivaliz-site/amazon-returns-safet"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 VERIFIER = Path(__file__).resolve().parents[1] / "scripts" / "validate-owner-pr-grant.py"
 VERIFIER_SUCCESS = "OWNER_PR_GRANT=AUTHORIZED reason=owner_authorization_verified"
@@ -35,6 +37,8 @@ def authorize_owner_pr(
     head_sha: str,
     merge_sha: str,
     capability: str,
+    operation: str | None = None,
+    target_repository: str | None = None,
     human_attestor: HumanAttestor | None = None,
     runtime_permission: RuntimePermission | None = None,
     runner=None,
@@ -54,6 +58,15 @@ def authorize_owner_pr(
             or not isinstance(capability, str)
             or capability not in CAPABILITIES):
         return False, "invalid_pr_or_scope"
+    if capability == "deployment_manage" and (not isinstance(operation, str) or operation not in DEPLOYMENT_OPERATIONS):
+        return False, "operation_required_for_deployment"
+    if capability != "deployment_manage" and operation is not None:
+        return False, "unexpected_operation_for_capability"
+    if not isinstance(target_repository, str) or not re.fullmatch(
+            r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", target_repository):
+        return False, "target_repository_required_for_deployment"
+    if capability == "deployment_manage" and target_repository != OLIST_REPOSITORY:
+        return False, "target_repository_required_for_deployment"
 
     if human_attestor is None:
         return False, "human_only_attestation_unavailable"
@@ -86,6 +99,10 @@ def authorize_owner_pr(
         "--principal", PRINCIPAL,
         "--capability", capability,
     ]
+    if operation is not None:
+        command.extend(["--operation", operation])
+    if target_repository is not None:
+        command.extend(["--target-repository", target_repository])
     try:
         result = (runner or subprocess.run)(
             command, capture_output=True, text=True, timeout=20, check=False,

@@ -42,7 +42,8 @@ class OwnerPrGateTests(unittest.TestCase):
         self.privilege = privilege
         self.args = dict(
             pr_number=PR, head_sha=HEAD, merge_sha=MERGE,
-            capability="file_write", runner=runner,
+            capability="file_write",
+            target_repository="Vivaliz-site/site-shopvivaliz", runner=runner,
         )
         self.environ = patch.dict(os.environ, {
             "SHOPVIVALIZ_SECURITY_OWNER_LOGIN": "verified-owner",
@@ -55,6 +56,43 @@ class OwnerPrGateTests(unittest.TestCase):
         opts = dict(self.args)
         opts.update(changes)
         return gate.authorize_owner_pr(**opts)
+
+
+    def test_privileged_operation_must_bind_exact_known_repository(self):
+        params = dict(capability="deployment_manage", operation="olist_browser_restart",
+                      human_attestor=self.human, runtime_permission=self.privilege)
+        self.assertEqual(
+            self.verify(**params, target_repository=None),
+            (False, "target_repository_required_for_deployment"),
+        )
+        self.assertEqual(self.verifier_calls, [])
+        self.assertEqual(
+            self.verify(**params, target_repository="Vivaliz-site/amazon-returns-safet"),
+            (True, "exact_owner_pr_grant_verified"),
+        )
+        args = self.verifier_calls[-1][0]
+        self.assertEqual(args[args.index("--target-repository") + 1],
+                         "Vivaliz-site/amazon-returns-safet")
+        self.assertFalse(self.verify(
+            **params, target_repository="Vivaliz-site/mercadolivre-returns-recovery")[0])
+
+    def test_olist_deployment_grant_requires_exact_operation(self):
+        proof = dict(capability="deployment_manage",
+                     target_repository="Vivaliz-site/amazon-returns-safet",
+                     human_attestor=self.human,
+                     runtime_permission=self.privilege)
+        self.assertEqual(
+            self.verify(**proof), (False, "operation_required_for_deployment"),
+        )
+        self.assertEqual(self.verifier_calls, [])
+        self.assertEqual(
+            self.verify(**proof, operation="olist_browser_restart"),
+            (True, "exact_owner_pr_grant_verified"),
+        )
+        command = self.verifier_calls[-1][0]
+        self.assertEqual(command[command.index("--operation") + 1], "olist_browser_restart")
+        for value in ("shell", "other_service_restart", "", None, 123, [], {}):
+            self.assertFalse(self.verify(**proof, operation=value)[0], value)
 
     def test_no_implicit_approval_from_merged_pr_or_owner_login(self):
         self.assertEqual(self.verify(), (False, "human_only_attestation_unavailable"))

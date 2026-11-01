@@ -21,11 +21,12 @@ SECURITY_HUMAN_LOGIN = "shopvivaliz-human"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 LOGIN = re.compile(r"^[A-Za-z0-9-]{1,39}$")
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+OPERATION = re.compile(r"^[a-z][a-z0-9_]{3,63}$")
 
 
 def decide(pr: object, grant: object, *, repository: str, pr_number: int,
            owner_login: str, merge_sha: str, head_sha: str, resource: str,
-           principal: str, capability: str, reviews: object = None,
+           principal: str, capability: str, operation: str | None = None, target_repository: str | None = None, reviews: object = None,
            now: datetime | None = None) -> tuple[bool, str]:
     """Require authenticated owner merger and exact immutable scope match."""
     if not (isinstance(pr, dict) and isinstance(grant, dict)):
@@ -83,6 +84,28 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
         return False, "invalid_capability_list"
     if capability not in caps:
         return False, "capability_not_approved"
+    if resource == "mcp:marina" and capability == "deployment_manage" and operation != "olist_browser_restart":
+        return False, "privileged_operation_required"
+    # A capability alone must not authorize a different privileged operation.
+    bound_operation = grant.get("operation")
+    if operation is not None:
+        if (not isinstance(operation, str) or not OPERATION.fullmatch(operation)
+                or bound_operation != operation):
+            return False, "operation_scope_not_approved"
+    elif bound_operation is not None:
+        return False, "operation_binding_required"
+    if resource == "mcp:marina":
+        if (not isinstance(target_repository, str) or
+                not REPO.fullmatch(target_repository) or
+                grant.get("target_repository") != target_repository):
+            return False, "target_repository_not_approved"
+    elif target_repository is not None:
+        if (not isinstance(target_repository, str) or
+                not REPO.fullmatch(target_repository) or
+                grant.get("target_repository") != target_repository):
+            return False, "target_repository_not_approved"
+    elif grant.get("target_repository") is not None:
+        return False, "target_repository_binding_required"
     expiry = grant.get("expires_at_utc")
     try:
         if not isinstance(expiry, str) or not expiry.endswith("Z"):
@@ -139,6 +162,8 @@ def main() -> int:
     p.add_argument("--resource", required=True)
     p.add_argument("--principal", required=True)
     p.add_argument("--capability", required=True)
+    p.add_argument("--operation", default=None, help="Exact privileged operation bound to this grant")
+    p.add_argument("--target-repository", default=None, help="Exact project repository bound to this grant")
     args = p.parse_args()
     owner = os.environ.get("SHOPVIVALIZ_SECURITY_OWNER_LOGIN", "").strip()
     token = os.environ.get("GITHUB_TOKEN", "").strip()
@@ -170,7 +195,7 @@ def main() -> int:
                                 pr_number=args.pr_number, owner_login=owner,
                                 merge_sha=args.merge_sha, head_sha=args.head_sha,
                                 resource=args.resource, principal=args.principal,
-                                capability=args.capability, reviews=reviews)
+                                capability=args.capability, operation=args.operation, target_repository=args.target_repository, reviews=reviews)
     except Exception:
         ok, reason = False, "verification_unavailable"
     print(f"OWNER_PR_GRANT={'AUTHORIZED' if ok else 'DENIED'} reason={reason}")

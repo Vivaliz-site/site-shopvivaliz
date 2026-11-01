@@ -24,16 +24,26 @@ def fixture():
           "auto_merge": None, "user": {"login": "fredmourao-ai"}}
     grant = {"schema": grant_module.SCHEMA, "repository": REPO, "pr_number": 123,
              "resource": "mcp:marina", "principal": "marina-mcp-service",
+             "target_repository": "Vivaliz-site/site-shopvivaliz",
              "capabilities": ["file_write", "deployment_manage"],
              "expires_at_utc": "2026-12-01T00:00:00Z"}
     opts = dict(repository=REPO, pr_number=123, owner_login="shopvivaliz-human",
                 merge_sha=MERGE, head_sha=HEAD, resource="mcp:marina",
-                principal="marina-mcp-service", capability="file_write", now=TIME,
+                principal="marina-mcp-service", capability="file_write",
+                target_repository="Vivaliz-site/site-shopvivaliz", now=TIME,
                 reviews=[{"user": {"login": "shopvivaliz-human"}, "state": "APPROVED", "commit_id": HEAD}])
     return pr, grant, opts
 
 
 class OwnerAuthorizationTests(unittest.TestCase):
+    def test_security_policy_requires_owner_only_pr_for_security_grants(self):
+        policy = (Path(__file__).resolve().parents[1]
+                  / "docs/knowledge/security-approval-via-pr.md").read_text()
+        self.assertIn('"operation": "olist_browser_restart"', policy)
+        self.assertIn("shopvivaliz-human", policy)
+        self.assertNotIn("chat aceito primeiro", policy.lower())
+        self.assertNotIn("chat deve ser utilizada normalmente", policy.lower())
+
     def test_security_codeowners_are_only_human_account(self):
         codeowners = Path(__file__).resolve().parents[1] / ".github" / "CODEOWNERS"
         mapping = {}
@@ -47,6 +57,70 @@ class OwnerAuthorizationTests(unittest.TestCase):
             "/scripts/validate-owner-pr-grant.py",
         ):
             self.assertEqual(["@shopvivaliz-human"], mapping.get(path))
+
+
+    def test_privileged_operation_must_bind_target_repository(self):
+        pr, grant, opts = fixture()
+        grant.update(operation="olist_browser_restart",
+                     target_repository="Vivaliz-site/amazon-returns-safet")
+        opts.update(capability="deployment_manage", operation="olist_browser_restart",
+                    target_repository="Vivaliz-site/amazon-returns-safet")
+        self.assertEqual((True, "owner_authorization_verified"),
+                         grant_module.decide(pr, grant, **opts))
+        opts["target_repository"] = "Vivaliz-site/mercadolivre-returns-recovery"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+        opts["target_repository"] = None
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+        opts["target_repository"] = "Vivaliz-site/amazon-returns-safet"
+        del grant["target_repository"]
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_named_operation_grant_must_match_exact_execution(self):
+        pr, grant, opts = fixture()
+        grant["operation"] = "olist_browser_restart"
+        grant["target_repository"] = "Vivaliz-site/amazon-returns-safet"
+        opts["capability"] = "deployment_manage"
+        opts["operation"] = "olist_browser_restart"
+        opts["target_repository"] = "Vivaliz-site/amazon-returns-safet"
+        self.assertEqual((True, "owner_authorization_verified"),
+                         grant_module.decide(pr, grant, **opts))
+        for wrong in ("other_service_restart", "shell", "", None):
+            opts["operation"] = wrong
+            self.assertFalse(grant_module.decide(pr, grant, **opts)[0], wrong)
+        opts["operation"] = "olist_browser_restart"
+        del grant["operation"]
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_unscoped_legacy_marina_deployment_grant_never_authorizes_restart(self):
+        pr, grant, opts = fixture()
+        opts["capability"] = "deployment_manage"
+        self.assertEqual(
+            (False, "privileged_operation_required"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_operation_restricted_grant_denies_unscoped_readback(self):
+        pr, grant, opts = fixture()
+        grant["operation"] = "olist_browser_restart"
+        opts["capability"] = "deployment_manage"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_file_write_security_grant_requires_repository_scope(self):
+        pr, grant, opts = fixture()
+        del grant["target_repository"]
+        del opts["target_repository"]
+        self.assertEqual(
+            (False, "target_repository_not_approved"),
+            grant_module.decide(pr, grant, **opts),
+        )
+        grant["target_repository"] = "Vivaliz-site/site-shopvivaliz"
+        opts["target_repository"] = "Vivaliz-site/site-shopvivaliz"
+        self.assertEqual(
+            (True, "owner_authorization_verified"),
+            grant_module.decide(pr, grant, **opts),
+        )
+        opts["target_repository"] = "Vivaliz-site/buscador"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
     def test_owner_merged_exact_scope_is_accepted(self):
         pr, grant, opts = fixture()
@@ -227,6 +301,7 @@ class GrantOriginBindingTests(unittest.TestCase):
             "--pr-number", "123", "--merge-sha", MERGE, "--head-sha", HEAD,
             "--resource", "mcp:marina", "--principal", "marina-mcp-service",
             "--capability", "file_write",
+            "--target-repository", "Vivaliz-site/site-shopvivaliz",
         ]
         output = StringIO()
         with patch.dict(os.environ, {
