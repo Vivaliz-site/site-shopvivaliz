@@ -262,6 +262,49 @@ class OwnerAuthorizationTests(unittest.TestCase):
 
 
 
+    def test_central_marina_owner_grant_requires_exact_readonly_host_and_actor(self):
+        pr, grant, opts = fixture()
+        grant.update(resource="mcp:central:marina", principal="shopvivaliz-central-mcp",
+                     host="marina-a1-4c24g",
+                     controller_host="always-free-arm-1787907847-26",
+                     capabilities=["marina_readonly"])
+        del grant["target_repository"]
+        opts.update(resource="mcp:central:marina", principal="shopvivaliz-central-mcp",
+                    capability="marina_readonly", target_repository=None)
+        self.assertEqual((True, "owner_authorization_verified"),
+                         grant_module.decide(pr, grant, **opts))
+        for field, replacement in (
+            ("host", "shopvivaliz-free-a1"),
+            ("host", "always-free-arm-1787907847-26"),
+            ("controller_host", "shopvivaliz-free-a1"),
+            ("principal", "root"),
+            ("capabilities", ["marina_readonly", "admin_command_run"]),
+            ("capabilities", ["file_write"]),
+        ):
+            changed = dict(grant, **{field: replacement})
+            with self.subTest(field=field, replacement=replacement):
+                self.assertFalse(grant_module.decide(pr, changed, **opts)[0])
+        changed = dict(grant, operation="systemctl_restart")
+        self.assertFalse(grant_module.decide(pr, changed, **opts)[0])
+        changed = dict(grant, target_repository="Vivaliz-site/site-shopvivaliz")
+        self.assertFalse(grant_module.decide(pr, changed, **opts)[0])
+        opts["operation"] = "systemctl_restart"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_central_marina_grant_not_valid_for_privileged_marina_resource(self):
+        pr, grant, opts = fixture()
+        grant.update(resource="mcp:central:marina", principal="shopvivaliz-central-mcp",
+                     host="marina-a1-4c24g", controller_host="always-free-arm-1787907847-26",
+                     capabilities=["marina_readonly"])
+        grant.pop("target_repository")
+        opts.update(resource="mcp:marina", principal="shopvivaliz-central-mcp",
+                    capability="marina_readonly", target_repository="Vivaliz-site/site-shopvivaliz")
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+        opts.update(resource="mcp:central:marina", target_repository=None,
+                    owner_login="fredmourao-ai")
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+
 class GrantOriginBindingTests(unittest.TestCase):
     """Regression: approving an unrelated PR must never activate old grants."""
 
