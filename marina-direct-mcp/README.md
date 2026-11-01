@@ -27,19 +27,36 @@ A auditoria GitHub `docs/ops/mcp-admin-workflow-source-audit-2026-11-01.json` re
 * Bearer token MUST be a dedicated Marina secret file owned by the service UID,
   a regular file with mode **0600**; no copy/reuse of central MCP, OCI, RDC,
   Cloudflare or SSH credentials. No token in logs, process arguments, Git or chat.
-* Supports only MCP initialize, ping, discovery and two strictly read-only
-  tools: host identity and a fixed systemd service status allowlist. No shell,
-  sudo, Docker access, SQL changes, writes, service actions or durable tasks.
+* Supports MCP initialize, ping, discovery and six strictly read-only
+  tools: host identity; fixed systemd service status; bounded process ID/name
+  listing; aggregate system usage; individually approved public Linux kernel
+  metrics; and a bounded batch of those public metrics. No shell, process
+  arguments, arbitrary filesystem read, sudo, Docker access, SQL changes,
+  writes, service actions or durable tasks.
 * Rejects unauthenticated callers, client-supplied Origin, unknown tools,
   unexpected services, oversized requests and host identity mismatch.
 * Security is intentionally fail-closed. This staging server is NOT a replacement
   for the full ShopVivaliz Remote Control MCP; it does not offer state mutation,
   ownership leases, CAS or fencing because it has no mutation surface.
 
+## RDC parity progress (2026-11-01)
+
+The independent MCP now provides real, unprivileged equivalents to parts of
+`list_processes`, `get_usage_stats`, `read_file` (only fixed public kernel
+metrics), and `read_multiple_files` (same fixed sources), alongside identity
+and service status. Those six tools have tested Streamable HTTP behavior.
+**This does not certify the 29 RDC methods:** interactive process control,
+filesystem changes, unrestricted commands, provider config and service
+mutations require separate protected operators, host RBAC and owner-PR grants.
+The staging unit remains disabled until the dedicated OpenAI Secure MCP Tunnel
+and local secrets are officially provisioned. Staged code is not an installed
+or ChatGPT-connected MCP.
+
 ## Validation without deployment
 
 ```sh
-python3 -m py_compile marina-direct-mcp/server.py tests/test_marina_direct_mcp.py
+python3 -m py_compile marina-direct-mcp/server.py tests/test_marina_direct_mcp.py marina-direct-mcp/read_only_telemetry.py tests/test_marina_read_only_telemetry.py
+python3 tests/test_marina_read_only_telemetry.py -v
 python3 tests/test_marina_direct_mcp.py
 ```
 

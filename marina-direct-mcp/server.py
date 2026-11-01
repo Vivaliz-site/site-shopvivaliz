@@ -10,6 +10,7 @@ import argparse
 import hmac
 import json
 import os
+import runpy
 import socket
 import stat
 import subprocess
@@ -20,6 +21,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 EXPECTED_HOST = "marina-a1-4c24g"
+# Fixed sibling file staged root-owned and read-only by the official operator.
+# run_path avoids ambient PYTHONPATH and caller-controlled module lookup.
+_TELEMETRY = runpy.run_path(str(Path(__file__).with_name("read_only_telemetry.py")))
 PROTOCOL_VERSION = "2025-06-18"
 MAX_BODY = 16384
 # A local or tunneled slow client must not exhaust the read-only MCP's threads.
@@ -38,6 +42,38 @@ TOOLS = [
         "name": "marina_host_health",
         "description": "Identify the directly attached Marina host (read only).",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "marina_processes_list",
+        "description": "List up to 48 process IDs and sanitized executable names, without argv, users or secrets.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "marina_system_usage",
+        "description": "Read aggregate CPU, memory and root disk metrics without host mutation.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "marina_kernel_telemetry",
+        "description": "Read one fixed non-secret Linux kernel metrics file, never caller-selected paths.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"source": {"type": "string", "enum": ["uptime", "loadavg", "meminfo"]}},
+            "required": ["source"], "additionalProperties": False,
+        },
+    },
+    {
+        "name": "marina_kernel_telemetry_batch",
+        "description": "Read up to three unique fixed non-secret Linux telemetry resources.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sources": {"type": "array", "items": {
+                    "type": "string", "enum": ["uptime", "loadavg", "meminfo"]},
+                    "minItems": 1, "maxItems": 3, "uniqueItems": True},
+            },
+            "required": ["sources"], "additionalProperties": False,
+        },
     },
     {
         "name": "marina_service_status",
@@ -242,6 +278,14 @@ def create_server(
                             "user_uid": os.geteuid(),
                             "scope": "unprivileged_read_only",
                         }
+                    elif name == "marina_processes_list" and not arguments:
+                        output = _TELEMETRY["public_processes_list"]()
+                    elif name == "marina_system_usage" and not arguments:
+                        output = _TELEMETRY["public_system_usage"]()
+                    elif name == "marina_kernel_telemetry" and set(arguments) == {"source"}:
+                        output = _TELEMETRY["public_telemetry_read"](arguments["source"])
+                    elif name == "marina_kernel_telemetry_batch" and set(arguments) == {"sources"}:
+                        output = _TELEMETRY["public_telemetry_batch"](arguments["sources"])
                     elif name == "marina_service_status" and set(arguments) == {"service"}:
                         requested_service = arguments["service"]
                         if not isinstance(requested_service, str) or requested_service not in ALLOWED_SERVICES:
