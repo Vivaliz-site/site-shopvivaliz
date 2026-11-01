@@ -1,0 +1,153 @@
+"""Negative/positive contracts for owner-gated central Marina route activation.
+
+Tests never contact GitHub, start a service, or read real credentials.
+"""
+import base64
+import importlib.util
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts" / "ops" / "activate-mcp-central-marina-readonly.py"
+spec = importlib.util.spec_from_file_location("marina_central_activation", SCRIPT)
+assert spec and spec.loader
+a = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(a)
+
+PR_NUMBER = 3478
+HEAD = "a" * 40
+MERGE = "b" * 40
+
+
+def sample_pr():
+    return {
+        "merged": True, "state": "closed", "auto_merge": None,
+        "user": {"login": "fredmourao-ai"}, "merged_by": {"login": a.OWNER},
+        "head": {"sha": HEAD}, "merge_commit_sha": MERGE,
+    }
+
+
+def sample_grant():
+    return {
+        "schema": a.PR_SCHEMA, "repository": a.REPOSITORY,
+        "pr_number": PR_NUMBER, "resource": "mcp:central:marina",
+        "principal": "shopvivaliz-central-mcp",
+        "host": a.MARINA, "controller_host": a.CONTROLLER,
+        "capabilities": ["marina_readonly"],
+        "expires_at_utc": "2099-02-01T00:00:00Z",
+    }
+
+
+class OwnerActivationTests(unittest.TestCase):
+    def proof(self, pr=None, grant=None):
+        pr = pr if pr is not None else sample_pr()
+        grant = grant if grant is not None else sample_grant()
+
+        def fake_api(endpoint, _token):
+            if endpoint == f"pulls/{PR_NUMBER}":
+                return pr
+            if endpoint.startswith("contents/security/owner-approvals/"):
+                return {
+                    "encoding": "base64",
+                    "content": base64.b64encode(json.dumps(grant).encode()).decode(),
+                }
+            raise AssertionError(f"unrecognized endpoint {endpoint}")
+
+        with patch.object(a, "github", side_effect=fake_api), patch.object(
+                a, "run", return_value="OWNER_PR_GRANT=AUTHORIZED"):
+            return a.grant_proof(PR_NUMBER, "fixture-token")
+
+    def test_exact_owner_approved_grant_produces_read_only_attestation(self):
+        found = self.proof()
+        self.assertEqual(found["capabilities"], ["marina_readonly"])
+        self.assertEqual(found["principal"], "shopvivaliz-central-mcp")
+        self.assertEqual(found["head_sha"], HEAD)
+        self.assertEqual(found["merge_sha"], MERGE)
+        self.assertEqual(found["merged_by"], a.OWNER)
+        self.assertEqual(found["reviewer"], a.OWNER)
+
+    def test_pr_must_have_manual_human_merger_distinct_from_author(self):
+        for field, bad in (
+            ("merged", False), ("state", "open"),
+            ("auto_merge", {"merge_method": "squash"}),
+            ("merged_by", {"login": "fredmourao-ai"}),
+            ("user", {"login": a.OWNER}),
+            ("head", {"sha": "not-valid"}),
+        ):
+            with self.subTest(field=field):
+                pr = dict(sample_pr(), **{field: bad})
+                with self.assertRaises(a.ActivationDenied):
+                    self.proof(pr=pr)
+
+    def test_exact_grant_host_principal_and_scope(self):
+        for field, bad in (
+            ("resource", "mcp:marina"),
+            ("principal", "root"),
+            ("host", "shopvivaliz-free-a1"),
+            ("controller_host", "shopvivaliz-free-a1"),
+            ("capabilities", ["marina_readonly", "admin_command_run"]),
+            ("pr_number", 3477),
+            ("expires_at_utc", "2020-01-01T00:00:00Z"),
+        ):
+            with self.subTest(field=field):
+                with self.assertRaises(a.ActivationDenied):
+                    self.proof(grant=dict(sample_grant(), **{field: bad}))
+
+    def test_fail_closed_on_official_verifier_rejection(self):
+        def fake_api(endpoint, _token):
+            if endpoint == f"pulls/{PR_NUMBER}":
+                return sample_pr()
+            raise AssertionError("must not fetch grant when verification fails")
+        with patch.object(a, "github", side_effect=fake_api), patch.object(
+                a, "run", side_effect=a.ActivationDenied("official_verification_or_command_failed")):
+            with self.assertRaises(a.ActivationDenied):
+                a.grant_proof(PR_NUMBER, "fixture-token")
+
+    def test_non_root_cannot_mutate_or_run_preflight(self):
+        with patch.object(a.os, "geteuid", return_value=1000):
+            with self.assertRaises(a.ActivationDenied):
+                a.preflight(PR_NUMBER)
+
+    def test_activation_failure_does_not_touch_service_or_state(self):
+        with patch.object(a, "preflight", side_effect=a.ActivationDenied("unmerged")), \
+             patch.object(a, "write_private") as write, \
+             patch.object(a, "restart_and_verify") as restart, \
+             patch.object(sys, "argv", ["activation", "activate", "--pr", str(PR_NUMBER)]):
+            self.assertEqual(a.main(), 1)
+            write.assert_not_called()
+            restart.assert_not_called()
+
+    def test_private_state_file_is_written_atomically_0600(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "grant.json"
+            a.write_private(path, json.dumps(sample_grant()))
+            self.assertEqual(json.loads(path.read_text()), sample_grant())
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_revocation_requires_root_on_correct_host(self):
+        with patch.object(a.os, "geteuid", return_value=1000), \
+             patch.object(a, "restart_and_verify") as restart, \
+             patch.object(sys, "argv", ["activation", "revoke"]):
+            self.assertEqual(a.main(), 1)
+            restart.assert_not_called()
+
+    def test_source_contains_no_automatic_privilege_bypass(self):
+        server = (ROOT / "remote-control-mcp" / "server.py").read_text()
+        self.assertIn("marina_central_readonly_grant_active()", server)
+        self.assertIn("os.O_NOFOLLOW", server)
+        self.assertIn("st.st_nlink != 1", server)
+        self.assertNotIn("marina_central_mutation_enabled = True", server)
+        script = SCRIPT.read_text()
+        self.assertIn('"--capability", "marina_readonly"', script)
+        self.assertIn("GRANT_STATE.unlink", script)
+        self.assertNotIn("StrictHostKeyChecking=no", script)
+
+
+if __name__ == "__main__":
+    unittest.main()

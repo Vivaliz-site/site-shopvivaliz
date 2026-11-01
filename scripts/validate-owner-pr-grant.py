@@ -94,6 +94,18 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
             return False, "operation_scope_not_approved"
     elif bound_operation is not None:
         return False, "operation_binding_required"
+    # A central-to-Marina read grant must never inherit general Marina admin
+    # permissions, unrelated target repositories, or an unbound operation.
+    if resource == "mcp:central:marina":
+        if (principal != "shopvivaliz-central-mcp" or
+                capability != "marina_readonly" or
+                caps != ["marina_readonly"] or
+                operation is not None or target_repository is not None or
+                grant.get("operation") is not None or
+                grant.get("target_repository") is not None or
+                grant.get("host") != "marina-a1-4c24g" or
+                grant.get("controller_host") != "always-free-arm-1787907847-26"):
+            return False, "central_marina_scope_not_approved"
     if resource == "mcp:marina":
         if (not isinstance(target_repository, str) or
                 not REPO.fullmatch(target_repository) or
