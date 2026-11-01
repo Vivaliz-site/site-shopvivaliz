@@ -109,9 +109,27 @@ class RemoteControlMcpTests(unittest.TestCase):
         known_hosts.write_text("dummy pinned host metadata", encoding="utf-8")
         key.chmod(0o600)
         known_hosts.chmod(0o600)
+        attestation = Path(self.tmp.name) / "private-grant.json"
+        attestation.write_text(json.dumps({
+            "schema": "SHOPVIVALIZ_CENTRAL_MARINA_RUNTIME_GRANT_V1",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "pr_number": 3478,
+            "resource": "mcp:central:marina",
+            "principal": "shopvivaliz-central-mcp",
+            "host": m.MARINA_HOST,
+            "controller_host": "always-free-arm-1787907847-26",
+            "capabilities": ["marina_readonly"],
+            "head_sha": "a" * 40, "merge_sha": "b" * 40,
+            "reviewer": "shopvivaliz-human",
+            "merged_by": "shopvivaliz-human",
+            "expires_at_utc": "2099-01-01T00:00:00Z",
+        }), encoding="utf-8")
+        attestation.chmod(0o600)
         with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": "approved-v1"}), \
+             mock.patch.object(m, "MARINA_CENTRAL_OWNER_ATTESTATION", attestation), \
              mock.patch.object(m, "MARINA_SSH_KEY", key), \
              mock.patch.object(m, "MARINA_PINNED_HOSTS", known_hosts):
+            self.assertTrue(m.marina_central_readonly_grant_active())
             invoked = m.remote_invocation(m.MARINA_HOST, health)
             self.assertEqual(invoked[:5], ["/usr/sbin/runuser", "-u", "ubuntu", "--", "/usr/bin/ssh"])
             self.assertIn("StrictHostKeyChecking=yes", invoked)
@@ -128,6 +146,51 @@ class RemoteControlMcpTests(unittest.TestCase):
             key.chmod(0o666)
             with self.assertRaisesRegex(PermissionError, "marina_central_pinned_identity_not_ready"):
                 m.remote_invocation(m.MARINA_HOST, health)
+
+    def test_marina_private_attestation_fails_closed_for_missing_expired_and_tampered_grants(self):
+        allowed = {
+            "schema": "SHOPVIVALIZ_CENTRAL_MARINA_RUNTIME_GRANT_V1",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "pr_number": 3478, "resource": "mcp:central:marina",
+            "principal": "shopvivaliz-central-mcp", "host": m.MARINA_HOST,
+            "controller_host": "always-free-arm-1787907847-26",
+            "capabilities": ["marina_readonly"], "head_sha": "a" * 40,
+            "merge_sha": "b" * 40, "reviewer": "shopvivaliz-human",
+            "merged_by": "shopvivaliz-human", "expires_at_utc": "2099-01-01T00:00:00Z",
+        }
+        path = Path(self.tmp.name) / "attestation"
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": "approved-v1"}), \
+             mock.patch.object(m, "MARINA_CENTRAL_OWNER_ATTESTATION", path):
+            self.assertFalse(m.marina_central_readonly_grant_active())
+            path.write_text(json.dumps(allowed), encoding="utf-8")
+            path.chmod(0o600)
+            self.assertTrue(m.marina_central_readonly_grant_active())
+            with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": ""}):
+                self.assertFalse(m.marina_central_readonly_grant_active())
+            for field, value in (
+                ("expires_at_utc", "2020-01-01T00:00:00Z"),
+                ("expires_at_utc", "never"),
+                ("capabilities", ["marina_readonly", "admin_command_run"]),
+                ("host", "always-free-arm-1787907847-26"),
+                ("controller_host", "shopvivaliz-free-a1"),
+                ("principal", "root"),
+                ("reviewer", "fredmourao-ai"),
+                ("merged_by", "fredmourao-ai"),
+                ("head_sha", "bad"),
+                ("pr_number", True),
+            ):
+                with self.subTest(field=field, value=value):
+                    updated = dict(allowed, **{field: value})
+                    path.write_text(json.dumps(updated), encoding="utf-8")
+                    self.assertFalse(m.marina_central_readonly_grant_active())
+            path.write_text(json.dumps(allowed), encoding="utf-8")
+            path.chmod(0o644)
+            self.assertFalse(m.marina_central_readonly_grant_active())
+            path.chmod(0o600)
+            link = Path(self.tmp.name) / "symlink"
+            link.symlink_to(path)
+            with mock.patch.object(m, "MARINA_CENTRAL_OWNER_ATTESTATION", link):
+                self.assertFalse(m.marina_central_readonly_grant_active())
 
     def test_marina_mutation_and_unlisted_services_deny_before_execution(self):
         blocked = [
