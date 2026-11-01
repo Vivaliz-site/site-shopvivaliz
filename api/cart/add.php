@@ -76,71 +76,54 @@ if (!isset($_SESSION['cart'])) {
 
 // ✅ Validate product exists and has valid price
 try {
-    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../includes/catalog-runtime.php';
+    require_once __DIR__ . '/../../includes/cart-authoritative-product.php';
 
-    $db = Database::getInstance()->getConnection();
-    $stmt = $db->prepare('SELECT id, sku, name, price, stock FROM products WHERE sku = ? LIMIT 1');
-
-    if (!$stmt) {
-        http_response_code(500);
-        echo json_encode(['error' => 'Database error']);
-        exit;
-    }
-
-    $stmt->bind_param('s', $sku);
-    $stmt->execute();
-    $stmt->bind_result($productId, $productSku, $productName, $productPrice, $productStock);
-    $product = $stmt->fetch()
-        ? [
-            'id' => $productId,
-            'sku' => $productSku,
-            'name' => $productName,
-            'price' => $productPrice,
-            'stock' => $productStock,
-        ]
-        : null;
-    $stmt->close();
-
-    if (!$product) {
+    // The catalog runtime is derived from official Olist/Tiny v3 and Amazon 991.
+    // Do not use the local MySQL products table: it can contain obsolete IDs,
+    // prices and physical-stock figures after ERP product recreation.
+    $product = svca_find_catalog_product(svcr_products(), $sku);
+    if (!is_array($product)) {
         http_response_code(404);
-        echo json_encode(['error' => 'Product not found', 'sku' => $sku]);
+        echo json_encode(['error' => 'Product not found or ambiguous in ERP', 'sku' => $sku]);
         exit;
     }
 
-    $price = (float)($product['price'] ?? 0);
-    $stock = (int)($product['stock'] ?? 0);
-
-    // ✅ Validate price
-    if ($price <= 0) {
-        http_response_code(422);
-        echo json_encode(['error' => 'Product has invalid price', 'price' => $price]);
-        exit;
+    $canonicalSku = trim((string)($product['sku'] ?? ''));
+    // Count prior quantities across case variants without mutating the cart
+    // until the authoritative price/stock check succeeds.
+    $existingQuantity = 0;
+    $existingKeys = [];
+    foreach ($_SESSION['cart'] as $storedKey => $stored) {
+        if (!is_array($stored)) continue;
+        $storedSku = trim((string)($stored['sku'] ?? $storedKey));
+        if (strcasecmp($storedSku, $canonicalSku) !== 0) continue;
+        $existingQuantity += (int)($stored['quantity'] ?? 0);
+        $existingKeys[] = $storedKey;
     }
-
-    // ✅ Validate stock
-    if ($stock < $quantity) {
-        http_response_code(409);
+    $quote = svca_quote_cart_add($product, $quantity, $existingQuantity);
+    if (!$quote['ok']) {
+        http_response_code((int)$quote['status']);
         echo json_encode([
-            'error' => 'Insufficient stock',
-            'sku' => $sku,
-            'requested' => $quantity,
-            'available' => $stock
+            'error' => $quote['error'] ?? 'Invalid ERP product',
+            'sku' => $canonicalSku,
+            'requested' => $quote['requested'] ?? $quantity,
+            'available' => $quote['available'] ?? 0,
         ]);
         exit;
     }
 
-    // ✅ Add to cart
-    if (isset($_SESSION['cart'][$sku])) {
-        $_SESSION['cart'][$sku]['quantity'] += $quantity;
-    } else {
-        $_SESSION['cart'][$sku] = [
-            'sku' => $sku,
-            'name' => $product['name'],
-            'price' => round($price, 2),
-            'quantity' => $quantity,
-            'product_id' => $product['id']
-        ];
-    }
+    // Commit the session mutation only after validating total quantity.
+    foreach ($existingKeys as $key) unset($_SESSION['cart'][$key]);
+    $sku = $canonicalSku;
+    $price = (float)$quote['price'];
+    $_SESSION['cart'][$sku] = [
+        'sku' => $sku,
+        'name' => (string)($product['name'] ?? $sku),
+        'price' => $price,
+        'quantity' => (int)$quote['quantity'],
+        'product_id' => (string)$quote['product_id'],
+    ];
 
     // ✅ Calculate cart totals
     $cartTotal = 0;
