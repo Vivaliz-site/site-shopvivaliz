@@ -92,7 +92,9 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         self.assertEqual(self.rpc("ping")[0], 200)
         _, listed = self.rpc("tools/list")
         self.assertEqual({t["name"] for t in listed["result"]["tools"]},
-                         {"marina_host_health", "marina_service_status"})
+                         {"marina_host_health", "marina_service_status",
+                          "marina_processes_list", "marina_system_usage",
+                          "marina_kernel_telemetry", "marina_kernel_telemetry_batch"})
         _, output = self.rpc("tools/call", {"name": "marina_host_health", "arguments": {}})
         result = json.loads(output["result"]["content"][0]["text"])
         self.assertEqual(result["host"], m.EXPECTED_HOST)
@@ -112,6 +114,53 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
             _, refused = self.rpc("tools/call", {"name": name, "arguments": args})
             self.assertIn("error", refused, name)
         self.assertEqual(self.probed, ["ml-pricing-worker.service"])
+
+    def test_rdc_read_only_process_usage_and_kernel_telemetry(self):
+        """These four functions execute genuine unprivileged reads, not no-ops."""
+        _, processes = self.rpc("tools/call", {
+            "name": "marina_processes_list", "arguments": {}})
+        self.assertNotIn("error", processes)
+        entries = json.loads(processes["result"]["content"][0]["text"])
+        self.assertEqual(entries["host"], m.EXPECTED_HOST)
+        self.assertGreater(len(entries["processes"]), 0)
+        self.assertLessEqual(len(entries["processes"]), 48)
+        self.assertEqual(set(entries["processes"][0]), {"pid", "process"})
+        _, usage = self.rpc("tools/call", {
+            "name": "marina_system_usage", "arguments": {}})
+        self.assertNotIn("error", usage)
+        stats = json.loads(usage["result"]["content"][0]["text"])
+        self.assertGreater(stats["root_total_bytes"], 0)
+        self.assertGreater(stats["memory_total_bytes"], 0)
+        _, single = self.rpc("tools/call", {
+            "name": "marina_kernel_telemetry", "arguments": {"source": "uptime"}})
+        self.assertNotIn("error", single)
+        self.assertEqual(json.loads(single["result"]["content"][0]["text"])["source"], "uptime")
+        _, batch = self.rpc("tools/call", {
+            "name": "marina_kernel_telemetry_batch",
+            "arguments": {"sources": ["uptime", "loadavg"]}})
+        self.assertNotIn("error", batch)
+        self.assertEqual([x["source"] for x in json.loads(batch["result"]["content"][0]["text"])["sources"]],
+                         ["uptime", "loadavg"])
+
+    def test_telemetry_rejects_paths_injection_duplicates_and_mutation(self):
+        for name, arguments in (
+            ("marina_kernel_telemetry", {"source": "/etc/shadow"}),
+            ("marina_kernel_telemetry", {"source": "../proc/uptime"}),
+            ("marina_kernel_telemetry", {"source": "uptime", "path": "/etc/passwd"}),
+            ("marina_kernel_telemetry_batch", {"sources": ["uptime", "uptime"]}),
+            ("marina_kernel_telemetry_batch", {"sources": []}),
+            ("marina_kernel_telemetry_batch", {"sources": "uptime"}),
+            ("marina_processes_list", {"command": "sudo id"}),
+            ("marina_system_usage", {"host": "always-free-arm-1787907847-26"}),
+            ("marina_file_write", {"path": "/tmp/x", "data": "x"}),
+        ):
+            with self.subTest(name=name, arguments=arguments):
+                _, refused = self.rpc("tools/call", {"name": name, "arguments": arguments})
+                self.assertIn("error", refused)
+        # New tools inherit bearer+Origin checks, never bypass MCP authentication.
+        _, denied = self.rpc("tools/call", {
+            "name": "marina_processes_list", "arguments": {}}, bearer="incorrect")
+        self.assertEqual(denied, {"error": "unauthorized"})
 
     def test_streamable_http_requires_get_405_and_valid_headers(self):
         good_token = AUTH_VALUE
