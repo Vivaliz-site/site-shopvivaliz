@@ -74,6 +74,15 @@ else:
         if token not in agents_text:
             errors.append(f"AGENTS.md: missing {token}")
 
+for path in (ROOT / "CLAUDE.md", ROOT / "GEMINI.md", ROOT / "GEPETO-POLICY.md", ROOT / ".github" / "copilot-instructions.md"):
+    if not path.is_file():
+        errors.append(f"missing checkpoint-first entrypoint: {path.relative_to(ROOT)}")
+        continue
+    checkpoint_text = path.read_text(encoding="utf-8", errors="replace")
+    for token in (CHECKPOINT_FIRST_MARKER, "agent_task_state.py start", "agent_task_state.py progress", "antes da primeira"):
+        if token not in checkpoint_text:
+            errors.append(f"{path.relative_to(ROOT)}: missing checkpoint-first contract {token}")
+
 for path in NORMATIVE:
     if not path.is_file():
         errors.append(f"missing normative entrypoint: {path.relative_to(ROOT)}")

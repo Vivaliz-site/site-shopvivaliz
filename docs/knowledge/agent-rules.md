@@ -1,3 +1,15 @@
+<!-- MANDATORY_AGENT_CHECKLIST_V1 -->
+## Checklist transacional obrigatorio: todos os agentes e todas as IAs
+
+A cada tarefa material, consultar e atualizar o checklist duravel ANTES de agir, DEPOIS de cada etapa e ANTES de escolher a proxima acao. Esta regra vale para ChatGPT/Gepeto, Codex, Claude, Gemini, Copilot, workers e subagentes. A sessao ou o controlador nao substituem a responsabilidade de cada agente em executar a proxima etapa permitida.
+
+Usar o registro canonico `scripts/agent_task_state.py`: iniciar o checkpoint com identidade/autorizacao reais; `plan-checklist --task ID --step "..." --step "..."` antes de qualquer progresso; `next-step --task ID` para consultar o item aberto; `check-step --task ID --step-id N --evidence "prova concreta" --verification "validacao independente"` ao completar CADA item; `add-checklist-step` para nova descoberta sem apagar etapas ja comprovadas. Somente passar ao proximo item depois de verificar a conclusao do anterior. `ready` e `complete` nao substituem testes finais, E2E/UI, gates, deploy e merge.
+
+Checklists iniciados nao podem ser sobrescritos para apagar pendencias, pular etapas, inventar provas, ou transformar bloqueios em conclusoes. Nos novos checkpoints do runtime canonico a falta de plano ou de qualquer item comprovado bloqueia `READY_TO_COMPLETE` e `CONCLUIDO`. Checkpoints legados exigem migracao explicita, preservando historico, leases, ownership, next_action e prova existente; nao criar tarefa duplicada. Falhas de ferramenta exigem rota alternativa autorizada e estado aberto, nao falsificacao de check. Todos os repositorios/agentes devem adotar o mesmo contrato ou um mecanismo equivalente com testes negativos; documento presente sozinho nao certifica adesao operacional.
+
+Protecoes do GitHub, MFA, RBAC, segredos, gates comerciais e aprovacoes humanas continuam vigentes. Registro de check nao prova, por si, o comportamento real: confirmar os resultados nos sistemas alvo e nos certificadores independentes aplicaveis.
+<!-- /MANDATORY_AGENT_CHECKLIST_V1 -->
+
 ## Regra universal de continuidade e esgotamento de rotas — todos os agentes e repositorios (2026-10-31)
 
 **Obrigatoria para toda execucao e todo agente, independentemente do fornecedor, modelo ou interface:** ChatGPT, Codex, Claude, Gemini, agentes autonomos, bots, workers, scripts, GitHub Actions, ferramentas MCP e futuros agentes. Aplica-se a todos os repositorios e organizacoes GitHub sob gestao da ShopVivaliz, nao apenas a este repositorio.
@@ -447,3 +459,6 @@ Toda alteração implantável requer CI verde, merge permitido, deploy de releas
 
 Preços: `scripts/quality/audit-storefront-erp-prices.py` reconsulta a **tabela Amazon ID 991 na API v3**, aplica o percentual da tabela e as exceções por ID exato sobre os preços-base do ERP (nunca preço local), e compara integralmente preços efetivos, promoções, proveniência e SKU com cache e catálogo público, somente leitura. A rotina pós-deploy + diária `.github/workflows/postdeploy-erp-price-parity.yml` deve registrar `PRICE_PARITY_VERDICT` e artefato de evidência. Duplicidade de SKU, divergência, erro de consulta ou versão incompatível são falha de aceite, não aviso ignorável. A autenticação e a entrega de eventos reais por webhook continuam gates separados. Ver `docs/knowledge/deploy.md` e `AGENTS.md`.
 <!-- /DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
+## Preflight obrigatorio de identidade Git
+
+Antes de qualquer operacao Git de agente remoto, resolva a propriedade real do worktree e utilize `scripts/maintenance/git_as_repo_owner.py --repo <worktree> -- <git-subcommand>`. Um shell MCP com `uid=0` nao e autorizacao para agir como root no repositorio pertencente a `ubuntu`. Nao mitigar `dubious ownership` com `safe.directory=*`, chown recursivo, copia de tokens ou troca da identidade de autenticacao. Testar o caminho seguro via `tests/test_git_as_repo_owner.py`.

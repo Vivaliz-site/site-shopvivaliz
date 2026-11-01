@@ -19,29 +19,91 @@ TIME = datetime(2026, 10, 31, tzinfo=timezone.utc)
 
 def fixture():
     pr = {"merged": True, "state": "closed", "number": 123,
-          "merged_by": {"login": "verified-owner"}, "merge_commit_sha": MERGE,
+          "merged_by": {"login": "shopvivaliz-human"}, "merge_commit_sha": MERGE,
           "head": {"sha": HEAD}, "base": {"ref": "main", "repo": {"full_name": REPO}},
-          "auto_merge": None}
+          "auto_merge": None, "user": {"login": "fredmourao-ai"}}
     grant = {"schema": grant_module.SCHEMA, "repository": REPO, "pr_number": 123,
              "resource": "mcp:marina", "principal": "marina-mcp-service",
              "capabilities": ["file_write", "deployment_manage"],
              "expires_at_utc": "2026-12-01T00:00:00Z"}
-    opts = dict(repository=REPO, pr_number=123, owner_login="verified-owner",
+    opts = dict(repository=REPO, pr_number=123, owner_login="shopvivaliz-human",
                 merge_sha=MERGE, head_sha=HEAD, resource="mcp:marina",
-                principal="marina-mcp-service", capability="file_write", now=TIME)
+                principal="marina-mcp-service", capability="file_write", now=TIME,
+                reviews=[{"user": {"login": "shopvivaliz-human"}, "state": "APPROVED", "commit_id": HEAD}])
     return pr, grant, opts
 
 
 class OwnerAuthorizationTests(unittest.TestCase):
+    def test_security_codeowners_are_only_human_account(self):
+        codeowners = Path(__file__).resolve().parents[1] / ".github" / "CODEOWNERS"
+        mapping = {}
+        for line in codeowners.read_text().splitlines():
+            parts = line.split()
+            if parts and not parts[0].startswith("#"):
+                mapping[parts[0]] = parts[1:]
+        for path in (
+            "/security/owner-approvals/",
+            "/docs/knowledge/security-approval-via-pr.md",
+            "/scripts/validate-owner-pr-grant.py",
+        ):
+            self.assertEqual(["@shopvivaliz-human"], mapping.get(path))
+
     def test_owner_merged_exact_scope_is_accepted(self):
         pr, grant, opts = fixture()
         self.assertEqual((True, "owner_authorization_verified"), grant_module.decide(pr, grant, **opts))
+
+    def test_configured_owner_must_be_exclusive_human_account(self):
+        pr, grant, opts = fixture()
+        opts["owner_login"] = "fredmourao-ai"
+        pr["merged_by"]["login"] = "fredmourao-ai"
+        self.assertEqual(
+            (False, "configured_owner_is_not_shopvivaliz_human"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_human_account_must_not_author_own_security_authorization(self):
+        pr, grant, opts = fixture()
+        pr["user"] = {"login": "shopvivaliz-human"}
+        self.assertEqual(
+            (False, "security_pr_author_must_be_distinct"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_missing_human_review_denies_security_grant(self):
+        pr, grant, opts = fixture()
+        opts["reviews"] = []
+        self.assertEqual(
+            (False, "security_pr_not_approved_by_human"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_review_by_agent_does_not_authorize(self):
+        pr, grant, opts = fixture()
+        opts["reviews"] = [{"user": {"login": "fredmourao-ai"}, "state": "APPROVED", "commit_id": HEAD}]
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_review_for_previous_head_sha_denied(self):
+        pr, grant, opts = fixture()
+        opts["reviews"][0]["commit_id"] = "c" * 40
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_human_changes_requested_after_approval_revokes_grant(self):
+        pr, grant, opts = fixture()
+        opts["reviews"].append(
+            {"user": {"login": "shopvivaliz-human"}, "state": "CHANGES_REQUESTED", "commit_id": HEAD}
+        )
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_review_list_pagination_boundary_fails_closed(self):
+        pr, grant, opts = fixture()
+        opts["reviews"] *= 100
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
     def test_auto_merge_enabled_by_owner_is_not_human_only_grant(self):
         pr, grant, opts = fixture()
         pr["auto_merge"] = {
             "merge_method": "squash",
-            "enabled_by": {"login": "verified-owner"},
+            "enabled_by": {"login": "shopvivaliz-human"},
         }
         self.assertEqual(
             (False, "owner_only_merge_not_proven_manual"),
@@ -121,7 +183,7 @@ class OwnerAuthorizationTests(unittest.TestCase):
 
     def test_case_insensitive_owner_match(self):
         pr, grant, opts = fixture()
-        opts["owner_login"] = "Verified-Owner"
+        opts["owner_login"] = "SHOPVIVALIZ-HUMAN"
         self.assertTrue(grant_module.decide(pr, grant, **opts)[0])
 
 
@@ -152,6 +214,8 @@ class GrantOriginBindingTests(unittest.TestCase):
         def read_github(url, _token):
             if url.endswith("/pulls/123"):
                 return pr
+            if url.endswith("/pulls/123/reviews?per_page=100"):
+                return opts["reviews"]
             if url.endswith("/pulls/123/files?per_page=100"):
                 return files
             if "/contents/" in url and "?ref=" in url:
@@ -166,13 +230,19 @@ class GrantOriginBindingTests(unittest.TestCase):
         ]
         output = StringIO()
         with patch.dict(os.environ, {
-                "SHOPVIVALIZ_SECURITY_OWNER_LOGIN": "verified-owner",
+                "SHOPVIVALIZ_SECURITY_OWNER_LOGIN": "shopvivaliz-human",
                 "GITHUB_TOKEN": "test-token-not-valid",
              }), patch.object(sys, "argv", argv), patch.object(
                 grant_module, "github_json", side_effect=read_github
              ), redirect_stdout(output):
             exit_code = grant_module.main()
         return exit_code, output.getvalue()
+
+    def test_agent_account_cannot_be_security_grant_owner(self):
+        pr, grant, opts = fixture()
+        opts["owner_login"] = "fredmourao-ai"
+        pr["merged_by"]["login"] = "fredmourao-ai"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
     def test_preexisting_grant_in_unrelated_owner_pr_is_denied(self):
         exit_code, output = self.execute_gate(status="modified")

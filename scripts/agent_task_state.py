@@ -67,6 +67,12 @@ SCHEMA_VERSION = 1
 PROOF_SCHEMA_VERSION = 2
 DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 CANONICAL_CONTROLLER_RUNTIME_DIR = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
+# MANDATORY_AGENT_CHECKLIST_V1: strict for fresh canonical checkpoints,
+# with explicit environment opt-in for isolated regression tests.
+def _mandatory_checklist_enabled() -> bool:
+    strict = os.getenv("SHOPVIVALIZ_REQUIRE_AGENT_CHECKLIST", "").strip().lower() in {"1", "true", "yes", "on"}
+    return strict or RUNTIME_DIR.resolve() == CANONICAL_CONTROLLER_RUNTIME_DIR
+
 CHATGPT_AGENT_ID_RE = re.compile(r"(?:^|[^a-z0-9])(?:chatgpt|gpt[0-9]*|orquestrador)(?=$|[^a-z0-9])", re.I)
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
@@ -495,6 +501,118 @@ def _portable_completion_argv(argv: list[str]) -> list[str]:
     return argv
 
 
+# MANDATORY_AGENT_CHECKLIST_V1: step-by-step evidence is a separate gate
+# from final goal verification and certified runtime/E2E completion checks.
+def _checklist_row(description: str, number: int) -> dict[str, Any]:
+    return {
+        "id": number,
+        "description": description,
+        "status": "PENDENTE",
+        "evidence": [],
+        "verification": "",
+    }
+
+
+def _require_checklist_complete(payload: dict[str, Any]) -> None:
+    checklist = payload.get("checklist")
+    if checklist is None:
+        return  # pre-policy legacy checkpoint: no silent retroactive mutation
+    if not isinstance(checklist, dict) or not checklist.get("required"):
+        raise TaskStateError("mandatory checklist contract missing or invalid")
+    items = checklist.get("items")
+    if not isinstance(items, list) or not items:
+        raise TaskStateError("mandatory checklist requires an explicit action plan")
+    for position, item in enumerate(items, 1):
+        if not isinstance(item, dict) or item.get("id") != position or not str(item.get("description", "")).strip():
+            raise TaskStateError("mandatory checklist is structurally invalid")
+        if (item.get("status") != "CONCLUIDO" or not item.get("evidence")
+                or not str(item.get("verification", "")).strip() or not item.get("completed_at")):
+            raise TaskStateError(f"mandatory checklist step {position} is not certified as completed")
+
+
+@_serialized_transition
+def set_checklist(task_id: str, *, steps: Iterable[str]) -> dict[str, Any]:
+    payload = _load(task_id)
+    if payload.get("status") != "RUNNING":
+        raise TaskStateError("checklist may only be planned while RUNNING")
+    _require_current_resume(payload)
+    titles = [str(step).strip() for step in steps]
+    if not titles or len(titles) > 80 or any(not title or len(title) > 500 for title in titles):
+        raise TaskStateError("mandatory checklist requires 1-80 concrete steps (max 500 characters each)")
+    if len(set(titles)) != len(titles):
+        raise TaskStateError("mandatory checklist has duplicate steps")
+    existing = payload.get("checklist")
+    if isinstance(existing, dict) and existing.get("items"):
+        if [item.get("description") for item in existing["items"]] == titles:
+            return payload
+        raise TaskStateError("existing checklist is immutable; use add-checklist-step without erasing prior evidence")
+    payload["checklist"] = {"schema_version": 1, "required": True,
+                            "items": [_checklist_row(title, index) for index, title in enumerate(titles, 1)]}
+    payload["next_action"] = titles[0]
+    _bump_checkpoint_version(payload)
+    _history(payload, "checklist_planned", count=len(titles))
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+@_serialized_transition
+def add_checklist_step(task_id: str, *, description: str) -> dict[str, Any]:
+    payload = _load(task_id)
+    if payload.get("status") != "RUNNING":
+        raise TaskStateError("new checklist steps require RUNNING status")
+    _require_current_resume(payload)
+    checklist = payload.get("checklist")
+    if not isinstance(checklist, dict) or not checklist.get("required") or not checklist.get("items"):
+        raise TaskStateError("define a mandatory action plan before adding steps")
+    title = str(description).strip()
+    items = checklist["items"]
+    if not title or len(title) > 500 or len(items) >= 80:
+        raise TaskStateError("invalid checklist step")
+    if any(row.get("description") == title for row in items):
+        raise TaskStateError("duplicate checklist step")
+    items.append(_checklist_row(title, len(items) + 1))
+    if all(row.get("status") == "CONCLUIDO" for row in items[:-1]):
+        payload["next_action"] = title
+    _bump_checkpoint_version(payload)
+    _history(payload, "checklist_step_added", step_id=len(items))
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+@_serialized_transition
+def complete_checklist_step(task_id: str, *, step_id: int, evidence: str, verification: str) -> dict[str, Any]:
+    payload = _load(task_id)
+    if payload.get("status") != "RUNNING":
+        raise TaskStateError("checklist steps can only be checked while RUNNING")
+    _require_current_resume(payload)
+    checklist = payload.get("checklist")
+    if not isinstance(checklist, dict) or not checklist.get("required") or not checklist.get("items"):
+        raise TaskStateError("mandatory checklist plan is missing")
+    items = checklist["items"]
+    if step_id < 1 or step_id > len(items):
+        raise TaskStateError("unknown checklist step")
+    row = items[step_id - 1]
+    proof, verified = str(evidence).strip(), str(verification).strip()
+    if not proof or not verified:
+        raise TaskStateError("checking a step requires actual evidence and independent verification")
+    if any(previous.get("status") != "CONCLUIDO" for previous in items[:step_id - 1]):
+        raise TaskStateError("checklist cannot skip previous unfinished steps")
+    if row.get("status") == "CONCLUIDO":
+        if row.get("evidence") == [proof] and row.get("verification") == verified:
+            return payload
+        raise TaskStateError("completed checklist evidence is immutable")
+    row.update({"status": "CONCLUIDO", "evidence": [proof],
+                "verification": verified, "completed_at": utc_now()})
+    following = next((step for step in items if step["status"] != "CONCLUIDO"), None)
+    payload["next_action"] = (following["description"] if following else
+                              "Verify the original goal, run required completion checks, and record READY_TO_COMPLETE")
+    _bump_checkpoint_version(payload)
+    _history(payload, "checklist_step_completed", step_id=step_id,
+             evidence=proof, verification=verified)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
 @_serialized_transition
 def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = (), conversation_id: str = "", browser_session: str = "") -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
@@ -561,6 +679,8 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         "history": [{"at": now, "event": "started"}],
         "checkpoint_version": 1,
     }
+    if _mandatory_checklist_enabled():
+        payload["checklist"] = {"schema_version": 1, "required": True, "items": []}
     if checks:
         payload["schema_version"] = PROOF_SCHEMA_VERSION
         payload["completion_checks"] = checks
@@ -622,6 +742,8 @@ def start_successor_task(
         }],
         "checkpoint_version": 1,
     }
+    if _mandatory_checklist_enabled():
+        payload["checklist"] = {"schema_version": 1, "required": True, "items": []}
     inherited_conversation_id = str(predecessor.get("conversation_id", "")).strip()
     if inherited_conversation_id:
         payload["conversation_id"] = _safe_conversation_id(inherited_conversation_id)
@@ -647,6 +769,9 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     if is_terminal(payload):
         raise TaskStateError("terminal task cannot record progress; resume a blocked task explicitly")
     _require_current_resume(payload)
+    checklist = payload.get("checklist")
+    if isinstance(checklist, dict) and checklist.get("required") and not checklist.get("items"):
+        raise TaskStateError("mandatory checklist plan required before progress")
     action = str(next_action).strip()
     if not action:
         raise TaskStateError("non-terminal task requires a concrete next_action")
@@ -689,6 +814,7 @@ def mark_ready(
         raise TaskStateError("READY_TO_COMPLETE requires verification against the original goal")
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
+    _require_checklist_complete(payload)
     _require_background_terminal_checks(payload)
     _require_extreme_audit_proof(payload)
     _run_completion_checks(payload)
@@ -710,6 +836,7 @@ def _complete_task_transition(task_id: str) -> dict[str, Any]:
         raise TaskStateError("completion rejected: executable next_action still exists")
     if not payload.get("evidence") or not payload.get("verification"):
         raise TaskStateError("completion rejected: verification evidence is missing")
+    _require_checklist_complete(payload)
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
     try:
@@ -1129,6 +1256,23 @@ def _parser() -> argparse.ArgumentParser:
     successor.add_argument("--agent", default="")
     successor.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
 
+    plan = sub.add_parser("plan-checklist")
+    plan.add_argument("--task", required=True)
+    plan.add_argument("--step", action="append", required=True)
+
+    add_step = sub.add_parser("add-checklist-step")
+    add_step.add_argument("--task", required=True)
+    add_step.add_argument("--description", required=True)
+
+    check_step = sub.add_parser("check-step")
+    check_step.add_argument("--task", required=True)
+    check_step.add_argument("--step-id", type=int, required=True)
+    check_step.add_argument("--evidence", required=True)
+    check_step.add_argument("--verification", required=True)
+
+    next_step = sub.add_parser("next-step")
+    next_step.add_argument("--task", required=True)
+
     progress = sub.add_parser("progress")
     progress.add_argument("--task", required=True)
     progress.add_argument("--next-action", required=True)
@@ -1194,6 +1338,22 @@ def main() -> int:
                 agent_id=args.agent,
                 repository=args.repository,
             )
+        elif args.command == "plan-checklist":
+            payload = set_checklist(args.task, steps=args.step)
+        elif args.command == "add-checklist-step":
+            payload = add_checklist_step(args.task, description=args.description)
+        elif args.command == "check-step":
+            payload = complete_checklist_step(args.task, step_id=args.step_id,
+                                              evidence=args.evidence, verification=args.verification)
+        elif args.command == "next-step":
+            payload = load_task(args.task)
+            checklist = payload.get("checklist") or {}
+            items = checklist.get("items") or []
+            current = next((row for row in items if row.get("status") != "CONCLUIDO"), None)
+            print(json.dumps({"task_id": args.task, "status": payload.get("status"),
+                              "next_step": current, "remaining": sum(row.get("status") != "CONCLUIDO" for row in items),
+                              "total": len(items), "next_action": payload.get("next_action")}, ensure_ascii=False, indent=2))
+            return 0
         elif args.command == "progress":
             payload = record_progress(args.task, next_action=args.next_action, evidence=args.evidence)
         elif args.command == "ready":

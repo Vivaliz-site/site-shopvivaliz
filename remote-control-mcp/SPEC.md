@@ -52,17 +52,6 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Privilege does not authorize credential theft, secret disclosure, authentication bypass, disabling audit, or bypassing platform/repository protections.
 - Production immutability remains mandatory: privileged access must not edit the active `current/` release directly.
 
-## Security Model
-- No public host-control endpoint.
-- No hardcoded credentials, tokens, cookies or private keys.
-- Named host allowlist; never route by user-supplied arbitrary address.
-- Read operations and write/execute operations are distinct tools.
-- Shell execution is policy-controlled and bounded by timeout/output limits. The daemon may execute with root/LocalSystem privilege when the requested administrative capability requires it; ordinary operations should use the least privilege that still completes the task.
-- High-impact destructive operations require a dedicated explicit tool or policy rule; elevation itself is not treated as an error because administrative recovery is a core capability.
-- Every request creates an append-only audit record with redacted arguments and outcome.
-- Secrets are never returned in tool output.
-- File access is restricted to configured roots per host.
-- Sessions/tasks have TTL and cancellation support.
 
 ## Universal administrative execution and software installation
 - `admin_command_run` is the universal privileged escape hatch for legitimate host administration on the four canonical hosts.
