@@ -32,6 +32,36 @@ function surface({ history = 'Previous reply', completedTurn = '', tail = '', ro
 export async function runThinkingFailedTests({ errorBannerPresent, recoverableFailureReason, sendContinueMessage }) {
   const failures = [];
   const cases = [
+    ['current Portuguese ConversationDetailError is a recoverable banner', async () => {
+      const cdp = surface({ tail: 'A operação não pode ser concluída. (APICore.ConversationDetailError.DetailError erro 1.)' });
+      assert.equal(await errorBannerPresent(cdp), true);
+      assert.equal(await recoverableFailureReason(cdp), 'generation_error');
+    }],
+    ['technical ConversationDetailError in the active alert is recognized', async () => {
+      const cdp = surface({ alert: 'APICore.ConversationDetailError.DetailError error 1' });
+      assert.equal(await recoverableFailureReason(cdp), 'generation_error');
+    }],
+    ['a quoted historic conversation-detail failure does not trigger retry', async () => {
+      const cdp = surface({
+        history: 'The screenshot said APICore.ConversationDetailError.DetailError erro 1',
+        completedTurn: 'Last successful answer',
+        tail: 'Ready for the next task',
+        roles: false,
+      });
+      assert.equal(await errorBannerPresent(cdp), false);
+      assert.equal(await recoverableFailureReason(cdp), '');
+    }],
+    ['a still active server stream blocks continuation despite ConversationDetailError', async () => {
+      const current = surface({ tail: 'A operação não pode ser concluída. (APICore.ConversationDetailError.DetailError erro 1.)' });
+      let writes = 0;
+      const cdp = {
+        evaluate: source => source.includes('/stream_status')
+          ? Promise.resolve({ http_status: 200, status: 'IS_STREAMING' }) : current.evaluate(source),
+        async send() { writes += 1; throw Error('no duplicate continuation'); },
+      };
+      assert.equal(await sendContinueMessage(cdp), false);
+      assert.equal(writes, 0);
+    }],
     ['Portuguese failure in the current status is a generation error', async () => {
       const cdp = surface({ tail: 'O pensamento falhou' });
       assert.equal(await errorBannerPresent(cdp), true);
