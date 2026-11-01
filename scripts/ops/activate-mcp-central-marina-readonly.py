@@ -87,11 +87,21 @@ def validate_metadata(path: Path, *, key: bool = False) -> None:
 
 def grant_proof(pr_number: int, token: str) -> dict:
     pr = github(f"pulls/{pr_number}", token)
-    if (not isinstance(pr, dict) or not pr.get("merged") or
-            pr.get("state") != "closed" or
+    if not isinstance(pr, dict) or "auto_merge" not in pr:
+        raise ActivationDenied("personal_owner_merge_not_verified")
+    auto = pr["auto_merge"]
+    # An owner APPROVED review of the current SHA is validated by the
+    # canonical owner-pr verifier below. Native auto-merge is allowed only
+    # when the same human owner enabled it; the GitHub checks still gate merge.
+    if auto is not None:
+        enabled_by = auto.get("enabled_by") if isinstance(auto, dict) else None
+        if (not isinstance(enabled_by, dict) or
+                enabled_by.get("login") != OWNER or
+                auto.get("merge_method") not in ("merge", "squash", "rebase")):
+            raise ActivationDenied("owner_auto_merge_not_authorized")
+    if (not pr.get("merged") or pr.get("state") != "closed" or
             pr.get("user", {}).get("login") == OWNER or
-            pr.get("merged_by", {}).get("login") != OWNER or
-            pr.get("auto_merge") is not None):
+            pr.get("merged_by", {}).get("login") != OWNER):
         raise ActivationDenied("personal_owner_merge_not_verified")
     head = pr.get("head", {}).get("sha")
     merge = pr.get("merge_commit_sha")
