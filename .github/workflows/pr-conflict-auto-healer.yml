@@ -17,12 +17,51 @@ concurrency:
 
 jobs:
   preflight:
+    # Only the trusted hosted preflight can request review; Oracle healer stays read-only.
+    permissions:
+      contents: read
+      pull-requests: write
     name: Detect whether Oracle conflict healing is actually needed
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
       should_heal: ${{ steps.detect.outputs.should_heal }}
     steps:
+      - name: Request human owner review on every ready PR
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          # A draft cannot be reviewed yet; ready_for_review will trigger this
+          # again. Never authenticate as the human or request a duplicate.
+          [[ "${PR_NUMBER:-}" =~ ^[1-9][0-9]*$ ]] || exit 64
+          meta="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          actual_head="$(jq -r '.head.sha // ""' <<<"$meta")"
+          if [[ "$actual_head" != "$EVENT_HEAD" ]]; then
+            echo "owner_review_notification=stale_event"
+            exit 0
+          fi
+          if ! jq -e '.state == "open" and .draft == false and .user.login != "shopvivaliz-human"' <<<"$meta" >/dev/null; then
+            echo "owner_review_notification=not_ready_or_self_authored"
+            exit 0
+          fi
+          current="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers")"
+          if jq -e '[.users[]? | select(.login == "shopvivaliz-human")] | length > 0' <<<"$current" >/dev/null; then
+            echo "owner_review_notification=already_requested"
+            exit 0
+          fi
+          reviews="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" | jq -s 'add // []')"
+          if jq -e --arg sha "$actual_head" '[.[] | select(.user.login == "shopvivaliz-human" and .state == "APPROVED" and .commit_id == $sha)] | length > 0' <<<"$reviews" >/dev/null; then
+            echo "owner_review_notification=already_approved"
+            exit 0
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+            -f 'reviewers[]=shopvivaliz-human' >/dev/null
+          echo "owner_review_notification=requested"
       - name: Inspect mergeability without reserving the Oracle runner
         id: detect
         shell: bash

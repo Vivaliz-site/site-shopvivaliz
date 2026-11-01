@@ -62,7 +62,15 @@ class CiFeedbackOptimizationTests(unittest.TestCase):
         for name in workflows:
             text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
             self.assertIn("concurrency:", text, name)
-            self.assertIn("cancel-in-progress: true", text, name)
+            if name == "mandatory-validation-gate.yml":
+                # Review is not a code change: preserve the original code run.
+                # Every actual synchronize/label event still cancels stale work.
+                self.assertIn(
+                    "cancel-in-progress: $"+"{{ github.event_name != 'pull_request_review' }}",
+                    text, name)
+                self.assertIn("review_code_validation_reuse", text, name)
+            else:
+                self.assertIn("cancel-in-progress: true", text, name)
 
 
 if __name__ == "__main__":
