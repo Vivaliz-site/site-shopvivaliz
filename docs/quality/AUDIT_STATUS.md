@@ -4,6 +4,18 @@
 
 # Estado da Auditoria
 
+## 2026-11-01 — corrigir carrinho legado que consulta MySQL comercial defasado
+
+**Escopo:** `api/cart/add.php`, apenas referência de produto e validação de carrinho; não edita tabela de preço Amazon 991 nem estoque ERP. **AUDIT_VERDICT=NAO_APTO** enquanto novo SHA não estiver aprovado/deployado e o fluxo UI não for repetido.
+
+**RED reproduzido em produção:** o SKU `1C7Q-LKVS-MDOC` consta como ERP Olist v3 ID `393626238`, preço Amazon 991 R$38,90 e saldo vendável 4, mas MySQL derivado `products` ainda guarda ID `387064728`, R$10,00, estoque 0. A API legada `api/cart/add.php` usava `SELECT ... FROM products`; podia negar o carrinho e usar valores incorretos. Preflight descobriu também 155 preços, 149 estoques e 19 IDs divergentes na tabela derivada. A auditoria total oficial de preços, no entanto, terminou `PRICE_PARITY_VERDICT=PASS` com 202 ERP=cache e 200/200 públicos, SHA `61d73ec6ee95882329bfb84a282812861e867e8a`; evidência persistida na Marina, hash SHA256 `5864a068b8c97d125813c422f294429a6ab8dcc72e98352a00a734615bb44662`.
+
+**Correção preventiva:** endpoint legado passa a consumir exclusivamente `svcr_products()` (cache ERP Olist v3, tabela Amazon 991 e estoque disponível), recusa SKU ausente/ambíguo e valida quantidade TOTAL de sessão antes de mutá-la. Nunca usa fallback MySQL nem preço base; não altera preços comerciais, flag, banco ou outros sistemas. Testes unitários isolados exercitam 0/1/4/5/99/100, estoque zero, preço zero, duplicidade, identidade ERP e contrato de ausência de SQL. Evita repetição do incidente mesmo se o MySQL derivado estiver defasado.
+
+**GREEN local no SHA `f5ba5add9fb4b3b9ae3056699c86064b277191aa`:** 3/3 `php -l` e `php tests/cart-authoritative-erp-contract-test.php` = `cart-authoritative-erp-contract: ok`, executados em worktree sparse separado na Marina, **sem deploy**, sem compras/pagamentos, sem alteração comercial ou dados. Cobertura oficial de CI, deploy e comportamento UI do SHA final ainda requerem validação após integração. A auditoria V5 e o estado da tabela MySQL derivada permanecem pendentes; a decisão humana para reconciliar o banco foi solicitada na PR Draft #3476.
+
+---
+
 ## Rodada de publicação do site público na Marina — 2026-10-20 (escopo auditado)
 
 **SITE_PUBLIC_AUDIT_STATUS=APTO** — o `AUDIT_VERDICT=APTO` certifica **somente o escopo da auditoria funcional do storefront e das jornadas UI efetivamente executadas** no SHA/release `99416b61be202b95a1f77b0469fd6395954eeb74`. Preserva-se a certificação original e suas evidências; não há conversão automática em aprovação para toda a infraestrutura.

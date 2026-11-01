@@ -216,6 +216,8 @@ jobs:
           if [ "$found" -eq 0 ]; then
             echo "No PHP files require lint for this event."
           fi
+      - name: Carrinho legado usa ERP v3 e estoque disponivel (regressao)
+        run: php tests/cart-authoritative-erp-contract-test.php
       - name: "Bloquear CSS wildcard de layout (ex: [class*=hero])"
         run: |
           PADRAO='\[class\s*\*=\s*"(hero|banner|section|page|layout|container)'
