@@ -185,7 +185,7 @@ def restart_and_verify() -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["preflight", "activate", "revoke"])
-    parser.add_argument("--pr", type=int, default=3478)
+    parser.add_argument("--pr", type=int, default=None, help="Exact manual owner grant PR; required for preflight/activate")
     args = parser.parse_args()
     try:
         if args.action == "revoke":
@@ -197,8 +197,8 @@ def main() -> int:
             restart_and_verify()
             print("CENTRAL_MARINA_GRANT_REVOKED=PASS")
             return 0
-        if args.pr <= 0:
-            raise ActivationDenied("invalid_pr")
+        if args.pr is None or args.pr <= 0:
+            raise ActivationDenied("explicit_owner_grant_pr_required")
         attestation = preflight(args.pr)
         if args.action == "preflight":
             print("CENTRAL_MARINA_GRANT_PREFLIGHT=PASS no_runtime_change=true")
