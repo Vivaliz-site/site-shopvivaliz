@@ -1,3 +1,7 @@
+<!-- CENTRAL_MARINA_REQUIRED_DUAL_ROUTE_20261101 -->
+> **Diretriz posterior do proprietario (2026-11-01):** o MCP central tambem DEVE alcancar `marina-a1-4c24g`, em paralelo ao MCP independente direto da Marina. Nao confundir "alcancar" com root liberado. A implementacao central inicia como rota privada separada, com host key pinada, identidade real, leitura restrita e desabilitada ate grant formal por PR e E2E. O MCP independente continua obrigatorio, sem dependencia RDC/backend, usando seu proprio tunel OpenAI. Nunca reutilizar alias ou segredos da VM excluida. Codigo em revisao nao e capacidade disponivel: ver `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
+<!-- /CENTRAL_MARINA_REQUIRED_DUAL_ROUTE_20261101 -->
+
 <!-- CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
 > **Regra vigente (31/10/2026, confirmada pelo proprietario):** existem apenas duas VMs OCI operacionais: `marina-a1-4c24g` (web/deploy/banco/workers) e `always-free-arm-1787907847-26` (backend/MCP/controller/browser). `shopvivaliz-free-a1` foi encerrada: NAO acessar, pesquisar como destino, monitorar, recuperar, recriar ou redirecionar aliases para ela. Referencias historicas abaixo nao representam destino ativo.
 >

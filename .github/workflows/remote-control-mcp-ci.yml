@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'remote-control-mcp/**'
+      - 'docs/ops/mcp-rdc-capability-parity-2026-11-01.json'
+      - 'scripts/validate-mcp-rdc-capability-parity.py'
+      - 'tests/test_mcp_rdc_capability_parity.py'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-iphone-private-ssh-relay.sh'
       - 'scripts/ensure-chatgpt-freeze-successor.py'
@@ -39,6 +42,9 @@ on:
   push:
     paths:
       - 'remote-control-mcp/**'
+      - 'docs/ops/mcp-rdc-capability-parity-2026-11-01.json'
+      - 'scripts/validate-mcp-rdc-capability-parity.py'
+      - 'tests/test_mcp_rdc_capability_parity.py'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-iphone-private-ssh-relay.sh'
       - 'scripts/ensure-chatgpt-freeze-successor.py'
@@ -88,6 +94,8 @@ jobs:
           python3 -m py_compile scripts/controller-recovery-with-lease.py tests/test_controller_remote_recovery_gate.py
           python3 tests/test_controller_remote_recovery_gate.py
           python3 tests/remote-control-mcp-test.py
+          python3 tests/test_mcp_rdc_capability_parity.py -v
+          python3 scripts/validate-mcp-rdc-capability-parity.py
           python3 tests/iphone-private-ssh-relay-contract-test.py
           python3 tests/test_chatgpt_freeze_successor.py
           python3 tests/test_secure_mcp_tunnel_stability.py

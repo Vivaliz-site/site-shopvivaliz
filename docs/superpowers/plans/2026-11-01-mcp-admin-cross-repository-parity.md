@@ -1,3 +1,7 @@
+<!-- CENTRAL_MARINA_DUAL_REQUIREMENT_20261101 -->
+> **Atualizacao de escopo 2026-11-01:** alem do MCP independente da Marina (sem RDC/backend), o MCP central deve alcancar a Marina por rota privada explicitamente autorizada. A PR #3474 prepara somente health/status read-only, ainda desligados por padrao; implementar grant owner-only separado e E2E antes de habilitar, depois expandir controles por operacao. O plano antigo de independencia nao elimina esta segunda via de acesso.
+<!-- /CENTRAL_MARINA_DUAL_REQUIREMENT_20261101 -->
+
 # MCP administrativo em todos os repositorios — plano de implementacao
 
 > **Para agentes:** executar com Superpowers TDD, testes negativos e verificaçao de runtime por etapa. Somente `shopvivaliz-human` faz merge de PRs de concessao/seguranca.
