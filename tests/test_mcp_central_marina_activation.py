@@ -172,6 +172,72 @@ class OwnerActivationTests(unittest.TestCase):
             self.assertEqual(a.main(), 1)
             restart.assert_not_called()
 
+
+    def test_browser_bridge_repair_only_after_exact_owner_attestation(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            att = self.proof()
+            state = root / "grant.json"
+            base_dropin = root / "base.conf"
+            browser_dropin = root / "browser.conf"
+            state.write_text(json.dumps(att))
+            base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a, "preflight", return_value=att), \
+                 patch.object(a, "restart_browser_and_verify") as restart_browser, \
+                 patch.object(a, "restart_and_verify") as restart_base, \
+                 patch.object(sys, "argv", ["activation", "repair-browser", "--pr", str(PR_NUMBER)]):
+                self.assertEqual(a.main(), 0)
+                self.assertEqual(browser_dropin.read_text(), base_dropin.read_text())
+                self.assertEqual(stat.S_IMODE(browser_dropin.stat().st_mode), 0o644)
+                restart_browser.assert_called_once()
+                restart_base.assert_not_called()
+                self.assertEqual(json.loads(state.read_text()), att)
+
+    def test_browser_bridge_repair_denies_stale_or_replaced_grant(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            att = self.proof()
+            state = root / "grant.json"
+            base_dropin = root / "base.conf"
+            browser_dropin = root / "browser.conf"
+            state.write_text(json.dumps({**att, "pr_number": 3477}))
+            base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a, "preflight", return_value=att), \
+                 patch.object(a, "restart_browser_and_verify") as restart_browser, \
+                 patch.object(sys, "argv", ["activation", "repair-browser", "--pr", str(PR_NUMBER)]):
+                self.assertEqual(a.main(), 1)
+                self.assertFalse(browser_dropin.exists())
+                restart_browser.assert_not_called()
+
+    def test_browser_bridge_repair_rollback_preserves_base_grant(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            att = self.proof()
+            state = root / "grant.json"
+            base_dropin = root / "base.conf"
+            browser_dropin = root / "browser.conf"
+            state.write_text(json.dumps(att))
+            base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a, "preflight", return_value=att), \
+                 patch.object(a, "restart_browser_and_verify",
+                              side_effect=[a.ActivationDenied("browser_unhealthy"), None]) as reboot, \
+                 patch.object(a, "restart_and_verify") as restart_base, \
+                 patch.object(sys, "argv", ["activation", "repair-browser", "--pr", str(PR_NUMBER)]):
+                self.assertEqual(a.main(), 1)
+                self.assertEqual(reboot.call_count, 2)
+                self.assertFalse(browser_dropin.exists())
+                self.assertTrue(state.exists())
+                restart_base.assert_not_called()
+
     def test_source_contains_no_automatic_privilege_bypass(self):
         server = (ROOT / "remote-control-mcp" / "server.py").read_text()
         self.assertIn("marina_central_readonly_grant_active()", server)
