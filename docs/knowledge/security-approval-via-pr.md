@@ -1,10 +1,10 @@
 # Autorizacao humana de seguranca por Pull Request — ShopVivaliz
 
 ## Decisao do proprietario (2026-10-31)
-A autorizacao expressa do proprietario **pelo chat deve ser utilizada normalmente quando a regra de seguranca e o sistema aceitarem esse canal**. Pull Request como mecanismo de autorizacao humana formal e exigido **somente quando chat nao for aceito** e a plataforma reconhecer aprovacao autenticada por PR. Um PR continua sendo o fluxo de revisao de codigo quando regras de branch exigirem, independentemente do canal de autorizacao humana.
+**Decisao humana exclusiva:** qualquer autorizacao de seguranca administrada pela ShopVivaliz exige PR formal criado por uma identidade diferente de `shopvivaliz-human`. Somente a pessoa proprietaria, usando a conta GitHub `shopvivaliz-human` (inacessivel a todos os agentes, bots, conectores e runners), pode validar, aprovar, liberar e efetuar pessoalmente o merge desse PR. Autorizacao por chat nao substitui esse ato para privilegios de seguranca. PRs comuns de codigo seguem as protecoes habituais e nao se tornam autorizacoes de seguranca sem um grant formal vinculado.
 
-## Precedencia: chat aceito primeiro; PR de autorizacao apenas se chat for recusado
-Sempre que uma regra de seguranca, RBAC, governanca, infraestrutura ou provedor exigir **acao direta e autenticada do proprietario** e **nao aceitar autorizacao escrita no chat** como prova suficiente, o agente deve obrigatoriamente preparar um PR Draft de aprovacao com a mudanca proposta, testes, impacto e rollback. Nao repetir pedidos de autorizacao pelo chat nem encerrar apenas com o bloqueio.
+## Fluxo obrigatorio: PR Draft criado por identidade de agente; aprovacao e merge exclusivamente humanos
+Para conceder privilegios de seguranca, o executor deve preparar PR Draft com diff, escopo minimo, recurso, principal, capacidades, TTL, riscos, testes e rollback. O autor do PR nao pode ser `shopvivaliz-human` nem aprovar/mergear o proprio pedido. Somente o merge autenticado e pessoal de `shopvivaliz-human` constitui autorizacao humana formal para aquele PR, SHA e escopo. Nenhuma aprovacao escrita em chat ou por agente substitui esse ato.
 
 A aprovacao/liberacao autenticada do PR constitui a manifestacao formal do proprietario **para o escopo revisado**, nos sistemas que aceitam o fluxo PR como autorizacao. Caso OCI, OpenAI Platform ou outro provedor exija um ato administrativo proprio (por exemplo, consentimento OAuth, alteracao RBAC, MFA ou aprovacao de owner), anexar ao PR as instrucoes e evidencias dessa etapa e solicitar que ela seja feita por seu mecanismo oficial. Aprovacao do PR nao altera por si so a politica do provedor.
 
@@ -47,7 +47,7 @@ Quando a liberacao de funcoes administrativas do MCP independente de Marina exig
 A aprovacao de um PR com identidade verificada representa a decisao do proprietario para o diff e escopo correspondentes. O executor nao deve criar uma segunda barreira de permissao humana por iniciativa propria. O pipeline devera validar o evento de aprovacao e SHA, conferir gates e implementar apenas os privilegios aprovados com principio do menor privilegio, trilha auditavel, fencing e rollback. A concessao tecnica de papel/escopo em OCI, host ou OpenAI Platform deve ser feita pelo caminho oficial de cada sistema, se requerida; um PR nao equivale tecnicamente a uma alteracao de RBAC inexistente e nao autoriza contornar uma recusa explicita do provedor.
 
 ## Exclusividade do proprietario no merge de aprovacao de seguranca
-Quando houver bloqueio que exija autorizacao humana formal e a autorizacao escrita no chat nao for aceita, o agente deve preparar um PR com escopo, testes, rollback e permissao solicitada, sem executa-la antecipadamente. **Somente o proprietario, autenticado e com permissao no repositorio, pode validar, liberar e efetuar o merge desse PR.** Nenhum agente, bot, workflow de auto-merge ou outro colaborador deve executar o merge de PRs classificados como aprovacao de seguranca, mesmo diante de CI verde ou de autorizacao generica em chat.
+Quando houver pedido de autorizacao humana de seguranca, o agente deve preparar PR Draft com escopo, testes, rollback e permissao solicitada, sem executa-la antecipadamente. **Somente o proprietario `shopvivaliz-human`, autenticado, pode validar, liberar e efetuar pessoalmente o merge desse PR.** Nenhum agente, bot, workflow de auto-merge ou outro colaborador deve executar o merge de PRs classificados como aprovacao de seguranca, mesmo diante de CI verde ou de autorizacao generica em chat.
 
 A liberacao e o merge feitos pelo proprietario sao a evidencia formal de sua decisao no escopo exato do SHA revisado. Nao solicitar novamente a mesma decisao por chat quando o PR for o canal oficial de aprovacao. A identidade de quem fez o merge deve ser validada pelas protecoes do GitHub/rulesets e registrada junto ao SHA. A presente diretriz, por si so, **nao configura ruleset nem comprova exclusividade tecnica de merge**: qualquer mecanismo automatico ou restricao de atores deve ser implementado e validado antes de alegar enforcement.
 
@@ -55,7 +55,7 @@ Para bloqueios de permissoes administrativas (ex.: MCP Marina), o PR pode autori
 
 ## Contrato
 1. Agente investiga, corrige, executa testes e abre PR para revisao do proprietario. O PR deve informar exatamente alvo, risco, diff, testes, impacto, rollback, efeitos externos e operacoes de deploy previstas.
-2. Se o chat for meio valido de autorizacao, aceitar a autorizacao explicita por chat e seguir normalmente pelos gates aplicaveis. Se o canal chat nao for aceito, abrir PR em **Draft** e reservar sua validacao, liberacao e merge **exclusivamente ao proprietario**. A existencia do PR, CI verde ou aprovacao de outro agente nao constituem autorizacao.
+2. Para autorizacao de seguranca, abrir PR em **Draft** com autor distinto de `shopvivaliz-human` e reservar sua validacao, aprovacao, liberacao e merge **exclusivamente a `shopvivaliz-human`**. A existencia do PR, CI verde, autorizacao por chat ou aprovacao de outro agente nao constituem essa autorizacao.
 3. O aceite deve estar vinculado ao PR e ao SHA revisado, com identidade autenticada no GitHub. Nova mudanca material apos aprovacao exige revalidacao da aprovacao segundo rulesets.
 4. Apos aprovacao, respeitar branch protection, gates obrigatorios, revisoes exigidas e acesso da identidade executora. O merge aprovado nao concede credenciais, sudo, OAuth, RBAC ou permissoes ausentes.
 5. Lease/fencing/lock do runtime e um controle de exclusividade entre execucoes, nao uma decisao humana de autorizacao. Mesmo com PR aprovado, a operacao deve adquirir seu lease canonicamente e aguardar ocupante legitimo; nunca apagar, forjar, sobrescrever ou contornar bloqueios para aplicar uma mudanca.
@@ -63,12 +63,12 @@ Para bloqueios de permissoes administrativas (ex.: MCP Marina), o PR pode autori
 7. Acoes nao cobertas pelo escopo exato do PR (inclusive financeiras, destrutivas ou de acesso administrativo especial) continuam sujeitas a controles/aprovacoes proprios e a recusa expressa do provedor.
 
 
-## Regra condicional: intervencao humana vira PR de autorizacao somente quando chat nao e aceito
-Quando uma tarefa depender de intervencao do proprietario e **nao for aceita a autorizacao explicita pelo chat**, o agente deve, antes de devolver o impedimento:
+## Regra obrigatoria: pedido de privilegio de seguranca sempre exige PR
+Quando uma tarefa depender de concessao humana de privilegios de seguranca, o agente deve, antes de devolver o impedimento:
 1. Investigar a origem, definir a mudanca minima, implementar apenas artefatos reversiveis de preparacao, testes e rollback, sem acionar a permissao ausente.
-2. Somente nesse caso, criar PR Draft especifico com descricao exata da acao a autorizar, escopo, riscos, rollback, evidencias, tests GREEN e checklist verificavel de aprovacao do proprietario.
+2. Criar PR Draft especifico sob identidade de agente distinta de `shopvivaliz-human`, com descricao exata da acao a autorizar, escopo, riscos, rollback, evidencias, tests GREEN e checklist para aprovacao pessoal da identidade humana exclusiva.
 3. Vincular no PR o identificador do host, do componente e o SHA, especificando se o merge dispara alguma automacao; tornar visivel qualquer efeito privilegiado, sem segredos.
-4. Aguardar a validacao e liberacao explicitas do proprietario por review/merge. Um PR aprovado so autoriza aquilo que consta no diff e que o aprovador tem poderes para autorizar. Nenhum agente presume que um PR cria permissoes externas.
+4. Aguardar a validacao, aprovacao e merge pessoais e autenticados de `shopvivaliz-human`. Um PR aprovado so autoriza aquilo que consta no diff e que o aprovador tem poderes para autorizar. Nenhum agente presume que um PR cria permissoes externas.
 5. Apos merge, executar o procedimento oficial, verificar controles externos obrigatorios, registrar trilha e testar runtime/rollback. Caso o provedor exija concessao independente fora do GitHub, incluir no PR roteiro verificavel da acao oficial; o PR nao substitui a propria concessao.
 
 ### Exemplo obrigatorio: MCP independente da Marina

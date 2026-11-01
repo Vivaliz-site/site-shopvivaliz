@@ -1,0 +1,4 @@
+# Human-only security approval: reviewer is the exclusive owner, never an agent.
+/security/owner-approvals/ @shopvivaliz-human
+/docs/knowledge/security-approval-via-pr.md @shopvivaliz-human
+/scripts/validate-owner-pr-grant.py @shopvivaliz-human

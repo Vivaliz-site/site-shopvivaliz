@@ -17,6 +17,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 SCHEMA = "SHOPVIVALIZ_OWNER_PR_GRANT_V1"
+SECURITY_HUMAN_LOGIN = "shopvivaliz-human"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 LOGIN = re.compile(r"^[A-Za-z0-9-]{1,39}$")
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -24,7 +25,8 @@ REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 def decide(pr: object, grant: object, *, repository: str, pr_number: int,
            owner_login: str, merge_sha: str, head_sha: str, resource: str,
-           principal: str, capability: str, now: datetime | None = None) -> tuple[bool, str]:
+           principal: str, capability: str, reviews: object = None,
+           now: datetime | None = None) -> tuple[bool, str]:
     """Require authenticated owner merger and exact immutable scope match."""
     if not (isinstance(pr, dict) and isinstance(grant, dict)):
         return False, "invalid_response_shape"
@@ -32,6 +34,8 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
             SHA40.fullmatch(merge_sha) and SHA40.fullmatch(head_sha) and
             isinstance(pr_number, int) and pr_number > 0):
         return False, "invalid_trust_parameters"
+    if owner_login.casefold() != SECURITY_HUMAN_LOGIN:
+        return False, "configured_owner_is_not_shopvivaliz_human"
     if not resource or not principal or not capability:
         return False, "missing_requested_scope"
     if not (pr.get("merged") is True and pr.get("state") == "closed" and
@@ -44,8 +48,29 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
         return False, "owner_only_merge_not_proven_manual"
     if str(pr.get("merged_by", {}).get("login", "")).casefold() != owner_login.casefold():
         return False, "merge_actor_not_owner"
+    author = pr.get("user")
+    author_login = str(author.get("login", "")) if isinstance(author, dict) else ""
+    if not LOGIN.fullmatch(author_login) or author_login.casefold() == SECURITY_HUMAN_LOGIN:
+        return False, "security_pr_author_must_be_distinct"
     if pr.get("merge_commit_sha") != merge_sha or pr.get("head", {}).get("sha") != head_sha:
         return False, "commit_binding_mismatch"
+    # Only the latest security-owner review on the exact PR head may approve.
+    # An incomplete first page fails closed; approval cannot be inferred from merge.
+    if not isinstance(reviews, list) or not 0 < len(reviews) < 100:
+        return False, "security_pr_not_approved_by_human"
+    latest_owner_review = None
+    for review in reviews:
+        if not isinstance(review, dict):
+            return False, "security_pr_not_approved_by_human"
+        actor = review.get("user")
+        reviewer_login = str(actor.get("login", "")) if isinstance(actor, dict) else ""
+        if reviewer_login.casefold() != SECURITY_HUMAN_LOGIN:
+            continue
+        if review.get("state") in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED"):
+            latest_owner_review = review
+    if (latest_owner_review is None or latest_owner_review.get("state") != "APPROVED"
+            or latest_owner_review.get("commit_id") != head_sha):
+        return False, "security_pr_not_approved_by_human"
     base = pr.get("base")
     if not isinstance(base, dict) or base.get("ref") != "main" or base.get("repo", {}).get("full_name") != repository:
         return False, "unexpected_merge_target"
@@ -120,10 +145,14 @@ def main() -> int:
     if not owner or not token or not REPO.fullmatch(args.repository) or args.pr_number <= 0:
         print("OWNER_PR_GRANT=DENIED reason=missing_trusted_configuration")
         return 1
+    if owner.casefold() != SECURITY_HUMAN_LOGIN:
+        print("OWNER_PR_GRANT=DENIED reason=configured_owner_is_not_shopvivaliz_human")
+        return 1
     path = "security/owner-approvals/" + str(args.pr_number) + ".json"
     repo = quote(args.repository, safe="/")
     try:
         pr = github_json(f"/repos/{repo}/pulls/{args.pr_number}", token)
+        reviews = github_json(f"/repos/{repo}/pulls/{args.pr_number}/reviews?per_page=100", token)
         encoded = github_json(
             f"/repos/{repo}/contents/{path}?ref={quote(args.merge_sha, safe='')}", token)
         if not isinstance(encoded, dict) or encoded.get("encoding") != "base64":
@@ -141,7 +170,7 @@ def main() -> int:
                                 pr_number=args.pr_number, owner_login=owner,
                                 merge_sha=args.merge_sha, head_sha=args.head_sha,
                                 resource=args.resource, principal=args.principal,
-                                capability=args.capability)
+                                capability=args.capability, reviews=reviews)
     except Exception:
         ok, reason = False, "verification_unavailable"
     print(f"OWNER_PR_GRANT={'AUTHORIZED' if ok else 'DENIED'} reason={reason}")
