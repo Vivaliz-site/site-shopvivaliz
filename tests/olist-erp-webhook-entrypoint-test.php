@@ -24,4 +24,23 @@ $assert(!preg_match("/\['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET', 'SHOPVIVA
 $assert(str_contains($order, 'SV_OLIST_INTERNAL_AUTHENTICATED'), 'endpoint de pedidos nao aceita despacho interno autenticado');
 $assert(str_contains($order, "\$dados['urlRastreio']"), 'urlRastreio oficial nao reconhecida');
 
+// A retired direct HTTP endpoint must never accept unauthenticated mutations,
+// even if the Apache rewrite layer is bypassed by an internal invocation.
+$legacyProcessor = (string)file_get_contents($root . '/api/olist/webhook-processor.php');
+$legacyInstaller = (string)file_get_contents($root . '/setup-webhooks.php');
+$htaccess = (string)file_get_contents($root . '/.htaccess');
+$assert(str_contains($legacyProcessor, "http_response_code(410)"), 'legacy processor must return Gone');
+$assert(str_contains($legacyProcessor, "'legacy_webhook_retired'"), 'legacy processor must be explicitly retired');
+$assert(!preg_match('/\\b(?:UPDATE|INSERT|DELETE)\\s+(?:FROM\\s+|INTO\\s+)?products\\b/i', $legacyProcessor),
+    'retired processor must not contain product mutation SQL');
+$assert(!str_contains($legacyProcessor, 'mysqli') && !str_contains($legacyProcessor, 'PDO'),
+    'retired processor must not connect to local database');
+$assert(str_contains($legacyInstaller, "http_response_code(410)"), 'legacy installer must return Gone');
+$assert(!str_contains($legacyInstaller, 'file_put_contents'),
+    'legacy installer must not modify canonical webhook');
+$assert(str_contains($htaccess, 'RewriteRule ^api/olist/webhook-processor\\.php$ - [F,L,NC]'),
+    'Apache must block direct legacy processor before PHP is invoked');
+$assert(str_contains($endpoint, "sv_webhook_secret_gate('olist', false)"),
+    'canonical Olist webhook must authenticate provider requests');
+
 echo "olist-erp-webhook-entrypoint: ok\n";
