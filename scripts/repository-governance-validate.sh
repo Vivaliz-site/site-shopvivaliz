@@ -8,6 +8,9 @@ if [ "$phase" = "absolute-audit" ]; then
 fi
 
 
+# Prevent blanket GitHub human review requests before expensive CI.
+python3 scripts/check_pr_review_routing.py
+python3 -m unittest tests/test_pr_review_routing.py -v
 bash -n .githooks/pre-commit .githooks/pre-push scripts/repository-governance-validate.sh
 python3 scripts/validate-recurring-ai-policy.py
 python3 scripts/validate-retired-windows-tasks.py
