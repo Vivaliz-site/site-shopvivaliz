@@ -150,6 +150,15 @@ def grant_proof(pr_number: int, token: str) -> dict:
     }
 
 
+def checkout_sha_as_owner() -> str:
+    """Read the Ubuntu-owned worktree with the Ubuntu identity, not root.
+
+    No global safe.directory, credential copying, or GitHub Actions fallback.
+    """
+    return run(["runuser", "-u", "ubuntu", "--", "git", "-C",
+                str(ROOT), "rev-parse", "HEAD"])
+
+
 def preflight(pr_number: int) -> dict:
     if os.geteuid() != 0 or socket.gethostname().split(".")[0] != CONTROLLER:
         raise ActivationDenied("operator_must_be_root_on_backend")
@@ -157,7 +166,7 @@ def preflight(pr_number: int) -> dict:
         raise ActivationDenied("protected_state_dir_unavailable")
     validate_metadata(SSH_KEY, key=True)
     validate_metadata(PINNED)
-    if run(["git", "-C", str(ROOT), "rev-parse", "HEAD"]) != run(
+    if checkout_sha_as_owner() != run(
             ["runuser", "-u", "ubuntu", "--", "gh", "api",
              f"repos/{REPOSITORY}/commits/main", "--jq", ".sha"]):
         raise ActivationDenied("operator_source_not_exact_main")
