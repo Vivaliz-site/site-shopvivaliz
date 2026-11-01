@@ -181,6 +181,7 @@ class OwnerActivationTests(unittest.TestCase):
             base_dropin = root / "base.conf"
             browser_dropin = root / "browser.conf"
             state.write_text(json.dumps(att))
+            state.chmod(0o600)
             base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
             with patch.object(a, "GRANT_STATE", state), \
                  patch.object(a, "DROPIN", base_dropin), \
@@ -204,6 +205,7 @@ class OwnerActivationTests(unittest.TestCase):
             base_dropin = root / "base.conf"
             browser_dropin = root / "browser.conf"
             state.write_text(json.dumps({**att, "pr_number": 3477}))
+            state.chmod(0o600)
             base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
             with patch.object(a, "GRANT_STATE", state), \
                  patch.object(a, "DROPIN", base_dropin), \
@@ -223,6 +225,7 @@ class OwnerActivationTests(unittest.TestCase):
             base_dropin = root / "base.conf"
             browser_dropin = root / "browser.conf"
             state.write_text(json.dumps(att))
+            state.chmod(0o600)
             base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
             with patch.object(a, "GRANT_STATE", state), \
                  patch.object(a, "DROPIN", base_dropin), \
