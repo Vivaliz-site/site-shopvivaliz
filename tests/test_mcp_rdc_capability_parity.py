@@ -39,16 +39,37 @@ class McpRdcParityMatrixTests(unittest.TestCase):
         doc["target_hosts"] = ["shopvivaliz-free-a1"] + doc["target_hosts"][1:]
         self.assertFalse(v.validate(doc)[0])
 
-    def test_no_fake_runtime_from_review_branch(self):
+    def test_live_central_advertisement_must_not_be_claimed_as_e2e(self):
         for field, value in (
-            ("runtime_state", "CONNECTED"),
-            ("code_state", "DEPLOYED"),
+            ("runtime_state", "RDC_EQUIVALENT"),
+            ("code_state", "ADMIN_ENABLED"),
             ("e2e", "PASS"),
-            ("authorization_state", "AUTHORIZED"),
+            ("authorization_state", "UNRESTRICTED"),
+            ("chatgpt_tool_catalog", "REFRESHED"),
         ):
-            doc = copy.deepcopy(self.doc)
-            doc["service_state"]["central"]["marina"][field] = value
-            self.assertFalse(v.validate(doc)[0])
+            with self.subTest(field=field):
+                doc = copy.deepcopy(self.doc)
+                doc["service_state"]["central"]["marina"][field] = value
+                self.assertFalse(v.validate(doc)[0])
+
+    def test_readonly_grant_cannot_become_admin_capability(self):
+        doc = copy.deepcopy(self.doc)
+        doc["service_state"]["central"]["marina"]["server_tools"].append("admin_command_run")
+        self.assertFalse(v.validate(doc)[0])
+        doc = copy.deepcopy(self.doc)
+        doc["service_state"]["central"]["hosts"].remove("marina-a1-4c24g")
+        self.assertFalse(v.validate(doc)[0])
+
+    def test_independent_local_tests_do_not_prove_tunnel_or_chatgpt(self):
+        doc = copy.deepcopy(self.doc)
+        doc["service_state"]["marina"]["state"] = "CONNECTED"
+        self.assertFalse(v.validate(doc)[0])
+        doc = copy.deepcopy(self.doc)
+        doc["service_state"]["marina"]["local_staging_tools"].append("admin_command_run")
+        self.assertFalse(v.validate(doc)[0])
+        doc = copy.deepcopy(self.doc)
+        doc["service_state"]["marina"]["local_staging_status"] = "TUNNEL_AUTHENTICATED"
+        self.assertFalse(v.validate(doc)[0])
 
     def test_all_rdc_methods_required(self):
         doc = copy.deepcopy(self.doc)
