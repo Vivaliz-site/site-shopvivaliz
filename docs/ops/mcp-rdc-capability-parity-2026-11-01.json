@@ -2,7 +2,7 @@
   "schema": "SHOPVIVALIZ_RDC_MCP_CAPABILITY_PARITY_V1",
   "captured_date": "2026-11-01",
   "certification": "NOT_CERTIFIED",
-  "basis": "Live discovery of connected RDC1/RDC2 tools and ShopVivaliz central MCP, plus Marina runtime read-only inspection. Candidates are NOT equivalence proofs.",
+  "basis": "Live catalogs and Marina status (2026-11-01); explicit central Marina read-only code on review branch only. Neither central route nor independent MCP was certified.",
   "target_hosts": [
     "always-free-arm-1787907847-26",
     "Fred-Win",
@@ -17,7 +17,19 @@
         "always-free-arm-1787907847-26",
         "Fred-Win",
         "KOCEPSV"
-      ]
+      ],
+      "marina": {
+        "host": "marina-a1-4c24g",
+        "route": "private_ssh_read_only",
+        "code_state": "STAGED_ONLY",
+        "runtime_state": "NOT_ENABLED",
+        "capabilities_implemented_in_branch": [
+          "host_health",
+          "service_status"
+        ],
+        "authorization_state": "OWNER_PR_AND_RUNTIME_GRANT_REQUIRED",
+        "e2e": "NOT_TESTED"
+      }
     },
     "marina": {
       "state": "OFFLINE_NOT_CONNECTED",
