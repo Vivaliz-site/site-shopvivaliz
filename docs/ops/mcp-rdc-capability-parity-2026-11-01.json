@@ -1,0 +1,376 @@
+{
+  "schema": "SHOPVIVALIZ_RDC_MCP_CAPABILITY_PARITY_V1",
+  "captured_date": "2026-11-01",
+  "certification": "NOT_CERTIFIED",
+  "basis": "Live discovery of connected RDC1/RDC2 tools and ShopVivaliz central MCP, plus Marina runtime read-only inspection. Candidates are NOT equivalence proofs.",
+  "target_hosts": [
+    "always-free-arm-1787907847-26",
+    "Fred-Win",
+    "KOCEPSV",
+    "marina-a1-4c24g"
+  ],
+  "retired_host": "shopvivaliz-free-a1",
+  "service_state": {
+    "central": {
+      "state": "CONNECTED_PARTIAL",
+      "hosts": [
+        "always-free-arm-1787907847-26",
+        "Fred-Win",
+        "KOCEPSV"
+      ]
+    },
+    "marina": {
+      "state": "OFFLINE_NOT_CONNECTED",
+      "host": "marina-a1-4c24g",
+      "local_staging_tools": [
+        "marina_host_health",
+        "marina_service_status"
+      ]
+    }
+  },
+  "requirements": {
+    "independent_marina": true,
+    "rdc_dependency_for_normal_operation": false,
+    "no_cross_host_relay": true,
+    "exact_owner_security_pr_required_for_new_grants": true,
+    "host_rbac_and_leases_required": true,
+    "no_generic_unrestricted_shell": true,
+    "ui_e2e_for_gui_capabilities": true,
+    "deny_on_unproven_capability": true
+  },
+  "capabilities": [
+    {
+      "rdc_method": "list_devices",
+      "family": "host",
+      "central_tools": [
+        "hosts_list"
+      ],
+      "central_coverage": "DIRECT_CANDIDATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "who_am_i",
+      "family": "provider_identity",
+      "central_tools": [
+        "host_health"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "get_tool_result",
+      "family": "durable_task",
+      "central_tools": [
+        "task_status"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "list_remote_tool_calls",
+      "family": "audit",
+      "central_tools": [
+        "audit_recent"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "shutdown",
+      "family": "control_plane",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "get_config",
+      "family": "config",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "set_config_value",
+      "family": "config",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "read_file",
+      "family": "files",
+      "central_tools": [
+        "file_read"
+      ],
+      "central_coverage": "DIRECT_CANDIDATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "read_multiple_files",
+      "family": "files",
+      "central_tools": [
+        "file_read"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "write_file",
+      "family": "files",
+      "central_tools": [
+        "admin_command_run"
+      ],
+      "central_coverage": "GENERIC_SURROGATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "write_pdf",
+      "family": "documents",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "create_directory",
+      "family": "files",
+      "central_tools": [
+        "admin_command_run"
+      ],
+      "central_coverage": "GENERIC_SURROGATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "list_directory",
+      "family": "files",
+      "central_tools": [
+        "file_list"
+      ],
+      "central_coverage": "DIRECT_CANDIDATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "move_file",
+      "family": "files",
+      "central_tools": [
+        "admin_command_run"
+      ],
+      "central_coverage": "GENERIC_SURROGATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "start_search",
+      "family": "search",
+      "central_tools": [
+        "admin_command_run"
+      ],
+      "central_coverage": "GENERIC_SURROGATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "get_more_search_results",
+      "family": "search",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "stop_search",
+      "family": "search",
+      "central_tools": [
+        "task_cancel"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "list_searches",
+      "family": "search",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "get_file_info",
+      "family": "files",
+      "central_tools": [
+        "file_list"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "edit_block",
+      "family": "files",
+      "central_tools": [
+        "admin_command_run"
+      ],
+      "central_coverage": "GENERIC_SURROGATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "start_process",
+      "family": "process",
+      "central_tools": [
+        "admin_command_run",
+        "task_submit"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "read_process_output",
+      "family": "process",
+      "central_tools": [
+        "task_status"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "interact_with_process",
+      "family": "process",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "force_terminate",
+      "family": "process",
+      "central_tools": [
+        "task_cancel"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "list_sessions",
+      "family": "process",
+      "central_tools": [],
+      "central_coverage": "NOT_IMPLEMENTED",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "list_processes",
+      "family": "process",
+      "central_tools": [
+        "processes_list"
+      ],
+      "central_coverage": "DIRECT_CANDIDATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "kill_process",
+      "family": "process",
+      "central_tools": [
+        "admin_command_run"
+      ],
+      "central_coverage": "GENERIC_SURROGATE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "get_usage_stats",
+      "family": "audit",
+      "central_tools": [
+        "audit_recent"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    },
+    {
+      "rdc_method": "get_recent_tool_calls",
+      "family": "audit",
+      "central_tools": [
+        "audit_recent"
+      ],
+      "central_coverage": "PARTIAL_ANALOGUE",
+      "marina_tools": [],
+      "marina_coverage": "OFFLINE_NOT_CONNECTED",
+      "certification": "NOT_CERTIFIED",
+      "last_verified_e2e": null
+    }
+  ]
+}
