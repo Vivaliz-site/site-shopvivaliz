@@ -712,6 +712,29 @@ node with `end_turn=false` still cannot certify `PROGRESS_CONFIRMED`.
 
 ## Unavailable-conversation classification and proof
 
+### ConversationDetailError no ChatGPT iOS ou web
+
+O aviso `APICore.ConversationDetailError.DetailError erro 1` significa que o
+cliente nao conseguiu carregar detalhes da conversa; nao demonstra que a tarefa
+foi concluida nem que a resposta do assistente tenha progredido. A mensagem
+exibida **somente no aplicativo iOS** nao e um evento remoto observavel pelo
+controlador na VM. A continuidade ocorre independentemente do aplicativo,
+pela tarefa `RUNNING` e seu checkpoint duravel.
+
+Se o mesmo erro aparecer na **superficie atual** da conversa corporativa
+vinculada no browser do backend, o worker o classifica como falha de
+disponibilidade, valida identidade, `conversation_id`, sessao, stream canonico,
+ownership e cooldown, e tenta apenas recuperacao permitida. Nao tratar textos
+citados no historico, screenshots na conversa, HTTP 200, reload ou clique como
+`PROGRESS_CONFIRMED`.
+
+Checkpoints sem `conversation_id` e `browser_session` comprovados nao podem
+ser vinculados a uma conversa por titulo, horario ou similaridade de conteudo.
+Perfil nao autenticado deve ser recuperado pelo login oficial na propria conta,
+com lease e MFA aplicaveis, sem reutilizar outro perfil. Enquanto isso,
+preservar pendencia e `next_action`; nunca realizar envios duplicados ou
+declarar continuidade certificada.
+
 The unavailable-conversation UI detector must inspect the current `main`
 surface, excluding transcript turns, quoted code, drafts, hidden content,
 sidebars and other dialogs. A phrase in conversation history is diagnostic

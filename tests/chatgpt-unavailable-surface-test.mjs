@@ -36,6 +36,9 @@ function browserFixture(body, pathname = '/c/fixture-thread-id') {
 
 export async function runUnavailableSurfaceTests({ conversationUnavailablePresent }) {
   const cases = [
+    ['current ConversationDetailError marks this conversation unavailable', el('body', {}, el('main', {}, el('div', { role: 'alert' }, 'A operação não pode ser concluída. (APICore.ConversationDetailError.DetailError erro 1.)'))), true],
+    ['quoted historic ConversationDetailError is not a live failure', el('body', {}, el('main', {}, el('div', { 'data-message-author-role': 'user' }, 'APICore.ConversationDetailError.DetailError erro 1'))), false],
+    ['plain operation failure without conversation identity is not unavailability', el('body', {}, el('main', {}, 'A operação não pode ser concluída.')), false],
     ['genuine current conversation error is detected', el('body', {}, el('main', {}, el('div', { role: 'alert' }, message))), true],
     ['historical assistant quote is not current unavailability', el('body', {}, el('main', {}, el('div', { 'data-message-author-role': 'assistant' }, message))), false],
     ['historical user message is not current unavailability', el('body', {}, el('main', {}, el('div', { 'data-message-author-role': 'user' }, message))), false],

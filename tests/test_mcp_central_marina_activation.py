@@ -172,6 +172,136 @@ class OwnerActivationTests(unittest.TestCase):
             self.assertEqual(a.main(), 1)
             restart.assert_not_called()
 
+
+    def test_browser_bridge_repair_only_after_exact_owner_attestation(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            att = self.proof()
+            state = root / "grant.json"
+            base_dropin = root / "base.conf"
+            browser_dropin = root / "browser.conf"
+            state.write_text(json.dumps(att))
+            state.chmod(0o600)
+            base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a, "preflight", return_value=att), \
+                 patch.object(a, "restart_browser_and_verify") as restart_browser, \
+                 patch.object(a, "restart_and_verify") as restart_base, \
+                 patch.object(sys, "argv", ["activation", "repair-browser", "--pr", str(PR_NUMBER)]):
+                self.assertEqual(a.main(), 0)
+                self.assertEqual(browser_dropin.read_text(), base_dropin.read_text())
+                self.assertEqual(stat.S_IMODE(browser_dropin.stat().st_mode), 0o644)
+                restart_browser.assert_called_once()
+                restart_base.assert_not_called()
+                self.assertEqual(json.loads(state.read_text()), att)
+
+    def test_browser_bridge_repair_denies_stale_or_replaced_grant(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            att = self.proof()
+            state = root / "grant.json"
+            base_dropin = root / "base.conf"
+            browser_dropin = root / "browser.conf"
+            state.write_text(json.dumps({**att, "pr_number": 3477}))
+            state.chmod(0o600)
+            base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a, "preflight", return_value=att), \
+                 patch.object(a, "restart_browser_and_verify") as restart_browser, \
+                 patch.object(sys, "argv", ["activation", "repair-browser", "--pr", str(PR_NUMBER)]):
+                self.assertEqual(a.main(), 1)
+                self.assertFalse(browser_dropin.exists())
+                restart_browser.assert_not_called()
+
+    def test_browser_bridge_repair_rollback_preserves_base_grant(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            att = self.proof()
+            state = root / "grant.json"
+            base_dropin = root / "base.conf"
+            browser_dropin = root / "browser.conf"
+            state.write_text(json.dumps(att))
+            state.chmod(0o600)
+            base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a, "preflight", return_value=att), \
+                 patch.object(a, "restart_browser_and_verify",
+                              side_effect=[a.ActivationDenied("browser_unhealthy"), None]) as reboot, \
+                 patch.object(a, "restart_and_verify") as restart_base, \
+                 patch.object(sys, "argv", ["activation", "repair-browser", "--pr", str(PR_NUMBER)]):
+                self.assertEqual(a.main(), 1)
+                self.assertEqual(reboot.call_count, 2)
+                self.assertFalse(browser_dropin.exists())
+                self.assertTrue(state.exists())
+                restart_base.assert_not_called()
+
+    def test_browser_bridge_repair_rejects_writable_existing_dropin(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            att = self.proof()
+            state = root / "grant.json"
+            state.write_text(json.dumps(att))
+            state.chmod(0o600)
+            base_dropin = root / "base.conf"
+            base_dropin.write_text('[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            browser_dropin = root / "browser.conf"
+            browser_dropin.write_text(base_dropin.read_text())
+            browser_dropin.chmod(0o666)
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a, "preflight", return_value=att), \
+                 patch.object(a, "restart_browser_and_verify") as restart_browser, \
+                 patch.object(sys, "argv", ["activation", "repair-browser", "--pr", str(PR_NUMBER)]):
+                self.assertEqual(a.main(), 1)
+                restart_browser.assert_not_called()
+
+    def test_revoke_clears_base_and_browser_flags(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            state = root / "grant.json"
+            state.write_text(json.dumps(self.proof()))
+            base_dropin = root / "base.conf"
+            browser_dropin = root / "browser.conf"
+            base_dropin.write_text(a.FLAG_DROPIN_TEXT)
+            browser_dropin.write_text(a.FLAG_DROPIN_TEXT)
+            with patch.object(a, "GRANT_STATE", state), \
+                 patch.object(a, "DROPIN", base_dropin), \
+                 patch.object(a, "BROWSER_DROPIN", browser_dropin), \
+                 patch.object(a.os, "geteuid", return_value=0), \
+                 patch.object(a.socket, "gethostname", return_value=a.CONTROLLER), \
+                 patch.object(a, "restart_and_verify") as restart_base, \
+                 patch.object(a, "restart_browser_and_verify") as restart_browser, \
+                 patch.object(sys, "argv", ["activation", "revoke"]):
+                self.assertEqual(a.main(), 0)
+                self.assertFalse(state.exists())
+                self.assertFalse(base_dropin.exists())
+                self.assertFalse(browser_dropin.exists())
+                restart_base.assert_called_once()
+                restart_browser.assert_called_once_with(expected_enabled=False)
+
+    def test_browser_bridge_inherits_base_tool_contract_not_a_new_ssh_principal(self):
+        browser_source = (ROOT / "remote-control-browser-mcp" / "server.py").read_text()
+        self.assertIn("inherited = [spec for spec in BASE_TOOL_SPECS()", browser_source)
+        self.assertIn("return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)", browser_source)
+        self.assertIn("base.execute_tool = execute_tool", browser_source)
+
+    def test_checkout_sha_read_uses_ubuntu_repo_owner_not_root(self):
+        # Running git as root in an ubuntu-owned checkout hits dubious ownership,
+        # masking the already-granted owner's official authorization.
+        with patch.object(a, "run", return_value=HEAD) as invocation:
+            self.assertEqual(a.checkout_sha_as_owner(), HEAD)
+            invocation.assert_called_once_with([
+                "runuser", "-u", "ubuntu", "--", "git", "-C",
+                str(a.ROOT), "rev-parse", "HEAD",
+            ])
+
     def test_source_contains_no_automatic_privilege_bypass(self):
         server = (ROOT / "remote-control-mcp" / "server.py").read_text()
         self.assertIn("marina_central_readonly_grant_active()", server)
