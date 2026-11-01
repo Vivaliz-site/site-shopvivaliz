@@ -62,9 +62,7 @@ def validate(document: object) -> tuple[bool, str]:
     if not isinstance(independent, dict) or independent.get("state") != "OFFLINE_NOT_CONNECTED":
         return False, "independent_marina_unverified"
     requirements = document.get("requirements", {})
-    if not isinstance(requirements, dict) or any(requirements.get(key) is not True for key in (
-        "independent_marina", "rdc_dependency_for_normal_operation",
-    ) if key == "independent_marina"):
+    if not isinstance(requirements, dict):
         return False, "invalid_requirements"
     if requirements.get("independent_marina") is not True or requirements.get("rdc_dependency_for_normal_operation") is not False:
         return False, "independent_route_contract_violated"
