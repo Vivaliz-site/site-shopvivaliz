@@ -2,10 +2,14 @@ name: Mandatory Validation Gate
 on:
   pull_request:
     branches: [main, master]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
   push:
     branches: [main, master]
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   GITHUB_TOKEN: ${{ github.token }}
@@ -20,16 +24,70 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Select fail-closed impact scope
+        id: impact
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' || "$GITHUB_EVENT_NAME" == 'pull_request_review' ]]; then
+            python3 scripts/ci_impact_selection.py \
+              --base "$BASE_SHA" --head "$HEAD_SHA" --github-output "$GITHUB_OUTPUT"
+          else
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+            echo "groups=full" >> "$GITHUB_OUTPUT"
+            echo "needs_php=true" >> "$GITHUB_OUTPUT"
+            echo "push_full_validation_required=true"
+          fi
+      - name: Validate fail-closed impact-selection contract
+        run: python3 -m unittest tests.test_ci_impact_selection tests.test_ci_scoped_validation_contract -v
       - name: Set up PHP 8.4
+        if: steps.impact.outputs.needs_php != 'false'
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           tools: composer:v2
           coverage: none
+      - name: Certify universal mandatory agent checklist gate (negative tests)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests.test_mandatory_agent_checklist -v
+          python3 -m unittest tests.test_git_as_repo_owner -v
+          python3 scripts/check_universal_agent_policy.py
+
       - name: Validate current PR history lineage
         run: python3 scripts/maintenance/validate_current_history_lineage.py
 
+      - name: Enforce commercial approval in required gate
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          GH_PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHOPVIVALIZ_COMMERCIAL_OWNER_LOGIN: ${{ secrets.SHOPVIVALIZ_COMMERCIAL_OWNER_LOGIN }}
+          SHOPVIVALIZ_COMMERCIAL_AUTOMATION_LOGINS: ${{ secrets.SHOPVIVALIZ_COMMERCIAL_AUTOMATION_LOGINS }}
+        run: python3 scripts/enforce-autonomy-policy.py
       - name: Validate repository change
+        if: steps.impact.outputs.mode != 'scoped'
         env:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: bash scripts/repository-governance-validate.sh ci
+      - name: Validate isolated impact with mandatory security guardrails
+        if: steps.impact.outputs.mode == 'scoped'
+        env:
+          IMPACT_GROUPS: ${{ steps.impact.outputs.groups }}
+        run: bash scripts/ci_scoped_validate.sh "$IMPACT_GROUPS"
+
+      - name: Cloudflare admin staging preflight regression (when present)
+        if: ${{ steps.impact.outputs.mode != 'scoped' && hashFiles('scripts/cloudflare-admin-preflight.py') != '' }}
+        run: |
+          python3 -m unittest discover -s tests -p 'test_cloudflare_admin_*.py' -v
+          bash -n scripts/cloudflare-admin-stage-unit.sh
+          bash -n scripts/ops/cloudflare-admin-preflight.sh

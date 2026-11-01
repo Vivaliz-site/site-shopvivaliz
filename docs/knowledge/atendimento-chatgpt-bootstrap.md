@@ -1,3 +1,9 @@
+<!-- CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
+> **Regra vigente (31/10/2026, confirmada pelo proprietario):** existem apenas duas VMs OCI operacionais: `marina-a1-4c24g` (web/deploy/banco/workers) e `always-free-arm-1787907847-26` (backend/MCP/controller/browser). `shopvivaliz-free-a1` foi encerrada: NAO acessar, pesquisar como destino, monitorar, recuperar, recriar ou redirecionar aliases para ela. Referencias historicas abaixo nao representam destino ativo.
+>
+> **Continuidade obrigatoria contra bloqueios:** uma falha isolada de terminal, usuario de execucao, GitHub CLI, SSH, plugin, runner ou browser NAO comprova ausencia de acesso e NAO encerra a tarefa. Ler documentacao de acesso vigente, conferir usuario/contexto correto e fontes protegidas ja provisionadas, testar rotas alternativas independentemente autorizadas (MCP, RDC 1/2, SSH privado/Tailscale, GitHub via perfil autorizado, runner/OCI apenas para recuperacao), corrigir falhas tecnicas, preservar checkpoints e prosseguir ate teste, merge, deploy automatico aplicavel e validacao posterior. Exemplo confirmado: `gh` estava autenticado sob `ubuntu`, nao sob `root`; executar via identidade autorizada sem revelar tokens. Proibido contornar MFA, RBAC, recusas explicitas, controles de branch ou leases. Se todas as rotas legitimas falharem, registrar evidencia e proxima acao, sem declarar sucesso.
+<!-- /CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
+
 <!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
 > **Estado de runtime posterior, prevalente (2026-10-29):** o MCP central do backend agora anuncia **somente backend, Fred-Win e KOCEPSV**; a origem `shopvivaliz-free-a1` foi removida da allowlist (PRs #3391/#3392) e nunca e alvo. Marina permanece fora do MCP central, mas RDC direto e SSH privado foram comprovados; o tunel SSH do MEI para Marina esta ativo (HTTP 200), separado do MCP independente Marina que continua nao instalado. O PR #3395 bloqueou 20 jobs antigos sem migrar automaticamente seus objetivos. Controlador 24x7 ainda precisa de lease valido e recuperacao de checkpoints; CI `mei-ci-a1` segue sem registro. Declaracoes de "MCP ainda inclui origem" abaixo sao apenas historicas. Referencia: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
 <!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
@@ -31,15 +37,9 @@ Este documento é o bootstrap canônico, **não secreto**, da conta corporativa 
 
 ## Leitura obrigatória ao iniciar uma sessão
 
-Nesta ordem:
+**Preflight canônico e prevalente, antes de qualquer alteração e em toda retomada**: ler no `main` de `Vivaliz-site/site-shopvivaliz`, nesta ordem: (1) este `docs/knowledge/atendimento-chatgpt-bootstrap.md`; (2) `docs/knowledge/host-access.md`; (3) `docs/knowledge/README.md`; (4) `docs/knowledge/agent-rules.md`; depois `AGENTS.md`, `AUDIT_POLICY.md`, instruções do agente e documentos do projeto. Registrar `rules_loaded` com revisão/hash e preflight aplicável. A ordem suplementar antiga abaixo foi substituída, **não** é uma segunda ordem concorrente.
 
-1. `docs/knowledge/host-access.md`;
-2. `docs/knowledge/agent-rules.md`;
-3. `docs/knowledge/project.md`;
-4. `docs/knowledge/chatgpt-account-migration-curated.md` quando a sessão depender de contexto vindo de outra conta ou de histórico migrado;
-5. `docs/knowledge/dev-agent-briefing.md` quando houver trabalho de engenharia;
-6. documento específico da rotina;
-7. este arquivo para o perfil e checklist da conta Atendimento.
+Para o contexto complementar da conta Atendimento, consultar `docs/knowledge/project.md`, `docs/knowledge/chatgpt-account-migration-curated.md` quando houver migração, `docs/knowledge/dev-agent-briefing.md` para engenharia e o documento específico da rotina. Em conflito, respeitar controles de segurança e as instruções canônicas explícitas mais recentes; sem precedência demonstrada, não executar a ação contraditória até reconciliar os textos.
 
 ## Mapa operacional de hosts
 

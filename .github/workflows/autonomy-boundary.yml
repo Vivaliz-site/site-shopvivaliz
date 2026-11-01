@@ -16,6 +16,8 @@ on:
       - 'tests/**stock**'
       - 'tests/**inventory**'
       - '.github/workflows/autonomy-boundary.yml'
+  pull_request_review:
+    types: [submitted, dismissed]
   workflow_dispatch:
     inputs:
       base_sha:
@@ -54,6 +56,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate native commercial review regressions
+        run: python3 -m unittest discover -s tests -p 'test_verify_commercial_review.py' -v
 
       - name: Enforce autonomy policy
         env:
@@ -61,6 +68,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref || inputs.head_ref }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') || inputs.pr_labels }}
+          GH_PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SHOPVIVALIZ_COMMERCIAL_OWNER_LOGIN: ${{ secrets.SHOPVIVALIZ_COMMERCIAL_OWNER_LOGIN }}
+          SHOPVIVALIZ_COMMERCIAL_AUTOMATION_LOGINS: ${{ secrets.SHOPVIVALIZ_COMMERCIAL_AUTOMATION_LOGINS }}
         run: |
           set -euo pipefail
           python3 scripts/enforce-autonomy-policy.py

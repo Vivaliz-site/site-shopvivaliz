@@ -355,6 +355,65 @@ function svoei_refresh_product_from_v3(string $root, string $productId = '', str
     return $product;
 }
 
+
+/**
+ * Persist only the authoritative Amazon 991 price snapshot, preserving
+ * inventory, images, descriptions and commercial references on existing rows.
+ * New IDs begin with zero available stock until a separate stock event runs.
+ */
+function svoei_apply_amazon_price_snapshot(string $root, array $priced): void
+{
+    $id = trim((string)($priced['id'] ?? ''));
+    $sku = trim((string)($priced['sku'] ?? ''));
+    if ($id === '' || !ctype_digit($id)) throw new InvalidArgumentException('product_id_invalid');
+    if (($priced['_price_source'] ?? '') !== 'olist_tiny_amazon'
+        || ($priced['_price_list_id'] ?? null) !== 991
+        || !is_array($priced['precos'] ?? null)
+        || !is_array($priced['_erp_base_prices'] ?? null)) {
+        throw new RuntimeException('amazon_price_snapshot_invalid');
+    }
+    svoei_catalog_mutate($root, static function (array &$items) use ($priced, $id, $sku): void {
+        $index = svoei_catalog_item_index($items, $sku, $id);
+        if ($index === null) {
+            $new = $priced;
+            $new['estoque_disponivel'] = 0;
+            $new['estoque'] = ['quantidade' => 0];
+            $items[] = $new;
+            return;
+        }
+        foreach (['precos', '_erp_base_prices', '_price_source', '_price_list_id',
+                  'sync_source', '_detail_synced_at'] as $key) {
+            $items[$index][$key] = $priced[$key];
+        }
+    });
+}
+
+/** @return array<string,mixed> */
+function svoei_refresh_price_from_v3(string $root, string $productId = '', string $sku = ''): array
+{
+    $token = svtop_tiny_get_token();
+    if ($token === '') throw new RuntimeException('erp_access_token_missing');
+    $productId = trim($productId);
+    if ($productId === '') $productId = svoei_resolve_v3_product_id($sku, $token);
+    if (!ctype_digit($productId)) throw new InvalidArgumentException('product_id_invalid');
+
+    // The price notification must NOT depend on /estoque/{id} availability.
+    // Never trust the commercial amount supplied in a webhook payload.
+    $response = svtop_tiny_get('/produtos/' . rawurlencode($productId), $token);
+    if ((int)($response['status'] ?? 0) !== 200) throw new RuntimeException('erp_product_read_failed');
+    $detail = svoei_unwrap_product(is_array($response['json'] ?? null) ? $response['json'] : []);
+    if ($detail === []) throw new RuntimeException('erp_product_payload_empty');
+    $resolvedId = trim((string)($detail['id'] ?? $productId));
+    if ($resolvedId !== $productId) throw new RuntimeException('erp_product_id_mismatch');
+
+    $normalized = svoei_normalize_v3_product($detail, ['disponivel' => 0]);
+    $normalized['id'] = $productId;
+    $amazonTable = sveap_read_table($token);
+    $priced = sveap_apply_table($normalized, $amazonTable);
+    svoei_apply_amazon_price_snapshot($root, $priced);
+    return $priced;
+}
+
 function svoei_refresh_stock_from_v3(string $root, string $productId, string $mappedSku, string $erpSku = ''): int
 {
     $token = svtop_tiny_get_token();

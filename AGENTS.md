@@ -1,3 +1,43 @@
+<!-- MANDATORY_AGENT_CHECKLIST_V1 -->
+## Checklist transacional obrigatorio: todos os agentes e todas as IAs
+
+A cada tarefa material, consultar e atualizar o checklist duravel ANTES de agir, DEPOIS de cada etapa e ANTES de escolher a proxima acao. Esta regra vale para ChatGPT/Gepeto, Codex, Claude, Gemini, Copilot, workers e subagentes. A sessao ou o controlador nao substituem a responsabilidade de cada agente em executar a proxima etapa permitida.
+
+Usar o registro canonico `scripts/agent_task_state.py`: iniciar o checkpoint com identidade/autorizacao reais; `plan-checklist --task ID --step "..." --step "..."` antes de qualquer progresso; `next-step --task ID` para consultar o item aberto; `check-step --task ID --step-id N --evidence "prova concreta" --verification "validacao independente"` ao completar CADA item; `add-checklist-step` para nova descoberta sem apagar etapas ja comprovadas. Somente passar ao proximo item depois de verificar a conclusao do anterior. `ready` e `complete` nao substituem testes finais, E2E/UI, gates, deploy e merge.
+
+Checklists iniciados nao podem ser sobrescritos para apagar pendencias, pular etapas, inventar provas, ou transformar bloqueios em conclusoes. Nos novos checkpoints do runtime canonico a falta de plano ou de qualquer item comprovado bloqueia `READY_TO_COMPLETE` e `CONCLUIDO`. Checkpoints legados exigem migracao explicita, preservando historico, leases, ownership, next_action e prova existente; nao criar tarefa duplicada. Falhas de ferramenta exigem rota alternativa autorizada e estado aberto, nao falsificacao de check. Todos os repositorios/agentes devem adotar o mesmo contrato ou um mecanismo equivalente com testes negativos; documento presente sozinho nao certifica adesao operacional.
+
+Protecoes do GitHub, MFA, RBAC, segredos, gates comerciais e aprovacoes humanas continuam vigentes. Registro de check nao prova, por si, o comportamento real: confirmar os resultados nos sistemas alvo e nos certificadores independentes aplicaveis.
+<!-- /MANDATORY_AGENT_CHECKLIST_V1 -->
+
+## Regra universal de continuidade e esgotamento de rotas — todos os agentes e repositorios (2026-10-31)
+
+**Obrigatoria para toda execucao e todo agente, independentemente do fornecedor, modelo ou interface:** ChatGPT, Codex, Claude, Gemini, agentes autonomos, bots, workers, scripts, GitHub Actions, ferramentas MCP e futuros agentes. Aplica-se a todos os repositorios e organizacoes GitHub sob gestao da ShopVivaliz, nao apenas a este repositorio.
+
+**Nao abandonar tarefas por um bloqueio tecnico isolado.** Investigar a causa raiz, corrigir o que for seguro e autorizado, testar novamente e inventariar sistematicamente todas as rotas REALMENTE provisionadas e independentemente autorizadas antes de alegar bloqueio: MCP/Remote Control, conectores, Cloudflare/cloudflared e tuneis, GitHub CLI/API com identidade correta e credenciais protegidas, SSH privado/Tailscale, RDC 1/2, navegadores de agentes no host permitido, VMs ativas, runners/Actions, OCI, Superpowers quando disponivel e outros recursos identificados na documentacao vigente. Nao assumir disponibilidade, permissao ou sucesso sem teste e evidencia. Nao expor segredos nem criar credenciais paralelas.
+
+Para cada rota registrar disponibilidade, identidade, escopo de permissao, lease/fencing quando aplicavel, tentativa, resultado, causa da falha, reparo e proxima alternativa. Nao repetir indefinidamente a mesma tentativa. Prosseguir nas etapas independentes, preservar checkpoints duraveis e retomada automatica autorizada. A tarefa so termina com correcao, prevencao, testes, validacao runtime/E2E real e merge apos gates quando aplicavel, ou bloqueio externo comprovado apos esgotamento de todas as rotas legitimas. Nenhum status RUNNING antigo comprova execucao ativa.
+
+**Limites absolutos:** nao contornar MFA, CAPTCHA, RBAC, 401/403, recusa expressa, branch protection, aprovacoes, leases, isolamento de hosts ou politicas do provedor. Rota alternativa nunca pode ser usada para burlar uma negativa. Manter pendencias abertas com evidencia e proxima acao quando existir impedimento legitimo.
+
+**Propagacao:** manter esta regra nos arquivos de instrucoes de agentes de cada repositorio ativo (AGENTS.md, CLAUDE.md, GEMINI.md, instrucoes Codex e equivalentes existentes), respeitando a governanca local; verificar aplicacao por inventario e testes, nao por presuncao.
+
+<!-- PR_RELEVANT_GATES_ONLY_V1 -->
+## Gates de PR selecionados por impacto comprovado
+Aplicar `docs/knowledge/agent-rules.md#regra-permanente-gates-somente-por-impacto-comprovado-da-pr`: **somente disparar gates especializados com relacao tecnica entre arquivos/dependencias alterados e o respectivo subsistema**. Se impacto nao puder ser comprovado, ampliar/falhar fechado, nunca ignorar riscos. Preservar Mandatory Validation, Repository Governance, bridge Absolute Audit V5, Main Guard e protecoes do GitHub. Evitar repeticao de testes caros de worker, site e API sem dependencia real com o diff; auditar o seletor por testes negativos.
+<!-- /PR_RELEVANT_GATES_ONLY_V1 -->
+
+<!-- OWNER_PR_SECURITY_APPROVAL_20261031 -->
+## Autorizacao humana de seguranca exclusivamente pelo GitHub PR
+
+Aplicar `docs/knowledge/security-approval-via-pr.md`: **toda autorizacao de seguranca da ShopVivaliz exige PR Draft criado por outra identidade (agente/operador), com diff, minimo privilegio, testes, escopo, efeitos e rollback; somente `shopvivaliz-human` pode validar, aprovar e pessoalmente mergear o PR de autorizacao**. A conta `shopvivaliz-human` e exclusiva da pessoa proprietaria; agentes, bots, conectores, runners e workflows jamais podem autenticar nessa identidade, executar auto-merge, simular a aprovacao ou pedir aprovacao duplicada pelo chat. Autorizacao escrita pelo chat nao substitui a aprovacao humana por PR quando o efeito e seguranca. O autorizador interno deve conferir autoria distinta, identidade exclusiva do merge, SHA, grant ainda vigente, escopo/capacidades, integridade, reviews/checks, idempotencia e auditoria, falhando fechado em divergencias. O merge valido e a unica aprovacao **humana** para o escopo; ele nao cria RBAC ou consentimento externo, nem contorna MFA, lock/lease/fencing ou negativa de provedores. Operacoes de codigo comuns seguem os gates de PR aplicaveis e podem ser integradas por executores autorizados apos validacao, exceto PRs classificados como autorizacao de seguranca.
+<!-- /OWNER_PR_SECURITY_APPROVAL_20261031 -->
+
+<!-- V5_NO_DIAGNOSTIC_ONLY_ENFORCEMENT_20261030 -->
+## Auditoria V5: proibido encerrar no diagnostico
+Em qualquer Auditoria Extrema V5, TODOS os agentes devem aplicar `docs/quality/AUDIT_V5_DIAGNOSTIC_ONLY_PREVENTION_20261030.md` alem de `AUDIT_POLICY.md`. Relatorio de findings, HTTP 200, testes isolados ou PR nao autorizam parada ou certificacao. Cada falha executavel exige reparo, prevencao, testes, validacao runtime/UI, persistencia, contraditorio e certifier oficial. Nunca declarar `APTO` sem `AUDIT_VERDICT=APTO` do mesmo release, ambiente e escopo. Preservar autorizacoes, leases e seguranca.
+<!-- /V5_NO_DIAGNOSTIC_ONLY_ENFORCEMENT_20261030 -->
+
 <!-- EXHAUST_AUTHORIZED_ROUTES_V5_20261030 -->
 ## Continuidade obrigatoria e esgotamento das rotas autorizadas
 
@@ -905,3 +945,8 @@ Para toda alteracao implantavel de codigo, configuracao, servico ou integracao, 
 
 O workflow `.github/workflows/production-deployment-closure-guard.yml` verifica novamente a producao apos o pipeline e quando acionado manualmente, e abre/atualiza um unico issue de deriva de deploy ate que a evidencia real seja reconciliada. Este guard NAO faz deploy e nao contorna CI, labels humanos, RBAC, leases ou revisoes; o executor da tarefa continua responsavel por corrigir, implantar pela rota oficial e validar no runtime. Quando a tarefa e de catalogo/preco, confrontar **todos** os SKUs publicados com a API Olist/Tiny v3 e a API individual por SKU apos a implantacao; nao basta uma amostra ou apenas o cache.
 <!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+
+<!-- V5_AGENT_PREFLIGHT_NONABANDONMENT_V1 -->
+## Contrato verificavel de preflight de todos os agentes e PRs sem abandono
+Antes de qualquer escrita, todos os agentes (ChatGPT/Gepeto/Codex/Claude/Gemini/subagentes/controladores) devem seguir `docs/quality/AUDIT_AGENT_PREFLIGHT_AND_PR_CONTINUITY_V1.md`. Comprovar leitura integral e verificacao independente das regras vigentes no `main` por SHA em `rules_loaded`. Sem prova: `RULES_NOT_LOADED`, nenhuma mutacao. A auditoria de PRs exige inventario completo, reconciliacao individual, next_action persistida, checks obrigatorios, prevencao, validacao e certifier oficial. A presenca de uma regra documental nao demonstra que o agente obedeceu: verificar preflight real e self-tests negativos. Nao usar commits vazios, atalhos de branch protection ou checks sinteticos para forcar merge.
+<!-- /V5_AGENT_PREFLIGHT_NONABANDONMENT_V1 -->

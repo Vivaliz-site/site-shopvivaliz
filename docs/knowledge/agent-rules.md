@@ -62,6 +62,19 @@ Para cada erro, executar e evidenciar: (1) RED/reproducao observavel e impacto, 
 Auditorias extremas, completas, V5 ou de aptidao de qualquer sistema com interface exigem **execucao do proprio agente na UI real publicada**, percorrendo as jornadas e casos aplicaveis de ponta a ponta. Logs, API, SQL, codigo, mocks, simples HTTP 200, screenshot isolado ou execucao somente headless nao substituem interacao visual. Para cada fluxo: entrar na tela real, navegar, acionar controles, observar erros, gravar provas de antes/depois, recarregar/revisitar, confirmar persistencia e reconciliar efeitos. Investigar, corrigir, prevenir e reauditar pela UI apos cada correcao aplicavel. Sem evidencias reais: `NAO_VALIDADO_UI` e nunca `APTO`/`CONCLUIDO`. Proibido esconder UI existente em `browser.required=false` ou `journey.ui=false`; a ausencia real de UI requer inventario negativo documentado e evidencias. Usar hosts, perfis e leases autorizados, sem bypass de MFA ou acoes irreversiveis sem permissao exata. Ver `AGENTS.md`, `AUDIT_POLICY.md` e `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md`.
 <!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 
+<!-- REMOTE_EXHAUSTION_EVIDENCE_V2_20261030 -->
+## Retomada obrigatoria: esgotamento comprovado de rotas (RDC/MCP/tunel)
+
+Para qualquer agente ShopVivaliz (ChatGPT, Codex, Claude, Gemini, controlador e subagentes), `retome`, `continue`, `prossiga` e equivalentes significam executar ate o aceite validado ou impedimento externo comprovado, nao encerrar no primeiro erro, timeout ou diagnostico.
+
+- Inventariar e testar, conforme o host e o runbook, **ShopVivaliz Remote Control MCP e Orquestrador, Remote Desktop Commander (RDC 1 e RDC 2), desktop bridge/RustDesk, SSH privado/Tailscale, tunel documentado e acesso via laptop como ponte**, bem como controles OCI/GitHub de recuperacao autorizados. Rota de aplicacao nao equivale a canal SSH/MCP; comprovar capacidades reais.
+- Nao presumir indisponibilidade: testar identidade, conectividade, autorizacao, escopo da ferramenta, lease/fencing e capacidade da acao. Se uma rota falhar, diagnosticar e corrigir falhas tecnicas permitidas, tentar a proxima rota independente e evitar repetir indefinidamente a mesma tentativa.
+- Antes de anunciar `BLOCKED_EXTERNAL`, registrar por rota: data, host, objetivo, teste, resultado verificavel, motivo de exclusao, proxima acao e evidencias. Quando houver proxima acao executavel, continuar em `RUNNING`.
+- Em rede/impressoras, identificar equipamento por MAC, modelo, interface fisica/Wi-Fi e porta USB antes de alterar IP. Preservar configuracoes que funcionam; validar conectividade, impressao real e estabilidade apos correcao.
+- Nenhuma diretriz autoriza contornar bloqueio explicito de plataforma, MFA, acesso RBAC, aprovacoes, ownership, locks/leases/fencing ou extrair credenciais. Sem permissao, registrar impedimento e usar somente outro caminho legitimamente autorizado.
+- Nunca declarar `APTO` apenas por ping, HTTP 200, API ou logs: exigir teste funcional e, quando houver UI, validacao grafica conforme Auditoria Extrema V5.
+<!-- /REMOTE_EXHAUSTION_EVIDENCE_V2_20261030 -->
+
 <!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
 ## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
 
@@ -398,3 +411,7 @@ Para diagnosticos de login/GUI na backend, obrigatorio ler `docs/knowledge/shopv
 
 Antes de marcar `CONCLUIDO` para qualquer mudanca de codigo/configuracao implantavel, pin o SHA **mergeado em main** e execute `python3 scripts/quality/deployment_closure_guard.py --expected-sha <SHA_MAIN>`; sem `ok=true`/exit 0, manter `RUNNING` com proxima acao, reparar CI/pipeline e revalidar. O guard verifica a evidencia oficial do deploy e a revisao publica; nao aceita PR/CI/merge como substituto. Para alteracoes so de docs/testes, usar o classificador oficial `scripts/should-deploy-production.sh`. Independente do chat, `.github/workflows/production-deployment-closure-guard.yml` detecta desvio e mantem issue unico ate correcao. Nunca contornar gates humanos de precos/estoque ou protecoes de branch. Em auditoria de precos apos deploy, comparar **todos os produtos efetivamente publicados**, o preco base e promo API v3, e cada endpoint individual; registrar os que nao puderam ser verificados.
 <!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+
+## Preflight obrigatorio de identidade Git
+
+Antes de qualquer operacao Git de agente remoto, resolva a propriedade real do worktree e utilize `scripts/maintenance/git_as_repo_owner.py --repo <worktree> -- <git-subcommand>`. Um shell MCP com `uid=0` nao e autorizacao para agir como root no repositorio pertencente a `ubuntu`. Nao mitigar `dubious ownership` com `safe.directory=*`, chown recursivo, copia de tokens ou troca da identidade de autenticacao. Testar o caminho seguro via `tests/test_git_as_repo_owner.py`.

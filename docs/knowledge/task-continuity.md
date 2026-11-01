@@ -1,3 +1,15 @@
+<!-- MANDATORY_AGENT_CHECKLIST_V1 -->
+## Checklist transacional obrigatorio: todos os agentes e todas as IAs
+
+A cada tarefa material, consultar e atualizar o checklist duravel ANTES de agir, DEPOIS de cada etapa e ANTES de escolher a proxima acao. Esta regra vale para ChatGPT/Gepeto, Codex, Claude, Gemini, Copilot, workers e subagentes. A sessao ou o controlador nao substituem a responsabilidade de cada agente em executar a proxima etapa permitida.
+
+Usar o registro canonico `scripts/agent_task_state.py`: iniciar o checkpoint com identidade/autorizacao reais; `plan-checklist --task ID --step "..." --step "..."` antes de qualquer progresso; `next-step --task ID` para consultar o item aberto; `check-step --task ID --step-id N --evidence "prova concreta" --verification "validacao independente"` ao completar CADA item; `add-checklist-step` para nova descoberta sem apagar etapas ja comprovadas. Somente passar ao proximo item depois de verificar a conclusao do anterior. `ready` e `complete` nao substituem testes finais, E2E/UI, gates, deploy e merge.
+
+Checklists iniciados nao podem ser sobrescritos para apagar pendencias, pular etapas, inventar provas, ou transformar bloqueios em conclusoes. Nos novos checkpoints do runtime canonico a falta de plano ou de qualquer item comprovado bloqueia `READY_TO_COMPLETE` e `CONCLUIDO`. Checkpoints legados exigem migracao explicita, preservando historico, leases, ownership, next_action e prova existente; nao criar tarefa duplicada. Falhas de ferramenta exigem rota alternativa autorizada e estado aberto, nao falsificacao de check. Todos os repositorios/agentes devem adotar o mesmo contrato ou um mecanismo equivalente com testes negativos; documento presente sozinho nao certifica adesao operacional.
+
+Protecoes do GitHub, MFA, RBAC, segredos, gates comerciais e aprovacoes humanas continuam vigentes. Registro de check nao prova, por si, o comportamento real: confirmar os resultados nos sistemas alvo e nos certificadores independentes aplicaveis.
+<!-- /MANDATORY_AGENT_CHECKLIST_V1 -->
+
 
 <!-- CONTINUITY_ATOMIC_ROUTING_V1 -->
 ## Registro atomico de tarefa e conversa
@@ -39,6 +51,8 @@ de criar um novo checkpoint.
 ## Janela de análise do controlador
 
 O controlador de continuidade deve analisar somente tarefas cujo `created_at` esteja dentro dos **últimos 10 dias**. Tarefas criadas antes dessa janela, ou com timestamp de criação ausente/inválido, não entram no watchdog, no nudge do ChatGPT nem no dispatcher detached, mesmo que recebam uma atualização posterior. Isso limita reprocessamento de histórico antigo sem desabilitar a continuidade das tarefas recentes.
+
+**Escopo dessa janela:** dez dias e apenas filtro antirreprocessamento do controlador, **nao** prazo de encerramento, expiracao do objetivo ou indicacao de que a tarefa foi concluida. Tarefas antigas sem recuperacao automatica continuam pendentes ate revalidacao e conclusao efetiva ou impedimento externo comprovado; exigem triagem/renovacao autorizada de binding e checkpoint, sem inventar conversa nem criar clones ou concorrencia. Uma sessao curta e controles contra loops abandonados ou sem progresso tambem nao encerram a tarefa. Ver `docs/knowledge/agent-rules.md` (`TASK_SESSION_CONTINUITY_V1`).
 <!-- /CONTINUITY_TASK_LOOKBACK_V1 -->
 
 ## Limpeza de clones temporários ao concluir uma tarefa
