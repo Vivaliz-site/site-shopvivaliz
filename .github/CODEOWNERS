@@ -1,3 +1,6 @@
+# Default human reviewer for all pull requests. Agents cannot approve on behalf of this account.
+* @shopvivaliz-human
+
 # Human-only security approval: reviewer is the exclusive owner, never an agent.
 /security/owner-approvals/ @shopvivaliz-human
 /docs/knowledge/security-approval-via-pr.md @shopvivaliz-human
