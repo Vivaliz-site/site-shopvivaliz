@@ -1,3 +1,12 @@
+<!-- PR_HUMAN_VISIBILITY_ROUTING_V1 -->
+## Regra de PRs: visibilidade nao exige revisao humana
+A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso nativo ao repositorio. **Nao adicionar shopvivaliz-human como CODEOWNER global, revisor padrao, nem solicitar revisao humana automatica para toda PR.** PRs tecnicas comuns seguem testes e gates pertinentes, com correcao e merge por agente autorizado quando permitido. Solicitar aprovacao/merge exclusivo da conta humana somente quando a PR representar autorizacao humana formal de seguranca, privilegio, controle de acesso ou decisao comercial protegida, e manter os fluxos oficiais de grant, SHA, checks e RBAC. Visibilidade, ser informado e permissao de consulta nao equivalem a pedido de aprovacao. Nunca substituir CODEOWNERS sensiveis por regra universal; manter o owner nos escopos de grant. Antes de criar/editar CODEOWNERS ou workflows de revisores, executar o gate scripts/check_pr_review_routing.py. Nao contornar protecoes de branch ou recusas de provedores.
+<!-- /PR_HUMAN_VISIBILITY_ROUTING_V1 -->
+
+<!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
+> O MCP ShopVivaliz **central** tambem deve alcancar `marina-a1-4c24g`, alem do MCP proprio da Marina, que deve permanecer independente do backend/RDC. Paridade com RDC exige capacidades por host e operacao comprovadas por E2E, sem shell/root universal. Rota central read-only em PR nao equivale a runtime conectado; nunca ativar sem grant oficial, lease e autorizacao. Fonte: `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
+<!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
+
 <!-- MANDATORY_AGENT_CHECKLIST_V1 -->
 ## Checklist transacional obrigatorio: todos os agentes e todas as IAs
 

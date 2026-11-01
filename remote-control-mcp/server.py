@@ -109,6 +109,30 @@ HOSTS = {
     },
 }
 
+# Explicit second route to Marina (besides the independent Marina MCP).
+# This route is a separately approved, fixed-read-only private SSH capability.
+# It is NEVER an alias for the retired source, nor a substitute for the Marina
+# OpenAI Secure MCP Tunnel. Mutation requires an independent owner PR grant and
+# a host-scoped executor not implemented here.
+MARINA_HOST = "marina-a1-4c24g"
+MARINA_PRIVATE_ADDRESS = "100.118.170.46"
+MARINA_SSH_KEY = Path("/home/ubuntu/.ssh/oci-marina-a1-2026")
+MARINA_PINNED_HOSTS = Path("/home/ubuntu/.ssh/known_hosts_marina_verified")
+MARINA_READONLY_SERVICES = frozenset({
+    "shopvivaliz-marina-mcp.service",
+    "shopvivaliz-marina-mcp-tunnel.service",
+    "shopvivaliz-queue-worker.service",
+    "mlrr-fetch-worker.service",
+    "amazon-returns-safet.service",
+    "ml-pricing-worker.service",
+    "docker.service",
+})
+HOSTS[MARINA_HOST] = {
+    "platform": "linux", "transport": "private_ssh_read_only",
+    "role": "production web/deploy/database/workers",
+    "service_user_owner": "ubuntu", "capability": "read_only_pending_owner_grant",
+}
+
 # Terminally retired source. Never advertised, routed, queued or bootstrapped.
 # Keeping the name only as a denial marker preserves historical task records.
 RETIRED_HOSTS = frozenset({"shopvivaliz-free-a1"})
@@ -148,6 +172,7 @@ HOST_DURABLE_LIMITS = {
     "always-free-arm-1787907847-26": 2,
     "Fred-Win": 1,
     "KOCEPSV": 1,
+    "marina-a1-4c24g": 0,  # No administrative/durable jobs on the Marina route.
 }
 
 REVERSE_SSH_RECOVERABLE_ERRORS = (
@@ -1311,9 +1336,50 @@ def ssh_base(address: str, user: str, port: int = 22) -> list[str]:
     ]
 
 
+def marina_readonly_service_command(service: str) -> str:
+    if not isinstance(service, str) or service not in MARINA_READONLY_SERVICES:
+        raise ValueError("marina_service_not_allowlisted")
+    # The unprivileged operator can inspect this metadata with no sudo.
+    return ("systemctl show --no-pager "
+            "--property=LoadState,ActiveState,SubState,UnitFileState -- " + shlex.quote(service))
+
+
+def marina_readonly_ssh_invocation(command: str) -> list[str]:
+    # This flag must be set by the officially authorized host administrator
+    # after a distinct human-only security PR review; default denies transport.
+    if os.environ.get("SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED") != "approved-v1":
+        raise PermissionError("marina_central_route_not_approved")
+    allowed = {health_command("linux")} | {
+        marina_readonly_service_command(svc) for svc in MARINA_READONLY_SERVICES
+    }
+    if not isinstance(command, str) or command not in allowed:
+        raise ValueError("marina_central_command_not_allowlisted")
+    for path in (MARINA_SSH_KEY, MARINA_PINNED_HOSTS):
+        if path.is_symlink() or not path.is_file() or (path.stat().st_mode & 0o022):
+            raise PermissionError("marina_central_pinned_identity_not_ready")
+    if MARINA_SSH_KEY.stat().st_mode & 0o077:
+        raise PermissionError("marina_central_private_key_permissions_invalid")
+    # No root shell on Marina. No agent forwarding, ProxyCommand, SSH config,
+    # public SSH, StrictHostKeyChecking=no or extra caller-selected destination.
+    return [
+        "/usr/sbin/runuser", "-u", "ubuntu", "--",
+        "/usr/bin/ssh", "-F", "/dev/null",
+        "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
+        "-o", "StrictHostKeyChecking=yes",
+        "-o", "ForwardAgent=no", "-o", "ClearAllForwardings=yes",
+        "-o", "ConnectTimeout=8",
+        "-o", f"UserKnownHostsFile={MARINA_PINNED_HOSTS}",
+        "-i", str(MARINA_SSH_KEY),
+        f"ubuntu@{MARINA_PRIVATE_ADDRESS}",
+        "sh -c " + shlex.quote(command),
+    ]
+
+
 def remote_invocation(host: str, command: str) -> list[str]:
     cfg = validate_host(host)
     platform = cfg["platform"]
+    if host == MARINA_HOST:
+        return marina_readonly_ssh_invocation(command)
     if cfg["transport"] == "local":
         return ["/usr/bin/env", "HOME=/root", "USER=root", "LOGNAME=root", "bash", "-lc", command]
     address = str(cfg["address"])
@@ -2379,6 +2445,10 @@ def execute_tool(
     # Retired hosts are denied even before lease checks, transports and handlers.
     if isinstance(host, str) and host in RETIRED_HOSTS:
         raise ValueError("retired_host_not_executable")
+    if host == MARINA_HOST and name not in {"host_health", "service_status"}:
+        raise PermissionError("marina_central_read_only_requires_owner_grant")
+    if host == MARINA_HOST and name == "service_status":
+        marina_readonly_service_command(args.get("service"))
     _assert_runtime_mutation(name, args)
     _assert_conversation_mutation(name, args)
     if name in {"marina_cart_preview", "marina_cart_retire_source"}:
@@ -2513,7 +2583,13 @@ def execute_tool(
             [str(item) for item in durable_command], int(args.get('lease_ttl_seconds', 90)),
             _submitter=submitter)
     if name == "hosts_list":
-        return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
+        return {"hosts": [
+            {"name": n, **cfg, **(
+                {"route_enabled": os.environ.get("SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED") == "approved-v1"}
+                if n == MARINA_HOST else {}
+            )}
+            for n, cfg in HOSTS.items()
+        ]}
     if name == "audit_recent":
         limit = max(1, min(int(args.get("limit", 25)), 200))
         with db_conn() as db:
@@ -2627,17 +2703,14 @@ def execute_tool(
     elif name == "processes_list":
         result = run_host_command(str(host), processes_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "service_status":
+        command = (
+            marina_readonly_service_command(args.get("service"))
+            if host == MARINA_HOST else
+            service_command(platform, str(args.get("service") or ""), "status",
+                            str(cfg.get("service_user_owner") or "") or None)
+        )
         result = run_host_command(
-            str(host),
-            service_command(
-                platform,
-                str(args.get("service") or ""),
-                "status",
-                str(cfg.get("service_user_owner") or "") or None,
-            ),
-            timeout,
-            cancel_check,
-            recover_transport=False,
+            str(host), command, timeout, cancel_check, recover_transport=False,
         )
     elif name == "service_action":
         action = str(args.get("action") or "")
@@ -2720,7 +2793,7 @@ TOOLS = [
         "ticket": {"type": "object"},
         "signature_b64": {"type": "string", "maxLength": 128},
     }, False, True),
-    ("hosts_list", "List the currently authorized backend and Windows support hosts; retired VMs are excluded.", {}, True, False),
+    ("hosts_list", "List approved hosts including Marina as a separately gated private read-only candidate; retired VMs are excluded.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("service_status", "Inspect a service on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}}, True, False),
@@ -2745,6 +2818,14 @@ def tool_specs() -> list[dict[str, Any]]:
         if name == "browser_navigate":
             optional.add("tab_id")
         schema_props = dict(props)
+        # Do not advertise Marina for tools without an implemented host grant.
+        if name in {
+            "processes_list", "service_action", "file_read", "file_list",
+            "logs_tail", "admin_command_run", "task_submit",
+        } and "host" in schema_props:
+            schema_props["host"] = {"type": "string", "enum": [
+                host for host in HOSTS if host != MARINA_HOST
+            ]}
         if name in MUTATING_RUNTIME_ACTIONS:
             schema_props.update({
                 "runtime_lease_id": {"type": "string", "maxLength": 200},

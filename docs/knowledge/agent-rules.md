@@ -1,3 +1,15 @@
+<!-- PR_HUMAN_VISIBILITY_ROUTING_V1 -->
+## Regra de PRs: visibilidade nao exige revisao humana
+A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso nativo ao repositorio. **Nao adicionar shopvivaliz-human como CODEOWNER global, revisor padrao, nem solicitar revisao humana automatica para toda PR.** PRs tecnicas comuns seguem testes e gates pertinentes, com correcao e merge por agente autorizado quando permitido. Solicitar aprovacao/merge exclusivo da conta humana somente quando a PR representar autorizacao humana formal de seguranca, privilegio, controle de acesso ou decisao comercial protegida, e manter os fluxos oficiais de grant, SHA, checks e RBAC. Visibilidade, ser informado e permissao de consulta nao equivalem a pedido de aprovacao. Nunca substituir CODEOWNERS sensiveis por regra universal; manter o owner nos escopos de grant. Antes de criar/editar CODEOWNERS ou workflows de revisores, executar o gate scripts/check_pr_review_routing.py. Nao contornar protecoes de branch ou recusas de provedores.
+<!-- /PR_HUMAN_VISIBILITY_ROUTING_V1 -->
+
+<!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_PARITY_20261101 -->
+## Cobertura MCP central e MCP Marina independente (decisao 2026-11-01)
+
+Todos os agentes devem implementar/verificar **duas rotas distintas** para Marina: (a) o MCP central ShopVivaliz deve alcancar Marina com ferramentas efetivamente autorizadas, sem alias da VM excluida e sem usar RDC como transporte normal; (b) o MCP exclusivo da Marina deve funcionar autonomamente por seu tunel OpenAI autenticado, sem o backend. A meta e paridade funcional por host/operacao com capacidades do RDC, nao root/shell indistinto. Nenhum caminho e APTO apenas porque outro funciona. Exigir grant PR humano exato para ampliacao de privilegios, host RBAC, identidade, lease/fencing, audit, E2E e protecoes de producao. A rota central read-only proposta ainda nao esta ativa nem certificada. Ver `docs/ops/mcp-central-marina-dual-route-2026-11-01.md` e matriz `docs/ops/mcp-rdc-capability-parity-2026-11-01.json`.
+
+<!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_PARITY_20261101 -->
+
 <!-- RDC_FRED_ONLY_IDENTITY_GATE_20261030 -->
 ## RDC Fred-Win: identidade unica, continuidade e sem retorno para Dev
 

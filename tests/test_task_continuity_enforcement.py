@@ -770,7 +770,17 @@ class TaskContinuityPolicyTests(unittest.TestCase):
         for workflow in workflows:
             text = workflow.read_text(encoding="utf-8")
             self.assertIn("concurrency:", text, str(workflow))
-            self.assertIn("cancel-in-progress: true", text, str(workflow))
+            if workflow.name == "mandatory-validation-gate.yml":
+                # Review does not cancel in-progress code validation; later
+                # synchronize/label events still cancel obsolete runs.
+                self.assertIn(
+                    "cancel-in-progress: $"+"{{ github.event_name != 'pull_request_review' }}",
+                    text, str(workflow))
+                self.assertIn("mode=review-reuse", text, str(workflow))
+                self.assertIn("Verify completed code validation before reusing it on review",
+                              text, str(workflow))
+            else:
+                self.assertIn("cancel-in-progress: true", text, str(workflow))
 
     def test_production_e2e_gate_is_required_and_cannot_invoke_recovery_stages(self) -> None:
         probe = ROOT / "scripts" / "task_continuity_e2e.py"

@@ -17,6 +17,11 @@ concurrency:
 
 jobs:
   preflight:
+    # Hosted conflict preflight and Oracle healer do not request human reviews.
+    # Repository collaboration visibility is separate from mandatory security PR approval.
+    permissions:
+      contents: read
+      pull-requests: read
     name: Detect whether Oracle conflict healing is actually needed
     runs-on: ubuntu-latest
     timeout-minutes: 2

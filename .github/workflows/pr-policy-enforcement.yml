@@ -7,6 +7,7 @@ on:
       - '.github/workflows/history-integrity.yml'
       - 'scripts/maintenance/validate_sanitized_history.py'
       - 'tests/test_ci_latency_contract.py'
+      - 'tests/test_pr_owner_review_visibility.py'
       - 'scripts/pr_completion_scheduler.py'
       - 'tests/test_pr_completion_scheduler.py'
       - 'scripts/check_pr_completion_policy.py'
@@ -87,7 +88,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest tests.test_ci_latency_contract tests.test_pr_completion_scheduler -v
+          python3 -m unittest tests.test_ci_latency_contract tests.test_pr_completion_scheduler tests.test_pr_owner_review_visibility -v
 
       - name: Verify V5 agent preflight rejects missing and stale rules
         shell: bash
