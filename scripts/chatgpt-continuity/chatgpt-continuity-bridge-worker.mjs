@@ -2553,6 +2553,11 @@ async function errorBannerPresent(cdp) {
       'esgotou-se o tempo limite da solicitacao',
       'request timed out',
       'request timeout',
+      // A client may surface conversation-detail failures instead of the generic banner.
+      // The recovery actuator still requires an exact bound conversation and canonical stream proof.
+      'a operação não pode ser concluída',
+      'a operacao nao pode ser concluida',
+      'apicore.conversationdetailerror.detailerror',
     ],
     'continuity-error-banner-probe',
   );
@@ -2583,6 +2588,9 @@ async function conversationUnavailablePresent(cdp) {
       'unable to load this chatgpt conversation',
       'não foi possível carregar esta conversa',
       'nao foi possivel carregar esta conversa',
+      // ConversationDetailError denotes failure to load the conversation itself.
+      // Handle it as unavailable until the canonical bound conversation is verified.
+      'apicore.conversationdetailerror.detailerror',
     ].some(value=>text.includes(value));
   })()`));
 }
