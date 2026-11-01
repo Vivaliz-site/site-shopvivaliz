@@ -218,6 +218,8 @@ jobs:
           fi
       - name: Carrinho legado usa ERP v3 e estoque disponivel (regressao)
         run: php tests/cart-authoritative-erp-contract-test.php
+      - name: Olist v3 webhook authenticated and unsafe legacy retired
+        run: php tests/olist-erp-webhook-entrypoint-test.php
       - name: "Bloquear CSS wildcard de layout (ex: [class*=hero])"
         run: |
           PADRAO='\[class\s*\*=\s*"(hero|banner|section|page|layout|container)'

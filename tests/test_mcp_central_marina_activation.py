@@ -72,7 +72,7 @@ class OwnerActivationTests(unittest.TestCase):
         self.assertEqual(found["merged_by"], a.OWNER)
         self.assertEqual(found["reviewer"], a.OWNER)
 
-    def test_pr_must_have_manual_human_merger_distinct_from_author(self):
+    def test_pr_requires_human_owner_merge_actor_distinct_from_author(self):
         for field, bad in (
             ("merged", False), ("state", "open"),
             ("auto_merge", {"merge_method": "squash"}),
@@ -82,6 +82,31 @@ class OwnerActivationTests(unittest.TestCase):
         ):
             with self.subTest(field=field):
                 pr = dict(sample_pr(), **{field: bad})
+                with self.assertRaises(a.ActivationDenied):
+                    self.proof(pr=pr)
+
+    def test_owner_approved_auto_merge_allows_scoped_central_activation(self):
+        for method in ("merge", "squash", "rebase"):
+            with self.subTest(method=method):
+                pr = dict(sample_pr(), auto_merge={
+                    "merge_method": method,
+                    "enabled_by": {"login": a.OWNER},
+                })
+                found = self.proof(pr=pr)
+                self.assertEqual(found["merged_by"], a.OWNER)
+                self.assertEqual(found["head_sha"], HEAD)
+
+    def test_automated_or_untrusted_auto_merge_enablement_denied(self):
+        bad_meta = (
+            {"merge_method": "merge", "enabled_by": {"login": "fredmourao-ai"}},
+            {"merge_method": "merge", "enabled_by": {"login": "github-actions[bot]"}},
+            {"merge_method": "merge"},
+            {"enabled_by": {"login": a.OWNER}},
+            {"merge_method": "unexpected", "enabled_by": {"login": a.OWNER}},
+        )
+        for auto_merge in bad_meta:
+            with self.subTest(auto_merge=auto_merge):
+                pr = dict(sample_pr(), auto_merge=auto_merge)
                 with self.assertRaises(a.ActivationDenied):
                     self.proof(pr=pr)
 
@@ -108,6 +133,16 @@ class OwnerActivationTests(unittest.TestCase):
                 a, "run", side_effect=a.ActivationDenied("official_verification_or_command_failed")):
             with self.assertRaises(a.ActivationDenied):
                 a.grant_proof(PR_NUMBER, "fixture-token")
+
+    def test_preflight_and_activate_require_explicit_non_revoked_pr(self):
+        for action in ("preflight", "activate"):
+            with self.subTest(action=action), patch.object(
+                    a, "preflight") as checker, patch.object(
+                    a, "write_private") as writer, patch.object(
+                    sys, "argv", ["activation", action]):
+                self.assertEqual(a.main(), 1)
+                checker.assert_not_called()
+                writer.assert_not_called()
 
     def test_non_root_cannot_mutate_or_run_preflight(self):
         with patch.object(a.os, "geteuid", return_value=1000):

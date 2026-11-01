@@ -237,6 +237,9 @@ AddCharset UTF-8 .html .txt .php .json
     # Nenhum consumidor interno usa este endpoint (so api/coupons/active.php
     # e consumido, por includes/popup-cupons.php). Ver B3 no relatorio da
     # Rodada 2.
+    # Legacy Olist handler accepted unauthenticated price/stock/delete payloads.
+    # Only /api/olist/webhook.php is the signed + ERP-v3-aware ingress.
+    RewriteRule ^api/olist/webhook-processor\.php$ - [F,L,NC]
     RewriteRule ^api/coupons/validate\.php$ - [F,L,NC]
     RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]
     RewriteRule ^(?:discover-db|do-sync-[a-z0-9-]+|find-db-host|fix-database|full-sync|get_ext_dir|get_php_info|shop-catalog-export)\.php$ - [F,L,NC]
