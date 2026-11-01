@@ -109,6 +109,16 @@ class OwnerActivationTests(unittest.TestCase):
             with self.assertRaises(a.ActivationDenied):
                 a.grant_proof(PR_NUMBER, "fixture-token")
 
+    def test_preflight_and_activate_require_explicit_non_revoked_pr(self):
+        for action in ("preflight", "activate"):
+            with self.subTest(action=action), patch.object(
+                    a, "preflight") as checker, patch.object(
+                    a, "write_private") as writer, patch.object(
+                    sys, "argv", ["activation", action]):
+                self.assertEqual(a.main(), 1)
+                checker.assert_not_called()
+                writer.assert_not_called()
+
     def test_non_root_cannot_mutate_or_run_preflight(self):
         with patch.object(a.os, "geteuid", return_value=1000):
             with self.assertRaises(a.ActivationDenied):
