@@ -271,10 +271,22 @@ def main() -> int:
             return 0
         if args.action == "repair-browser":
             verify_current_owner_state(attestation)
+            parent = BROWSER_DROPIN.parent
+            if parent.is_symlink():
+                raise ActivationDenied("browser_mcp_unit_dir_symlink_forbidden")
+            if parent.exists():
+                meta = parent.lstat()
+                if (not stat.S_ISDIR(meta.st_mode) or
+                        meta.st_uid != os.geteuid() or meta.st_mode & 0o022):
+                    raise ActivationDenied("browser_mcp_unit_dir_not_trusted")
             if BROWSER_DROPIN.is_symlink():
                 raise ActivationDenied("browser_mcp_dropin_symlink_forbidden")
             if BROWSER_DROPIN.exists():
-                if BROWSER_DROPIN.read_text() != FLAG_DROPIN_TEXT:
+                meta = BROWSER_DROPIN.lstat()
+                if (not stat.S_ISREG(meta.st_mode) or
+                        meta.st_uid != os.geteuid() or
+                        meta.st_mode & 0o022 or meta.st_nlink != 1 or
+                        BROWSER_DROPIN.read_text() != FLAG_DROPIN_TEXT):
                     raise ActivationDenied("unexpected_existing_browser_grant")
                 restart_browser_and_verify()
                 print("CENTRAL_MARINA_BROWSER_REPAIR=PASS already_configured=true")
