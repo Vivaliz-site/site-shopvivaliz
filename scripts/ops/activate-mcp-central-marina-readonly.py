@@ -30,6 +30,9 @@ MARINA = "marina-a1-4c24g"
 STATE_DIR = Path("/var/lib/shopvivaliz-remote-control")
 GRANT_STATE = STATE_DIR / "marina-central-owner-grant.json"
 DROPIN = Path("/etc/systemd/system/shopvivaliz-remote-control-mcp.service.d/92-marina-readonly-grant.conf")
+BROWSER_DROPIN = Path("/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d/92-marina-readonly-grant.conf")
+BROWSER_SERVICE = "shopvivaliz-remote-control-browser-mcp.service"
+FLAG_DROPIN_TEXT = "[Service]\\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\\n".replace("\\n", "\n")
 SERVER = Path("/opt/shopvivaliz-remote-control/server.py")
 SSH_KEY = Path("/home/ubuntu/.ssh/oci-marina-a1-2026")
 PINNED = Path("/home/ubuntu/.ssh/known_hosts_marina_verified")
@@ -192,9 +195,60 @@ def restart_and_verify() -> None:
     raise ActivationDenied("central_mcp_health_not_ready")
 
 
+def verify_current_owner_state(attestation: dict) -> None:
+    """Require the exact, already-validated owner grant before bridge repair."""
+    try:
+        fd = os.open(GRANT_STATE, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        with os.fdopen(fd, "r", encoding="utf-8") as source:
+            meta = os.fstat(source.fileno())
+            if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
+                    or meta.st_mode & 0o077 or meta.st_nlink != 1
+                    or meta.st_size > 4096):
+                raise ActivationDenied("existing_owner_attestation_metadata_invalid")
+            current = json.load(source)
+    except (OSError, ValueError, TypeError, UnicodeError) as exc:
+        raise ActivationDenied("existing_owner_attestation_unavailable") from exc
+    if current != attestation:
+        raise ActivationDenied("existing_owner_attestation_not_exact_approved_pr")
+    try:
+        meta = DROPIN.lstat()
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
+                or meta.st_mode & 0o022 or DROPIN.read_text() != FLAG_DROPIN_TEXT):
+            raise ActivationDenied("base_mcp_owner_flag_not_approved")
+    except OSError as exc:
+        raise ActivationDenied("base_mcp_owner_flag_missing") from exc
+
+
+def restart_browser_and_verify(*, expected_enabled: bool = True) -> None:
+    """Restart only the browser MCP; never restart Chrome or the central MCP."""
+    run(["systemctl", "daemon-reload"])
+    run(["systemctl", "restart", BROWSER_SERVICE])
+    for _ in range(20):
+        try:
+            run(["curl", "--fail", "--silent", "--show-error", "--max-time", "2",
+                 "http://127.0.0.1:5581/health"])
+            # Check just the boolean marker. No process environment is logged,
+            # and no credentials, profile contents or cookies are read.
+            expected = "0" if expected_enabled else "1"
+            shell_check = (
+                "pid=$(/usr/bin/systemctl show " + BROWSER_SERVICE +
+                " --property=MainPID --value); "
+                "test \"$pid\" -gt 1; "
+                "if /usr/bin/tr '\\0' '\\n' < \"/proc/$pid/environ\" | "
+                "/usr/bin/grep -qx 'SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1'; "
+                "then test " + expected + " -eq 0; "
+                "else test " + expected + " -eq 1; fi"
+            )
+            run(["/usr/bin/bash", "-c", shell_check])
+            return
+        except ActivationDenied:
+            time.sleep(0.5)
+    raise ActivationDenied("browser_mcp_owner_flag_not_effective")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["preflight", "activate", "revoke"])
+    parser.add_argument("action", choices=["preflight", "activate", "revoke", "repair-browser"])
     parser.add_argument("--pr", type=int, default=None, help="Exact manual owner grant PR; required for preflight/activate")
     args = parser.parse_args()
     try:
@@ -203,8 +257,10 @@ def main() -> int:
                 raise ActivationDenied("operator_must_be_root_on_backend")
             # Immediate local revocation needs no external GitHub access.
             DROPIN.unlink(missing_ok=True)
+            BROWSER_DROPIN.unlink(missing_ok=True)
             GRANT_STATE.unlink(missing_ok=True)
             restart_and_verify()
+            restart_browser_and_verify(expected_enabled=False)
             print("CENTRAL_MARINA_GRANT_REVOKED=PASS")
             return 0
         if args.pr is None or args.pr <= 0:
@@ -213,17 +269,42 @@ def main() -> int:
         if args.action == "preflight":
             print("CENTRAL_MARINA_GRANT_PREFLIGHT=PASS no_runtime_change=true")
             return 0
-        if GRANT_STATE.exists() or DROPIN.exists():
+        if args.action == "repair-browser":
+            verify_current_owner_state(attestation)
+            if BROWSER_DROPIN.is_symlink():
+                raise ActivationDenied("browser_mcp_dropin_symlink_forbidden")
+            if BROWSER_DROPIN.exists():
+                if BROWSER_DROPIN.read_text() != FLAG_DROPIN_TEXT:
+                    raise ActivationDenied("unexpected_existing_browser_grant")
+                restart_browser_and_verify()
+                print("CENTRAL_MARINA_BROWSER_REPAIR=PASS already_configured=true")
+                return 0
+            write_private(BROWSER_DROPIN, FLAG_DROPIN_TEXT)
+            BROWSER_DROPIN.chmod(0o644)
+            try:
+                restart_browser_and_verify()
+            except Exception:
+                BROWSER_DROPIN.unlink(missing_ok=True)
+                restart_browser_and_verify(expected_enabled=False)
+                raise
+            print("CENTRAL_MARINA_BROWSER_REPAIR=PASS no_base_mutation=true")
+            return 0
+        if GRANT_STATE.exists() or DROPIN.exists() or BROWSER_DROPIN.exists() or BROWSER_DROPIN.is_symlink():
             raise ActivationDenied("existing_grant_requires_explicit_revocation")
         write_private(GRANT_STATE, json.dumps(attestation, sort_keys=True) + "\n")
         try:
-            write_private(DROPIN, '[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED=approved-v1\n')
+            write_private(DROPIN, FLAG_DROPIN_TEXT)
             DROPIN.chmod(0o644)
+            write_private(BROWSER_DROPIN, FLAG_DROPIN_TEXT)
+            BROWSER_DROPIN.chmod(0o644)
             restart_and_verify()
+            restart_browser_and_verify()
         except Exception:
             DROPIN.unlink(missing_ok=True)
+            BROWSER_DROPIN.unlink(missing_ok=True)
             GRANT_STATE.unlink(missing_ok=True)
             restart_and_verify()
+            restart_browser_and_verify(expected_enabled=False)
             raise
         print("CENTRAL_MARINA_GRANT_INSTALLED=PASS")
         return 0
