@@ -292,6 +292,16 @@ class OwnerActivationTests(unittest.TestCase):
         self.assertIn("return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)", browser_source)
         self.assertIn("base.execute_tool = execute_tool", browser_source)
 
+    def test_checkout_sha_read_uses_ubuntu_repo_owner_not_root(self):
+        # Running git as root in an ubuntu-owned checkout hits dubious ownership,
+        # masking the already-granted owner's official authorization.
+        with patch.object(a, "run", return_value=HEAD) as invocation:
+            self.assertEqual(a.checkout_sha_as_owner(), HEAD)
+            invocation.assert_called_once_with([
+                "runuser", "-u", "ubuntu", "--", "git", "-C",
+                str(a.ROOT), "rev-parse", "HEAD",
+            ])
+
     def test_source_contains_no_automatic_privilege_bypass(self):
         server = (ROOT / "remote-control-mcp" / "server.py").read_text()
         self.assertIn("marina_central_readonly_grant_active()", server)
