@@ -1,3 +1,10 @@
+<!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_PARITY_20261101 -->
+## Cobertura MCP central e MCP Marina independente (decisao 2026-11-01)
+
+Todos os agentes devem implementar/verificar **duas rotas distintas** para Marina: (a) o MCP central ShopVivaliz deve alcancar Marina com ferramentas efetivamente autorizadas, sem alias da VM excluida e sem usar RDC como transporte normal; (b) o MCP exclusivo da Marina deve funcionar autonomamente por seu tunel OpenAI autenticado, sem o backend. A meta e paridade funcional por host/operacao com capacidades do RDC, nao root/shell indistinto. Nenhum caminho e APTO apenas porque outro funciona. Exigir grant PR humano exato para ampliacao de privilegios, host RBAC, identidade, lease/fencing, audit, E2E e protecoes de producao. A rota central read-only proposta ainda nao esta ativa nem certificada. Ver `docs/ops/mcp-central-marina-dual-route-2026-11-01.md` e matriz `docs/ops/mcp-rdc-capability-parity-2026-11-01.json`.
+
+<!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_PARITY_20261101 -->
+
 <!-- RDC_FRED_ONLY_IDENTITY_GATE_20261030 -->
 ## RDC Fred-Win: identidade unica, continuidade e sem retorno para Dev
 
