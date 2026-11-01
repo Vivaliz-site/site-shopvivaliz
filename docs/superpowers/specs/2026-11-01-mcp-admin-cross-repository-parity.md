@@ -1,3 +1,7 @@
+<!-- CENTRAL_MARINA_DUAL_REQUIREMENT_20261101 -->
+> **Nova decisao do proprietario:** o MCP central tambem deve ter acesso a Marina, por rota privada propria e independentemente autorizada, alem do MCP Marina direto. A proibicao de backend como relay e valida para a **independencia do MCP Marina**, nao proibe o controlador de ter acesso explicito autorizado a Marina para suas proprias ferramentas. Nao reutilizar credenciais/SSH entre os MCPs; nao fingir que rota central read-only cobre as 29 operacoes RDC. Proposta em `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
+<!-- /CENTRAL_MARINA_DUAL_REQUIREMENT_20261101 -->
+
 # MCP administrativo de paridade por repositorio — desenho V1
 
 **Data:** 2026-11-01
