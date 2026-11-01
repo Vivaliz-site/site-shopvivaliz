@@ -16,8 +16,28 @@ $diagnostics = [
     'checks' => [],
 ];
 
-$processor = __DIR__ . '/webhook-processor.php';
-$diagnostics['checks']['processor_file_exists'] = is_file($processor) && is_readable($processor);
+// The old webhook-processor.php is now an intentional 410 tombstone. A
+// health check for its mere existence can falsely report a working integration
+// even when the signed Olist/Tiny v3 ingress has disappeared or lost auth.
+$canonical = __DIR__ . '/webhook.php';
+$legacy = __DIR__ . '/webhook-processor.php';
+$apache = $root . '/.htaccess';
+$canonicalSource = is_file($canonical) && is_readable($canonical)
+    ? (string)file_get_contents($canonical) : '';
+$legacySource = is_file($legacy) && is_readable($legacy)
+    ? (string)file_get_contents($legacy) : '';
+$apacheSource = is_file($apache) && is_readable($apache)
+    ? (string)file_get_contents($apache) : '';
+$diagnostics['checks']['canonical_entrypoint_readable'] = $canonicalSource !== '';
+$diagnostics['checks']['canonical_provider_gate_present'] =
+    str_contains($canonicalSource, "sv_webhook_secret_gate('olist', false)");
+$diagnostics['checks']['canonical_v3_product_reconciliation_present'] =
+    str_contains($canonicalSource, 'svoei_refresh_product_from_v3');
+$diagnostics['checks']['legacy_processor_retired'] =
+    str_contains($legacySource, "http_response_code(410)") &&
+    !preg_match('/\\b(?:UPDATE|INSERT|DELETE)\\s+(?:FROM\\s+|INTO\\s+)?products\\b/i', $legacySource);
+$diagnostics['checks']['legacy_http_blocked'] =
+    str_contains($apacheSource, 'RewriteRule ^api/olist/webhook-processor\\.php$ - [F,L,NC]');
 
 $logDir = $root . '/logs';
 $diagnostics['checks']['logs_writable'] = is_dir($logDir) && is_writable($logDir);
@@ -60,7 +80,12 @@ try {
     }
 }
 
-$diagnostics['ok'] = $diagnostics['checks']['processor_file_exists']
+$diagnostics['ok'] =
+    $diagnostics['checks']['canonical_entrypoint_readable']
+    && $diagnostics['checks']['canonical_provider_gate_present']
+    && $diagnostics['checks']['canonical_v3_product_reconciliation_present']
+    && $diagnostics['checks']['legacy_processor_retired']
+    && $diagnostics['checks']['legacy_http_blocked']
     && $diagnostics['checks']['logs_writable']
     && $diagnostics['checks']['database_connected'];
 
