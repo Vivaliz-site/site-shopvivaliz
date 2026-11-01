@@ -72,7 +72,7 @@ class OwnerActivationTests(unittest.TestCase):
         self.assertEqual(found["merged_by"], a.OWNER)
         self.assertEqual(found["reviewer"], a.OWNER)
 
-    def test_pr_must_have_manual_human_merger_distinct_from_author(self):
+    def test_pr_requires_human_owner_merge_actor_distinct_from_author(self):
         for field, bad in (
             ("merged", False), ("state", "open"),
             ("auto_merge", {"merge_method": "squash"}),
@@ -82,6 +82,31 @@ class OwnerActivationTests(unittest.TestCase):
         ):
             with self.subTest(field=field):
                 pr = dict(sample_pr(), **{field: bad})
+                with self.assertRaises(a.ActivationDenied):
+                    self.proof(pr=pr)
+
+    def test_owner_approved_auto_merge_allows_scoped_central_activation(self):
+        for method in ("merge", "squash", "rebase"):
+            with self.subTest(method=method):
+                pr = dict(sample_pr(), auto_merge={
+                    "merge_method": method,
+                    "enabled_by": {"login": a.OWNER},
+                })
+                found = self.proof(pr=pr)
+                self.assertEqual(found["merged_by"], a.OWNER)
+                self.assertEqual(found["head_sha"], HEAD)
+
+    def test_automated_or_untrusted_auto_merge_enablement_denied(self):
+        bad_meta = (
+            {"merge_method": "merge", "enabled_by": {"login": "fredmourao-ai"}},
+            {"merge_method": "merge", "enabled_by": {"login": "github-actions[bot]"}},
+            {"merge_method": "merge"},
+            {"enabled_by": {"login": a.OWNER}},
+            {"merge_method": "unexpected", "enabled_by": {"login": a.OWNER}},
+        )
+        for auto_merge in bad_meta:
+            with self.subTest(auto_merge=auto_merge):
+                pr = dict(sample_pr(), auto_merge=auto_merge)
                 with self.assertRaises(a.ActivationDenied):
                     self.proof(pr=pr)
 

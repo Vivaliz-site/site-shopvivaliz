@@ -173,22 +173,84 @@ class OwnerAuthorizationTests(unittest.TestCase):
         opts["reviews"] *= 100
         self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
-    def test_auto_merge_enabled_by_owner_is_not_human_only_grant(self):
+    def test_owner_approved_exact_head_and_owner_enabled_auto_merge_authorizes(self):
+        """Owner review, not check completion or a second manual click, authorizes."""
+        pr, grant, opts = fixture()
+        pr["auto_merge"] = {
+            "merge_method": "merge",
+            "enabled_by": {"login": "shopvivaliz-human"},
+        }
+        self.assertEqual(
+            (True, "owner_authorization_verified"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_owner_approved_squash_auto_merge_is_also_valid(self):
         pr, grant, opts = fixture()
         pr["auto_merge"] = {
             "merge_method": "squash",
             "enabled_by": {"login": "shopvivaliz-human"},
         }
         self.assertEqual(
-            (False, "owner_only_merge_not_proven_manual"),
+            (True, "owner_authorization_verified"),
             grant_module.decide(pr, grant, **opts),
         )
 
-    def test_missing_auto_merge_metadata_fails_closed(self):
+    def test_agent_enabled_auto_merge_cannot_authorize_a_human_only_grant(self):
+        pr, grant, opts = fixture()
+        for actor in ("fredmourao-ai", "github-actions[bot]", ""):
+            with self.subTest(actor=actor):
+                pr["auto_merge"] = {
+                    "merge_method": "merge",
+                    "enabled_by": {"login": actor},
+                }
+                self.assertEqual(
+                    (False, "owner_auto_merge_not_authorized"),
+                    grant_module.decide(pr, grant, **opts),
+                )
+
+    def test_owner_auto_merge_without_exact_head_human_approval_is_denied(self):
+        pr, grant, opts = fixture()
+        pr["auto_merge"] = {
+            "merge_method": "merge",
+            "enabled_by": {"login": "shopvivaliz-human"},
+        }
+        opts["reviews"] = [
+            {"user": {"login": "shopvivaliz-human"}, "state": "APPROVED",
+             "commit_id": "c" * 40},
+        ]
+        self.assertEqual(
+            (False, "security_pr_not_approved_by_human"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_automerge_does_not_make_an_agent_merge_actor_authorized(self):
+        pr, grant, opts = fixture()
+        pr["auto_merge"] = {
+            "merge_method": "merge",
+            "enabled_by": {"login": "shopvivaliz-human"},
+        }
+        pr["merged_by"] = {"login": "fredmourao-ai"}
+        self.assertEqual(
+            (False, "merge_actor_not_owner"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_malformed_or_missing_auto_merge_metadata_fails_closed(self):
+        for value in ({"merge_method": "merge"}, {"enabled_by": {"login": "shopvivaliz-human"}},
+                      {"merge_method": "unsafe", "enabled_by": {"login": "shopvivaliz-human"}},
+                      {}, "invalid"):
+            with self.subTest(value=value):
+                pr, grant, opts = fixture()
+                pr["auto_merge"] = value
+                self.assertEqual(
+                    (False, "owner_auto_merge_not_authorized"),
+                    grant_module.decide(pr, grant, **opts),
+                )
         pr, grant, opts = fixture()
         pr.pop("auto_merge")
         self.assertEqual(
-            (False, "owner_only_merge_not_proven_manual"),
+            (False, "owner_merge_metadata_missing"),
             grant_module.decide(pr, grant, **opts),
         )
 
