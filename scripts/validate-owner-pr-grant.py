@@ -42,11 +42,20 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
     if not (pr.get("merged") is True and pr.get("state") == "closed" and
             pr.get("number") == pr_number):
         return False, "pr_not_merged"
-    # Owner-only grants require a direct owner action. GitHub auto-merge
-    # (even when enabled by the owner login) is not evidence of a human-only
-    # merge. Missing API metadata is also not a trustworthy authorization.
-    if "auto_merge" not in pr or pr["auto_merge"] is not None:
-        return False, "owner_only_merge_not_proven_manual"
+    # The owner's APPROVED review on the exact head SHA (verified below) is
+    # the human authorization. GitHub may complete the merge after checks
+    # when the SAME exclusive owner explicitly enabled native auto-merge.
+    # A bot/agent-enabled auto-merge, unknown merge actor or missing GitHub
+    # metadata is never a substitute for that owner action.
+    if "auto_merge" not in pr:
+        return False, "owner_merge_metadata_missing"
+    auto_merge = pr["auto_merge"]
+    if auto_merge is not None:
+        enabled_by = auto_merge.get("enabled_by") if isinstance(auto_merge, dict) else None
+        if (not isinstance(enabled_by, dict) or
+                str(enabled_by.get("login", "")).casefold() != owner_login.casefold() or
+                auto_merge.get("merge_method") not in ("merge", "squash", "rebase")):
+            return False, "owner_auto_merge_not_authorized"
     if str(pr.get("merged_by", {}).get("login", "")).casefold() != owner_login.casefold():
         return False, "merge_actor_not_owner"
     author = pr.get("user")
