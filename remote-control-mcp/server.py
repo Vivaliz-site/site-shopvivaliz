@@ -17,6 +17,7 @@ import re
 import signal
 import shlex
 import socket
+import stat
 import sqlite3
 import subprocess
 import sys
@@ -118,6 +119,7 @@ MARINA_HOST = "marina-a1-4c24g"
 MARINA_PRIVATE_ADDRESS = "100.118.170.46"
 MARINA_SSH_KEY = Path("/home/ubuntu/.ssh/oci-marina-a1-2026")
 MARINA_PINNED_HOSTS = Path("/home/ubuntu/.ssh/known_hosts_marina_verified")
+MARINA_CENTRAL_OWNER_ATTESTATION = STATE_DIR / "marina-central-owner-grant.json"
 MARINA_READONLY_SERVICES = frozenset({
     "shopvivaliz-marina-mcp.service",
     "shopvivaliz-marina-mcp-tunnel.service",
@@ -1344,10 +1346,61 @@ def marina_readonly_service_command(service: str) -> str:
             "--property=LoadState,ActiveState,SubState,UnitFileState -- " + shlex.quote(service))
 
 
+def marina_central_readonly_grant_active() -> bool:
+    """A flag alone must never authorize the Marina route.
+
+    The protected attestation is minted only by an official operator after
+    checking the separately merged human grant with the GitHub verifier.
+    It is rechecked for permissions, scope and expiry on every read.
+    """
+    if os.environ.get("SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED") != "approved-v1":
+        return False
+    try:
+        fd = os.open(MARINA_CENTRAL_OWNER_ATTESTATION,
+                     os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        with os.fdopen(fd, "r", encoding="utf-8") as source:
+            st = os.fstat(source.fileno())
+            if (not stat.S_ISREG(st.st_mode) or st.st_uid != os.geteuid()
+                    or st.st_mode & 0o077 or st.st_nlink != 1 or st.st_size > 4096):
+                return False
+            grant = json.load(source)
+    except (OSError, ValueError, TypeError, UnicodeError):
+        return False
+    if not isinstance(grant, dict) or set(grant) != {
+        "schema", "repository", "pr_number", "resource", "principal",
+        "host", "controller_host", "capabilities", "head_sha", "merge_sha",
+        "reviewer", "merged_by", "expires_at_utc"
+    }:
+        return False
+    if (grant.get("schema") != "SHOPVIVALIZ_CENTRAL_MARINA_RUNTIME_GRANT_V1"
+            or grant.get("repository") != "Vivaliz-site/site-shopvivaliz"
+            or type(grant.get("pr_number")) is not int or grant["pr_number"] <= 0
+            or grant.get("resource") != "mcp:central:marina"
+            or grant.get("principal") != "shopvivaliz-central-mcp"
+            or grant.get("host") != MARINA_HOST
+            or grant.get("controller_host") != CONTROLLER_BACKEND_HOST
+            or grant.get("capabilities") != ["marina_readonly"]
+            or grant.get("reviewer") != "shopvivaliz-human"
+            or grant.get("merged_by") != "shopvivaliz-human"
+            or not isinstance(grant.get("head_sha"), str)
+            or not FULL_SHA_RE.fullmatch(grant["head_sha"])
+            or not isinstance(grant.get("merge_sha"), str)
+            or not FULL_SHA_RE.fullmatch(grant["merge_sha"])):
+        return False
+    expiry = grant.get("expires_at_utc")
+    if not isinstance(expiry, str) or not expiry.endswith("Z"):
+        return False
+    try:
+        deadline = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return deadline.tzinfo is not None and datetime.now(timezone.utc) < deadline
+
+
 def marina_readonly_ssh_invocation(command: str) -> list[str]:
     # This flag must be set by the officially authorized host administrator
     # after a distinct human-only security PR review; default denies transport.
-    if os.environ.get("SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED") != "approved-v1":
+    if not marina_central_readonly_grant_active():
         raise PermissionError("marina_central_route_not_approved")
     allowed = {health_command("linux")} | {
         marina_readonly_service_command(svc) for svc in MARINA_READONLY_SERVICES
@@ -2441,8 +2494,8 @@ def execute_tool(
     args: dict[str, Any],
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
-    # Dedicated tool names have stable schemas even if a connector cached the
-    # pre-Marina host enum. Never accept a caller-controlled alias or host.
+    # Stable aliases avoid the host enum cached before Marina was registered.
+    # The caller cannot select a host, user, route or command.
     if name == "marina_host_health":
         if args:
             raise ValueError("marina_health_arguments_not_allowed")
@@ -2597,7 +2650,7 @@ def execute_tool(
     if name == "hosts_list":
         return {"hosts": [
             {"name": n, **cfg, **(
-                {"route_enabled": os.environ.get("SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED") == "approved-v1"}
+                {"route_enabled": marina_central_readonly_grant_active()}
                 if n == MARINA_HOST else {}
             )}
             for n, cfg in HOSTS.items()
@@ -2806,8 +2859,8 @@ TOOLS = [
         "signature_b64": {"type": "string", "maxLength": 128},
     }, False, True),
     ("hosts_list", "List approved hosts including Marina as a separately gated private read-only candidate; retired VMs are excluded.", {}, True, False),
-    ("marina_host_health", "Check the real Marina host over the separately approved private read-only route. Does not accept a host parameter, and denies access without valid owner grant.", {}, True, False),
-    ("marina_service_status", "Read an exact allowlisted systemd unit on Marina via the owner-approved pinned private SSH route; no writes or shell arguments.", {"service": {"type": "string", "enum": sorted(MARINA_READONLY_SERVICES)}}, True, False),
+    ("marina_host_health", "Read Marina identity through fixed owner-approved private route. No caller-selected host and no permission without a valid owner grant.", {}, True, False),
+    ("marina_service_status", "Inspect an allowlisted Marina systemd unit through pinned owner-approved private route, never a caller-selected host.", {"service": {"type": "string", "enum": sorted(MARINA_READONLY_SERVICES)}}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("service_status", "Inspect a service on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}}, True, False),
