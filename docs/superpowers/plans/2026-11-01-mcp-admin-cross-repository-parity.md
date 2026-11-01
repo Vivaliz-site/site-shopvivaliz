@@ -20,9 +20,11 @@
 
 ## Fase 0: inventario e modelo de autorizacao
 - [x] Consultar 11 arvores GitHub `main`, documentar commits, workflows e 17 candidatos com fonte real (inicial, nao exaustivo).
+- [x] Reconciliar metadados de workflows registrados com arquivos main; 345 paths ativos nao encontrados no main, todos nao certificados e sem habilitacao.
 - [x] Adicionar validador que rejeita alias antigo, escopo selvagem, ativacao nao certificada e parametros malformados.
 - [x] Vincular grant Marina por repo de destino e operacao exata com TDD RED/GREEN, sem conceder permissao ou fazer deploy.
 - [ ] Expandir catalogo a TODOS os workflows ativos/operacoes historicas, cruzar 72 ferramentas MCP anunciadas com scripts/runbooks/unidades por projeto, deduplicar e classificar funcao/comportamento.
+- [ ] Investigar os 345 registros ativos sem fonte no main quanto a branch, trigger, ultima execucao, owner e desativacao oficial; nunca migrar ou disparar automaticamente.
 - [ ] Certificar inventario com historico real de execucao, owners e dry-runs por familia. A quantidade 17 nao equivale a paridade.
 
 ## Fase 1: provisionamento oficial da rota Marina
