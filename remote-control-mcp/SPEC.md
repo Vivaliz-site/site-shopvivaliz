@@ -1,3 +1,7 @@
+<!-- MCP_CENTRAL_MARINA_DUAL_ROUTE_20261101 -->
+> **Diretriz vigente 2026-11-01:** o MCP central tambem DEVE alcancar `marina-a1-4c24g`, em paralelo ao MCP independente da Marina. Codigo de host central `private_ssh_read_only` esta em revisao e desabilitado ate autorizacao formal especifica, checagem de host e E2E. O MCP independente nao usa backend/RDC como relay. O texto historico abaixo sobre quatro hosts e origem retirada NAO autoriza ou descreve runtime atual. Ver `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
+<!-- /MCP_CENTRAL_MARINA_DUAL_ROUTE_20261101 -->
+
 <!-- RETIRED_SOURCE_DOC_AUDIT_20261029 -->
 > **Revisão de documentação de 2026-10-29:** registros de `shopvivaliz-free-a1` abaixo são HISTÓRICOS. O proprietário confirmou a exclusão da VM de origem. Nenhum agente deve tentar restabelecer, conectar, monitorar, operar, descomissionar novamente ou criar aliases para esse host. Produção web/DB/workers = `marina-a1-4c24g`; backend/controller/browser = `always-free-arm-1787907847-26`. Leia `docs/knowledge/current-topology-and-access-2026-10-29.md` antes de agir. **A exclusão não prova** migração integral, paridade, segredos migrados, autorização sudo, MCP independente ou E2E. Instruções de manutenção legadas contra origem não são executáveis; corrigir workflow/runbook próprio antes de qualquer automação.
 <!-- /RETIRED_SOURCE_DOC_AUDIT_20261029 -->
