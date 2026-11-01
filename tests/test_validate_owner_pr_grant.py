@@ -34,6 +34,14 @@ def fixture():
 
 
 class OwnerAuthorizationTests(unittest.TestCase):
+    def test_security_policy_requires_owner_only_pr_for_security_grants(self):
+        policy = (Path(__file__).resolve().parents[1]
+                  / "docs/knowledge/security-approval-via-pr.md").read_text()
+        self.assertIn('"operation": "olist_browser_restart"', policy)
+        self.assertIn("shopvivaliz-human", policy)
+        self.assertNotIn("chat aceito primeiro", policy.lower())
+        self.assertNotIn("chat deve ser utilizada normalmente", policy.lower())
+
     def test_security_codeowners_are_only_human_account(self):
         codeowners = Path(__file__).resolve().parents[1] / ".github" / "CODEOWNERS"
         mapping = {}
@@ -47,6 +55,35 @@ class OwnerAuthorizationTests(unittest.TestCase):
             "/scripts/validate-owner-pr-grant.py",
         ):
             self.assertEqual(["@shopvivaliz-human"], mapping.get(path))
+
+
+    def test_named_operation_grant_must_match_exact_execution(self):
+        pr, grant, opts = fixture()
+        grant["operation"] = "olist_browser_restart"
+        opts["capability"] = "deployment_manage"
+        opts["operation"] = "olist_browser_restart"
+        self.assertEqual((True, "owner_authorization_verified"),
+                         grant_module.decide(pr, grant, **opts))
+        for wrong in ("other_service_restart", "shell", "", None):
+            opts["operation"] = wrong
+            self.assertFalse(grant_module.decide(pr, grant, **opts)[0], wrong)
+        opts["operation"] = "olist_browser_restart"
+        del grant["operation"]
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_unscoped_legacy_marina_deployment_grant_never_authorizes_restart(self):
+        pr, grant, opts = fixture()
+        opts["capability"] = "deployment_manage"
+        self.assertEqual(
+            (False, "privileged_operation_required"),
+            grant_module.decide(pr, grant, **opts),
+        )
+
+    def test_operation_restricted_grant_denies_unscoped_readback(self):
+        pr, grant, opts = fixture()
+        grant["operation"] = "olist_browser_restart"
+        opts["capability"] = "deployment_manage"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
     def test_owner_merged_exact_scope_is_accepted(self):
         pr, grant, opts = fixture()

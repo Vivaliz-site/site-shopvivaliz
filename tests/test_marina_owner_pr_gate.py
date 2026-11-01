@@ -56,6 +56,24 @@ class OwnerPrGateTests(unittest.TestCase):
         opts.update(changes)
         return gate.authorize_owner_pr(**opts)
 
+
+    def test_olist_deployment_grant_requires_exact_operation(self):
+        proof = dict(capability="deployment_manage",
+                     human_attestor=self.human,
+                     runtime_permission=self.privilege)
+        self.assertEqual(
+            self.verify(**proof), (False, "operation_required_for_deployment"),
+        )
+        self.assertEqual(self.verifier_calls, [])
+        self.assertEqual(
+            self.verify(**proof, operation="olist_browser_restart"),
+            (True, "exact_owner_pr_grant_verified"),
+        )
+        command = self.verifier_calls[-1][0]
+        self.assertEqual(command[command.index("--operation") + 1], "olist_browser_restart")
+        for value in ("shell", "other_service_restart", "", None, 123, [], {}):
+            self.assertFalse(self.verify(**proof, operation=value)[0], value)
+
     def test_no_implicit_approval_from_merged_pr_or_owner_login(self):
         self.assertEqual(self.verify(), (False, "human_only_attestation_unavailable"))
         self.assertEqual(self.verifier_calls, [])

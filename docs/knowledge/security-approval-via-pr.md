@@ -39,6 +39,23 @@ A autorizacao concedida em cada PR de seguranca deve incluir o documento `securi
 }
 ```
 
+Para um grant administrativo em `mcp:marina` com capacidade `deployment_manage`, o documento do **PR de autorizacao especifica** tambem deve conter a operacao exata (exemplo ilustrativo, nao operacional):
+
+```json
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 123,
+  "resource": "mcp:marina",
+  "principal": "marina-mcp-service",
+  "capabilities": ["deployment_manage"],
+  "operation": "olist_browser_restart",
+  "expires_at_utc": "2026-12-01T00:00:00Z"
+}
+```
+
+O verificador deve receber `--capability deployment_manage --operation olist_browser_restart` e comparar `operation` byte a byte com o grant imutavel. Um documento legado sem `operation`, uma requisicao sem `--operation` ou outra operacao nao autoriza reiniciar servicos. A PR de **codigo** #3470 nao continha `security/owner-approvals/<NUMERO_PR>.json` e nao e, sozinha, grant administrativo. O operador protegido continua obrigado a validar identidade, RBAC, lease/fencing, auditoria, integridade do runtime, e controles externos antes de qualquer efeito.
+
 O provedor sob controle ShopVivaliz verifica PR merged pelo proprietario, branch `main`, SHA do head e do merge, principal, recurso, capacidade, validade e integridade do documento ainda presente no `main`. Um grant removido ou modificado posteriormente e automaticamente recusado. Com status `OWNER_PR_GRANT=AUTHORIZED`, deve reconhecer a decisao humana sem pedir nova aprovacao; caso `DENIED`, falhar fechado. O comando **nao executa** o grant: a rotina do MCP precisa chamar o verificador imediatamente antes da concessao oficial, respeitando seu proprio RBAC/lease/fencing. Implantar e testar a integracao do MCP Marina em PR separado, antes de afirmar que a verificacao esta ativa no host.
 
 ## Aprovacao formal do MCP Marina: aceitar e executar, nao alegar bypass
@@ -78,4 +95,4 @@ Para habilitar capacidades administrativas do MCP em `marina-a1-4c24g`, abrir PR
 PR e SHA, aprovador autenticado, workflow/gates, evento de merge, identidade do executor, lease/fencing (sem segredos), checks de runtime e rollback. Sem isso, nao declarar EXECUTADO nem APTO.
 
 ## Status de adocao
-Esta diretriz e proposta em PR, nao esta efetiva ate merge autorizado. Enforcements runtime/CI ainda exigem verificacao especifica.
+Esta diretriz de PR exclusivo humano esta versionada em `main`. O enforcement runtime e os controles de provedor, tunel, RBAC, lease e auditoria continuam sujeitos a instalacao e verificacao especifica. Nao confundir merge humano do codigo com o grant de uma operacao ou com MCP ativo.
