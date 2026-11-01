@@ -1,3 +1,8 @@
+<!-- CHECKPOINT_FIRST_V9 -->
+## Checkpoint obrigatorio antes de executar
+Toda tarefa longa, delegacao, investigacao material ou mutacao deve executar `scripts/agent_task_state.py start` antes da primeira etapa material. Apos cada etapa, executar `scripts/agent_task_state.py progress` com evidencia e `next_action`. Na retomada, ler o checkpoint existente e preservar ownership e gates. Se o registro duravel nao estiver acessivel, falhar fechado para tarefas dependentes de retomada automatica e usar rota autorizada auditavel. Nao declarar conclusao sem validacao e `terminal`.
+<!-- /CHECKPOINT_FIRST_V9 -->
+
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 ## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
 
