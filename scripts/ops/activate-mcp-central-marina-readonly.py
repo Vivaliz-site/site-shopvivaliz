@@ -201,7 +201,7 @@ def verify_current_owner_state(attestation: dict) -> None:
         fd = os.open(GRANT_STATE, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
         with os.fdopen(fd, "r", encoding="utf-8") as source:
             meta = os.fstat(source.fileno())
-            if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
+            if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
                     or meta.st_mode & 0o077 or meta.st_nlink != 1
                     or meta.st_size > 4096):
                 raise ActivationDenied("existing_owner_attestation_metadata_invalid")
@@ -212,7 +212,7 @@ def verify_current_owner_state(attestation: dict) -> None:
         raise ActivationDenied("existing_owner_attestation_not_exact_approved_pr")
     try:
         meta = DROPIN.lstat()
-        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
                 or meta.st_mode & 0o022 or DROPIN.read_text() != FLAG_DROPIN_TEXT):
             raise ActivationDenied("base_mcp_owner_flag_not_approved")
     except OSError as exc:
