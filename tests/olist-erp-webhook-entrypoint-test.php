@@ -43,4 +43,23 @@ $assert(str_contains($htaccess, 'RewriteRule ^api/olist/webhook-processor\\.php$
 $assert(str_contains($endpoint, "sv_webhook_secret_gate('olist', false)"),
     'canonical Olist webhook must authenticate provider requests');
 
+// The production health endpoint must verify the authenticated canonical v3
+// ingress and retired legacy writer; the mere existence of the tombstone
+// is not a green signal. This is a source-contract negative regression.
+$webhookHealth = (string)file_get_contents($root . '/api/olist/webhook-health.php');
+foreach ([
+    'canonical_entrypoint_readable',
+    'canonical_provider_gate_present',
+    'canonical_v3_product_reconciliation_present',
+    'legacy_processor_retired',
+    'legacy_http_blocked',
+] as $requiredCheck) {
+    $assert(str_contains($webhookHealth, "'{$requiredCheck}'"),
+        "webhook health must require {$requiredCheck}");
+}
+$assert(!str_contains($webhookHealth, "'processor_file_exists'"),
+    'webhook health cannot treat the retired processor existence as healthy');
+$assert(str_contains($webhookHealth, "\$diagnostics['checks']['database_connected']"),
+    'webhook health must keep local database check, without weakening order reconciliation');
+
 echo "olist-erp-webhook-entrypoint: ok\n";

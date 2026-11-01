@@ -4,6 +4,16 @@
 
 # Estado da Auditoria
 
+## 2026-11-01 — corrigir falso-verde da saúde do webhook Olist
+
+**RED de runtime:** após a PR #3489 fechar o processador legado com HTTP403/410, `GET /api/olist/webhook-health.php` continuava `HTTP200 ok:true`, registrando apenas `processor_file_exists:true` porque o arquivo tombstone ainda existe. Essa observação não verifica o webhook oficial `api/olist/webhook.php`, o segredo do provedor ou a reconciliação Olist/Tiny v3 e pode esconder regressão de autenticação.
+
+**Correção:** exigir no health a existência do endpoint canônico, seus contratos de autenticação e reconciliação via API v3, tombstone sem SQL e bloqueio Apache legado, além das checagens anteriores de logs e MySQL necessárias aos fluxos de pedidos. Quando qualquer condição falhar, retornar `503 ok:false`. Não muda escrita, fonte comercial, ID, preço, estoque, ERP nem canal de autenticação.
+
+**Testes locais e de impacto:** regressão adicionada ao teste já obrigatório `tests/olist-erp-webhook-entrypoint-test.php`, acionado em `ShopVivaliz QA`; PHP lint e teste de contrato no SHA vigente, checks oficiais após PR e readback HTTP do health/403 legado/401 canônico na release pós-merge. **AUDIT_VERDICT=NAO_APTO** até merge e revalidação real. Nenhum webhook de alteração foi enviado.
+
+---
+
 ## 2026-11-01 — P0: entrada legada Olist desprotegida e escritores comerciais fora do ERP v3
 
 **AUDIT_VERDICT=NAO_APTO** ate concluir CI, merge autorizado, deploy imutavel e teste externo negativo. Escopo desta PR: apenas impedir escrita insegura pelo endpoint obsoleto; nao ajustar tabelas, anuncios, preco, estoque, ERP nem outbox.
