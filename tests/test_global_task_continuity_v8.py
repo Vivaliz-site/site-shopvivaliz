@@ -153,5 +153,25 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
         self.assertNotIn('| tee "continuity-e2e-reports/${slug}.json"', workflow)
 
 
+    def test_active_global_continuity_routes_use_migrated_org_names(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        active = (
+            ".github/workflows/global-task-continuity-e2e-all-repos.yml",
+            ".github/workflows/global-task-continuity-e2e-once.yml",
+            ".github/workflows/global-task-continuity-e2e-all-repos-once.yml",
+            ".github/workflows/codex-global-issue-comment-routing.yml",
+            "docs/knowledge/task-continuity.md",
+        )
+        for item in active:
+            with self.subTest(file=item):
+                text = (root / item).read_text(encoding="utf-8")
+                for suffix in ("mei-mg-email", "solange-rolla-consultorio"):
+                    self.assertIn(f"Vivaliz-site/{suffix}", text)
+                    self.assertNotIn(f"fredmourao-ai/{suffix}", text)
+        for suffix in ("mei-mg-email", "solange-rolla-consultorio"):
+            self.assertIn(f"Vivaliz-site/{suffix}", dispatcher.ALLOWED_REPOSITORIES)
+            self.assertNotIn(f"fredmourao-ai/{suffix}", dispatcher.ALLOWED_REPOSITORIES)
+
+
 if __name__ == "__main__":
     unittest.main()
