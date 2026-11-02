@@ -15,6 +15,7 @@ import runpy
 import socket
 import sqlite3
 import stat
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -29,6 +30,9 @@ GRANT_MERGE = "a22f64f76729a21ccd7d1bf19f4a133fc0224a0a"
 GRANT_PATH = "security/owner-approvals/3514.json"
 WORKSPACE = Path("/var/lib/shopvivaliz-marina-mcp/workspace")
 STATE = Path("/var/lib/shopvivaliz-marina-mcp/state")
+# Optional independently provisioned repository read-only credential. Never borrow
+# an existing CLI/browser/controller token or trust one supplied by an RPC.
+GITHUB_READ_TOKEN_FILE = Path("/var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/github-read-token")
 API = "https://api.github.com"
 CAPABILITY = "file_write"
 OPERATION = "marina_workspace_file_write"
@@ -38,6 +42,10 @@ _VERIFIER_FILE = Path(__file__).with_name("validate_owner_pr_grant.py")
 if not _VERIFIER_FILE.is_file() and Path(__file__).parent.name == "marina-direct-mcp":
     _VERIFIER_FILE = Path(__file__).parent.parent / "scripts" / "validate-owner-pr-grant.py"
 _VERIFIER = runpy.run_path(str(_VERIFIER_FILE))
+# PR/merge/file-at-merge are immutable historical facts. Only cache those.
+# Every write still MUST recheck fresh owner reviews and the live main blob.
+_STATIC_PROOF = None
+_STATIC_PROOF_LOCK = threading.Lock()
 
 
 def _safe_dir(directory: Path, uid: int) -> bool:
@@ -47,16 +55,46 @@ def _safe_dir(directory: Path, uid: int) -> bool:
     except OSError:
         return False
 
+def _read_protected_github_token() -> str | None:
+    """Credential is optional; if present but unsafe, refuse the API request."""
+    try:
+        fd = os.open(GITHUB_READ_TOKEN_FILE, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return None
+    try:
+        metadata = os.fstat(fd)
+        if not _safe_dir(GITHUB_READ_TOKEN_FILE.parent, os.geteuid()):
+            raise RuntimeError("github_read_token_parent_unsafe")
+        if (not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.geteuid()
+                or stat.S_IMODE(metadata.st_mode) != 0o600):
+            raise RuntimeError("github_read_token_metadata_unsafe")
+        raw = os.read(fd, 4097)
+        if (not 20 <= len(raw) <= 4096
+                or any(c < 33 or c > 126 for c in raw.rstrip(b"\r\n"))
+                or raw.rstrip(b"\r\n").find(b" ") != -1):
+            raise RuntimeError("github_read_token_invalid")
+        token = raw.rstrip(b"\r\n").decode("ascii")
+        if not 20 <= len(token) <= 4096 or "\n" in token or "\r" in token:
+            raise RuntimeError("github_read_token_invalid")
+        return token
+    finally:
+        os.close(fd)
+
 
 def _public_api(path: str) -> object:
     """The caller never supplies a URL; only fixed repository API endpoints."""
     if not path.startswith("/repos/Vivaliz-site/site-shopvivaliz/"):
         raise RuntimeError("github_resource_not_allowlisted")
-    request = Request(API + path, headers={
+    headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "shopvivaliz-marina-owner-grant-readonly",
-    })
+    }
+    token = _read_protected_github_token()
+    if token is not None:
+        headers["Authorization"] = "Bearer " + token
+    request = Request(API + path, headers=headers)
     with urlopen(request, timeout=5) as response:
         if response.status != 200:
             raise RuntimeError("github_read_unavailable")
@@ -64,6 +102,39 @@ def _public_api(path: str) -> object:
         if len(raw) > 65536:
             raise RuntimeError("github_response_too_large")
         return json.loads(raw)
+
+
+def _immutable_owner_proof() -> tuple | None:
+    """Fetch/certify historical PR artifacts once per process, never the live grant."""
+    global _STATIC_PROOF
+    with _STATIC_PROOF_LOCK:
+        if _STATIC_PROOF is not None:
+            return _STATIC_PROOF
+        base = "/repos/Vivaliz-site/site-shopvivaliz"
+        pr_json = _public_api(base + "/pulls/3514")
+        changed = _public_api(base + "/pulls/3514/files?per_page=100")
+        blob = _public_api(base + "/contents/" + GRANT_PATH + "?ref=" + GRANT_MERGE)
+        if (not isinstance(pr_json, dict) or not isinstance(blob, dict)
+                or blob.get("encoding") != "base64"
+                or not _VERIFIER["grant_added_in_reviewed_pr"](changed, GRANT_PATH, blob)):
+            return None
+        grant = json.loads(base64.b64decode(
+            blob["content"].replace("\n", ""), validate=True).decode("utf-8"))
+        # This fixed, narrowly scoped data never changes without a different
+        # main-branch blob, which is checked live on EVERY operation.
+        if (not isinstance(grant, dict)
+                or grant.get("host") != HOST
+                or grant.get("capabilities") != ["file_write"]
+                or grant.get("workspace_root") != str(WORKSPACE)
+                or grant.get("allowed_extensions") != [".json", ".txt"]
+                or grant.get("max_content_bytes") != 4096
+                or grant.get("cas_required") is not True
+                or grant.get("lease_fencing_required") is not True
+                or grant.get("audit_required") is not True
+                or grant.get("root_or_shell_allowed") is not False):
+            return None
+        _STATIC_PROOF = (pr_json, blob, grant)
+        return _STATIC_PROOF
 
 
 def _owner_grant_valid(pr: int, head: str, merge: str, capability: str, operation: str,
@@ -74,36 +145,23 @@ def _owner_grant_valid(pr: int, head: str, merge: str, capability: str, operatio
         return False
     base = "/repos/Vivaliz-site/site-shopvivaliz"
     try:
-        pr_json = _public_api(base + "/pulls/3514")
-        reviews = _public_api(base + "/pulls/3514/reviews?per_page=100")
-        changed = _public_api(base + "/pulls/3514/files?per_page=100")
-        blob = _public_api(base + "/contents/" + GRANT_PATH + "?ref=" + GRANT_MERGE)
-        current = _public_api(base + "/contents/" + GRANT_PATH + "?ref=main")
-        if (not isinstance(blob, dict) or blob.get("encoding") != "base64"
-                or not _VERIFIER["immutable_grant_still_active"](blob, current)
-                or not _VERIFIER["grant_added_in_reviewed_pr"](changed, GRANT_PATH, blob)):
+        proof = _immutable_owner_proof()
+        if proof is None:
             return False
-        data = base64.b64decode(blob["content"].replace("\n", ""), validate=True)
-        grant = json.loads(data.decode("utf-8"))
+        pr_json, approved_blob, grant = proof
+        # Dynamic authorization evidence is NEVER cached: reviewer revocation
+        # and subsequent edits/deletion on main must deny on the very next call.
+        reviews = _public_api(base + "/pulls/3514/reviews?per_page=100")
+        current = _public_api(base + "/contents/" + GRANT_PATH + "?ref=main")
+        if not _VERIFIER["immutable_grant_still_active"](approved_blob, current):
+            return False
         valid, _ = _VERIFIER["decide"](
             pr_json, grant, repository=REPOSITORY, pr_number=GRANT_PR,
             owner_login="shopvivaliz-human", merge_sha=merge, head_sha=head,
             resource="mcp:marina", principal="marina-mcp-service",
             capability=capability, operation=operation, target_repository=REPOSITORY,
             reviews=reviews)
-        if not valid:
-            return False
-        # Refuse a modified/broadened grant, even when the generic validator
-        # still accepts the requested capability as one of several.
-        return (grant.get("host") == HOST
-                and grant.get("capabilities") == ["file_write"]
-                and grant.get("workspace_root") == str(WORKSPACE)
-                and grant.get("allowed_extensions") == [".json", ".txt"]
-                and grant.get("max_content_bytes") == 4096
-                and grant.get("cas_required") is True
-                and grant.get("lease_fencing_required") is True
-                and grant.get("audit_required") is True
-                and grant.get("root_or_shell_allowed") is False)
+        return bool(valid)
     except Exception:
         return False
 
