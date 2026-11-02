@@ -103,6 +103,11 @@ class RulesetActivationTests(unittest.TestCase):
         f.pop(0)
         self.assertFalse(activator.approved_owner_p2(p, r, f, c))
 
+    def test_activation_refuses_request_without_required_review_workflow(self):
+        pr,reviews,files,config=self.data()
+        files=[f for f in files if f["filename"]!=".github/workflows/mandatory-validation-gate.yml"]
+        self.assertFalse(activator.approved_owner_p2(pr,reviews,files,config))
+
     def test_activator_preserves_required_rules(self):
         rules = [
             {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},

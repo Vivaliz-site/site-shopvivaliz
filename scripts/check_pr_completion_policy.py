@@ -63,6 +63,15 @@ REQUIRED = {
         "scripts/pr_conflict_vm_heal.sh",
         "scripts/pr_conflict_gemini_healer.py",
     ],
+    ".github/workflows/mandatory-validation-gate.yml": [
+        "Checkout trusted owner-review policy from protected base",
+        "Enforce human owner APPROVED review on exact protected PR HEAD",
+        "trusted-owner-review/scripts/quality/verify_owner_protected_pr_review.py",
+        "github.event.pull_request.base.sha",
+        "github.event.pull_request.head.sha",
+        "set -Eeuo pipefail",
+        "OWNER_REVIEW_GATE=DENIED reason=trusted_verifier_missing",
+    ],
     ".github/workflows/pr-policy-enforcement.yml": [
         "pull_request:",
         "workflow_dispatch:",

@@ -34,6 +34,20 @@ independente. A PR #3543 corrige a rota de runner separadamente.
    com o HEAD e diff do pedido exatos e merged_by=shopvivaliz-human.
    A conta técnica backend já existente é usada, sem copiar credenciais.
 
+## Correção efetiva do gate de revisão no mesmo diff
+
+Este diff também conecta o verificador owner-only do main ao required
+Mandatory Validation Gate, que antes permitia sucesso de PR P2 sem
+APPROVED. A verificação usa o target base SHA confiável, token oficial
+somente leitura, SHA/PR exatos e falha fechada. Mantém os checks existentes
+e a proteção comercial independente de preços/estoque.
+
+A integração aqui substitui a solução equivalente da PR #3551. Depois
+de confirmar o código e os testes nesta PR, fechar a #3551 como duplicada
+sem fazer merge nela. **A aprovação pessoal necessária é uma só: esta PR
+#3552 no HEAD final, pela conta shopvivaliz-human.** O ativador
+exige em seu diff o workflow mandatory-validation-gate.yml, presente aqui.
+
 ## Risco, rollback e aceitação
 
 Mudança P2 nas regras de integração e na fronteira de autorização.
