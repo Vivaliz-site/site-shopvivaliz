@@ -1,7 +1,7 @@
 {
   "repository": "Vivaliz-site/site-shopvivaliz",
   "ruleset_id": 24523478,
-  "approval_pr": 0,
+  "approval_pr": 3552,
   "approval_request_path": "security/requests/owner-review-merge-queue-20261102.md",
   "queue": {
     "type": "merge_queue",
