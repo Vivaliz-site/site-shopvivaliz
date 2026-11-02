@@ -1,0 +1,33 @@
+# INSTALL ONLY after official owner grant + root-owned protected credential.
+# Deliberately root-only broker over systemd AF_UNIX socket; no network.
+[Unit]
+Description=ShopVivaliz Marina scoped root broker (owner PR gated)
+Requires=shopvivaliz-marina-root-broker.socket
+After=shopvivaliz-marina-root-broker.socket
+
+[Service]
+Type=exec
+User=root
+Group=root
+ExecStart=/usr/bin/python3 -B /opt/shopvivaliz-marina-mcp/current/root_broker.py
+StateDirectory=shopvivaliz-marina-broker
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+MemoryMax=128M
+TasksMax=24
+TimeoutStartSec=15
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
