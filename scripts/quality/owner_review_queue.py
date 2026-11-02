@@ -22,6 +22,12 @@ REQUIRED_WORKFLOWS = ("Mandatory Validation Gate", "Repository Governance")
 PROTECTED_EXACT = frozenset((
     ".github/CODEOWNERS", "docs/knowledge/security-approval-via-pr.md",
     "scripts/validate-owner-pr-grant.py",
+    ".github/workflows/owner-human-review-autoqueue.yml",
+    ".github/workflows/owner-review-merge-queue-enable.yml",
+    ".github/workflows/repository-governance.yml",
+    "config/owner-review-merge-queue.json",
+    "scripts/quality/owner_review_queue.py",
+    "scripts/quality/enable_owner_merge_queue.py",
 ))
 PROTECTED_PREFIXES = ("security/owner-approvals/", "security/requests/")
 EXPLICIT_HOLDS = frozenset(("blocked-by-runtime-lease", "blocked-external"))
@@ -52,14 +58,16 @@ def decision(pr: dict, reviews: list, files: list, rules: list,
         return False, "runtime_hold"
     if not isinstance(reviews, list) or not 0 < len(reviews) < 100:
         return False, "human_review_missing_or_incomplete"
-    last = None
+    owner_reviews = []
     for review in reviews:
-        if not isinstance(review, dict):
+        if not isinstance(review, dict) or not isinstance(review.get("user"), dict):
             return False, "review_api_invalid"
-        login = review.get("user", {}).get("login")
-        if login == OWNER_LOGIN and review.get("state") in (
-                "APPROVED", "CHANGES_REQUESTED", "DISMISSED"):
-            last = review
+        if (review["user"].get("login") == OWNER_LOGIN and
+                review.get("state") in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")):
+            if not isinstance(review.get("submitted_at"), str) or not review["submitted_at"]:
+                return False, "human_review_timestamp_missing"
+            owner_reviews.append(review)
+    last = max(owner_reviews, key=lambda r: r["submitted_at"]) if owner_reviews else None
     if not last or last.get("state") != "APPROVED" or last.get("commit_id") != head:
         return False, "human_approval_not_on_current_head"
     if not isinstance(rules, list) or not any(

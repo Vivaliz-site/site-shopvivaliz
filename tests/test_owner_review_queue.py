@@ -20,7 +20,8 @@ def make_inputs():
         "labels": [{"name": "no-auto-merge"}],
     }
     reviews = [{"user": {"login": MOD.OWNER_LOGIN},
-                "state": "APPROVED", "commit_id": HEAD}]
+                "state": "APPROVED", "commit_id": HEAD,
+                "submitted_at": "2026-11-02T19:25:01Z"}]
     files = [{"filename": "security/requests/owner-review-merge-queue.md"}]
     rules = [{"type": "merge_queue", "parameters": {}}]
     runs = [{"name": name, "head_sha": HEAD, "status": "completed",
@@ -51,7 +52,8 @@ class OwnerQueueTests(unittest.TestCase):
         self.assertFalse(self.check(lambda x: x[1].clear())[0])
         self.assertEqual(self.check(lambda x: x[1].append({
             "user": {"login": MOD.OWNER_LOGIN},
-            "state": "DISMISSED", "commit_id": HEAD}))[1],
+            "state": "DISMISSED", "commit_id": HEAD,
+            "submitted_at": "2026-11-02T19:30:01Z"}))[1],
             "human_approval_not_on_current_head")
 
     def test_agent_approval_never_substitutes_human(self):
@@ -84,6 +86,27 @@ class OwnerQueueTests(unittest.TestCase):
         self.assertFalse(self.check(lambda x: x[0]["head"]["repo"].update(
             full_name="outside/repo"))[0])
         self.assertFalse(self.check(lambda x: x[0]["base"].update(ref="other"))[0])
+
+    def test_all_queue_mutation_paths_always_owner_protected(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "canonical_owner_review_guard",
+            ROOT / "scripts/quality/verify_owner_protected_pr_review.py")
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        sensitive = (
+            ".github/workflows/owner-human-review-autoqueue.yml",
+            ".github/workflows/owner-review-merge-queue-enable.yml",
+            ".github/workflows/repository-governance.yml",
+            "config/owner-review-merge-queue.json",
+            "scripts/quality/owner_review_queue.py",
+            "scripts/quality/enable_owner_merge_queue.py",
+            "scripts/validate-owner-pr-grant.py",
+        )
+        for path in sensitive:
+            with self.subTest(path=path):
+                self.assertTrue(MOD.protected_path(path))
+                self.assertTrue(guard.is_protected_path(path))
 
     def test_workflow_trust_syntax(self):
         text = (ROOT / ".github/workflows/owner-human-review-autoqueue.yml").read_text()

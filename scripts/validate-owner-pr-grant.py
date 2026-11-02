@@ -45,7 +45,7 @@ def valid_owner_approved_queue_history(events: object, approved_at: str,
     if approved.tzinfo is None or merged.tzinfo is None or merged < approved:
         return False
     active_add = False
-    for item in events:
+    for item in sorted(events, key=lambda entry: entry.get('createdAt', '') if isinstance(entry, dict) else ''):
         if not isinstance(item, dict):
             return False
         try:

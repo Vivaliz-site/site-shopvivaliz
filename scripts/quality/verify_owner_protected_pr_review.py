@@ -23,6 +23,12 @@ PROTECTED_EXACT = frozenset({
     "docs/knowledge/security-approval-via-pr.md",
     "scripts/validate-owner-pr-grant.py",
     ".github/workflows/mandatory-validation-gate.yml",
+    ".github/workflows/owner-human-review-autoqueue.yml",
+    ".github/workflows/owner-review-merge-queue-enable.yml",
+    ".github/workflows/repository-governance.yml",
+    "config/owner-review-merge-queue.json",
+    "scripts/quality/owner_review_queue.py",
+    "scripts/quality/enable_owner_merge_queue.py",
     "scripts/quality/verify_owner_protected_pr_review.py",
 })
 
