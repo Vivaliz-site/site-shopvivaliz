@@ -511,12 +511,12 @@ class BrowserMcpTests(unittest.TestCase):
     def native_test_png(self, *, with_text=False):
         # Real 1x1 PNG, with optional oversized harmless ancillary text.
         data = (
-            b"\\x89PNG\\r\\n\\x1a\\n"
+            b"\x89PNG\r\n\x1a\n"
             + m._png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
-            + m._png_chunk(b"IDAT", zlib.compress(b"\\x00\\x11\\x22\\x33"))
+            + m._png_chunk(b"IDAT", zlib.compress(b"\x00\x11\x22\x33"))
         )
         if with_text:
-            data += m._png_chunk(b"tEXt", b"note\\x00" + b"x" * 350)
+            data += m._png_chunk(b"tEXt", b"note\x00" + b"x" * 350)
         return data + m._png_chunk(b"IEND", b"")
 
     def test_fredwin_desktop_screenshot_uses_native_bridge(self):
@@ -537,7 +537,7 @@ class BrowserMcpTests(unittest.TestCase):
 
     def test_fredwin_large_screenshot_is_bounded_jpeg_and_keeps_coordinates(self):
         png = self.native_test_png(with_text=True)
-        fake_jpeg = b"\\xff\\xd8" + b"x" * 125 + b"\\xff\\xd9"
+        fake_jpeg = b"\xff\xd8" + b"x" * 125 + b"\xff\xd9"
         native = {
             "ok": True, "action": "screenshot", "mime_type": "image/png",
             "image_b64": base64.b64encode(png).decode("ascii"),
@@ -574,7 +574,7 @@ class BrowserMcpTests(unittest.TestCase):
         png = self.native_test_png(with_text=True)
         with mock.patch.object(m, "MAX_NATIVE_MCP_IMAGE_BYTES", 550_000):
             jpeg = m.encode_large_native_png_for_mcp(png, 1, 1)
-        self.assertTrue(jpeg.startswith(b"\\xff\\xd8"))
+        self.assertTrue(jpeg.startswith(b"\xff\xd8"))
         with Image.open(io.BytesIO(jpeg)) as image:
             self.assertEqual("JPEG", image.format)
             self.assertEqual((1, 1), image.size)
