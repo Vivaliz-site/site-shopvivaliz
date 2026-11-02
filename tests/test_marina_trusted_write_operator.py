@@ -122,10 +122,10 @@ class OperatorTests(unittest.TestCase):
         args = (3514, m.GRANT_HEAD, m.GRANT_MERGE, m.CAPABILITY, m.OPERATION, m.REPOSITORY)
         with patch.object(m, "_public_api", side_effect=TimeoutError("github_timeout")):
             self.assertFalse(self.operator.grant_valid(*args))
-        with patch.object(m, "_public_api", side_effect=self.fixture()), \\
-             patch.object(m._VERIFIER["decide"].__globals__["datetime"], "now", return_value=None):
-            # No provider or snapshot can turn an invalid identity into a grant.
+        # A different PR number is denied before any network request.
+        with patch.object(m, "_public_api") as api:
             self.assertFalse(self.operator.grant_valid(0, *args[1:]))
+            api.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()
