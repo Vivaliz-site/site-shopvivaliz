@@ -91,7 +91,7 @@ safe_git() {
 checkout_status="$(safe_git status --porcelain -- marina-direct-mcp)" || refuse checkout_status_unavailable
 [[ -z "$checkout_status" ]] || refuse unclean_checkout
 
-for file in server.py read_only_telemetry.py scoped_write.py operator_preflight.py systemd/shopvivaliz-marina-mcp.service systemd/shopvivaliz-marina-mcp-tunnel.service; do
+for file in server.py read_only_telemetry.py scoped_write.py operator_admin_route.py operator_preflight.py systemd/shopvivaliz-marina-mcp.service systemd/shopvivaliz-marina-mcp-tunnel.service; do
   [[ -f "$source_dir/$file" && ! -L "$source_dir/$file" ]] || refuse source_file_missing_or_symlink
   [[ "$(stat -c '%u' "$source_dir/$file")" == '0' ]] || refuse source_file_not_root_owned
   refuse_writable "$source_dir/$file"
@@ -207,6 +207,7 @@ check_target() {
 check_target "$source_dir/server.py" "$release_dir/server.py" 444
 check_target "$source_dir/read_only_telemetry.py" "$release_dir/read_only_telemetry.py" 444
 check_target "$source_dir/scoped_write.py" "$release_dir/scoped_write.py" 444
+check_target "$source_dir/operator_admin_route.py" "$release_dir/operator_admin_route.py" 444
 check_target "$source_dir/operator_preflight.py" "$release_dir/operator_preflight.py" 444
 for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service; do
   check_target "$source_dir/systemd/$unit" "/etc/systemd/system/$unit" 644
@@ -227,6 +228,7 @@ stage_file() {
 stage_file "$source_dir/server.py" "$release_dir/server.py" 0444
 stage_file "$source_dir/read_only_telemetry.py" "$release_dir/read_only_telemetry.py" 0444
 stage_file "$source_dir/scoped_write.py" "$release_dir/scoped_write.py" 0444
+stage_file "$source_dir/operator_admin_route.py" "$release_dir/operator_admin_route.py" 0444
 stage_file "$source_dir/operator_preflight.py" "$release_dir/operator_preflight.py" 0444
 if [[ ! -L "$stage_root/current" ]]; then
   ln -s "releases/$expected_sha" "$stage_root/current"
