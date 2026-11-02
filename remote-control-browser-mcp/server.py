@@ -1095,6 +1095,7 @@ try {
         "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)||(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length)))))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||u.pathname==='/auth/error'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
+        "const native_password=" + JSON.stringify(action === "fill_password" && input === "") + ";" +
         "if(['back_to_methods','open_login','continue_google','continue_microsoft'].includes(action)){" +
         "let choices=[];" +
         "const label=e=>String(e.innerText||e.getAttribute('aria-label')||'').trim();" +
@@ -1118,7 +1119,7 @@ try {
         "if(choices.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
         "choices[0].click();return {clicked:true};" +
         "}" +
-        "if(action==='fill_password'&&!input){" +
+        "if(action==='fill_password'&&native_password){" +
         // Existing approved login surface only; never invoke the password manager
         // on an unrelated page, profile or account.
         "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in/password')throw Error('auth_stage_not_allowed');" +
