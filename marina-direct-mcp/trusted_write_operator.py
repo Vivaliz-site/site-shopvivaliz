@@ -63,6 +63,8 @@ def _read_protected_github_token() -> str | None:
         return None
     try:
         metadata = os.fstat(fd)
+        if not _safe_dir(GITHUB_READ_TOKEN_FILE.parent, os.geteuid()):
+            raise RuntimeError("github_read_token_parent_unsafe")
         if (not stat.S_ISREG(metadata.st_mode)
                 or metadata.st_uid != os.geteuid()
                 or stat.S_IMODE(metadata.st_mode) != 0o600):
