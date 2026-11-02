@@ -1,0 +1,45 @@
+name: Activate Owner-Approved Native Merge Queue
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'security/owner-approvals/**'
+      - 'scripts/ops/activate_owner_merge_queue_ruleset.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: owner-native-merge-queue-activation
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      SHOPVIVALIZ_SECURITY_OWNER_LOGIN: shopvivaliz-human
+    steps:
+      - name: Checkout trusted protected main after P2 owner merge
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Validate exact human grant and activate native queue
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname -s)" = 'always-free-arm-1787907847-26'
+          test "$(id -un)" = 'ubuntu'
+          python3 scripts/ops/activate_owner_merge_queue_ruleset.py
+      - name: Enqueue previously approved SHA-bound PRs after activation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          env -u GH_TOKEN -u GITHUB_TOKEN python3 scripts/ops/owner_approved_merge_queue.py

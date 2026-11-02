@@ -24,6 +24,10 @@ PROTECTED_EXACT = frozenset({
     "scripts/validate-owner-pr-grant.py",
     ".github/workflows/mandatory-validation-gate.yml",
     "scripts/quality/verify_owner_protected_pr_review.py",
+    ".github/workflows/pr-owner-approval-merge-queue.yml",
+    ".github/workflows/pr-owner-merge-queue-activate.yml",
+    "scripts/ops/owner_approved_merge_queue.py",
+    "scripts/ops/activate_owner_merge_queue_ruleset.py",
 })
 
 
