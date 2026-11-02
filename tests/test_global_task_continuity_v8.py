@@ -19,8 +19,8 @@ GOVERNED = {
     "Vivaliz-site/mercadolivre-returns-recovery",
     "Vivaliz-site/shopvivaliz-m365",
     "Vivaliz-site/buscador",
-    "fredmourao-ai/mei-mg-email",
-    "fredmourao-ai/solange-rolla-consultorio",
+    "Vivaliz-site/mei-mg-email",
+    "Vivaliz-site/solange-rolla-consultorio",
 }
 
 
@@ -55,7 +55,7 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
             "cross-repo-watchdog",
             "recover me",
             "gpt",
-            "fredmourao-ai/mei-mg-email",
+            "Vivaliz-site/mei-mg-email",
         )
         state.record_progress("cross-repo-watchdog", next_action="run the next safe step")
         path = self.runtime / "cross-repo-watchdog.json"
@@ -67,7 +67,7 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
         result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
         self.assertEqual(result["dispatched"], 1)
         request = watchdog.read_requests(self.runtime)[0]
-        self.assertEqual(request["repository"], "fredmourao-ai/mei-mg-email")
+        self.assertEqual(request["repository"], "Vivaliz-site/mei-mg-email")
 
     def test_dispatcher_allowlist_is_exactly_the_governed_set(self) -> None:
         self.assertEqual(dispatcher.ALLOWED_REPOSITORIES, GOVERNED)
@@ -75,6 +75,12 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
             self.assertEqual(dispatcher._safe_repository(repository), repository)
         with self.assertRaises(ValueError):
             dispatcher._safe_repository("someone/unmanaged-repo")
+        # The moved repository is never reinterpreted as the old owner on an
+        # authenticated clone; historical tasks need explicit provenance migration.
+        with self.assertRaises(ValueError):
+            dispatcher._safe_repository("fredmourao-ai/mei-mg-email")
+        with self.assertRaises(ValueError):
+            dispatcher._safe_repository("fredmourao-ai/solange-rolla-consultorio")
 
     def test_dispatcher_rejects_cross_repository_request_mismatch(self) -> None:
         checkpoint = {
@@ -145,6 +151,26 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
         self.assertIn('validation_rc=0', workflow)
         self.assertIn('exit "$failed"', workflow)
         self.assertNotIn('| tee "continuity-e2e-reports/${slug}.json"', workflow)
+
+
+    def test_active_global_continuity_routes_use_migrated_org_names(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        active = (
+            ".github/workflows/global-task-continuity-e2e-all-repos.yml",
+            ".github/workflows/global-task-continuity-e2e-once.yml",
+            ".github/workflows/global-task-continuity-e2e-all-repos-once.yml",
+            ".github/workflows/codex-global-issue-comment-routing.yml",
+            "docs/knowledge/task-continuity.md",
+        )
+        for item in active:
+            with self.subTest(file=item):
+                text = (root / item).read_text(encoding="utf-8")
+                for suffix in ("mei-mg-email", "solange-rolla-consultorio"):
+                    self.assertIn(f"Vivaliz-site/{suffix}", text)
+                    self.assertNotIn(f"fredmourao-ai/{suffix}", text)
+        for suffix in ("mei-mg-email", "solange-rolla-consultorio"):
+            self.assertIn(f"Vivaliz-site/{suffix}", dispatcher.ALLOWED_REPOSITORIES)
+            self.assertNotIn(f"fredmourao-ai/{suffix}", dispatcher.ALLOWED_REPOSITORIES)
 
 
 if __name__ == "__main__":
