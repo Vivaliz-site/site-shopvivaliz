@@ -215,3 +215,12 @@ Todas as operações stateful críticas foram exercitadas ao vivo contra produç
 
 ## Regra de validade
 Esta auditoria cobre o SHA `35fa132047b207e00bef37863a158725cf68dac6` (código web equivalente a `origin/main` em 2026-09-19). Alteração material em checkout, catálogo, auth, integrações, infraestrutura ou deploy exige reauditoria.
+
+## 2026-11-02 — PR #3506 - espelho global V5 apos ambas transferencias
+
+- Base SHA: 39da4eb7a44c3f97c75d33e8c46281784aa8ec74
+- Impacto: atualizar apenas o registro global V5 para os mesmos repositórios GitHub Solange (ID 1345489426) e MEI-MG (ID 1322334568) transferidos a Vivaliz-site; scripts e hashes conferidos com a fonte pipeline a95adaac, sem mudar anúncios, preços, estoque, pagamentos, UI ou serviços.
+- Testes: no HEAD técnico anterior 96767bca todos os cinco workflows de auditoria/governança/validação passaram; o bot de resolução de PRs acrescentou commit be2fe6d2, cujo SHA recebeu cinco conclusões action_required sem jobs. Essa conclusão NÃO equivale a CI verde no SHA novo. Exigir checks reais no commit final, sem afrouxar proteções.
+- Evidencias: a identidade do novo manifesto foi comparada aos blobs da fonte central; os hashes de certifier e policy são e62b8f84457fd79cf13dcda744baf7a20a446665 e 6da85a1882812ef3009ff5a693d4673dbbfcec88. PR técnica concorrente #3507 foi fechada por duplicidade, não integrada.
+- Pendencias: validar os checks reexecutados no HEAD exato via GitHub, merge protegido, readback no main e demais tarefas comerciais ainda NAO_APTO. Nenhum pagamento, campanha, preço ou sincronização alterados.
+- Estado: NAO_APTO
