@@ -402,15 +402,27 @@ def main() -> int:
                         default=Path.home() / ".config/shopvivaliz-marina-mcp/auth-token")
     parser.add_argument("--port", type=int, default=5580)
     parser.add_argument("--check", action="store_true", help="Check identity and secret metadata without binding")
+    parser.add_argument("--enable-approved-scoped-write", action="store_true",
+                        help="Enable owner-approved private-workspace writes only after protected local preflight")
     args = parser.parse_args()
     if socket.gethostname().split(".")[0] != EXPECTED_HOST:
         raise SystemExit("MARINA_MCP_REFUSED=host_identity_mismatch")
     try:
         token = load_token(args.token_file)
+        write_operator = None
+        if args.enable_approved_scoped_write:
+            # Trusted code lives in the same root-owned immutable release.
+            trusted = runpy.run_path(str(Path(__file__).with_name("trusted_write_operator.py")))
+            write_operator = trusted["bootstrap_operator"]()
+            if trusted["_owner_grant_valid"](trusted["GRANT_PR"], trusted["GRANT_HEAD"],
+                                              trusted["GRANT_MERGE"], trusted["CAPABILITY"],
+                                              trusted["OPERATION"], trusted["REPOSITORY"]) is not True:
+                raise RuntimeError("owner_approved_scoped_write_grant_unavailable")
         if args.check:
-            print("MARINA_MCP_READONLY_PREFLIGHT=PASS")
+            print("MARINA_MCP_SCOPED_WRITE_PREFLIGHT=PASS" if write_operator is not None
+                  else "MARINA_MCP_READONLY_PREFLIGHT=PASS")
             return 0
-        server = create_server(token, args.port)
+        server = create_server(token, args.port, write_operator=write_operator)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"MARINA_MCP_REFUSED={str(exc)}", file=sys.stderr)
         return 1
