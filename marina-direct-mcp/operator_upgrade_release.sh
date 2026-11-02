@@ -68,6 +68,7 @@ required=(
     read_only_telemetry.py
     scoped_write.py
     trusted_write_operator.py
+    operator_grant_readback.py
     operator_admin_route.py
     operator_preflight.py
     local_auth_smoke.py
@@ -99,10 +100,12 @@ copy_immutable() {
         install -o root -g root -m 0444 "$source" "$target"
     fi
 }
-for name in server.py read_only_telemetry.py scoped_write.py trusted_write_operator.py operator_admin_route.py operator_preflight.py local_auth_smoke.py; do
+for name in server.py read_only_telemetry.py scoped_write.py trusted_write_operator.py operator_grant_readback.py operator_admin_route.py operator_preflight.py local_auth_smoke.py; do
     copy_immutable "$source_checkout/marina-direct-mcp/$name" "$release/$name"
 done
 copy_immutable "$verifier" "$release/validate_owner_pr_grant.py"
+# The readback independently verifies the real owner-approved grant as the service UID.
+sudo -n -u shopvivaliz-marina-mcp /usr/bin/python3 -B "$release/operator_grant_readback.py" >/dev/null || refuse approved_owner_grant_invalid
 copy_immutable "$source_checkout/marina-direct-mcp/systemd/shopvivaliz-marina-mcp.service" "$release/shopvivaliz-marina-mcp.service"
 grep -Fqx 'User=shopvivaliz-marina-mcp' "$release/shopvivaliz-marina-mcp.service" || refuse service_user_invalid
 grep -Fqx 'NoNewPrivileges=yes' "$release/shopvivaliz-marina-mcp.service" || refuse service_privileges_invalid
