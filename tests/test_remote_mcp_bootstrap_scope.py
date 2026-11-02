@@ -73,6 +73,16 @@ def test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap():
         "tests/should-deploy-production-test.sh",
     ])
     assert scope.is_backend_controller_only(["remote-control-mcp/server.py"])
+    assert scope.is_backend_controller_only([
+        "scripts/remote_mcp_bootstrap_scope.py",
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    ])
+    assert not scope.is_backend_controller_only([
+        "scripts/remote_mcp_bootstrap_scope.py",
+    ])
+    assert not scope.is_backend_controller_only([
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    ])
     # Regression (2026-11-02): the approved PR #3550 modified the handler,
     # production E2E probe, and their tests. The classifier misrouted that
     # valid backend-only diff to a disabled four-host legacy bootstrap, so the
