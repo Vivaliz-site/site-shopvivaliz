@@ -4,10 +4,20 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 script = (root / 'scripts' / 'pr_conflict_vm_heal.sh').read_text()
 
-auth = 'gh auth status --hostname github.com'
+# Public metadata/clone must remain read-only. The real VM technical
+# identity is inspected only on the branch publication path; a bare gh auth
+# status is not a valid substitute for proving the exact actor and token
+# isolation from the Actions bot.
+auth = 'gh api user --jq .login'
 no_write = 'if [[ "$after_sha" == "$before_sha" ]]; then'
 if auth not in script:
-    raise SystemExit('missing guarded GitHub write-auth check')
+    raise SystemExit('missing independently authenticated GitHub write actor probe')
+if "[[ \"$independent_actor\" == 'fredmourao-ai' ]]" not in script:
+    raise SystemExit('publication actor must equal the approved technical identity')
+if 'env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS' not in script:
+    raise SystemExit('publication must isolate GitHub Actions token')
+if 'gh auth setup-git' not in script:
+    raise SystemExit('publication must configure independent git credentials')
 if no_write not in script:
     raise SystemExit('missing no-write fast path')
 if script.index(auth) < script.index(no_write):
