@@ -83,6 +83,41 @@ class BackupStateV5Tests(unittest.TestCase):
         self.assertIn("_durable-metadata.json", archived)
         self.assertNotIn("_gemini-24x7-controller-lease.json", archived)
 
+    def test_referenced_root_evidence_is_included_not_counted_as_task(self):
+        # Reproduce the production case: a completed checkpoint references a
+        # separate evidence JSON in descriptive strings, without a task_id.
+        evidence_name = "v5-test-evidence.json"
+        self.record["evidence"] = [
+            "Evidencia duravel " + evidence_name + ": retained source proof"
+        ]
+        self.record["history"] = [
+            {"evidence": ["Evidencia duravel " + evidence_name + ": preserved"]}
+        ]
+        (self.state / "v5-test.json").write_text(json.dumps(self.record))
+        evidence = {"timestamp": "2026-11-02T12:00:00Z", "records": [1, 2]}
+        (self.state / evidence_name).write_text(json.dumps(evidence))
+
+        result = self.run_backup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["task_records"], 1)
+        with tarfile.open(self.archives()[0], "r:gz") as tf:
+            self.assertEqual(json.load(tf.extractfile(evidence_name)), evidence)
+            self.assertEqual(json.load(tf.extractfile("v5-test.json")), self.record)
+
+    def test_unreferenced_root_evidence_blocks_publication(self):
+        (self.state / "v5-test-evidence.json").write_text('{"records":[1]}')
+        result = self.run_backup()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.archives(), [])
+
+    def test_spoofed_evidence_reference_does_not_permit_archive(self):
+        self.record["evidence"] = ["prefix-v5-test-evidence.json-extra"]
+        (self.state / "v5-test.json").write_text(json.dumps(self.record))
+        (self.state / "v5-test-evidence.json").write_text('{"records":[1]}')
+        result = self.run_backup()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.archives(), [])
+
     def test_invalid_task_json_blocks_publication(self):
         (self.state / "damaged.json").write_text("{broken")
         result = self.run_backup()
