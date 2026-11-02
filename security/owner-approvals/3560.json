@@ -1,0 +1,24 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3560,
+  "resource": "mcp:marina",
+  "principal": "marina-mcp-service",
+  "target_repository": "Vivaliz-site/amazon-returns-safet",
+  "host": "marina-a1-4c24g",
+  "capabilities": [
+    "deployment_manage"
+  ],
+  "operation": "olist_browser_restart",
+  "allowed_units": [
+    "amazon-returns-olist-erp-browser.service"
+  ],
+  "root_http_daemon_allowed": false,
+  "arbitrary_shell_allowed": false,
+  "requires_host_issued_lease": true,
+  "requires_fencing": true,
+  "requires_audit": true,
+  "requires_dedicated_readonly_github_credential": true,
+  "external_jwt_admin_allowed": false,
+  "expires_at_utc": "2026-12-02T23:59:00Z"
+}
