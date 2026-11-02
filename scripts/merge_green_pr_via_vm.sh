@@ -30,6 +30,34 @@ head_sha="$(jq -r '.head.sha' <<<"$meta")"
 [[ "$head_repo" == "$repo" ]] || fail 'fork PR is not eligible'
 [[ "$head_sha" == "$expected_head_sha" ]] || fail 'PR head SHA changed before merge'
 
+# Security owner authorization PRs must NEVER be merged by the bot.
+# Check the PR file list from the GitHub API, not untrusted labels or text.
+changed_paths="$(gh api --paginate "repos/${repo}/pulls/${pr_number}/files?per_page=100" --jq '.[].filename')"
+if grep -Eq '^security/owner-approvals/[0-9]+[.]json
+
+relation="$(gh api "repos/${repo}/compare/main...${head_sha}" --jq '.status')"
+[[ "$relation" == 'ahead' || "$relation" == 'identical' ]] || fail 'PR head does not contain current main'
+
+result="$(gh api --method PUT "repos/${repo}/pulls/${pr_number}/merge" \
+  -f sha="$head_sha" \
+  -f merge_method='squash')"
+merged="$(jq -r '.merged // false' <<<"$result")"
+[[ "$merged" == 'true' ]] || fail "GitHub rejected merge: $(jq -r '.message // "unknown"' <<<"$result")"
+merge_sha="$(jq -r '.sha' <<<"$result")"
+[[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'merge returned invalid SHA'
+
+echo 'pr_merged=true'
+echo "validated_head_sha=${head_sha}"
+echo "merge_sha=${merge_sha}"
+echo 'external_github_auth_used=true'
+echo 'secret_values_printed=false'
+ <<<"$changed_paths"; then
+  fail 'owner-only security grant cannot be merged by an automation'
+fi
+if grep -Eq '^security/requests/' <<<"$changed_paths"; then
+  fail 'owner-only security request cannot be merged by an automation'
+fi
+
 relation="$(gh api "repos/${repo}/compare/main...${head_sha}" --jq '.status')"
 [[ "$relation" == 'ahead' || "$relation" == 'identical' ]] || fail 'PR head does not contain current main'
 
