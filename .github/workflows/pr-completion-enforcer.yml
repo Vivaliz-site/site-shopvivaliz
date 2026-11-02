@@ -79,18 +79,29 @@ jobs:
             # The previous static list delayed isolated PRs for 120 seconds
             # on workflows never triggered by path filters.
             # Read scope from protected main, NEVER from untrusted PR code.
-            mapfile -t changed_files < <(
-              gh api "repos/${GITHUB_REPOSITORY}/pulls/${target_pr}/files?per_page=100" \
-                --paginate --jq '.[].filename'
-            )
-            if [[ "${#changed_files[@]}" -eq 0 ]]; then
+            if ! changed_list="$(gh api \
+                "repos/${GITHUB_REPOSITORY}/pulls/${target_pr}/files?per_page=100" \
+                --paginate --jq '.[].filename')"; then
               echo 'should_run=false' >> "$GITHUB_OUTPUT"
               echo 'fanout_scope_unavailable=fail_closed'
               exit 0
             fi
-            mapfile -t specialized_required < <(
-              python3 trusted/scripts/pr_gate_scope.py "${changed_files[@]/#/--file=}"
-            )
+            if [[ -z "$changed_list" ]]; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'fanout_scope_unavailable=fail_closed'
+              exit 0
+            fi
+            mapfile -t changed_files <<< "$changed_list"
+            if ! scoped_list="$(python3 trusted/scripts/pr_gate_scope.py \
+                "${changed_files[@]/#/--file=}")"; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'fanout_scope_unavailable=fail_closed'
+              exit 0
+            fi
+            specialized_required=()
+            if [[ -n "$scoped_list" ]]; then
+              mapfile -t specialized_required <<< "$scoped_list"
+            fi
             settle_required=('Repository Governance' "${specialized_required[@]}")
             echo "fanout_applicable_required=${settle_required[*]}"
             for attempt in $(seq 1 24); do
