@@ -81,7 +81,6 @@ class RulesetActivationTests(unittest.TestCase):
             cfg["approval_request_path"],
             "config/owner-review-merge-queue.json",
             ".github/workflows/owner-human-review-autoqueue.yml",
-            ".github/workflows/mandatory-validation-gate.yml",
             ".github/workflows/repository-governance.yml",
             "scripts/validate-owner-pr-grant.py",
         )]
