@@ -2,7 +2,7 @@
   "schema": "SHOPVIVALIZ_RDC_MCP_CAPABILITY_PARITY_V1",
   "captured_date": "2026-11-01",
   "certification": "NOT_CERTIFIED",
-  "basis": "Live catalogs and Marina status (2026-11-01); explicit central Marina read-only code on review branch only. Neither central route nor independent MCP was certified.",
+  "basis": "Live backend MCP and Marina checks on 2026-11-01: central Marina is advertised with a scoped read-only route flag and owner attestation, but the ChatGPT frozen tool catalog has not been refreshed; no authenticated central-to-Marina tool E2E. Marina's independent MCP passes local isolated tests but remains offline, disabled and unconnected to the ChatGPT workspace. Issue #3152 contains audit evidence.",
   "target_hosts": [
     "always-free-arm-1787907847-26",
     "Fred-Win",
@@ -16,19 +16,22 @@
       "hosts": [
         "always-free-arm-1787907847-26",
         "Fred-Win",
-        "KOCEPSV"
+        "KOCEPSV",
+        "marina-a1-4c24g"
       ],
       "marina": {
         "host": "marina-a1-4c24g",
         "route": "private_ssh_read_only",
-        "code_state": "STAGED_ONLY",
-        "runtime_state": "NOT_ENABLED",
-        "capabilities_implemented_in_branch": [
-          "host_health",
-          "service_status"
+        "code_state": "INSTALLED_RESTRICTED",
+        "runtime_state": "READ_ONLY_ROUTE_FLAG_ENABLED",
+        "authorization_state": "OWNER_GRANT_APPROVED_ATTESTED",
+        "e2e": "NOT_TESTED",
+        "server_tools": [
+          "marina_host_health",
+          "marina_service_status"
         ],
-        "authorization_state": "OWNER_PR_AND_RUNTIME_GRANT_REQUIRED",
-        "e2e": "NOT_TESTED"
+        "chatgpt_tool_catalog": "STALE_REFRESH_REQUIRED",
+        "route_enabled_audit_id": "402aa25d-e002-4559-8cb0-dd99d029bb54"
       }
     },
     "marina": {
@@ -36,8 +39,13 @@
       "host": "marina-a1-4c24g",
       "local_staging_tools": [
         "marina_host_health",
-        "marina_service_status"
-      ]
+        "marina_service_status",
+        "marina_processes_list",
+        "marina_system_usage",
+        "marina_kernel_telemetry",
+        "marina_kernel_telemetry_batch"
+      ],
+      "local_staging_status": "LOCAL_E2E_PASS_NOT_INSTALLED_NOT_CONNECTED"
     }
   },
   "requirements": {
