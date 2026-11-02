@@ -63,7 +63,7 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertIn("env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS", healer)
         self.assertIn("gh auth setup-git", healer)
         self.assertIn('    git push origin "HEAD:refs/heads/', healer)
-        self.assertNotIn('\\n  git push origin "HEAD:refs/heads/', healer)
+        self.assertNotIn('\n  git push origin "HEAD:refs/heads/', healer)
         self.assertIn("remote PR branch moved before publication", healer)
         self.assertIn("publication would not be fast-forward", healer)
 
