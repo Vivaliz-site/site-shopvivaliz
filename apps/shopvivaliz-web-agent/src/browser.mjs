@@ -2,6 +2,21 @@ import {resolve} from 'node:path';
 import {mkdirSync} from 'node:fs';
 import {safePublicUrl, sanitizedLocation} from './url-safety.mjs';
 
+// WebSocket upgrades are not covered by context.route('**/*').  Reject
+// non-public destinations before opening a Chrome WebSocket connection.
+export async function guardWebSocketRoute(route, validate=safePublicUrl) {
+  try {
+    const u=new URL(route.url());
+    if (u.protocol==='wss:') u.protocol='https:';
+    else if (u.protocol==='ws:') u.protocol='http:';
+    else throw Error('unsupported_websocket_protocol');
+    await validate(u.toString());
+    return await route.connectToServer();
+  } catch {
+    return route.close({code:1008,reason:'private_destination_blocked'});
+  }
+}
+
 export class BrowserDriver {
   constructor({profileDir=process.env.WEB_AGENT_PROFILE_DIR || resolve(process.cwd(),'.private-profile'), binary=process.env.WEB_AGENT_CHROME_BINARY || '/opt/shopvivaliz-browser/chrome-linux/chrome'}={}) {
     this.profileDir=resolve(profileDir);
@@ -19,6 +34,7 @@ export class BrowserDriver {
       acceptDownloads:false,serviceWorkers:'block',
       args:['--disable-dev-shm-usage']
     });
+    await this.context.routeWebSocket('**/*', guardWebSocketRoute);
     await this.context.route('**/*', async route=>{
       const raw=route.request().url();
       if (/^(data|blob):/i.test(raw))return route.continue();
