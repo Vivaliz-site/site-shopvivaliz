@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import math
 import os
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import threading
@@ -103,12 +104,42 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def throttle() -> None:
+    """Apply the Olist API budget across threads AND independent VM processes.
+
+    The periodic stock reconciler and postdeploy read-only price audit import
+    this module in separate Python processes. Thread-only throttling lets each
+    process consume the full ERP request rate and can blackhole live stock
+    checks. Use a separate short-held file lock, NOT the webhook/CAS lock:
+    webhooks must never wait for a multi-minute catalog scan.
+    """
     global _LAST_REQUEST
+    lock_path = CACHE_PATH.parent / "olist-erp-api-rate.lock"
     with _RATE_LOCK:
-        delay = _MIN_REQUEST_INTERVAL - (time.monotonic() - _LAST_REQUEST)
-        if delay > 0:
-            time.sleep(delay)
-        _LAST_REQUEST = time.monotonic()
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+", encoding="ascii") as guard:
+            fcntl.flock(guard.fileno(), fcntl.LOCK_EX)
+            try:
+                guard.seek(0)
+                raw = guard.read().strip()
+                try:
+                    previous = float(raw) if raw else 0.0
+                except ValueError as exc:
+                    raise RuntimeError("erp_api_rate_file_invalid") from exc
+                if not math.isfinite(previous) or previous < 0:
+                    raise RuntimeError("erp_api_rate_file_invalid")
+                now = time.monotonic()
+                # Monotonic timestamps are valid only within the same boot.
+                # If the VM restarted, replace the stale future epoch safely.
+                elapsed = now - previous
+                if 0 <= elapsed < _MIN_REQUEST_INTERVAL:
+                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                _LAST_REQUEST = time.monotonic()
+                guard.seek(0)
+                guard.truncate()
+                guard.write(f"{_LAST_REQUEST:.9f}\n")
+                guard.flush()
+            finally:
+                fcntl.flock(guard.fileno(), fcntl.LOCK_UN)
 
 
 def token_from_env_file(env_file: Path) -> str | None:
@@ -525,7 +556,11 @@ def sync_once(workers: int) -> bool:
     with_stock = sum(1 for item in products if int(item.get("estoque_disponivel") or 0) > 0)
     with_images = sum(1 for item in products if isinstance(item.get("anexos"), list) and item["anexos"])
     print(f"[+] Cache atômico salvo: {len(products)} produtos, {with_stock} com estoque, {with_images} com imagem, {failures} falhas em {output}")
-    return failures < len(summaries)
+    if failures:
+        # The cache remains fail-closed (unknown stock = zero), but the timer
+        # must signal DEGRADED rather than report success for 35/202 failures.
+        print(f"[!] ERP_STOCK_RECONCILE_INCOMPLETE={failures}/{len(summaries)}", flush=True)
+    return failures == 0
 
 
 def main() -> int:
