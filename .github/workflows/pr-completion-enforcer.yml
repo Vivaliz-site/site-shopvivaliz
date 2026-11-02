@@ -138,7 +138,7 @@ jobs:
     needs: production-runner-gate
     if: ${{ needs.production-runner-gate.outputs.should_run == 'true' }}
     name: Repair failures now and merge every current fully-green PR
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     env:
       REPO: ${{ github.repository }}
@@ -178,7 +178,7 @@ jobs:
           set -Eeuo pipefail
           bash -n trusted/scripts/merge_green_pr_via_vm.sh
           bash -n trusted/scripts/pr_conflict_vm_heal.sh
-          python3 -m py_compile trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py trusted/scripts/pr_conflict_gemini_healer.py
+          python3 -m py_compile trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py trusted/scripts/pr_conflict_gemini_healer.py trusted/.github/scripts/ai_conflict_resolver.py
 
       - name: Ensure GitHub CLI available on Oracle runner
         shell: bash
@@ -194,8 +194,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          test "$(hostname -s)" = 'marina-a1-4c24g'
-          echo 'pr_finalizer_host=marina-a1-4c24g'
+          test "$(hostname -s)" = 'always-free-arm-1787907847-26'
+          echo 'pr_finalizer_host=always-free-arm-1787907847-26'
 
       - name: Ensure immediate-repair label exists
         shell: bash
@@ -280,35 +280,13 @@ jobs:
               continue
             fi
 
-            relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
-            if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
-              if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -n "${SOURCE_HEAD_SHA:-}" && "$head_sha" != "$SOURCE_HEAD_SHA" ]]; then
-                echo "pr_${pr}_stale_update_skipped_not_source=true"
-                continue
-              fi
-              if [[ "$GITHUB_EVENT_NAME" != 'workflow_run' && "$stale_update_count" -ge 1 ]]; then
-                echo "pr_${pr}_stale_update_skipped_budget=true"
-                continue
-              fi
-              stale_update_count=$((stale_update_count + 1))
-              echo "pr_${pr}_repair-pr-branch=true"
-              if bash trusted/scripts/pr_conflict_vm_heal.sh \
-                "${pr}" "${head_ref}" "${head_sha}" trusted/scripts/pr_conflict_gemini_healer.py; then
-                echo "pr_${pr}_external_auth_branch_sync=true"
-              else
-                echo "pr_${pr}_external_auth_branch_sync_failed=true"
-                gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
-                repair_required_count=$((repair_required_count + 1))
-                continue
-              fi
-              gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
-              waiting_count=$((waiting_count + 1))
-              continue
+            # Formal owner grants must not have HEAD rewritten by an agent.
+            if ! changed_list="$(gh api --paginate "repos/${REPO}/pulls/${pr}/files?per_page=100" --jq '.[].filename')"; then
+              echo "pr_${pr}_changed_files_unavailable=fail_closed"
+              exit 1
             fi
-
-            mapfile -t changed_files < <(
-              gh api "repos/${REPO}/pulls/${pr}/files?per_page=100" --paginate --jq '.[].filename'
-            )
+            [[ -n "$changed_list" ]] || { echo "pr_${pr}_changed_files_empty=fail_closed"; exit 1; }
+            mapfile -t changed_files <<< "$changed_list"
             # A human-owner grant is not a normal autonomous PR. CI green is
             # never permission for the Oracle finalizer to merge it. Keep it
             # Ready for review and let only the human / GitHub-native merge it.
@@ -326,6 +304,34 @@ jobs:
               waiting_count=$((waiting_count + 1))
               continue
             fi
+            relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
+            if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
+              if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -n "${SOURCE_HEAD_SHA:-}" && "$head_sha" != "$SOURCE_HEAD_SHA" ]]; then
+                echo "pr_${pr}_stale_update_skipped_not_source=true"
+                continue
+              fi
+              if [[ "$GITHUB_EVENT_NAME" != 'workflow_run' && "$stale_update_count" -ge 1 ]]; then
+                echo "pr_${pr}_stale_update_skipped_budget=true"
+                continue
+              fi
+              stale_update_count=$((stale_update_count + 1))
+              echo "pr_${pr}_repair-pr-branch=true"
+              if bash trusted/scripts/pr_conflict_vm_heal.sh \
+                "${pr}" "${head_ref}" "${head_sha}" trusted/scripts/pr_conflict_gemini_healer.py \
+                trusted/.github/scripts/ai_conflict_resolver.py \
+                trusted/AI_CONFLICT_RULES.md; then
+                echo "pr_${pr}_external_auth_branch_sync=true"
+              else
+                echo "pr_${pr}_external_auth_branch_sync_failed=true"
+                gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
+                repair_required_count=$((repair_required_count + 1))
+                continue
+              fi
+              gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
+              waiting_count=$((waiting_count + 1))
+              continue
+            fi
+
             mapfile -t specialized_required < <(
               python3 trusted/scripts/pr_gate_scope.py "${changed_files[@]/#/--file=}"
             )

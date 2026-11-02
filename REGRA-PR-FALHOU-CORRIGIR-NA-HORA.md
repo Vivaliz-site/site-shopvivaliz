@@ -1,5 +1,13 @@
 # Regra operacional: PR falhou = corrigir na hora
 
+> **Rota atual (02/11/2026, prevalece sobre referencias historicas abaixo):**
+> PRs tecnicas comuns usam o runner ja provisionado `shopvivaliz-backend-browser`
+> no backend com a identidade tecnica GitHub independente `fredmourao-ai`
+> e IA local gratuita na ausencia de Gemini legitimamente instalado.
+> Nao copiar tokens do backend para Marina ou Actions, usar bot para push/merge,
+> modificar HEAD de PR P2 humana nem contornar revisao humana, branch protection,
+> SHA, checks, lock/lease. Provas e progresso na issue canonica #3451.
+
 **Vigência:** 2026-08-10  
 **Escopo:** todos os agentes e todas as alterações versionadas  
 **Norma superior:** `REGRAS-AGENTES-CENTRALIZADAS.md`

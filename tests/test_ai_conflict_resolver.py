@@ -1,6 +1,9 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import os
+import tempfile
+from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).parents[1] / ".github" / "scripts" / "ai_conflict_resolver.py"
 spec = importlib.util.spec_from_file_location("ai_conflict_resolver", MODULE_PATH)
@@ -9,6 +12,16 @@ spec.loader.exec_module(resolver)
 
 
 class ConflictResolverSafetyTests(unittest.TestCase):
+    def test_trusted_rule_path_overrides_untrusted_checkout_and_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trusted = Path(tmp) / "trusted_rules.md"
+            trusted.write_text("TRUSTED-MAIN-RULE\n", encoding="utf-8")
+            with patch.dict(os.environ, {"TRUSTED_AI_CONFLICT_RULES": str(trusted)}):
+                self.assertEqual("TRUSTED-MAIN-RULE\n", resolver.load_rules())
+            with patch.dict(os.environ, {"TRUSTED_AI_CONFLICT_RULES": str(Path(tmp) / "missing.md")}):
+                with self.assertRaises(FileNotFoundError):
+                    resolver.load_rules()
+
     def test_protected_paths_are_blocked(self):
         blocked = [".env", ".github/workflows/deploy-production.yml", "migrations/001.sql", "certs/private.key", "includes/auth.php", "checkout/payment.php", "infra/production.tf"]
         for path in blocked:
