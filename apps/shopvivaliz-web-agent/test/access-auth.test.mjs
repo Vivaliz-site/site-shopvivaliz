@@ -31,7 +31,7 @@ test('verifies Cloudflare Access JWT RS256, issuer, audience, email and expiry',
     unknown_identity:{email:'intruder@example.org'},expired:{exp:now-30},
     future:{nbf:now+360},iat_future:{iat:now+360}
   })){await assert.rejects(()=>v(jwt(claims)),undefined,name);}
-  assert.rejects(()=>v(jwt().slice(0,-2)+'aa'));
+  await assert.rejects(()=>v(jwt().slice(0,-2)+'aa'),/signature/);
   await assert.rejects(()=>v('not-a-token'),/invalid/);
 });
 test('prevents unsigned token and arbitrary key acceptance',async()=>{
