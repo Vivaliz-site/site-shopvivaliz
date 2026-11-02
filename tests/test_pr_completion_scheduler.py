@@ -41,7 +41,7 @@ class SchedulerTests(unittest.TestCase):
                       "scheduler cannot remain uncalled/dead code")
         self.assertIn("schedule_fair_slot", workflow, "each 15-minute sweep must rotate")
         self.assertIn("--batch 1", workflow, "retain bounded one-PR schedule budget")
-        self.assertIn("test \"$(hostname -s)\" = 'marina-a1-4c24g'", workflow)
+        self.assertIn("test \"$(hostname -s)\" = 'always-free-arm-1787907847-26'", workflow)
 
     def test_owner_only_security_grants_are_skipped_before_finalizer(self):
         root = Path(__file__).resolve().parents[1]

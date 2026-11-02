@@ -106,6 +106,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 scripts/check_pr_completion_policy.py
+          python3 tests/test_pr_conflict_healer_staging_contract.py
+          python3 -m unittest tests.test_ai_conflict_resolver -v
 
       - name: Publish enforcement invariant
         shell: bash

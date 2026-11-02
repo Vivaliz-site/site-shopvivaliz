@@ -73,12 +73,10 @@ jobs:
     needs: preflight
     if: ${{ needs.preflight.outputs.should_heal == 'true' }}
     name: Resolve same-repository PR conflicts with private Oracle Gemini pool
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 30
     env:
       REPO: ${{ github.repository }}
-      VM_HOST: 127.0.0.1
-      VM_USER: ubuntu
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -96,66 +94,29 @@ jobs:
           set -Eeuo pipefail
           python3 -m py_compile trusted/scripts/pr_conflict_gemini_healer.py
           bash -n trusted/scripts/pr_conflict_vm_heal.sh
+          python3 -m py_compile trusted/.github/scripts/ai_conflict_resolver.py
 
-      - name: Configure verified Oracle SSH
-        shell: bash
-        env:
-          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
-        run: |
-          set -Eeuo pipefail
-          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
-          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
-          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 1; }
-          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 1; }
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-
-      - name: Stage trusted healer in Oracle temporary boundary
-        id: stage
+      - name: Verify trusted backend host and independently authorized technical actor
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "install -d -m 700 /home/ubuntu/.cache/shopvivaliz-pr-healer"
-          remote_dir="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "mktemp -d /home/ubuntu/.cache/shopvivaliz-pr-healer/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-XXXXXX")"
-          remote_base="${remote_dir}/healer"
-          echo "remote_base=$remote_base" >> "$GITHUB_OUTPUT"
-          scp -q \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            trusted/scripts/pr_conflict_gemini_healer.py \
-            "${VM_USER}@${VM_HOST}:${remote_base}.py"
-          scp -q \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            trusted/scripts/pr_conflict_vm_heal.sh \
-            "${VM_USER}@${VM_HOST}:${remote_base}.sh"
+          test "$(hostname -s)" = 'always-free-arm-1787907847-26'
+          test "$(id -un)" = 'ubuntu'
+          actor="$(env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS gh api user --jq .login)"
+          test "$actor" = 'fredmourao-ai'
+          echo 'independent_backend_operator_verified=true'
+          echo 'secret_values_printed=false'
 
-      - name: Preflight private Gemini credential pool
+      - name: Verify already provisioned local AI model
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "GEMINI_ENV_FILE=/home/ubuntu/shopvivaliz-deploy/shared/.env python3 '${REMOTE_BASE}.py' --credential-preflight"
+          python3 -m py_compile trusted/.github/scripts/ai_conflict_resolver.py
+          ollama show qwen2.5-coder:1.5b >/dev/null 2>&1
+          echo 'local_conflict_fallback_ready=true'
 
       - name: Heal and synchronize eligible PR branches
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
           github_api() {
@@ -214,27 +175,34 @@ jobs:
               continue
             fi
 
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              "bash '${REMOTE_BASE}.sh' '${pr}' '${head_ref}' '${head_sha}' '${REMOTE_BASE}.py'"
+            # Only trusted main code; public metadata passed as data.
+            # Human-only grants must never have HEAD auto-synchronized,
+            # which would discard an existing exact-SHA APPROVED review.
+            if ! changed_list="$(gh api --paginate "repos/${REPO}/pulls/${pr}/files?per_page=100" --jq '.[].filename')"; then
+              echo "pr_${pr}_files_unavailable=fail_closed"
+              exit 1
+            fi
+            [[ -n "$changed_list" ]] || { echo "pr_${pr}_files_empty=fail_closed"; exit 1; }
+            owner_protected=false
+            while IFS= read -r changed_file; do
+              case "$changed_file" in
+                security/owner-approvals/*|security/requests/*|.github/CODEOWNERS|docs/knowledge/security-approval-via-pr.md|scripts/validate-owner-pr-grant.py)
+                  owner_protected=true
+                  break
+                  ;;
+              esac
+            done <<< "$changed_list"
+            if [[ "$owner_protected" == true ]]; then
+              echo "pr_${pr}_owner_protected_no_autosync=true"
+              continue
+            fi
+            bash trusted/scripts/pr_conflict_vm_heal.sh \
+              "$pr" "$head_ref" "$head_sha" \
+              trusted/scripts/pr_conflict_gemini_healer.py \
+              trusted/.github/scripts/ai_conflict_resolver.py \
+              trusted/AI_CONFLICT_RULES.md
             echo "pr_${pr}_oracle_heal_completed=true"
           done
-
-      - name: Remove Oracle and runner temporary material
-        if: always()
-        shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
-        run: |
-          set -Eeuo pipefail
-          if [[ -n "${REMOTE_BASE:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              "rm -rf -- '${REMOTE_BASE%/*}'"
-          fi
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
       - name: Security invariant
         if: always()
