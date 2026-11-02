@@ -53,7 +53,8 @@ safe_git() {
         /usr/bin/git -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$source_checkout" "$@"
 }
 [[ "$(safe_git rev-parse HEAD 2>/dev/null)" == "$sha" ]] || refuse unapproved_checkout
-[[ -z "$(safe_git status --porcelain 2>/dev/null)" ]] || refuse dirty_checkout
+checkout_status="$(safe_git status --porcelain 2>/dev/null)" || refuse checkout_status_unavailable
+[[ -z "$checkout_status" ]] || refuse dirty_checkout
 [[ -d /run && ! -L /run && "$(stat -c '%u' /run)" == 0 ]] || refuse lock_parent_unsafe
 refuse_writable /run
 lock=/run/shopvivaliz-marina-mcp-upgrade.lock
