@@ -305,6 +305,56 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
         self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
 
+    def test_unbound_legacy_task_cannot_make_personal_browser_login_required(self) -> None:
+        controller = load_controller()
+        (self.runtime / "orphan.json").write_text(json.dumps({
+            "task_id": "orphan", "status": "RUNNING",
+            "conversation_id": "legacyBoundConversation1",
+        }), encoding="utf-8")
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}),
+            patch.object(controller.route_reconciler, "reconcile", return_value={}),
+            patch.object(controller, "_completion_sweep", return_value={}),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+            patch.object(controller, "_chatgpt_browser_health", return_value={
+                "fresh": True, "session_state": "LOGGED_OUT", "authenticated": False,
+            }),
+            patch.object(controller, "_chatgpt_monitor_health", return_value={
+                "fresh": True, "degraded": True, "action": "auth_quiescent",
+            }),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="orphan-personal-not-required")
+        self.assertFalse(result["personal_browser_required"])
+        self.assertNotIn("chatgpt_browser_not_authenticated", result["degraded_reasons"])
+        self.assertNotIn("chatgpt_browser_stall_unresolved", result["degraded_reasons"])
+
+    def test_explicit_bound_fred_task_keeps_personal_mfa_required(self) -> None:
+        controller = load_controller()
+        (self.runtime / "fred.json").write_text(json.dumps({
+            "task_id": "fred", "status": "RUNNING", "browser_session": "fred",
+            "conversation_id": "legacyBoundConversation1",
+        }), encoding="utf-8")
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}),
+            patch.object(controller.route_reconciler, "reconcile", return_value={}),
+            patch.object(controller, "_completion_sweep", return_value={}),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+            patch.object(controller, "_chatgpt_browser_health", return_value={
+                "fresh": True, "session_state": "LOGGED_OUT", "authenticated": False,
+            }),
+            patch.object(controller, "_chatgpt_monitor_health", return_value={
+                "fresh": True, "degraded": True, "action": "auth_quiescent",
+            }),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="explicit-fred-required")
+        self.assertTrue(result["personal_browser_required"])
+        self.assertIn("chatgpt_browser_not_authenticated", result["degraded_reasons"])
+        self.assertIn("chatgpt_browser_stall_unresolved", result["degraded_reasons"])
+
     def test_logged_out_browser_fails_readiness_closed(self) -> None:
         controller = load_controller()
         (self.runtime / controller.CHATGPT_BROWSER_HEALTH_STATE_FILE).write_text(

@@ -11,6 +11,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import signal
 import sys
 import tempfile
@@ -566,6 +567,29 @@ def _has_material_activity(
     ) or any(int(resumed.get(key) or 0) > 0 for key in dispatched)
 
 
+
+def _personal_browser_required(root: Path) -> bool:
+    """Only an explicitly bound RUNNING Fred task needs personal CDP health.
+
+    Unbound legacy conversation IDs are not proof of the personal browser;
+    account-scoped corporate tasks remain governed by their own dispatcher.
+    """
+    for path in root.glob("*.json"):
+        if path.name.startswith("_") or not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(payload, dict) or payload.get("status") not in ("RUNNING", "READY_TO_COMPLETE"):
+            continue
+        if payload.get("browser_session") != "fred":
+            continue
+        if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", str(payload.get("conversation_id") or "")):
+            return True
+    return False
+
+
 def run_once(
     *,
     runtime_dir: Path | None = None,
@@ -604,6 +628,10 @@ def run_once(
         monitor_required = os.environ.get("CHATGPT_CONTINUITY_MONITOR_REQUIRED", "1").strip().lower() not in {"0", "false", "no", "off"}
         monitor["required"] = monitor_required
         browser_health = _chatgpt_browser_health(root)
+        # With durable fencing, the Fred monitor is strictly for explicit Fred
+        # tasks. Missing legacy provenance cannot make a logged-out personal
+        # browser a prerequisite for corporate Dev/Atendimento recovery.
+        personal_browser_required = (not durable_handoff_enabled or _personal_browser_required(root))
         claude_health = _claude_remote_control_health()
         degraded_reasons: list[str] = []
         if int(route_recovery.get("failed") or 0) > 0:
@@ -644,14 +672,15 @@ def run_once(
         if monitor_required and str(monitor.get("action") or "") == "monitor_disabled":
             degraded_reasons.append("chatgpt_browser_monitor_disabled")
         if monitor_required and monitor.get("degraded") is True:
-            degraded_reasons.append("chatgpt_browser_stall_unresolved")
-        if browser_health.get("fresh") is not True:
+            if personal_browser_required or monitor.get("action") != "auth_quiescent":
+                degraded_reasons.append("chatgpt_browser_stall_unresolved")
+        if personal_browser_required and browser_health.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_auth_unknown")
-        elif browser_health.get("session_state") == "AUTH_FLOW":
+        elif personal_browser_required and browser_health.get("session_state") == "AUTH_FLOW":
             degraded_reasons.append("chatgpt_browser_auth_in_progress")
-        elif browser_health.get("session_state") == "IDENTITY_MISMATCH":
+        elif personal_browser_required and browser_health.get("session_state") == "IDENTITY_MISMATCH":
             degraded_reasons.append("chatgpt_browser_identity_mismatch")
-        elif browser_health.get("authenticated") is not True:
+        elif personal_browser_required and browser_health.get("authenticated") is not True:
             if browser_health.get("session_state") == "LOGGED_OUT":
                 degraded_reasons.append("chatgpt_browser_not_authenticated")
             else:
@@ -678,6 +707,7 @@ def run_once(
             "lease_recovered": lease.recovered,
             "durable_handoff_enabled": durable_handoff_enabled,
             "single_writer_enforced": durable_handoff_enabled,
+            "personal_browser_required": personal_browser_required,
             "route_recovery": route_recovery,
             "completion_sweep": completion_sweep,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched", "mode")},
