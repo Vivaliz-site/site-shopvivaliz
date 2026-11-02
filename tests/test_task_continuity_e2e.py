@@ -391,7 +391,7 @@ class ProbeEvaluationTests(unittest.TestCase):
             self.assertEqual(len(checkpoint["checklist"]["items"]), 1)
             self.assertEqual(checkpoint["checklist"]["items"][0]["status"], "PENDENTE")
             self.assertEqual(
-                len([x for x in checkpoint["next_action"].splitlines() if x.startswith(("1) ", "2) ", "3) ")]),
+                len([x for x in checkpoint["next_action"].splitlines() if x.startswith(("1) ", "2) ", "3) "))]),
                 3,
             )
             # The harness must not pass readiness without real browser action.
