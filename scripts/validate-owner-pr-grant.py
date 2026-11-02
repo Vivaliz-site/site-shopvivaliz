@@ -37,8 +37,12 @@ def official_merge_group_proof(proof: dict, merge_sha: str,
     """
     if not SHA40.fullmatch(merge_sha):
         return False
-    runs = proof.get("merge_group_runs")
-    checks = proof.get("check_runs")
+    # Actual provider readback evidence, not a queue completion flag:
+    # the integration SHA must have both official workflow runs AND checks.
+    merge_group_readback_evidence = proof.get("merge_group_runs")
+    required_check_readback_evidence = proof.get("check_runs")
+    runs = merge_group_readback_evidence
+    checks = required_check_readback_evidence
     if (not isinstance(runs, list) or not 0 < len(runs) < 100 or
             not isinstance(checks, list) or not 0 < len(checks) < 100):
         return False
