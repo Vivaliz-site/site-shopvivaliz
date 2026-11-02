@@ -411,13 +411,24 @@ def main() -> int:
         token = load_token(args.token_file)
         write_operator = None
         if args.enable_approved_scoped_write:
-            # Trusted code lives in the same root-owned immutable release.
-            trusted = runpy.run_path(str(Path(__file__).with_name("trusted_write_operator.py")))
-            write_operator = trusted["bootstrap_operator"]()
-            if trusted["_owner_grant_valid"](trusted["GRANT_PR"], trusted["GRANT_HEAD"],
-                                              trusted["GRANT_MERGE"], trusted["CAPABILITY"],
-                                              trusted["OPERATION"], trusted["REPOSITORY"]) is not True:
-                raise RuntimeError("owner_approved_scoped_write_grant_unavailable")
+            # Read-only availability must survive transient GitHub API failures
+            # or revocation of this single write grant. Never advertise writes
+            # unless host preflight AND the fresh owner proof both succeed.
+            try:
+                trusted = runpy.run_path(str(Path(__file__).with_name("trusted_write_operator.py")))
+                candidate = trusted["bootstrap_operator"]()
+                if trusted["_owner_grant_valid"](trusted["GRANT_PR"], trusted["GRANT_HEAD"],
+                                                  trusted["GRANT_MERGE"], trusted["CAPABILITY"],
+                                                  trusted["OPERATION"], trusted["REPOSITORY"]) is not True:
+                    raise RuntimeError("owner_approved_scoped_write_grant_unavailable")
+                write_operator = candidate
+            except (OSError, RuntimeError, ValueError) as exc:
+                if args.check:
+                    raise
+                print("MARINA_MCP_SCOPED_WRITE_DISABLED=" + type(exc).__name__, file=sys.stderr)
+                write_operator = None
+        if args.check and args.enable_approved_scoped_write and write_operator is None:
+            raise RuntimeError("owner_approved_scoped_write_grant_unavailable")
         if args.check:
             print("MARINA_MCP_SCOPED_WRITE_PREFLIGHT=PASS" if write_operator is not None
                   else "MARINA_MCP_READONLY_PREFLIGHT=PASS")
