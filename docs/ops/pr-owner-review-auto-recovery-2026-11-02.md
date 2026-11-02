@@ -35,7 +35,7 @@ retry cego. Falha de leitura fica explicita e nao se transforma em sucesso.
 O label no-auto-merge continua impedindo merge pelo finalizador; recuperar
 um check nao e realizar merge nem conceder privilegios.
 
-Eventos de review podem omitir pull_requests. Nesses casos, o finalizador
+Eventos de review e runs originais podem omitir pull_requests. Nesses casos, o finalizador
 resolve apenas uma PR aberta inequivoca associada ao HEAD exato, sem
 buscar por nome de branch nem trabalhar em SHA antigo.
 
@@ -53,7 +53,7 @@ nao e uma promessa de tempo fixo: fila, testes e runner tambem influenciam.
 
 ## Validacao e limites
 
-25 testes locais: seletor de lint com historicos Git reais; negativos de
+28 testes locais: seletor de lint com historicos Git reais; negativos de
 revisao, SHA, hold, app, motivo de falha e corrida; idempotencia; e execucao
 do shell real do finalizador com somente a API GitHub substituida por
 respostas locais. Regressao RED comprovada antes da implementacao, seguida

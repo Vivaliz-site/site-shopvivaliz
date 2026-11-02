@@ -40,6 +40,7 @@ class FakeAPI:
         self.run, self.job, self.check = map(copy.deepcopy, (RUN, JOB, CHECK))
         self.log = LOG
         self.extra_runs = []
+        self.associations = [copy.deepcopy(PR)]
         self.writes = []
         self.pr_reads = 0
         self.move_on_recheck = False
@@ -61,6 +62,8 @@ class FakeAPI:
             if self.dismiss_on_recheck and self.pr_reads > 1:
                 self.reviews[0]['state'] = 'DISMISSED'
             return copy.deepcopy(self.pr)
+        if path.endswith('/pulls?per_page=100') and '/commits/' in path:
+            return copy.deepcopy(self.associations)
         if path.endswith('/files?per_page=100'):
             return copy.deepcopy(self.files)
         if path.endswith('/reviews?per_page=100'):
@@ -108,6 +111,25 @@ class OwnerReviewRecoveryTests(unittest.TestCase):
             self.assertEqual(self.recover(), 0)
             self.assertEqual(self.api.writes, [])
 
+    def test_real_github_empty_run_prs_uses_independent_commit_association(self):
+        # GitHub run 41544120846 returned pull_requests=[] even for PR events.
+        self.api.run['pull_requests'] = []
+        self.assertEqual(self.recover(), 1)
+        self.assertEqual(self.api.writes, [f'repos/{REPO}/actions/jobs/101/rerun'])
+
+    def test_empty_run_prs_without_unambiguous_commit_association_never_replays(self):
+        for associated in [[], [PR, dict(PR, number=3561)]]:
+            self.api = FakeAPI()
+            self.api.run['pull_requests'] = []
+            self.api.associations = copy.deepcopy(associated)
+            self.assertEqual(self.recover(), 0)
+            self.assertEqual(self.api.writes, [])
+
+    def test_explicit_mismatched_run_pr_is_never_overridden_by_lookup(self):
+        self.api.run['pull_requests'][0]['number'] = 9999
+        self.assertEqual(self.recover(), 0)
+        self.assertEqual(self.api.writes, [])
+
     def test_invalid_or_stale_owner_approval_never_mutates(self):
         for key, value in [('state', 'DISMISSED'), ('state', 'CHANGES_REQUESTED'),
                            ('commit_id', 'b' * 40), ('user', {'login': 'fredmourao-ai'})]:
@@ -141,7 +163,7 @@ class OwnerReviewRecoveryTests(unittest.TestCase):
     def test_wrong_workflow_event_head_or_attempt_is_not_replayed(self):
         for key, value in [('path', '.github/workflows/other.yml'), ('event', 'pull_request_review'),
                            ('head_sha', 'b' * 40), ('status', 'in_progress'),
-                           ('conclusion', 'success'), ('run_attempt', 2), ('pull_requests', [])]:
+                           ('conclusion', 'success'), ('run_attempt', 2), ('pull_requests', None)]:
             self.api = FakeAPI()
             self.api.run[key] = value
             self.assertEqual(self.recover(), 0, key)
