@@ -105,14 +105,25 @@ else
   remote_sha="$(git rev-parse "refs/remotes/origin/${head_ref}")"
   git merge-base --is-ancestor "$remote_sha" HEAD || fail 'publication would not be fast-forward'
 
-  # Write authentication is required only when a branch publication is necessary.
+  # A self-hosted GitHub Actions job provides GH_TOKEN=github.token for
+  # read-only orchestration. That token is the Actions bot: a branch push
+  # authenticated by it makes all PR checks action_required, with no jobs.
+  # Select the independently provisioned operator CLI account explicitly.
+  # This also refuses to publish when the VM's real technical credential is
+  # absent; NEVER fall back to the bot, human owner, secrets copied from CI,
+  # or a change to branch protections.
   command -v gh >/dev/null || fail 'gh unavailable on Oracle for branch publication'
-  gh auth status --hostname github.com >/dev/null 2>&1 || fail 'Oracle GitHub authentication unavailable for branch publication'
-  gh auth setup-git >/dev/null
+  independent_actor="$(env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS \
+    gh api user --jq .login 2>/dev/null)" || fail 'independent_github_auth_unavailable'
+  [[ "$independent_actor" == 'fredmourao-ai' ]] || fail 'independent_github_actor_not_approved'
+  env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS \
+    gh auth setup-git >/dev/null || fail 'independent_git_credential_helper_unavailable'
   external_github_auth_used=true
 
-  # ALLOW_SCOPED_PUSH: same-repository PR branch only, never protected refs.
-  git push origin "HEAD:refs/heads/${head_ref}" >/dev/null
+  # ALLOW_SCOPED_PUSH: technical account only, same-repository branch, CAS,
+  # fast-forward publication; never a protected ref or blanket GitHub token.
+  env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS \
+    git push origin "HEAD:refs/heads/${head_ref}" >/dev/null
   echo 'pr_branch_update_pushed=true'
   echo "pr_head_sha=${after_sha}"
 fi
