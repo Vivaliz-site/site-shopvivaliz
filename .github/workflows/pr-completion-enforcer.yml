@@ -75,15 +75,24 @@ jobs:
             fi
           fi
           if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -n "${SOURCE_HEAD_SHA:-}" ]]; then
-            settle_required=(
-              'Quality Gate'
-              'ShopVivaliz QA'
-              'Repository Governance'
-              'Policy Engine'
-              'Autonomy Boundary'
-              'Ecommerce Excellence Audit'
-              'PR Policy Enforcement'
+            # Wait only for checks applicable to this PR's exact changed paths.
+            # The previous static list delayed isolated PRs for 120 seconds
+            # on workflows never triggered by path filters.
+            # Read scope from protected main, NEVER from untrusted PR code.
+            mapfile -t changed_files < <(
+              gh api "repos/${GITHUB_REPOSITORY}/pulls/${target_pr}/files?per_page=100" \
+                --paginate --jq '.[].filename'
             )
+            if [[ "${#changed_files[@]}" -eq 0 ]]; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'fanout_scope_unavailable=fail_closed'
+              exit 0
+            fi
+            mapfile -t specialized_required < <(
+              python3 trusted/scripts/pr_gate_scope.py "${changed_files[@]/#/--file=}"
+            )
+            settle_required=('Repository Governance' "${specialized_required[@]}")
+            echo "fanout_applicable_required=${settle_required[*]}"
             for attempt in $(seq 1 24); do
               runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${SOURCE_HEAD_SHA}&per_page=100")"
               unsettled=0
