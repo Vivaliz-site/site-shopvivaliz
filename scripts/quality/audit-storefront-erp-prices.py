@@ -13,6 +13,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -222,6 +223,54 @@ def evaluate(
             "counts": counts, "issues": issues, "unpublished_exclusions": excluded}
 
 
+def fetch_details_with_targeted_retry(api: Any, token: str, active: list[dict[str, Any]],
+                                      *, sleep: Any = time.sleep) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
+    """Retry only failed ERP details, never certify an incomplete response."""
+    details: dict[str, dict[str, Any]] = {}
+    pending: dict[str, str] = {}
+    for index, product in enumerate(active, 1):
+        pid = str(product.get("id") or "")
+        if not pid.isdecimal():
+            pending[pid] = "invalid_id"
+            continue
+        try:
+            result = api.api_get("produtos/" + pid, token, timeout=14, attempts=3)
+            detail = result.get("produto") if isinstance(result.get("produto"), dict) else result.get("data") if isinstance(result.get("data"), dict) else result
+            if isinstance(detail.get("produto"), dict):
+                detail = detail["produto"]
+            if not isinstance(detail, dict) or not detail:
+                raise RuntimeError("erp_detail_invalid")
+            details[pid] = detail
+        except Exception as exc:
+            pending[pid] = type(exc).__name__
+        if index % 25 == 0 or index == len(active):
+            print(f"ERP_DETAILS_CHECKED={index}/{len(active)} API_ERRORS={len(pending)}", flush=True)
+    # The ERP may throttle a long sequential scan. Two bounded second-pass
+    # retries of ONLY the missing IDs avoid 200+ redundant API calls.
+    for attempt, delay in enumerate((4, 12), 1):
+        if not pending:
+            break
+        sleep(delay)
+        for pid in list(pending):
+            if not pid.isdecimal():
+                continue
+            try:
+                result = api.api_get("produtos/" + pid, token, timeout=20, attempts=3)
+                detail = result.get("produto") if isinstance(result.get("produto"), dict) else result.get("data") if isinstance(result.get("data"), dict) else result
+                if isinstance(detail.get("produto"), dict):
+                    detail = detail["produto"]
+                if not isinstance(detail, dict) or not detail:
+                    raise RuntimeError("erp_detail_invalid")
+                details[pid] = detail
+                del pending[pid]
+            except Exception as exc:
+                pending[pid] = type(exc).__name__
+        print(f"ERP_DETAIL_RECOVERY_PASS={attempt} REMAINING={len(pending)}", flush=True)
+    errors = [{"code": "erp_detail_query_failed" if pid.isdecimal() else "erp_product_id_invalid",
+               "id": pid, "reason": reason} for pid, reason in pending.items()]
+    return details, errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-sha", default="", help="exact immutable release SHA")
@@ -259,25 +308,7 @@ def main() -> int:
     active = api.fetch_products_active(token)
     if not active:
         raise RuntimeError("erp_active_list_empty")
-    details: dict[str, dict[str, Any]] = {}
-    errors: list[dict[str, str]] = []
-    for index, product in enumerate(active, 1):
-        pid = str(product.get("id") or "")
-        if not pid.isdecimal():
-            errors.append({"code": "erp_product_id_invalid", "id": pid})
-            continue
-        try:
-            result = api.api_get("produtos/" + pid, token, timeout=14, attempts=3)
-            detail = result.get("produto") if isinstance(result.get("produto"), dict) else result.get("data") if isinstance(result.get("data"), dict) else result
-            if isinstance(detail.get("produto"), dict):
-                detail = detail["produto"]
-            if not isinstance(detail, dict):
-                raise RuntimeError("erp_detail_invalid")
-            details[pid] = detail
-        except Exception as exc:
-            errors.append({"code": "erp_detail_query_failed", "id": pid, "reason": type(exc).__name__})
-        if index % 25 == 0 or index == len(active):
-            print(f"ERP_DETAILS_CHECKED={index}/{len(active)} API_ERRORS={len(errors)}", flush=True)
+    details, errors = fetch_details_with_targeted_retry(api, token, active)
     result = evaluate(active, details, cache_rows, site_rows, amazon_table)
     # A deploy that moves under this lengthy full-catalog audit invalidates its
     # snapshot; do not certify an earlier release as the current storefront.
