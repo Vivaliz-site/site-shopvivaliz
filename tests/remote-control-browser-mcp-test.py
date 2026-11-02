@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import base64
 import contextlib
 import importlib.util
 import io
@@ -507,22 +508,100 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn(secret, run.call_args.kwargs["input"].decode("utf-8"))
         self.assertIn("shopvivaliz-native-desktop-bridge.ps1", repr(argv))
 
+    def native_test_png(self, *, with_text=False):
+        # Real 1x1 PNG, with optional oversized harmless ancillary text.
+        data = (
+            b"\x89PNG\r\n\x1a\n"
+            + m._png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + m._png_chunk(b"IDAT", zlib.compress(b"\x00\x11\x22\x33"))
+        )
+        if with_text:
+            data += m._png_chunk(b"tEXt", b"note\x00" + b"x" * 350)
+        return data + m._png_chunk(b"IEND", b"")
+
     def test_fredwin_desktop_screenshot_uses_native_bridge(self):
+        png = self.native_test_png()
+        encoded = base64.b64encode(png).decode("ascii")
         native = {
-            "ok": True,
-            "action": "screenshot",
-            "mime_type": "image/png",
-            "image_b64": "cG5n",
-            "bytes": 3,
-            "width": 1920,
-            "height": 1080,
+            "ok": True, "action": "screenshot", "mime_type": "image/png",
+            "image_b64": encoded, "bytes": len(png), "width": 1, "height": 1,
         }
         with mock.patch.object(m, "native_desktop_bridge", return_value=native) as bridge:
             result = m.desktop_screenshot({"host": "Fred-Win"})
         bridge.assert_called_once_with("Fred-Win", {"action": "screenshot"})
-        self.assertEqual("cG5n", result["__mcp_image__"])
+        self.assertEqual(encoded, result["__mcp_image__"])
         self.assertNotIn("image_b64", result)
         self.assertEqual("windows_interactive", result["surface"])
+        self.assertEqual("image/png", result["mime_type"])
+        self.assertEqual(False, result["transcoded_for_transport"])
+
+    def test_fredwin_large_screenshot_is_bounded_jpeg_and_keeps_coordinates(self):
+        png = self.native_test_png(with_text=True)
+        fake_jpeg = b"\xff\xd8" + b"x" * 125 + b"\xff\xd9"
+        native = {
+            "ok": True, "action": "screenshot", "mime_type": "image/png",
+            "image_b64": base64.b64encode(png).decode("ascii"),
+            "bytes": len(png), "width": 1, "height": 1,
+            "left": -1920, "top": 0,
+        }
+        with (
+            mock.patch.object(m, "native_desktop_bridge", return_value=native),
+            mock.patch.object(m, "MAX_NATIVE_MCP_IMAGE_BYTES", 200),
+            mock.patch.object(m, "encode_large_native_png_for_mcp", return_value=fake_jpeg) as encode,
+        ):
+            result = m.desktop_screenshot({"host": "Fred-Win"})
+        encode.assert_called_once_with(png, 1, 1)
+        self.assertEqual("image/jpeg", result["mime_type"])
+        self.assertEqual(len(fake_jpeg), result["bytes"])
+        self.assertEqual(fake_jpeg, base64.b64decode(result["__mcp_image__"]))
+        self.assertTrue(result["transcoded_for_transport"])
+        self.assertEqual((result["left"], result["top"], result["width"], result["height"]), (-1920, 0, 1, 1))
+
+    def test_native_screenshot_rejects_mismatched_geometry_and_bad_image(self):
+        png = self.native_test_png()
+        native = {"mime_type": "image/png", "width": 1920, "height": 1080, "bytes": len(png)}
+        with self.assertRaisesRegex(RuntimeError, "geometry_mismatch"):
+            m.bounded_native_desktop_image(native, base64.b64encode(png).decode("ascii"))
+        native = {"mime_type": "image/png", "width": 1, "height": 1, "bytes": len(png)}
+        with self.assertRaisesRegex(RuntimeError, "invalid_png"):
+            m.bounded_native_desktop_image(native, base64.b64encode(b"wrong image" * 10).decode("ascii"))
+
+    def test_native_image_encoder_is_real_jpeg_when_pillow_available(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is optional outside installed backend")
+        png = self.native_test_png(with_text=True)
+        with mock.patch.object(m, "MAX_NATIVE_MCP_IMAGE_BYTES", 550_000):
+            jpeg = m.encode_large_native_png_for_mcp(png, 1, 1)
+        self.assertTrue(jpeg.startswith(b"\xff\xd8"))
+        with Image.open(io.BytesIO(jpeg)) as image:
+            self.assertEqual("JPEG", image.format)
+            self.assertEqual((1, 1), image.size)
+
+    def test_mcp_image_result_advertises_actual_mime_type(self):
+        payload = json.dumps({
+            "jsonrpc": "2.0", "id": 9, "method": "tools/call",
+            "params": {"name": "desktop_screenshot", "arguments": {"host": "Fred-Win"}},
+        }).encode("utf-8")
+        handler = object.__new__(m.BrowserHandler)
+        handler.path = "/mcp"
+        handler.client_address = ("127.0.0.1", 12345)
+        handler.headers = {
+            "Authorization": "Bearer synthetic-test", "Content-Length": str(len(payload)),
+        }
+        handler.rfile = io.BytesIO(payload)
+        fake = {"ok": True, "mime_type": "image/jpeg", "__mcp_image__": "abc"}
+        with (
+            mock.patch.object(m.base, "is_authorized", return_value=True),
+            mock.patch.object(m, "execute_tool", return_value=fake),
+            mock.patch.object(m, "audit", return_value="audit-test"),
+            mock.patch.object(m.BrowserHandler, "_client_disconnected", return_value=False),
+            mock.patch.object(m.BrowserHandler, "_json", autospec=True) as reply,
+        ):
+            handler.do_POST()
+        content = reply.call_args.args[2]["result"]["content"]
+        self.assertEqual("image/jpeg", content[1]["mimeType"])
 
     def test_fredwin_desktop_click_and_type_route_to_native_bridge(self):
         calls = []
