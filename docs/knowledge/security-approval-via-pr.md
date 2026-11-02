@@ -21,6 +21,20 @@ alteracao posterior da branch protegida exige nova revisao, nao uma
 reaprovacao informal em chat.
 <!-- /OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2_20261102 -->
 
+### Evidencia real de fila GitHub e identidade do merged_by (2026-11-02)
+
+GitHub pode registrar merged_by.login como o enqueuer tecnico
+fredmourao-ai mesmo com merge efetivado somente pela fila nativa.
+A identidade nao substitui shopvivaliz-human. A excecao P2 somente
+reconhece esse caso com review humano APPROVED no SHA exato,
+AddedToMergeQueueEvent autenticado posterior no mesmo SHA e pelo
+mesmo enqueuer, ambos workflows obrigatorios merge_group e checks
+oficiais GREEN no commit sintetico final, grant imutavel/escopo/TTL.
+Sem todas as evidencias, merged_by=fredmourao-ai permanece proibido.
+O fluxo manual humano historico nao e flexibilizado.
+
+
+
 # Autorizacao humana de seguranca por Pull Request — ShopVivaliz
 
 ## Decisao vigente do proprietario (2026-11-01)

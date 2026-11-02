@@ -158,7 +158,7 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
                            for n,i in RULESET.REQUIRED.items()]}}]}
         next_rules=RULESET.mutation_plan(before)
         self.assertEqual(before["rules"][-1]["parameters"]["strict_required_status_checks_policy"],True)
-        self.assertFalse(next_rules["rules"][-2]["parameters"]["strict_required_status_checks_policy"])
+        self.assertTrue(next_rules["rules"][-2]["parameters"]["strict_required_status_checks_policy"])
         self.assertEqual(next_rules["rules"][-1]["type"],"merge_queue")
         self.assertEqual(next_rules["rules"][-1]["parameters"]["grouping_strategy"],"ALLGREEN")
         self.assertEqual(next_rules["bypass_actors"],[])
