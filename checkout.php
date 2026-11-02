@@ -450,10 +450,13 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
         restore();
         form.addEventListener('input', save);
         form.addEventListener('change', save);
-        form.addEventListener('submit', function () {
-            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-        });
+        // O rascunho deve permanecer ate a confirmacao do handoff;
+        // falhas de validacao, rede e gateway nao podem apagar os dados.
     })();
+
+    function clearCheckoutFormDraft() {
+        try { localStorage.removeItem('shopvivaliz_checkout_form'); } catch (e) {}
+    }
 
     /* Carrinho abandonado: registra o e-mail (fire-and-forget, nunca bloqueia
        o checkout) quando o cliente preenche o campo e sai dele, pra permitir
@@ -974,6 +977,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                     payment_session_token: order.payment_session_token
                 });
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
+                clearCheckoutFormDraft();
                 document.getElementById('boleto-order-msg').textContent = 'Pedido ' + order.order_number;
                 document.getElementById('boleto-digitable-line').value = boleto.digitable_line || '';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
@@ -987,6 +991,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                 });
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
                 window.location.assign(preference.checkout_url);
+                clearCheckoutFormDraft();
                 return;
             } else if (method === 'infinitepay') {
                 btn.textContent = 'Abrindo InfinitePay…';
@@ -996,9 +1001,11 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                 });
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
                 window.location.assign(link.checkout_url);
+                clearCheckoutFormDraft();
                 return;
             } else {
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
+                clearCheckoutFormDraft();
                 if (method === 'pix') {
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
