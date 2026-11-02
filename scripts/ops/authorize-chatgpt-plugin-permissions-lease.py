@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import stat
 import subprocess
 import sys
 from urllib.request import Request, urlopen
@@ -149,10 +150,17 @@ def issue_one_use(pr_number: int, proof: dict) -> dict:
         raise PermissionMaintenanceDenied("unbound_owner_pr_number")
     if STATE_ROOT.is_symlink() or not STATE_ROOT.is_dir():
         raise PermissionMaintenanceDenied("protected_runtime_state_unavailable")
+    try:
+        expires = datetime.fromisoformat(proof["expires_at_utc"].replace("Z", "+00:00"))
+    except (KeyError, AttributeError, ValueError) as exc:
+        raise PermissionMaintenanceDenied("missing_verified_grant_expiration") from exc
+    if expires <= datetime.now(timezone.utc):
+        raise PermissionMaintenanceDenied("owner_grant_expired_before_issuance")
     LEDGER_DIR.mkdir(mode=0o700, parents=False, exist_ok=True)
-    if LEDGER_DIR.is_symlink():
-        raise PermissionMaintenanceDenied("protected_ledger_symlink_denied")
-    os.chmod(LEDGER_DIR, 0o700)
+    ledger_stat = LEDGER_DIR.lstat()
+    if (not stat.S_ISDIR(ledger_stat.st_mode) or
+            ledger_stat.st_uid != os.geteuid() or ledger_stat.st_mode & 0o077):
+        raise PermissionMaintenanceDenied("untrusted_ledger_directory")
     ledger = LEDGER_DIR / f"pr-{pr_number}.json"
     with locked_file(LEDGER_DIR / "issue.lock"):
         if ledger.exists() or ledger.is_symlink():
@@ -211,6 +219,8 @@ def main() -> int:
         if not PR_NUM.fullmatch(str(args.pr_number)):
             raise PermissionMaintenanceDenied("invalid_pr_number")
         if args.release:
+            if os.name != "posix" or os.geteuid() != 0 or socket.gethostname().split(".")[0] != CONTROLLER:
+                raise PermissionMaintenanceDenied("backend_privileged_operator_required")
             if not args.lease_id or args.fencing_token is None:
                 raise PermissionMaintenanceDenied("lease_identity_required")
             result = release_owned(args.pr_number, args.lease_id, args.fencing_token)
