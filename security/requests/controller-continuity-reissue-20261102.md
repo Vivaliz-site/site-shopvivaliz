@@ -1,6 +1,6 @@
 # Solicitação nova de autorização humana — controller + bridge
 
-Status: **PREPARAÇÃO — não aprovar até leitura de evidências finais e checks atuais.**
+Status: **READY FOR REVIEW, condicionado a checks GREEN no HEAD definitivo e revisão humana pessoal.**
 Esta solicitação substitui a PR #3499 como prova humana de autorização: #3499
 foi integrada por `github-actions[bot]` às 02:26:56Z de 2026-11-02,
 **sem qualquer review**. O grant 3499 não é válido e não autoriza runtime.
@@ -62,7 +62,7 @@ sem contornar a recusa e sem simular E2E.
 
 - PR #3500 integrada (bloqueia merge de autorização por bot): concluída em
   `63d65b87b111a31a08e25f1e5c305156e9d6830f`.
-- PR #3502 de adapter/lease/guardrails: só considerar pronta após todos os
-  checks pertinentes verdes e integração válida no main.
+- PR técnica #3502 de adapter/lease/guardrails: **testes MCP e validation-gate verdes e integrados ao main** em \`6b3ef735dbeaecb8c823a9f10806b86cbdcdad44\`.
+  O código aguarda grant humano e não executou deploy.
 - Verificações desta PR de grant atual em GREEN e review solicitada nominalmente
   a `shopvivaliz-human`. Sem review ainda: **AWAITING_OWNER_APPROVAL**.
