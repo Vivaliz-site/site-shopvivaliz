@@ -1,0 +1,15 @@
+# INSTALL ONLY after owner-approved exact-scope root grant and independent operator review.
+[Unit]
+Description=Local-only ShopVivaliz Marina privileged broker socket
+
+[Socket]
+ListenStream=/run/shopvivaliz-marina-broker/mcp-root.sock
+SocketMode=0660
+SocketUser=root
+SocketGroup=shopvivaliz-marina-mcp
+DirectoryMode=0755
+Accept=no
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
