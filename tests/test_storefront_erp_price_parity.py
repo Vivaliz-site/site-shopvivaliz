@@ -38,6 +38,70 @@ def evaluate(active_rows, erp_details, cache_rows, site_rows, amazon_table=AMAZO
     return audit.evaluate(active_rows, erp_details, cache_rows, site_rows, amazon_table)
 
 
+class PriceSnapshotStabilityTests(unittest.TestCase):
+    def sample_cache(self):
+        return {
+            "total": 1, "timestamp": "2026-11-02T10:00:00Z",
+            "price_list_id": 991, "price_source": "olist_tiny_amazon",
+            "itens": [item(10, "A", 100, 0, base_regular=90)],
+        }
+
+    def test_stock_only_refresh_keeps_price_snapshot_stable(self):
+        from copy import deepcopy
+        original = self.sample_cache()
+        refreshed = deepcopy(original)
+        refreshed["timestamp"] = "2026-11-02T10:05:00Z"
+        refreshed["itens"][0]["_stock_synced_at"] = "2026-11-02T10:05:00Z"
+        refreshed["itens"][0]["estoque_disponivel"] = 3
+        refreshed["itens"][0]["estoque"] = {"quantidade": 3}
+        refreshed["itens"][0]["anexos"] = [{"url": "https://example.com/test.jpg"}]
+        self.assertEqual(audit.cache_price_fingerprint(original),
+                         audit.cache_price_fingerprint(refreshed))
+
+    def test_price_sku_base_price_and_provenance_changes_are_rejected(self):
+        from copy import deepcopy
+        original = self.sample_cache()
+        sha = audit.cache_price_fingerprint(original)
+        changes = (
+            ("itens", "precos", "preco", 101),
+            ("itens", "_erp_base_prices", "preco", 89),
+            ("itens", "sku", None, "B"),
+            ("itens", "_price_list_id", None, 992),
+            ("itens", "_price_source", None, "unknown"),
+            ("price_list_id", None, None, 992),
+            ("price_source", None, None, "unknown"),
+        )
+        for outer, inner, leaf, value in changes:
+            with self.subTest(field=(outer, inner, leaf)):
+                newer = deepcopy(original)
+                if outer == "itens":
+                    target = newer["itens"][0]
+                    if leaf is None:
+                        target[inner] = value
+                    else:
+                        target[inner][leaf] = value
+                else:
+                    newer[outer] = value
+                self.assertNotEqual(sha, audit.cache_price_fingerprint(newer))
+
+    def test_public_snapshot_detects_price_and_sku_changes(self):
+        from copy import deepcopy
+        rows = [published(10, "A", 100), published(11, "B", 99)]
+        original = audit.storefront_price_fingerprint(rows)
+        self.assertEqual(original, audit.storefront_price_fingerprint(list(reversed(rows))))
+        for key, value in (("price", 101), ("sku", "C"), ("olist_product_id", 999)):
+            with self.subTest(key=key):
+                newer = deepcopy(rows)
+                newer[0][key] = value
+                self.assertNotEqual(original, audit.storefront_price_fingerprint(newer))
+
+    def test_invalid_cache_snapshot_fails_closed(self):
+        with self.assertRaises(ValueError):
+            audit.cache_price_fingerprint({"itens": [None]})
+        with self.assertRaises(ValueError):
+            audit.storefront_price_fingerprint([None])
+
+
 class DetailRecoveryTests(unittest.TestCase):
     def test_retries_only_missing_ids_and_recovers(self):
         class API:
