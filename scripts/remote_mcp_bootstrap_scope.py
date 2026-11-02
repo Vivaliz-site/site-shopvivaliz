@@ -75,6 +75,16 @@ def is_backend_controller_only(paths: list[str]) -> bool:
     # The retired-host safety fix changes the MCP handler without modifying the
     # unrelated checkpoint writer; never fall through to legacy full bootstrap.
     mandatory = {'remote-control-mcp/server.py'}
+    # A pair of classifier+regression fixes must also re-run the restricted
+    # backend installer. Otherwise a previous mixed diff that routed to the
+    # retired full-bootstrap (disabled) leaves stale live MCP source forever,
+    # and the self-repair PR suffers exactly the same no-op routing.
+    classifier_self_repair = {
+        "scripts/remote_mcp_bootstrap_scope.py",
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    }
+    if set(clean) == classifier_self_repair:
+        return True
     return mandatory.issubset(clean) and set(clean).issubset(BACKEND_CONTROLLER_FILES)
 
 
