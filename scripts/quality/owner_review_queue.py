@@ -128,12 +128,21 @@ def graph_pr(number: int) -> dict:
     return result
 
 
-def enqueue(node_id: str) -> object:
+def enqueue(node_id: str, expected_head: str) -> object:
+    """Make GitHub reject an enqueue if HEAD changed after owner review."""
+    if not isinstance(node_id, str) or not node_id or not SHA40.fullmatch(expected_head):
+        raise ValueError("invalid_queue_input")
     mutation = (
-        "mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id})"
-        "{clientMutationId}}"
+        "mutation($id:ID!,$head:GitObjectID!){enqueuePullRequest("
+        "input:{pullRequestId:$id,expectedHeadOid:$head})"
+        "{mergeQueueEntry{id}}}"
     )
-    return github(["graphql", "-f", "query=" + mutation, "-f", "id=" + node_id])
+    result = github(["graphql", "-f", "query=" + mutation,
+                     "-f", "id=" + node_id, "-f", "head=" + expected_head])
+    entry = result.get("data", {}).get("enqueuePullRequest", {}).get("mergeQueueEntry")
+    if not isinstance(entry, dict) or not entry.get("id"):
+        raise ValueError("native_queue_entry_not_attested")
+    return result
 
 
 def run_one(number: int, *, expected_head: str = "", dry_run: bool = False) -> str:
@@ -164,7 +173,7 @@ def run_one(number: int, *, expected_head: str = "", dry_run: bool = False) -> s
         return "skipped:head_moved_before_enqueue"
     if dry_run:
         return "dry_run:eligible"
-    enqueue(graph["id"])
+    enqueue(graph["id"], head)
     if rest(f"repos/{REPO}/pulls/{number}").get("head", {}).get("sha") != head:
         raise ValueError("post_enqueue_unexpected_head_change")
     return "enqueued:approved_head_unchanged"

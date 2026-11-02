@@ -89,6 +89,23 @@ class OwnerQueueTests(unittest.TestCase):
         self.assertIn("github.event.review.state == 'approved'",wf)
         self.assertIn("github.event.review.user.login == 'shopvivaliz-human'",wf)
 
+    def test_enqueue_mutation_atomically_binds_current_approved_sha(self):
+        from unittest.mock import patch
+        observed = []
+        def valid_call(args):
+            observed.append(args)
+            return {"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"queue_entry"}}}}
+        with patch.object(MOD,"github",side_effect=valid_call):
+            MOD.enqueue("PR_known", HEAD)
+        request = observed[0]
+        self.assertIn("expectedHeadOid:$head",request[2])
+        self.assertIn("head="+HEAD,request)
+        with patch.object(MOD,"github",return_value={"data":{"enqueuePullRequest":{"mergeQueueEntry":None}}}):
+            with self.assertRaises(ValueError):
+                MOD.enqueue("PR_known",HEAD)
+        with self.assertRaises(ValueError):
+            MOD.enqueue("PR_known","stale_or_invalid")
+
     def test_queue_idempotency(self):
         self.assertEqual(self.check(queued=True)[1], "already_in_merge_queue")
 
