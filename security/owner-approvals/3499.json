@@ -1,0 +1,21 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3499,
+  "resource": "mcp:controller",
+  "principal": "shopvivaliz-central-mcp",
+  "host": "always-free-arm-1787907847-26",
+  "capabilities": [
+    "controller_promote",
+    "continuity_bridge_install"
+  ],
+  "operation": "continuity_release_install",
+  "target_repository": "Vivaliz-site/site-shopvivaliz",
+  "target_merge_sha": "ae7857ee1187686a0b75bb0bd2e370a297910f60",
+  "requires_remote_main_sha_match": true,
+  "requires_free_runtime_lock": true,
+  "requires_exclusive_maintenance_lease": true,
+  "requires_fencing": true,
+  "forbid_foreign_lease_release": true,
+  "expires_at_utc": "2026-11-09T00:00:00Z"
+}
