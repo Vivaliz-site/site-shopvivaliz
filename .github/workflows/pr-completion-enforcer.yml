@@ -289,6 +289,23 @@ jobs:
             mapfile -t changed_files < <(
               gh api "repos/${REPO}/pulls/${pr}/files?per_page=100" --paginate --jq '.[].filename'
             )
+            # A human-owner grant is not a normal autonomous PR. CI green is
+            # never permission for the Oracle finalizer to merge it. Keep it
+            # Ready for review and let only the human / GitHub-native merge it.
+            owner_protected=false
+            for changed_file in "${changed_files[@]}"; do
+              case "$changed_file" in
+                security/owner-approvals/*|security/requests/*|.github/CODEOWNERS|docs/knowledge/security-approval-via-pr.md|scripts/validate-owner-pr-grant.py)
+                  owner_protected=true
+                  break
+                  ;;
+              esac
+            done
+            if [[ "$owner_protected" == 'true' ]]; then
+              echo "pr_${pr}_owner_review_only=true"
+              waiting_count=$((waiting_count + 1))
+              continue
+            fi
             mapfile -t specialized_required < <(
               python3 trusted/scripts/pr_gate_scope.py "${changed_files[@]/#/--file=}"
             )
