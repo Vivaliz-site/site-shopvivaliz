@@ -662,10 +662,11 @@ function hasActiveContinuityCheckpoint(taskStateDir = TASK_STATE_DIR) {
       if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.startsWith('_')) continue;
       try {
         const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + entry.name, 'utf8'));
-        // The reinforcement loop belongs only to the legacy/personal browser.
-        // Global/detached tasks without a bound browser conversation must not
-        // keep the Fred browser hot with account-scoped reinforcement sweeps.
-        if (Object.hasOwn(payload || {}, 'browser_session') && payload.browser_session !== 'fred') continue;
+        // The reinforcement loop belongs ONLY to explicitly bound legacy
+        // personal sessions. A missing/null browser_session is not provenance:
+        // an orphaned conversation_id must never wake the personal browser or
+        // keep its auth monitor red. Corporate tasks use the bound dispatcher.
+        if (payload?.browser_session !== 'fred') continue;
         if (!safeConversationId(payload?.conversation_id)) continue;
         const status = text(payload?.status).toUpperCase();
         if (status === 'RUNNING' || status === 'READY_TO_COMPLETE') return true;
