@@ -52,6 +52,11 @@ BACKEND_CONTROLLER_FILES = frozenset({
     "scripts/continuity/checkpoint_update_atomic.py",
     "tests/test_orquestrador_atomic_checkpoint.py",
     "tests/remote-control-mcp-test.py",
+    # E2E probe/schema updates are companion code to the constrained MCP.
+    # Routing mixed changes to disabled four-host bootstrap silently skips
+    # deployment of the already-tested MCP handler.
+    "scripts/task_continuity_e2e.py",
+    "tests/test_task_continuity_e2e.py",
     "scripts/remote_mcp_bootstrap_scope.py",
     "tests/test_remote_mcp_bootstrap_scope.py",
     ".github/workflows/remote-control-mcp-bootstrap.yml",
@@ -70,6 +75,16 @@ def is_backend_controller_only(paths: list[str]) -> bool:
     # The retired-host safety fix changes the MCP handler without modifying the
     # unrelated checkpoint writer; never fall through to legacy full bootstrap.
     mandatory = {'remote-control-mcp/server.py'}
+    # A pair of classifier+regression fixes must also re-run the restricted
+    # backend installer. Otherwise a previous mixed diff that routed to the
+    # retired full-bootstrap (disabled) leaves stale live MCP source forever,
+    # and the self-repair PR suffers exactly the same no-op routing.
+    classifier_self_repair = {
+        "scripts/remote_mcp_bootstrap_scope.py",
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    }
+    if set(clean) == classifier_self_repair:
+        return True
     return mandatory.issubset(clean) and set(clean).issubset(BACKEND_CONTROLLER_FILES)
 
 

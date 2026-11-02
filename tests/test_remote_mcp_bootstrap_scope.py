@@ -74,6 +74,40 @@ def test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap():
     ])
     assert scope.is_backend_controller_only(["remote-control-mcp/server.py"])
     assert scope.is_backend_controller_only([
+        "scripts/remote_mcp_bootstrap_scope.py",
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    ])
+    assert not scope.is_backend_controller_only([
+        "scripts/remote_mcp_bootstrap_scope.py",
+    ])
+    assert not scope.is_backend_controller_only([
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    ])
+    # Regression (2026-11-02): the approved PR #3550 modified the handler,
+    # production E2E probe, and their tests. The classifier misrouted that
+    # valid backend-only diff to a disabled four-host legacy bootstrap, so the
+    # live backend kept stale code even though GitHub reported workflow green.
+    assert scope.is_backend_controller_only([
+        "remote-control-mcp/server.py",
+        "tests/remote-control-mcp-test.py",
+        "scripts/task_continuity_e2e.py",
+        "tests/test_task_continuity_e2e.py",
+    ])
+    assert scope.is_backend_controller_only([
+        "remote-control-mcp/server.py",
+        "scripts/remote_mcp_bootstrap_scope.py",
+        "tests/test_remote_mcp_bootstrap_scope.py",
+    ])
+    assert not scope.is_backend_controller_only([
+        "scripts/task_continuity_e2e.py",
+        "tests/test_task_continuity_e2e.py",
+    ])
+    assert not scope.is_backend_controller_only([
+        "remote-control-mcp/server.py",
+        "scripts/task_continuity_e2e.py",
+        "deploy/systemd/shopvivaliz-remote-control-mcp.service",
+    ])
+    assert scope.is_backend_controller_only([
         "remote-control-mcp/server.py",
         "scripts/setup-remote-control-access.sh",
         "tests/remote-control-mcp-test.py",
