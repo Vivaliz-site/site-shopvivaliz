@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 SPEC=importlib.util.spec_from_file_location("owner_queue_grant",ROOT/"scripts/validate-owner-pr-grant.py")
@@ -126,6 +127,22 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         pr["labels"]=[]
         self.assertFalse(RUNNER.eligible(pr,files,[],checks[:-1],rules,
                                         specialized_check_completed=True)[0])
+
+    def test_specialized_impact_checks_are_never_skipped(self):
+        files=[{"filename":"scripts/pr_conflict_vm_heal.sh"}]
+        latest={"workflow_runs":[{"name":"PR Policy Enforcement",
+                "created_at":"2026-11-02T21:00:00Z","id":123,
+                "status":"completed","conclusion":"success"}]}
+        with patch.object(RUNNER,"gh_json",return_value=latest):
+            self.assertTrue(RUNNER.specialized_workflows_green(files,HEAD))
+        with patch.object(RUNNER,"gh_json",return_value={"workflow_runs":[]}):
+            self.assertFalse(RUNNER.specialized_workflows_green(files,HEAD))
+        latest["workflow_runs"][0]["conclusion"]="failure"
+        with patch.object(RUNNER,"gh_json",return_value=latest):
+            self.assertFalse(RUNNER.specialized_workflows_green(files,HEAD))
+        with patch.object(RUNNER,"gh_json",return_value={"workflow_runs":[]}):
+            self.assertTrue(RUNNER.specialized_workflows_green(
+                [{"filename":"docs/ops/p1-note.md"}],HEAD))
 
     def test_ruleset_activation_preserves_required_checks_and_mandates_queue(self):
         before={"id":24523478,"name":"Audit V5 - required PR and verified checks",

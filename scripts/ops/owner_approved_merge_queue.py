@@ -11,9 +11,15 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+# GitHub Actions executes this file as a script, so sys.path[0] points
+# at scripts/ops, not the trusted repository root. Resolve the canonical
+# main checkout before importing the reviewed path-based gate selector.
+TRUSTED_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(TRUSTED_REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(TRUSTED_REPOSITORY_ROOT))
 from scripts.pr_gate_scope import required_specialized_gates
 
 REPOSITORY = "Vivaliz-site/site-shopvivaliz"
