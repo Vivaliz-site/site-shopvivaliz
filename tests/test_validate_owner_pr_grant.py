@@ -584,6 +584,18 @@ marina_gate_tests = importlib.util.module_from_spec(MARINA_GATE_SPEC)
 MARINA_GATE_SPEC.loader.exec_module(marina_gate_tests)
 MarinaOwnerPrGateTests = marina_gate_tests.OwnerPrGateTests
 
+# Reuse the established security CI invocation to cover the new issuer's
+# one-use runtime-lock and GitHub owner-proof negative tests without a broader
+# unrelated workflow change.
+PLUGIN_ISSUER_TEST_PATH = Path(__file__).resolve().parent / "test_chatgpt_plugin_permissions_lease.py"
+PLUGIN_ISSUER_SPEC = importlib.util.spec_from_file_location(
+    "chatgpt_plugin_permission_issuer_tests", PLUGIN_ISSUER_TEST_PATH
+)
+assert PLUGIN_ISSUER_SPEC and PLUGIN_ISSUER_SPEC.loader
+plugin_issuer_tests = importlib.util.module_from_spec(PLUGIN_ISSUER_SPEC)
+PLUGIN_ISSUER_SPEC.loader.exec_module(plugin_issuer_tests)
+ChatgptPluginPermissionLeaseTests = plugin_issuer_tests.PluginPermissionLeaseTests
+
 
 if __name__ == "__main__":
     unittest.main()
