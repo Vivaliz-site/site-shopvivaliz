@@ -492,6 +492,11 @@ if ($notFound) {
                 'applicableCountry'    => 'BR',
                 'returnPolicyCategory' => 'https://schema.org/MerchantReturnFiniteReturnWindow',
                 'merchantReturnDays'   => 7,
+                // A politica publica cobre arrependimento em 7 dias, com
+                // postagem autorizada sem custo ao consumidor. Nao inferir
+                // frete zero para a compra; isto e apenas devolucao.
+                'returnMethod'         => 'https://schema.org/ReturnByMail',
+                'returnFees'           => 'https://schema.org/FreeReturn',
             ],
         ],
     ];

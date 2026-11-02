@@ -7,6 +7,10 @@ class SecurityMergeGuardTest(unittest.TestCase):
         self.assertIn("security/owner-approvals/*",script)
         self.assertIn("security/requests/*",script)
         self.assertIn("owner-protected PR must not be autonomously merged",script)
-        self.assertLess(script.index("changed_files="),script.index("result=\"$(gh api --method PUT"))
+        self.assertIn('technical_gh() {', script)
+        self.assertIn('env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS gh "$@"', script)
+        self.assertIn("[[ \"$independent_actor\" == 'fredmourao-ai' ]]", script)
+        self.assertLess(script.index('independent_actor='), script.index('result="$(technical_gh api --method PUT'))
+        self.assertLess(script.index("changed_files="), script.index('result="$(technical_gh api --method PUT'))
 
 if __name__=="__main__": unittest.main()
