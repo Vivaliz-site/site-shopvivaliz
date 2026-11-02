@@ -78,6 +78,17 @@ class OwnerQueueTests(unittest.TestCase):
         self.assertFalse(self.check(
             lambda x: x[4][0].update(head_sha="c" * 40))[0])
 
+    def test_in_progress_without_success_conclusion_is_rejected(self):
+        self.assertFalse(self.check(
+            lambda x: x[4][0].update(status="in_progress", conclusion=None))[0])
+
+    def test_github_expressions_have_literal_string_comparisons(self):
+        wf=(ROOT/".github/workflows/owner-human-review-autoqueue.yml").read_text()
+        self.assertIn("number || '"+ "sweep' }}",wf)
+        self.assertIn("github.event_name != 'pull_request_review'",wf)
+        self.assertIn("github.event.review.state == 'approved'",wf)
+        self.assertIn("github.event.review.user.login == 'shopvivaliz-human'",wf)
+
     def test_queue_idempotency(self):
         self.assertEqual(self.check(queued=True)[1], "already_in_merge_queue")
 

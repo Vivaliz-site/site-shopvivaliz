@@ -87,7 +87,9 @@ def decision(pr: dict, reviews: list, files: list, rules: list,
             return False, "required_workflow_missing:" + name
         latest = max(matching, key=lambda r: (r.get("created_at", ""),
                                                int(r.get("run_attempt") or 1)))
-        if latest.get("status") != "completed" or latest.get("conclusion") != "success":
+        # GitHub Actions only exposes conclusion=success for completed runs.
+        # Do not confuse an observed workflow status with task completion.
+        if latest.get("conclusion") != "success":
             return False, "required_workflow_not_green:" + name
     return True, "approved_head_green_queue_ready"
 
