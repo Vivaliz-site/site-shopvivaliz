@@ -46,11 +46,49 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertNotIn("REMOTE_HEAL_SCRIPT", workflow)
         self.assertNotIn("ssh -o BatchMode", workflow)
 
+    def test_fanout_settles_only_impacted_workflows_before_finalizer(self) -> None:
+        workflow = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
+        hosted = workflow.split("  enforce:", 1)[0]
+        self.assertIn("mapfile -t changed_files", hosted)
+        self.assertIn("trusted/scripts/pr_gate_scope.py", hosted)
+        self.assertIn("settle_required=('Repository Governance'", hosted)
+        self.assertIn("fanout_applicable_required=", hosted)
+        self.assertIn("fanout_scope_unavailable=fail_closed", hosted)
+        self.assertNotIn("settle_required=(\\n              'Quality Gate'", hosted)
+        from scripts.pr_gate_scope import required_specialized_gates
+        self.assertEqual(required_specialized_gates(["scripts/pr_conflict_vm_heal.sh"]), ["PR Policy Enforcement"])
+        self.assertEqual(required_specialized_gates(["docs/ops/unrelated-note.md"]), [])
+
     def test_clean_stale_pr_sync_does_not_require_gemini(self) -> None:
         healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text(encoding="utf-8")
         merge_pos = healer.index('if [[ "$merge_clean" -eq 0 ]]')
         credential_pos = healer.index("--credential-preflight")
         self.assertGreater(credential_pos, merge_pos)
+
+    def test_branch_sync_never_publishes_with_actions_bot_token(self) -> None:
+        # A GITHUB_TOKEN-authenticated branch push creates action_required CI
+        # approval runs; the independent GitHub technical identity avoids it.
+        healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text(encoding="utf-8")
+        self.assertIn("independent_actor=", healer)
+        self.assertIn('[[ "$independent_actor" == \'fredmourao-ai\' ]]', healer)
+        self.assertIn("fail 'independent_github_auth_unavailable'", healer)
+        self.assertIn("fail 'independent_github_actor_not_approved'", healer)
+        self.assertIn("env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS", healer)
+        self.assertIn("gh auth setup-git", healer)
+        self.assertIn('    git push origin "HEAD:refs/heads/', healer)
+        self.assertNotIn('\n  git push origin "HEAD:refs/heads/', healer)
+        self.assertIn("remote PR branch moved before publication", healer)
+        self.assertIn("publication would not be fast-forward", healer)
+
+    def test_technical_merger_never_uses_actions_bot_for_postmerge(self) -> None:
+        finalizer = (ROOT / "scripts" / "merge_green_pr_via_vm.sh").read_text(encoding="utf-8")
+        self.assertIn("technical_gh()", finalizer)
+        self.assertIn("env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS", finalizer)
+        self.assertIn("independent_technical_actor_required", finalizer)
+        self.assertIn("result=\"$(technical_gh api --method PUT", finalizer)
+        self.assertNotIn("result=\"$(gh api --method PUT", finalizer)
+        self.assertIn("owner-protected PR must not be autonomously merged", finalizer)
+        self.assertIn("PR head does not contain current main", finalizer)
 
     def test_history_integrity_avoids_blob_downloads(self) -> None:
         workflow = (WF / "history-integrity.yml").read_text(encoding="utf-8")
