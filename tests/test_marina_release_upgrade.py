@@ -27,7 +27,7 @@ class UpgradeOperatorSafety(unittest.TestCase):
         s = UPGRADE.read_text()
         for marker in ("SHOPVIVALIZ_MARINA_APPROVED_SHA", "SHOPVIVALIZ_MARINA_EXPECTED_CURRENT_SHA",
                        "unapproved_checkout", "stale_active_release", "dirty_checkout",
-                       "concurrent_upgrade", "safe_git", "source_file_unsafe",
+                       "concurrent_upgrade", "safe_git", "checkout_status_unavailable", "source_file_unsafe",
                        "existing_file_mismatch", "rollback", "ROLLED_BACK_AFTER_FAILURE",
                        "owner_grant_preflight_denied", "systemctl daemon-reload",
                        "local_auth_smoke.py", "CURRENT_UNCHANGED=true"):
@@ -51,6 +51,20 @@ class UpgradeOperatorSafety(unittest.TestCase):
         self.assertIn("--enable-approved-scoped-write", source)
         self.assertIn('owner_approved_scoped_write_grant_unavailable', source)
         self.assertIn("write_operator=write_operator", source)
+
+    def test_type_exec_must_not_smoke_before_bounded_listener_ready(self):
+        text = UPGRADE.read_text()
+        restarted = text.index("systemctl restart shopvivaliz-marina-mcp.service", text.index("switched=yes"))
+        health = text.index("http://127.0.0.1:5580/health", restarted)
+        smoke = text.index('"$release/local_auth_smoke.py"', restarted)
+        self.assertLess(restarted, health)
+        self.assertLess(health, smoke)
+        self.assertIn("attempt<=45", text)
+        self.assertIn("--connect-timeout 1 --max-time 1", text)
+        self.assertIn('[[ "$status" == 401 ]]', text)
+        self.assertIn("local_listener_not_ready_after_restart", text)
+        self.assertIn("sleep 1", text)
+        self.assertIn("rollback", text)
 
     def test_release_copies_all_protected_modules(self):
         s = UPGRADE.read_text()

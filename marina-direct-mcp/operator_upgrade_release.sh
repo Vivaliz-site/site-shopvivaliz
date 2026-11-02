@@ -53,7 +53,8 @@ safe_git() {
         /usr/bin/git -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$source_checkout" "$@"
 }
 [[ "$(safe_git rev-parse HEAD 2>/dev/null)" == "$sha" ]] || refuse unapproved_checkout
-[[ -z "$(safe_git status --porcelain 2>/dev/null)" ]] || refuse dirty_checkout
+checkout_status="$(safe_git status --porcelain 2>/dev/null)" || refuse checkout_status_unavailable
+[[ -z "$checkout_status" ]] || refuse dirty_checkout
 [[ -d /run && ! -L /run && "$(stat -c '%u' /run)" == 0 ]] || refuse lock_parent_unsafe
 refuse_writable /run
 lock=/run/shopvivaliz-marina-mcp-upgrade.lock
@@ -172,6 +173,19 @@ mv -Tf "$temp_unit" "$unit"
 mv -Tf "$temp_link" "$root/current"
 systemctl daemon-reload
 systemctl restart shopvivaliz-marina-mcp.service
+# Type=exec confirms process creation, NOT that the app has completed its
+# protected GitHub owner-grant verification and started listening. Poll only
+# loopback /health, without credentials; 401 is the intended healthy boundary.
+ready=no
+for (( attempt=1; attempt<=45; attempt++ )); do
+    status="$(/usr/bin/curl --silent --connect-timeout 1 --max-time 1 --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5580/health || :)"
+    if [[ "$status" == 401 ]]; then
+        ready=yes
+        break
+    fi
+    sleep 1
+done
+[[ "$ready" == yes ]] || refuse local_listener_not_ready_after_restart
 sudo -n -u shopvivaliz-marina-mcp /usr/bin/python3 -B "$release/local_auth_smoke.py"
 [[ "$(readlink "$root/current")" == "releases/$sha" ]] || refuse activation_not_persisted
 [[ "$(systemctl show shopvivaliz-marina-mcp.service -p ActiveState --value)" == active ]] || refuse activation_not_running
