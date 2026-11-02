@@ -11,6 +11,11 @@
 *.js text eol=lf
 Dockerfile text eol=lf
 
+# Pipeline audit manifest is a byte-exact CRLF blob upstream. Do not
+# normalize its checkout, or safe sync sees a perpetual EOL-only dirty path.
+# This exception applies only to this canonical mirrored JSON file.
+docs/quality/GLOBAL_AUDIT_MANIFEST.json -text -eol
+
 # Rodada 10.1 (2026-08-19, autorizado por Fred): export-ignore para diretorios
 # confirmados como nao-runtime (nenhum require/include do codigo PHP aponta pra
 # eles -- verificado por busca em todo o repo antes de aplicar). O deploy real

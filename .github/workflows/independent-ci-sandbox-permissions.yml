@@ -1,0 +1,40 @@
+name: Independent CI sandbox permission regression
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ops/shopvivaliz-independent-ci.py'
+      - 'tests/test_independent_ci_worktree_permissions.py'
+      - 'tests/test_post_migration_global_audit_parity.py'
+      - 'scripts/certify-audit-manifest.py'
+      - 'scripts/validate-global-audit-policy.py'
+      - 'docs/quality/GLOBAL_AUDIT_MANIFEST.json'
+      - '.github/workflows/independent-ci-sandbox-permissions.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/shopvivaliz-independent-ci.py'
+      - 'tests/test_independent_ci_worktree_permissions.py'
+      - 'tests/test_post_migration_global_audit_parity.py'
+      - 'scripts/certify-audit-manifest.py'
+      - 'scripts/validate-global-audit-policy.py'
+      - 'docs/quality/GLOBAL_AUDIT_MANIFEST.json'
+      - '.github/workflows/independent-ci-sandbox-permissions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox-permissions:
+    name: Validate unprivileged offline CI worktree
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax and isolated sandbox regression
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/ops/shopvivaliz-independent-ci.py tests/test_independent_ci_worktree_permissions.py
+          python3 -m unittest tests.test_independent_ci_worktree_permissions -v
+          python3 -m unittest tests.test_post_migration_global_audit_parity -v
