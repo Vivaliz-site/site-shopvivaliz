@@ -19,8 +19,8 @@ GOVERNED = {
     "Vivaliz-site/mercadolivre-returns-recovery",
     "Vivaliz-site/shopvivaliz-m365",
     "Vivaliz-site/buscador",
-    "fredmourao-ai/mei-mg-email",
-    "fredmourao-ai/solange-rolla-consultorio",
+    "Vivaliz-site/mei-mg-email",
+    "Vivaliz-site/solange-rolla-consultorio",
 }
 
 
@@ -55,7 +55,7 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
             "cross-repo-watchdog",
             "recover me",
             "gpt",
-            "fredmourao-ai/mei-mg-email",
+            "Vivaliz-site/mei-mg-email",
         )
         state.record_progress("cross-repo-watchdog", next_action="run the next safe step")
         path = self.runtime / "cross-repo-watchdog.json"
@@ -67,7 +67,7 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
         result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
         self.assertEqual(result["dispatched"], 1)
         request = watchdog.read_requests(self.runtime)[0]
-        self.assertEqual(request["repository"], "fredmourao-ai/mei-mg-email")
+        self.assertEqual(request["repository"], "Vivaliz-site/mei-mg-email")
 
     def test_dispatcher_allowlist_is_exactly_the_governed_set(self) -> None:
         self.assertEqual(dispatcher.ALLOWED_REPOSITORIES, GOVERNED)
@@ -75,6 +75,12 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
             self.assertEqual(dispatcher._safe_repository(repository), repository)
         with self.assertRaises(ValueError):
             dispatcher._safe_repository("someone/unmanaged-repo")
+        # The moved repository is never reinterpreted as the old owner on an
+        # authenticated clone; historical tasks need explicit provenance migration.
+        with self.assertRaises(ValueError):
+            dispatcher._safe_repository("fredmourao-ai/mei-mg-email")
+        with self.assertRaises(ValueError):
+            dispatcher._safe_repository("fredmourao-ai/solange-rolla-consultorio")
 
     def test_dispatcher_rejects_cross_repository_request_mismatch(self) -> None:
         checkpoint = {
