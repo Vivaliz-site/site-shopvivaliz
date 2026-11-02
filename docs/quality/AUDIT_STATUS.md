@@ -215,3 +215,12 @@ Todas as operações stateful críticas foram exercitadas ao vivo contra produç
 
 ## Regra de validade
 Esta auditoria cobre o SHA `35fa132047b207e00bef37863a158725cf68dac6` (código web equivalente a `origin/main` em 2026-09-19). Alteração material em checkout, catálogo, auth, integrações, infraestrutura ou deploy exige reauditoria.
+
+## 2026-11-02 — paridade da identidade Solange transferida no registro V5
+
+- Base SHA: 583987a205784e722d7d176f9c5a2d00e240373d
+- Impacto: reflete apenas a transferencia oficial do mesmo GitHub repository ID 1345489426 para Vivaliz-site/solange-rolla-consultorio em lista global de auditoria, hashes e scripts; nao altera precos, estoque, checkout, Ads, acesso ou gates comerciais.
+- Testes: validacao de lista, hashes de blob, sintaxe Python e check do repo novo como coberto e do endereco antigo como nao autorizado. Aguardam CI e paridade com manifesto global da PR #72.
+- Evidencias: a origem antiga retorna 301 e a nova conserva o ID numerico; nenhuma autorizacao comercial ou UI E2E foi inferida.
+- Pendencias: sincronizacao e gates do manifesto central, reauditoria apos merge; NAO_APTO.
+- Estado: NAO_APTO
