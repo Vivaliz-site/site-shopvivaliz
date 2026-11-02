@@ -10,6 +10,10 @@ const root = process.env.CHECKOUT_TEST_ROOT || path.join(__dirname, '..');
 const checkout = fs.readFileSync(path.join(root, 'checkout.php'), 'utf8');
 const hardener = fs.readFileSync(path.join(root, 'includes/checkout-output-hardening.php'), 'utf8');
 
+const draftStart = checkout.indexOf('    (function persistCheckoutForm() {');
+const draftEnd = checkout.indexOf('    /* Carrinho abandonado:', draftStart);
+assert.ok(draftStart >= 0 && draftEnd > draftStart, 'form persistence source must exist');
+const draftSource = checkout.slice(draftStart, draftEnd);
 const helperStart = checkout.indexOf('    function pendingKey(');
 const helperEnd = checkout.indexOf('    window.svNewCheckoutSubmit = true;', helperStart);
 const submitStart = checkout.indexOf("document.getElementById('checkout-form').addEventListener('submit', async function (e)", helperEnd);
@@ -26,12 +30,17 @@ handlerSource = handlerSource.slice(0, rawTotalStart) + '            ' + totalRe
 
 async function scenario(change, options = {}) {
   const memory = new Map();
+  memory.set('shopvivaliz_checkout_form', JSON.stringify({ customer_name: 'Synthetic Fixture', address: 'Fixture Street' }));
   const orders = [];
   const payments = [];
   const redirects = [];
   const button = { disabled: false, textContent: '' };
   const status = { textContent: '', className: '' };
-  const form = { checkValidity() { return true; }, reportValidity() {}, addEventListener(name, handler) { if (name === 'submit') this.handler = handler; } };
+  const form = {
+    submitHandlers: [], checkValidity() { return true; }, reportValidity() {},
+    querySelector() { return { value: '' }; },
+    addEventListener(name, handler) { if (name === 'submit') this.submitHandlers.push(handler); },
+  };
   const fields = {
     customer_name: 'Synthetic Fixture', customer_email: 'fixture@example.invalid',
     customer_phone: '(00) 00000-0000', cep: '01310-100', address: 'Fixture Street',
@@ -73,16 +82,18 @@ async function scenario(change, options = {}) {
     },
   };
   vm.createContext(context);
-  vm.runInContext(checkout.slice(helperStart, helperEnd) + '\n' + handlerSource, context);
-  await form.handler.call(form, { preventDefault() {} });
-  if (options.cryptoUnavailable || options.invalidTotal) return { orders, payments, memory, status, button };
+  vm.runInContext(draftSource + '\n' + checkout.slice(helperStart, helperEnd) + '\n' + handlerSource, context);
+  const submit = async () => { for (const handler of form.submitHandlers) await handler.call(form, { preventDefault() {} }); };
+  await submit();
+  const draftAfterFailure = memory.has('shopvivaliz_checkout_form');
+  if (options.cryptoUnavailable || options.invalidTotal) return { orders, payments, memory, status, button, draftAfterFailure };
   assert.equal(orders.length, 1, 'first attempt creates one fixture order');
   assert.equal(payments.length, 1, 'first attempt reaches the simulated gateway failure');
   assert.match(status.textContent, /Fixture temporary gateway failure/);
   const pending = JSON.parse(memory.get('shopvivaliz_pending_payment'));
   if (change) change({ fields, items, shipping, memory, context, setCoupon(value) { coupon = value; } });
-  await form.handler.call(form, { preventDefault() {} });
-  return { orders, payments, pending, redirects, status, lastOrder: context.window.ShopVivalizLastOrder };
+  await submit();
+  return { orders, payments, pending, redirects, status, lastOrder: context.window.ShopVivalizLastOrder, memory, draftAfterFailure };
 }
 
 (async () => {
@@ -150,6 +161,17 @@ async function scenario(change, options = {}) {
     assert.equal(result.payments.length, 0);
     assert.match(result.status.textContent, /total inválido/);
   });
-  console.log(JSON.stringify({ tests: 15, failures }));
+  await check('Gateway failure keeps checkout form draft; successful handoff clears it', async () => {
+    const result = await scenario();
+    assert.equal(result.draftAfterFailure, true, 'gateway failure must preserve draft for retry');
+    assert.equal(result.memory.has('shopvivaliz_checkout_form'), false, 'successful redirect handoff must clear draft');
+  });
+  await check('Preflight failures preserve checkout form draft', async () => {
+    for (const option of [{cryptoUnavailable:true},{invalidTotal:true}]) {
+      const result = await scenario(null, option);
+      assert.equal(result.draftAfterFailure, true, 'preflight failure must preserve draft');
+    }
+  });
+  console.log(JSON.stringify({ tests: 17, failures }));
   process.exitCode = failures ? 1 : 0;
 })().catch(error => { console.error(error.stack); process.exitCode = 2; });
