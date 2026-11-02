@@ -1,7 +1,7 @@
 # STAGING TEMPLATE ONLY. Official host administrator review/install required.
 # Never install or execute through GitHub Actions or an unapproved RDC privilege route.
 [Unit]
-Description=ShopVivaliz Marina independent read-only MCP
+Description=ShopVivaliz Marina independent MCP (grant-scoped private writes)
 After=network.target
 ConditionPathExists=/var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/auth-token
 
@@ -10,7 +10,7 @@ Type=exec
 User=shopvivaliz-marina-mcp
 Group=shopvivaliz-marina-mcp
 WorkingDirectory=/opt/shopvivaliz-marina-mcp/current
-ExecStart=/usr/bin/python3 /opt/shopvivaliz-marina-mcp/current/server.py --port 5580 --token-file /var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/auth-token
+ExecStart=/usr/bin/python3 /opt/shopvivaliz-marina-mcp/current/server.py --port 5580 --token-file /var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/auth-token --enable-approved-scoped-write
 Restart=on-failure
 RestartSec=5s
 UMask=0077
@@ -20,6 +20,8 @@ AmbientCapabilities=
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict
+# Fixed directories needed for durable CAS, fencing and append-only redacted audit.
+ReadWritePaths=/var/lib/shopvivaliz-marina-mcp/workspace /var/lib/shopvivaliz-marina-mcp/state
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
