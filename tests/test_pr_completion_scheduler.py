@@ -43,6 +43,17 @@ class SchedulerTests(unittest.TestCase):
         self.assertIn("--batch 1", workflow, "retain bounded one-PR schedule budget")
         self.assertIn("test \"$(hostname -s)\" = 'marina-a1-4c24g'", workflow)
 
+    def test_owner_only_security_grants_are_skipped_before_finalizer(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/pr-completion-enforcer.yml").read_text()
+        finalizer = (root / "scripts/merge_green_pr_via_vm.sh").read_text()
+        for path in ("security/owner-approvals/*", "security/requests/*",
+                     ".github/CODEOWNERS", "scripts/validate-owner-pr-grant.py"):
+            self.assertIn(path, workflow)
+            self.assertIn(path, finalizer)
+        self.assertIn("owner_review_only=true", workflow)
+        self.assertIn("owner-protected PR must not be autonomously merged", finalizer)
+
     def test_batch_one_rotation_reaches_all_not_just_oldest(self):
         rows = [pr(x) for x in (25, 50, 75, 100)]
         seen = [mod.select_prs(rows, REPO, slot, 1)[0] for slot in range(4)]
