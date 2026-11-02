@@ -11,6 +11,8 @@ on:
       - 'tests/test_mcp_central_marina_activation.py'
       - 'scripts/validate-owner-pr-grant.py'
       - 'tests/test_validate_owner_pr_grant.py'
+      - 'scripts/continuity/owner_authorized_rollout.py'
+      - 'tests/test_owner_authorized_rollout.py'
       - 'security/owner-approvals/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-iphone-private-ssh-relay.sh'
@@ -54,6 +56,8 @@ on:
       - 'tests/test_mcp_central_marina_activation.py'
       - 'scripts/validate-owner-pr-grant.py'
       - 'tests/test_validate_owner_pr_grant.py'
+      - 'scripts/continuity/owner_authorized_rollout.py'
+      - 'tests/test_owner_authorized_rollout.py'
       - 'security/owner-approvals/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-iphone-private-ssh-relay.sh'
@@ -102,11 +106,11 @@ jobs:
           set -Eeuo pipefail
           python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py tests/iphone-private-ssh-relay-contract-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/oci-mcp-stage7-action.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py tests/test_secure_mcp_tunnel_stability.py tests/test_fredwin_mcp_persistence.py
           python3 -m py_compile scripts/controller-recovery-with-lease.py tests/test_controller_remote_recovery_gate.py
-          python3 -m py_compile scripts/ops/activate-mcp-central-marina-readonly.py tests/test_mcp_central_marina_activation.py scripts/validate-owner-pr-grant.py tests/test_validate_owner_pr_grant.py
+          python3 -m py_compile scripts/ops/activate-mcp-central-marina-readonly.py tests/test_mcp_central_marina_activation.py scripts/validate-owner-pr-grant.py tests/test_validate_owner_pr_grant.py scripts/continuity/owner_authorized_rollout.py tests/test_owner_authorized_rollout.py
           python3 tests/test_controller_remote_recovery_gate.py
           python3 tests/remote-control-mcp-test.py
           python3 tests/test_mcp_central_marina_activation.py -v
-          python3 -m unittest tests.test_validate_owner_pr_grant -q
+          python3 -m unittest tests.test_validate_owner_pr_grant tests.test_owner_authorized_rollout -q
           python3 tests/test_mcp_rdc_capability_parity.py -v
           python3 scripts/validate-mcp-rdc-capability-parity.py
           python3 tests/iphone-private-ssh-relay-contract-test.py
