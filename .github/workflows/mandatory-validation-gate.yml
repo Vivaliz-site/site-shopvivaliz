@@ -5,6 +5,9 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled]
   pull_request_review:
     types: [submitted, dismissed]
+  # Validate synthetic integration SHA; keep human-approved PR head immutable.
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main, master]
 permissions:
