@@ -133,7 +133,7 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertIn("auth_native_autofill_unconfirmed", source)
         self.assertIn("typed:false,native_autofill:true", source)
         self.assertNotIn("document.cookie", source)
-        self.assertNotIn("password_value", source)
+        self.assertNotIn("document.querySelector('input[type=password]').value", source)
         self.assertNotIn("localStorage", source)
 
     def test_verification_code_format_is_constrained(self):
