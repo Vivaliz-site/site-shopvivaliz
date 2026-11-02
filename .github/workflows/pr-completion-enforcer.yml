@@ -12,6 +12,7 @@ on:
 permissions:
   contents: write
   actions: write
+  checks: read
   pull-requests: write
   issues: write
 
@@ -59,6 +60,12 @@ jobs:
               echo 'schedule_no_internal_open_pr=true'
               exit 0
             fi
+          fi
+          # Review-originated runs can have an empty pull_requests array.
+          # Resolve only an unambiguous open PR on this exact current HEAD.
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -z "$target_pr" && -n "${SOURCE_HEAD_SHA:-}" ]]; then
+            associated="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SOURCE_HEAD_SHA}/pulls?per_page=100")"
+            target_pr="$(printf '%s\n' "$associated" | python3 trusted/scripts/pr_owner_review_recovery.py --repo "$GITHUB_REPOSITORY" --lookup-head "$SOURCE_HEAD_SHA")"
           fi
           echo "target_pr=$target_pr" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' ]]; then
@@ -178,7 +185,7 @@ jobs:
           set -Eeuo pipefail
           bash -n trusted/scripts/merge_green_pr_via_vm.sh
           bash -n trusted/scripts/pr_conflict_vm_heal.sh
-          python3 -m py_compile trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py trusted/scripts/pr_conflict_gemini_healer.py trusted/.github/scripts/ai_conflict_resolver.py
+          python3 -m py_compile trusted/scripts/pr_owner_review_recovery.py trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py trusted/scripts/pr_conflict_gemini_healer.py trusted/.github/scripts/ai_conflict_resolver.py
 
       - name: Ensure GitHub CLI available on Oracle runner
         shell: bash
@@ -272,6 +279,11 @@ jobs:
               waiting_count=$((waiting_count + 1))
               continue
             fi
+            # Recover the original pre-approval job, not a different check suite.
+            # The helper requires real exact-HEAD approval, respects operational
+            # holds and retries at most once. It never edits or merges the PR.
+            python3 trusted/scripts/pr_owner_review_recovery.py --repo "$REPO" --pr "$pr"
+
             # An explicitly held ready PR remains ineligible until its operator
             # removes the hold after obtaining the official maintenance lease.
             if jq -e '[.labels[].name] | any(. == "blocked-by-runtime-lease" or . == "blocked-external" or . == "no-auto-merge")' <<<"$meta" >/dev/null; then
@@ -455,6 +467,7 @@ jobs:
           echo 'missing_required_gate_replayed=true'
           echo 'action_required_gate_replayed=true'
           echo 'failed_required_gate_auto_replayed=false'
+          echo 'resolved_owner_review_original_job_replayed_once=true'
           echo 'conflict_repair_uses_free_local_ollama=true'
           echo 'historical_failed_run_blocks_newer_success=false'
           echo 'draft_internal_pr_silently_ignored=false'
