@@ -874,6 +874,35 @@ state_path.write_text(json.dumps(state))
         self.assertIn("python3 scripts/safe_git_push.py", prompt)
         self.assertIn("Never run git push directly", prompt)
 
+    def test_detached_prompt_omits_unbounded_recovery_history(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        # Regression: real checkpoints accumulated hundreds of retry events
+        # until the detached prompt exceeded Ollama's 64-KiB input gate.
+        state["recovery_history"] = [
+            {"event": "retry", "detail": "PRIVATE_AUDIT_DATA_DO_NOT_SEND", "n": n}
+            for n in range(1300)
+        ]
+        state["history"] = [{"event": "progress", "private": "SECRET_NOT_IN_PROMPT"}]
+        state["browser_session"] = "dev"
+        state["conversation_id"] = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        prompt = dispatcher._build_prompt({}, state)
+        self.assertLessEqual(len(prompt.encode("utf-8")), 60 * 1024)
+        self.assertIn('"recovery_history_event_count": 1300', prompt)
+        self.assertIn('"history_event_count": 1', prompt)
+        self.assertIn('"browser_session": "dev"', prompt)
+        self.assertIn(state["conversation_id"], prompt)
+        self.assertIn("continue real work", prompt)
+        self.assertNotIn("PRIVATE_AUDIT_DATA_DO_NOT_SEND", prompt)
+        self.assertNotIn("SECRET_NOT_IN_PROMPT", prompt)
+
+    def test_detached_prompt_rejects_objective_exceeding_safe_budget(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["goal"] = "G" * (70 * 1024)
+        with self.assertRaisesRegex(ValueError, "detached_continuation_prompt_exceeds_safe_budget"):
+            dispatcher._build_prompt({}, state)
+
     def test_detached_prompt_names_the_headless_approved_task_state_command(self) -> None:
         dispatcher = (SCRIPTS / "task_resume_dispatcher.py").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/agent_task_state.py ready", dispatcher)
