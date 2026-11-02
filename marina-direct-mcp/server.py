@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Marina-only, read-only MCP staging server. Never grants shell or sudo.
+"""Marina MCP with read-only default and optional protected scoped writes. Never grants shell or sudo.
 
 This component does not set up an ingress tunnel or register a ChatGPT
 connector. Its sole listener must remain on loopback.
@@ -24,6 +24,8 @@ EXPECTED_HOST = "marina-a1-4c24g"
 # Fixed sibling file staged root-owned and read-only by the official operator.
 # run_path avoids ambient PYTHONPATH and caller-controlled module lookup.
 _TELEMETRY = runpy.run_path(str(Path(__file__).with_name("read_only_telemetry.py")))
+# Dormant unless trusted host startup supplies a protected write operator.
+_WRITE = runpy.run_path(str(Path(__file__).with_name("scoped_write.py")))
 PROTOCOL_VERSION = "2025-06-18"
 MAX_BODY = 16384
 # A local or tunneled slow client must not exhaust the read-only MCP's threads.
@@ -87,6 +89,27 @@ TOOLS = [
     },
 ]
 
+WRITE_TOOL = {
+    "name": "marina_workspace_file_write",
+    "description": "Create or CAS-replace one small private data file in Marina MCP's own workspace. Requires approved owner grant and durable host lease.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "filename": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,47}\\.(txt|json)$"},
+            "content_utf8": {"type": "string", "maxLength": 4096},
+            "expected_sha256": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]},
+            "pr_number": {"type": "integer", "minimum": 1},
+            "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "merge_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "idempotency_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{7,127}$"},
+            "fencing_token": {"type": "integer", "minimum": 1},
+        },
+        "required": ["filename", "content_utf8", "expected_sha256", "pr_number",
+                     "head_sha", "merge_sha", "idempotency_key", "fencing_token"],
+        "additionalProperties": False,
+    },
+}
+
 
 def load_token(path: Path) -> bytes:
     # Open once with O_NOFOLLOW: no lstat-to-open symlink/rename race.
@@ -132,6 +155,7 @@ def create_server(
     token: bytes, port: int = 5580, *,
     host: str = "127.0.0.1",
     service_reader=inspect_service,
+    write_operator=None,
 ) -> ThreadingHTTPServer:
     if host != "127.0.0.1":
         raise ValueError("loopback_only")
@@ -264,7 +288,7 @@ def create_server(
                 elif method == "ping":
                     result = {}
                 elif method == "tools/list":
-                    result = {"tools": TOOLS}
+                    result = {"tools": TOOLS + ([WRITE_TOOL] if write_operator is not None else [])}
                 elif method == "tools/call":
                     params = request.get("params")
                     if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
@@ -272,6 +296,7 @@ def create_server(
                     name, arguments = params["name"], params["arguments"]
                     if not isinstance(arguments, dict):
                         raise ValueError("invalid_tool_arguments")
+                    tool_failed = False
                     if name == "marina_host_health" and not arguments:
                         output = {
                             "host": actual_host,
@@ -286,6 +311,9 @@ def create_server(
                         output = _TELEMETRY["public_telemetry_read"](arguments["source"])
                     elif name == "marina_kernel_telemetry_batch" and set(arguments) == {"sources"}:
                         output = _TELEMETRY["public_telemetry_batch"](arguments["sources"])
+                    elif name == "marina_workspace_file_write" and write_operator is not None:
+                        write_ok, output = _WRITE["execute"](arguments, write_operator)
+                        tool_failed = not write_ok
                     elif name == "marina_service_status" and set(arguments) == {"service"}:
                         requested_service = arguments["service"]
                         if not isinstance(requested_service, str) or requested_service not in ALLOWED_SERVICES:
@@ -293,7 +321,7 @@ def create_server(
                         output = service_reader(requested_service)
                     else:
                         raise ValueError("unsupported_tool_or_arguments")
-                    result = {"content": [{"type": "text", "text": json.dumps(output, sort_keys=True)}], "isError": False}
+                    result = {"content": [{"type": "text", "text": json.dumps(output, sort_keys=True)}], "isError": tool_failed}
                 else:
                     error = {"code": -32601, "message": "method_not_found"}
             except (ValueError, TypeError):
