@@ -226,7 +226,7 @@ def evaluate(
 def cache_price_fingerprint(document: dict[str, Any]) -> str:
     """Hash every cache field used for price/SKU/provenance validation.
 
-    The stock reconciler rewrites this cache every five minutes with new stock
+    The stock reconciler rewrites this cache on its scheduled cycles with new stock
     and refresh timestamps even if its prices do not change. A full ERP audit
     takes longer than that cycle: a raw-file hash would always report a false
     price-race. Exclude ONLY stock, presentation, and volatile time fields.
