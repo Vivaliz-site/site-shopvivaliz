@@ -38,6 +38,100 @@ def evaluate(active_rows, erp_details, cache_rows, site_rows, amazon_table=AMAZO
     return audit.evaluate(active_rows, erp_details, cache_rows, site_rows, amazon_table)
 
 
+class PriceSnapshotStabilityTests(unittest.TestCase):
+    def sample_cache(self):
+        return {
+            "total": 1, "timestamp": "2026-11-02T10:00:00Z",
+            "price_list_id": 991, "price_source": "olist_tiny_amazon",
+            "itens": [item(10, "A", 100, 0, base_regular=90)],
+        }
+
+    def test_stock_only_refresh_keeps_price_snapshot_stable(self):
+        from copy import deepcopy
+        original = self.sample_cache()
+        refreshed = deepcopy(original)
+        refreshed["timestamp"] = "2026-11-02T10:05:00Z"
+        refreshed["itens"][0]["_stock_synced_at"] = "2026-11-02T10:05:00Z"
+        refreshed["itens"][0]["estoque_disponivel"] = 3
+        refreshed["itens"][0]["estoque"] = {"quantidade": 3}
+        refreshed["itens"][0]["anexos"] = [{"url": "https://example.com/test.jpg"}]
+        self.assertEqual(audit.cache_price_fingerprint(original),
+                         audit.cache_price_fingerprint(refreshed))
+
+    def test_price_sku_base_price_and_provenance_changes_are_rejected(self):
+        from copy import deepcopy
+        original = self.sample_cache()
+        sha = audit.cache_price_fingerprint(original)
+        changes = (
+            ("itens", "precos", "preco", 101),
+            ("itens", "_erp_base_prices", "preco", 89),
+            ("itens", "sku", None, "B"),
+            ("itens", "_price_list_id", None, 992),
+            ("itens", "_price_source", None, "unknown"),
+            ("price_list_id", None, None, 992),
+            ("price_source", None, None, "unknown"),
+        )
+        for outer, inner, leaf, value in changes:
+            with self.subTest(field=(outer, inner, leaf)):
+                newer = deepcopy(original)
+                if outer == "itens":
+                    target = newer["itens"][0]
+                    if leaf is None:
+                        target[inner] = value
+                    else:
+                        target[inner][leaf] = value
+                else:
+                    newer[outer] = value
+                self.assertNotEqual(sha, audit.cache_price_fingerprint(newer))
+
+    def test_public_snapshot_detects_price_and_sku_changes(self):
+        from copy import deepcopy
+        rows = [published(10, "A", 100), published(11, "B", 99)]
+        original = audit.storefront_price_fingerprint(rows)
+        self.assertEqual(original, audit.storefront_price_fingerprint(list(reversed(rows))))
+        for key, value in (("price", 101), ("sku", "C"), ("olist_product_id", 999)):
+            with self.subTest(key=key):
+                newer = deepcopy(rows)
+                newer[0][key] = value
+                self.assertNotEqual(original, audit.storefront_price_fingerprint(newer))
+
+    def test_invalid_cache_snapshot_fails_closed(self):
+        with self.assertRaises(ValueError):
+            audit.cache_price_fingerprint({"itens": [None]})
+        with self.assertRaises(ValueError):
+            audit.storefront_price_fingerprint([None])
+
+
+class DetailRecoveryTests(unittest.TestCase):
+    def test_retries_only_missing_ids_and_recovers(self):
+        class API:
+            calls = []
+            def api_get(self, path, token, **kwargs):
+                self.calls.append(path)
+                if path.endswith("/2") and self.calls.count(path) == 1:
+                    raise RuntimeError("temporary_throttle")
+                return {"produto": {"id": path.split("/")[-1], "sku": "OK"}}
+        api = API()
+        details, errors = audit.fetch_details_with_targeted_retry(
+            api, "synthetic", [active(1, "A"), active(2, "B")], sleep=lambda _: None)
+        self.assertEqual(errors, [])
+        self.assertEqual(set(details), {"1", "2"})
+        self.assertEqual(api.calls, ["produtos/1", "produtos/2", "produtos/2"])
+
+    def test_persistent_failure_is_not_hidden(self):
+        class API:
+            calls = 0
+            def api_get(self, path, token, **kwargs):
+                self.calls += 1
+                raise RuntimeError("unavailable")
+        api = API()
+        details, errors = audit.fetch_details_with_targeted_retry(
+            api, "synthetic", [active(3, "C")], sleep=lambda _: None)
+        self.assertEqual(details, {})
+        self.assertEqual(api.calls, 3)
+        self.assertEqual(errors[0]["code"], "erp_detail_query_failed")
+
+
 class PriceParityTests(unittest.TestCase):
     def test_all_real_prices_match(self):
         data = evaluate(

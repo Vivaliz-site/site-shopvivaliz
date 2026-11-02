@@ -13,6 +13,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -222,6 +223,103 @@ def evaluate(
             "counts": counts, "issues": issues, "unpublished_exclusions": excluded}
 
 
+def cache_price_fingerprint(document: dict[str, Any]) -> str:
+    """Hash every cache field used for price/SKU/provenance validation.
+
+    The stock reconciler rewrites this cache on its scheduled cycles with new stock
+    and refresh timestamps even if its prices do not change. A full ERP audit
+    takes longer than that cycle: a raw-file hash would always report a false
+    price-race. Exclude ONLY stock, presentation, and volatile time fields.
+    """
+    if not isinstance(document, dict) or not isinstance(document.get("itens"), list):
+        raise ValueError("cache_price_snapshot_invalid")
+    projected: list[dict[str, Any]] = []
+    for item in document["itens"]:
+        if not isinstance(item, dict):
+            raise ValueError("cache_price_snapshot_row_invalid")
+        projected.append({key: item.get(key) for key in (
+            "id", "sku", "codigo", "situacao", "tipo", "precos", "preco",
+            "_erp_base_prices", "_price_list_id", "_price_source",
+        )})
+    projected.sort(key=lambda item: (
+        str(item.get("id")), str(item.get("sku")),
+        json.dumps(item, ensure_ascii=False, sort_keys=True, allow_nan=False),
+    ))
+    fields = {
+        "total": document.get("total"),
+        "price_list_id": document.get("price_list_id"),
+        "price_source": document.get("price_source"),
+        "itens": projected,
+    }
+    canonical = json.dumps(fields, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def storefront_price_fingerprint(rows: list[dict[str, Any]]) -> str:
+    """Detect SKU/price/product-set changes on the published live storefront."""
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        raise ValueError("public_price_snapshot_invalid")
+    relevant = [
+        {key: row.get(key) for key in ("olist_product_id", "id", "sku", "codigo", "price")}
+        for row in rows
+    ]
+    relevant.sort(key=lambda row: (
+        str(row.get("olist_product_id") or row.get("id")), str(row.get("sku")),
+        json.dumps(row, ensure_ascii=False, sort_keys=True, allow_nan=False),
+    ))
+    return hashlib.sha256(json.dumps(relevant, ensure_ascii=False,
+        sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+
+
+def fetch_details_with_targeted_retry(api: Any, token: str, active: list[dict[str, Any]],
+                                      *, sleep: Any = time.sleep) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
+    """Retry only failed ERP details, never certify an incomplete response."""
+    details: dict[str, dict[str, Any]] = {}
+    pending: dict[str, str] = {}
+    for index, product in enumerate(active, 1):
+        pid = str(product.get("id") or "")
+        if not pid.isdecimal():
+            pending[pid] = "invalid_id"
+            continue
+        try:
+            result = api.api_get("produtos/" + pid, token, timeout=14, attempts=3)
+            detail = result.get("produto") if isinstance(result.get("produto"), dict) else result.get("data") if isinstance(result.get("data"), dict) else result
+            if isinstance(detail.get("produto"), dict):
+                detail = detail["produto"]
+            if not isinstance(detail, dict) or not detail:
+                raise RuntimeError("erp_detail_invalid")
+            details[pid] = detail
+        except Exception as exc:
+            pending[pid] = type(exc).__name__
+        if index % 25 == 0 or index == len(active):
+            print(f"ERP_DETAILS_CHECKED={index}/{len(active)} API_ERRORS={len(pending)}", flush=True)
+    # The ERP may throttle a long sequential scan. Two bounded second-pass
+    # retries of ONLY the missing IDs avoid 200+ redundant API calls.
+    for attempt, delay in enumerate((4, 12), 1):
+        if not pending:
+            break
+        sleep(delay)
+        for pid in list(pending):
+            if not pid.isdecimal():
+                continue
+            try:
+                result = api.api_get("produtos/" + pid, token, timeout=20, attempts=3)
+                detail = result.get("produto") if isinstance(result.get("produto"), dict) else result.get("data") if isinstance(result.get("data"), dict) else result
+                if isinstance(detail.get("produto"), dict):
+                    detail = detail["produto"]
+                if not isinstance(detail, dict) or not detail:
+                    raise RuntimeError("erp_detail_invalid")
+                details[pid] = detail
+                del pending[pid]
+            except Exception as exc:
+                pending[pid] = type(exc).__name__
+        print(f"ERP_DETAIL_RECOVERY_PASS={attempt} REMAINING={len(pending)}", flush=True)
+    errors = [{"code": "erp_detail_query_failed" if pid.isdecimal() else "erp_product_id_invalid",
+               "id": pid, "reason": reason} for pid, reason in pending.items()]
+    return details, errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-sha", default="", help="exact immutable release SHA")
@@ -242,7 +340,9 @@ def main() -> int:
     if (cache_doc.get("price_list_id") != 991
         or cache_doc.get("price_source") != "olist_tiny_amazon"):
         raise RuntimeError("active_cache_not_derived_from_amazon_991")
+    initial_cache_price_sha = cache_price_fingerprint(cache_doc)
     site_rows, served_sha = public_products()
+    initial_public_price_sha = storefront_price_fingerprint(site_rows)
     if not re.fullmatch(r"[0-9a-f]{40}", served_sha) or served_sha != live_sha:
         raise RuntimeError("public_release_sha_mismatch")
     daemon = ROOT / "daemon-sync-products.py"
@@ -259,41 +359,47 @@ def main() -> int:
     active = api.fetch_products_active(token)
     if not active:
         raise RuntimeError("erp_active_list_empty")
-    details: dict[str, dict[str, Any]] = {}
-    errors: list[dict[str, str]] = []
-    for index, product in enumerate(active, 1):
-        pid = str(product.get("id") or "")
-        if not pid.isdecimal():
-            errors.append({"code": "erp_product_id_invalid", "id": pid})
-            continue
-        try:
-            result = api.api_get("produtos/" + pid, token, timeout=14, attempts=3)
-            detail = result.get("produto") if isinstance(result.get("produto"), dict) else result.get("data") if isinstance(result.get("data"), dict) else result
-            if isinstance(detail.get("produto"), dict):
-                detail = detail["produto"]
-            if not isinstance(detail, dict):
-                raise RuntimeError("erp_detail_invalid")
-            details[pid] = detail
-        except Exception as exc:
-            errors.append({"code": "erp_detail_query_failed", "id": pid, "reason": type(exc).__name__})
-        if index % 25 == 0 or index == len(active):
-            print(f"ERP_DETAILS_CHECKED={index}/{len(active)} API_ERRORS={len(errors)}", flush=True)
+    details, errors = fetch_details_with_targeted_retry(api, token, active)
     result = evaluate(active, details, cache_rows, site_rows, amazon_table)
     # A deploy that moves under this lengthy full-catalog audit invalidates its
     # snapshot; do not certify an earlier release as the current storefront.
     current_live_sha = (ROOT / ".release-sha").read_text().strip()
+    current_public_sha = ""
+    current_public_price_sha = None
     try:
-        current_public_sha = str(read_json(PUBLIC_ROOT + "/api/health/version.php").get("release_sha") or "")
+        current_public_rows, current_public_sha = public_products()
+        current_public_price_sha = storefront_price_fingerprint(current_public_rows)
     except Exception:
-        current_public_sha = ""
+        result["issues"].append({"code": "public_catalog_unavailable_after_price_audit"})
     if current_live_sha != live_sha or current_public_sha != served_sha:
         result["issues"].append({"code": "release_changed_during_price_audit",
             "start_sha": live_sha, "end_local_sha": current_live_sha,
             "end_public_sha": current_public_sha})
-        result["counts"]["errors"] = len(result["issues"])
-        result["status"] = "FAIL"
-    if hashlib.sha256(cache_path.read_bytes()).digest() != hashlib.sha256(raw_cache).digest():
-        result["issues"].append({"code": "cache_changed_during_price_audit"})
+    if current_public_price_sha != initial_public_price_sha:
+        result["issues"].append({"code": "storefront_changed_during_price_audit"})
+    current_cache_price_sha = None
+    latest_raw_cache_sha = None
+    try:
+        latest_cache_bytes = cache_path.read_bytes()
+        latest_raw_cache_sha = hashlib.sha256(latest_cache_bytes).hexdigest()
+        current_cache_price_sha = cache_price_fingerprint(json.loads(latest_cache_bytes))
+    except (OSError, ValueError, TypeError):
+        result["issues"].append({"code": "cache_unreadable_after_price_audit"})
+    if current_cache_price_sha != initial_cache_price_sha:
+        result["issues"].append({"code": "cache_changed_during_price_audit",
+            "scope": "price_sku_provenance"})
+    # Do not block legitimate stock/timestamp refreshes when all fields
+    # relevant to price parity are identical. Never ignore actual price drift.
+    result["cache_price_sha256_start"] = initial_cache_price_sha
+    result["cache_price_sha256_end"] = current_cache_price_sha
+    result["public_price_sha256_start"] = initial_public_price_sha
+    result["public_price_sha256_end"] = current_public_price_sha
+    result["cache_volatile_only_refresh"] = bool(
+        latest_raw_cache_sha is not None
+        and latest_raw_cache_sha != hashlib.sha256(raw_cache).hexdigest()
+        and current_cache_price_sha == initial_cache_price_sha
+    )
+    if result["issues"]:
         result["counts"]["errors"] = len(result["issues"])
         result["status"] = "FAIL"
     if errors:
