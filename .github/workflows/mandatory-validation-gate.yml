@@ -3,8 +3,6 @@ on:
   pull_request:
     branches: [main, master]
     types: [opened, synchronize, reopened, labeled, unlabeled]
-  pull_request_review:
-    types: [submitted, dismissed]
   # Validate synthetic integration SHA; keep human-approved PR head immutable.
   merge_group:
     types: [checks_requested]
@@ -19,8 +17,7 @@ env:
   GITHUB_TOKEN: ${{ github.token }}
 concurrency:
   group: mandatory-validation-${{ github.event.pull_request.number || github.ref }}
-  # A review does not cancel an already-running code validation.
-  cancel-in-progress: ${{ github.event_name != 'pull_request_review' }}
+  cancel-in-progress: true
 jobs:
   validation-gate:
     runs-on: ubuntu-latest
