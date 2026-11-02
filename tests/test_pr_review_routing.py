@@ -43,5 +43,29 @@ class RoutingPolicyTests(unittest.TestCase):
         self.assertTrue(self.scan(owners='# just a comment\n'))
 
 
+    def test_single_owner_profile_does_not_waive_protected_approval(self):
+        root = SCRIPT.parents[1]
+        report = root / 'docs/ops/single-owner-governance-audit-2026-11-02.md'
+        self.assertTrue(report.is_file())
+        for relative in ('AGENTS.md', 'docs/knowledge/agent-rules.md'):
+            policy = (root / relative).read_text(encoding='utf-8')
+            for invariant in (
+                '<!-- SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1 -->',
+                'P0 (somente leitura/preparacao)',
+                'P1 (mudanca tecnica reversivel',
+                'P2 (novo poder/efeito protegido)',
+                'shopvivaliz-human',
+                'sem aprovacoes ou preflights duplicados',
+                'NoNewPrivileges=yes',
+                'fail-closed',
+            ):
+                with self.subTest(path=relative, invariant=invariant):
+                    self.assertIn(invariant, policy)
+        # Policy for a sole human owner must never remove grant-only CODEOWNERS.
+        owners = (root / '.github/CODEOWNERS').read_text(encoding='utf-8')
+        self.assertIn('/security/owner-approvals/ @shopvivaliz-human', owners)
+
+
+
 if __name__ == '__main__':
     unittest.main()
