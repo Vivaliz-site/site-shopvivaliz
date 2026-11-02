@@ -30,3 +30,56 @@ O servidor MCP existente executa `shopvivaliz-marina-mcp.service` como usuario s
 - https://github.com/Vivaliz-site/site-shopvivaliz/issues/3152
 - https://github.com/Vivaliz-site/site-shopvivaliz/pull/3514 (grant humano restrito a escrita local)
 - https://github.com/Vivaliz-site/site-shopvivaliz/pull/3517 (release MCP local)
+
+## Operacao continua 24x7 e privilegios root — requisito do proprietario (2026-11-02)
+
+O MCP e o Cloudflare Tunnel da Marina devem iniciar no boot, reiniciar em falhas
+e operar sem depender do laptop, do TOTP interativo, do RDC ou do backend.
+Em 2026-11-02, `shopvivaliz-marina-mcp.service` foi habilitado no boot,
+estava `active`, e `shopvivaliz-cloudflared-admin.service` estava
+`active/enabled`. O reboot real e reconexao E2E ainda nao foram certificados.
+Nunca converter esses status locais em prova de MCP remoto ChatGPT.
+
+### Autenticacao humana versus servico 24x7
+- **ChatGPT:** Cloudflare Access Managed OAuth com authorization-code + PKCE,
+  sessao renovada pelo fluxo oficial. O primeiro consentimento/login pode
+  depender do provedor; nao automatizar nem contornar MFA/consentimento e nao
+  reutilizar a credencial da conta `shopvivaliz-human`.
+- **Automacao:** credencial Cloudflare Access Service Token propria e protegida,
+  com politica `Service Auth` exclusiva para o app MCP e rotacao/expiracao
+  monitorada; sem usuario, senha ou TOTP humano em processos. O token admin
+  usado para configurar recursos Cloudflare nao e esse service token.
+- **Origem MCP:** `cloudflare_access_auth.py` valida JWT RS256 com chave
+  Cloudflare de JWKS rotativa, issuer do team domain, audience exata do
+  Access app MCP, iat/exp/type, identidade de usuario OU client-id da
+  credencial de servico. Nenhum valor de JWT vindo do cliente e tratado
+  como grant para root. Um arquivo `0600` do usuario dedicado deve conter
+  os metadados `team_domain`, `audience`, `allowed_emails` e
+  `allowed_service_tokens`. O verificador **nao** sobe sem esse arquivo
+  valido se `--access-config` estiver configurado.
+- **Acesso remoto:** o novo codigo limita JWT de Cloudflare Access a
+  ferramentas de leitura; as ferramentas de escrita locais existentes
+  continuam exigindo bearer privado, grant, lease, CAS e auditoria.
+  Autorizacao de escrita externa precisa de outra PR humana exata.
+
+### Capacidade administrativa root
+A exigencia e executar operacoes administrativas autorizadas **com privilegio
+root efetivo**, nao deixar o processo MCP HTTP rodando como root.
+Manter `shopvivaliz-marina-mcp` sem root (`NoNewPrivileges=yes`) e adicionar
+um **broker root isolado**, com chamadas estruturadas e allowlist por rotina.
+O broker precisa receber pedidos de identidade autenticada, validar concessao
+exata de `shopvivaliz-human` na PR/HEAD, escopo da operacao e repositorio,
+permissoes reais da VM, lease/fencing/idempotencia, logging redigido, efeitos
+reconciliados e rollback. Operacoes inicialmente projetadas: controle de
+servicos systemd permitidos, deploy/versionamento e manutencao restrita
+conforme projetos; **nao ha shell geral, sudo remoto arbitrario ou root
+universal**. Operacoes ainda sem broker/grant continuam DENIED e NAO_APTO.
+
+A PR humana #3514 cobre **somente** o workspace local restrito e nao
+autoriza root nem publicar um novo ingress. O desenvolvimento de autenticacao
+JWT e uma PR tecnica sem ativacao de superficie externa; a aprovacao de
+seguranca para registrar/ativar o ingress MCP e cada nova capacidade root
+deve ser especifica e verificavel pela conta humana exclusiva. Completado
+o grant, o operador oficial configura Access app/MFA/Managed OAuth antes
+de DNS/ingress no tunnel existente, testa principal/nonce/aud/exp/revogacao,
+E2E MCP, failover e restart, sem alterar o hostname administrativo.
