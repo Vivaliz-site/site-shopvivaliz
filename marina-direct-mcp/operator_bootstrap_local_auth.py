@@ -30,6 +30,20 @@ def private_directory_ok(path: Path, uid: int) -> bool:
             and info.st_uid == uid and stat.S_IMODE(info.st_mode) == 0o700)
 
 
+def safe_config_parent(path: Path, uid: int) -> bool:
+    """Allow a root-owned traversable parent, but never a writable/symlink parent."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    mode = stat.S_IMODE(info.st_mode)
+    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        return False
+    if info.st_uid == uid and mode == 0o700:
+        return True
+    return info.st_uid == 0 and mode == 0o755
+
+
 def bootstrap(*, home: Path = HOME, host: str | None = None, uid: int | None = None) -> str:
     host = host if host is not None else socket.gethostname().split(".", 1)[0]
     uid = uid if uid is not None else os.geteuid()
@@ -42,7 +56,7 @@ def bootstrap(*, home: Path = HOME, host: str | None = None, uid: int | None = N
     if uid != expected_uid or uid == 0:
         return "REFUSED_WRONG_IDENTITY"
     private = home / ".config" / SERVICE_ACCOUNT
-    if not private_directory_ok(home, uid) or not private_directory_ok(home / ".config", uid) or not private_directory_ok(private, uid):
+    if not private_directory_ok(home, uid) or not safe_config_parent(home / ".config", uid) or not private_directory_ok(private, uid):
         return "REFUSED_PRIVATE_DIRECTORY_UNSAFE"
     if any(os.path.lexists(private / name) for name in FILES):
         return "REFUSED_EXISTING_OR_PARTIAL_SECRET_PAIR"
