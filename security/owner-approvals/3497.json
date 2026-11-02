@@ -1,0 +1,23 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3497,
+  "resource": "mcp:fred-win:plugin-permissions",
+  "principal": "shopvivaliz-central-mcp",
+  "host": "Fred-Win",
+  "controller_host": "always-free-arm-1787907847-26",
+  "capabilities": [
+    "desktop_plugin_permission_maintenance"
+  ],
+  "operation": "configure_chatgpt_plugin_permissions",
+  "allowed_actions": [
+    "desktop_open",
+    "desktop_click",
+    "desktop_type"
+  ],
+  "target_origin": "https://chatgpt.com",
+  "permission_mode": "full_access",
+  "one_use": true,
+  "ttl_seconds": 180,
+  "expires_at_utc": "2026-11-08T00:00:00Z"
+}
