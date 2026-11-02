@@ -53,6 +53,11 @@ fi
 python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
+if [ "$(uname -s)" = "Linux" ]; then
+  python3 -m unittest tests.test_pr_owner_review_recovery tests.test_pr_owner_recovery_workflow tests.test_ci_php_lint_scope -v
+else
+  echo "SKIP POSIX_OWNER_RECOVERY_TEST=$(uname -s); required in Linux CI"
+fi
 python3 -m unittest tests.test_workflow_latency_budget -v
 python3 -m unittest tests.unit.test_runtime_deploy_reconciliation -v
 python3 -m unittest tests.test_ci_performance_monitor -v
@@ -105,7 +110,7 @@ case "$phase" in
     lint_php_list "$tmp_php_list"
     ;;
   ci)
-    if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
+    if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" || "${GITHUB_EVENT_NAME:-}" == "pull_request_review" ]] && [ -n "${GITHUB_BASE_REF:-}" ]; then
       base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
       git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
       lint_php_list "$tmp_php_list"
@@ -113,7 +118,10 @@ case "$phase" in
       git diff --name-only -z --diff-filter=ACMR "$PUSH_BEFORE_SHA"..HEAD -- '*.php' > "$tmp_php_list"
       lint_php_list "$tmp_php_list"
     else
-      find . -path './vendor' -prune -o -path './.git' -prune -o -path './.worktrees' -prune -o -path './node_modules' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
+      # Full CI coverage means every tracked PHP file, not nested trusted
+      # checkouts or untracked worktrees created by the validation workflow.
+      git ls-files -z -- '*.php' ':!:vendor/**' ':!:node_modules/**' ':!:.worktrees/**' > "$tmp_php_list"
+      lint_php_list "$tmp_php_list"
     fi
     ;;
   manual|full)
