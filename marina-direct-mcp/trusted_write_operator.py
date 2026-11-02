@@ -32,7 +32,12 @@ STATE = Path("/var/lib/shopvivaliz-marina-mcp/state")
 API = "https://api.github.com"
 CAPABILITY = "file_write"
 OPERATION = "marina_workspace_file_write"
-_VERIFIER = runpy.run_path(str(Path(__file__).with_name("validate_owner_pr_grant.py")))
+# The installed release has a pinned, root-owned copy. Source-tree CI uses
+# the matching canonical script; installed hosts must never import from elsewhere.
+_VERIFIER_FILE = Path(__file__).with_name("validate_owner_pr_grant.py")
+if not _VERIFIER_FILE.is_file() and Path(__file__).parent.name == "marina-direct-mcp":
+    _VERIFIER_FILE = Path(__file__).parent.parent / "scripts" / "validate-owner-pr-grant.py"
+_VERIFIER = runpy.run_path(str(_VERIFIER_FILE))
 
 
 def _safe_dir(directory: Path, uid: int) -> bool:
