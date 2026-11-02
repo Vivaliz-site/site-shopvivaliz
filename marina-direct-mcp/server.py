@@ -179,6 +179,7 @@ def create_server(
     service_reader=inspect_service,
     write_operator=None,
     admin_operator=None,
+    access_verifier=None,
 ) -> ThreadingHTTPServer:
     if host != "127.0.0.1":
         raise ValueError("loopback_only")
@@ -219,10 +220,20 @@ def create_server(
                 return False
             value = self.headers.get("Authorization", "")
             candidate = value[7:].encode("utf-8") if value.startswith("Bearer ") else b""
-            if not hmac.compare_digest(candidate, token):
-                self.send_json(401, {"error": "unauthorized"})
-                return False
-            return True
+            if hmac.compare_digest(candidate, token):
+                self.local_bearer = True
+                return True
+            # Access JWT assertions have distinct permissions: read-only until
+            # a separately approved, identity-bound remote write grant exists.
+            # Cloudflare must validate the OAuth/service token at the edge;
+            # the origin ALSO independently verifies the signed assertion.
+            if access_verifier is not None:
+                identity = access_verifier.verify(self.headers.get("Cf-Access-Jwt-Assertion", ""))
+                if identity is not None:
+                    self.local_bearer = False
+                    return True
+            self.send_json(401, {"error": "unauthorized"})
+            return False
 
         def do_GET(self) -> None:
             if self.path == "/mcp":
@@ -311,8 +322,9 @@ def create_server(
                 elif method == "ping":
                     result = {}
                 elif method == "tools/list":
-                    result = {"tools": TOOLS + ([WRITE_TOOL] if write_operator is not None else [])
-                              + ([ADMIN_TOOL] if admin_operator is not None else [])}
+                    result = {"tools": TOOLS
+                              + ([WRITE_TOOL] if write_operator is not None and self.local_bearer else [])
+                              + ([ADMIN_TOOL] if admin_operator is not None and self.local_bearer else [])}
                 elif method == "tools/call":
                     params = request.get("params")
                     if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
@@ -335,11 +347,11 @@ def create_server(
                         output = _TELEMETRY["public_telemetry_read"](arguments["source"])
                     elif name == "marina_kernel_telemetry_batch" and set(arguments) == {"sources"}:
                         output = _TELEMETRY["public_telemetry_batch"](arguments["sources"])
-                    elif name == "marina_olist_browser_restart" and admin_operator is not None:
+                    elif name == "marina_olist_browser_restart" and admin_operator is not None and self.local_bearer:
                         admin_ok, reason = _ADMIN["execute_admin_operation"](arguments, admin_operator)
                         tool_failed = not admin_ok
                         output = {"status": reason} if admin_ok else {"reason": reason}
-                    elif name == "marina_workspace_file_write" and write_operator is not None:
+                    elif name == "marina_workspace_file_write" and write_operator is not None and self.local_bearer:
                         write_ok, output = _WRITE["execute"](arguments, write_operator)
                         tool_failed = not write_ok
                     elif name == "marina_service_status" and set(arguments) == {"service"}:
@@ -401,6 +413,8 @@ def main() -> int:
     parser.add_argument("--token-file", type=Path,
                         default=Path.home() / ".config/shopvivaliz-marina-mcp/auth-token")
     parser.add_argument("--port", type=int, default=5580)
+    parser.add_argument("--access-config", type=Path, default=None,
+                        help="Protected Cloudflare Access policy file; absent disables external JWT auth")
     parser.add_argument("--check", action="store_true", help="Check identity and secret metadata without binding")
     parser.add_argument("--enable-approved-scoped-write", action="store_true",
                         help="Enable owner-approved private-workspace writes only after protected local preflight")
@@ -409,6 +423,11 @@ def main() -> int:
         raise SystemExit("MARINA_MCP_REFUSED=host_identity_mismatch")
     try:
         token = load_token(args.token_file)
+        access_verifier = None
+        if args.access_config is not None:
+            access_module = runpy.run_path(str(Path(__file__).with_name("cloudflare_access_auth.py")))
+            access_config = access_module["load_access_config"](args.access_config)
+            access_verifier = access_module["CloudflareAccessVerifier"](access_config)
         write_operator = None
         if args.enable_approved_scoped_write:
             # Read-only availability must survive transient GitHub API failures
@@ -433,7 +452,8 @@ def main() -> int:
             print("MARINA_MCP_SCOPED_WRITE_PREFLIGHT=PASS" if write_operator is not None
                   else "MARINA_MCP_READONLY_PREFLIGHT=PASS")
             return 0
-        server = create_server(token, args.port, write_operator=write_operator)
+        server = create_server(token, args.port, write_operator=write_operator,
+                               access_verifier=access_verifier)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"MARINA_MCP_REFUSED={str(exc)}", file=sys.stderr)
         return 1
