@@ -1,5 +1,8 @@
 import importlib.util
 import json
+import multiprocessing
+import os
+import time
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +27,19 @@ def row(price):
         "precos": {"preco": price, "precoPromocional": 0},
         "estoque_disponivel": 4,
     }
+
+
+
+def _cross_process_throttle_worker(cache_path, barrier, queue):
+    # fork children have their own module-level thread locks: this reproduces
+    # the scheduled catalog sync and independent read-only audit processes.
+    daemon.CACHE_PATH = Path(cache_path)
+    daemon._MIN_REQUEST_INTERVAL = 0.18
+    barrier.wait(timeout=10)
+    daemon.throttle()
+    queue.put(time.monotonic())
+
+
 
 
 class CatalogConcurrencyTest(unittest.TestCase):
@@ -53,6 +69,73 @@ class CatalogConcurrencyTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "catalog_changed_during_reconcile_retry_later"):
             daemon.save_products([row(45.00)], expected_revision=stale_revision)
         self.assertEqual(45.01, self.current())
+
+    @unittest.skipUnless(hasattr(os, "fork"), "production limiter uses Linux flock")
+    def test_erp_api_budget_is_shared_between_independent_processes(self):
+        ctx = multiprocessing.get_context("fork")
+        barrier = ctx.Barrier(2)
+        results = ctx.Queue()
+        workers = [
+            ctx.Process(target=_cross_process_throttle_worker,
+                        args=(str(self.target), barrier, results))
+            for _ in range(2)
+        ]
+        try:
+            for proc in workers:
+                proc.start()
+            for proc in workers:
+                proc.join(timeout=12)
+                self.assertEqual(proc.exitcode, 0, "throttle worker failed")
+            timestamps = sorted([results.get(timeout=3), results.get(timeout=3)])
+            self.assertGreaterEqual(timestamps[1] - timestamps[0], 0.14)
+            self.assertTrue((self.target.parent / "olist-erp-api-rate.lock").exists())
+        finally:
+            for proc in workers:
+                if proc.is_alive():
+                    proc.terminate()
+                proc.join(timeout=1)
+            results.close()
+
+    def test_corrupt_rate_file_fails_closed(self):
+        limiter = self.target.parent / "olist-erp-api-rate.lock"
+        limiter.write_text("not-a-monotonic-timestamp")
+        with self.assertRaisesRegex(RuntimeError, "erp_api_rate_file_invalid"):
+            daemon.throttle()
+
+    def test_rate_file_from_previous_boot_is_safely_replaced(self):
+        limiter = self.target.parent / "olist-erp-api-rate.lock"
+        future = time.monotonic() + 999
+        limiter.write_text(str(future))
+        with patch.object(daemon, "_MIN_REQUEST_INTERVAL", 0.01):
+            daemon.throttle()
+        self.assertLess(float(limiter.read_text().strip()), future)
+
+    def test_partial_stock_reconcile_reports_failure_even_after_safe_cache_save(self):
+        # A prior 35/202 partial stock refresh returned True, misleading
+        # systemd into reporting a healthy run while stock was fail-closed.
+        summaries = [{"id": "10"}, {"id": "11"}]
+        with patch.object(daemon, "cache_revision", return_value=None), \\
+             patch.object(daemon, "get_token", return_value="synthetic"), \\
+             patch.object(daemon, "fetch_amazon_table", return_value=(0, {})), \\
+             patch.object(daemon, "fetch_products_active", return_value=summaries), \\
+             patch.object(daemon, "enrich_products", return_value=([row(45)], 1)), \\
+             patch.object(daemon, "apply_amazon_prices", return_value=0), \\
+             patch.object(daemon, "apply_kit_stock", return_value=0), \\
+             patch.object(daemon, "save_products", return_value=self.target) as save:
+            self.assertFalse(daemon.sync_once(1))
+            save.assert_called_once()
+
+    def test_complete_stock_reconcile_reports_success(self):
+        summaries = [{"id": "10"}]
+        with patch.object(daemon, "cache_revision", return_value=None), \\
+             patch.object(daemon, "get_token", return_value="synthetic"), \\
+             patch.object(daemon, "fetch_amazon_table", return_value=(0, {})), \\
+             patch.object(daemon, "fetch_products_active", return_value=summaries), \\
+             patch.object(daemon, "enrich_products", return_value=([row(45)], 0)), \\
+             patch.object(daemon, "apply_amazon_prices", return_value=0), \\
+             patch.object(daemon, "apply_kit_stock", return_value=0), \\
+             patch.object(daemon, "save_products", return_value=self.target):
+            self.assertTrue(daemon.sync_once(1))
 
     def test_fresh_reconciliation_updates_atomically(self):
         daemon.save_products([row(45.00)], expected_revision=None)
