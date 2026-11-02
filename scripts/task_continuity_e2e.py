@@ -78,13 +78,13 @@ def build_sentinel_next_action(task_id: str) -> str:
     return (
         "Esta tarefa e um probe de continuidade automatica; nao ha edicao de "
         "codigo real necessaria. Execute exatamente estes tres comandos, nesta "
-        "ordem, somente na conversa vinculada:\\n"
+        "ordem, somente na conversa vinculada:\n"
         f"1) python3 scripts/agent_task_state.py check-step --task {task_id} "
         '--step-id 1 --evidence assistant_executed_bound_sentinel '
-        '--verification independent_browser_proof_required\\n'
+        '--verification independent_browser_proof_required\n'
         f"2) python3 scripts/agent_task_state.py ready --task {task_id} "
         '--evidence bound_sentinel_executed_pending_external_confirmation '
-        f"--verification {EXPECTED_VERIFICATION}\\n"
+        f"--verification {EXPECTED_VERIFICATION}\n"
         f"3) python3 scripts/agent_task_state.py complete --task {task_id}"
     )
 
