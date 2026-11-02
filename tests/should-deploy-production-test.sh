@@ -16,6 +16,10 @@ check() {
 
 check false README.md docs/VM-SSH-ACCESS.md .codex/config.toml .github/workflows/foo.yml tests/unit-test.php
 check false docs/runbook.md
+check false apps/shopvivaliz-web-agent/src/access-auth.mjs apps/shopvivaliz-web-agent/test/access-auth.test.mjs
+check false apps/shopvivaliz-web-agent/src/server.mjs apps/shopvivaliz-web-agent/deploy/shopvivaliz-web-agent.service
+check true apps/shopvivaliz-web-agent/src/access-auth.mjs produto.php
+check true apps/shopvivaliz-web-agent/src/access-auth.mjs scripts/unrecognized-agent.py
 # CI policy code is NOT a deployed storefront/worker payload. Actual PHP,
 # scripts/deploy-production.sh and any unknown script still demand deployment.
 check false scripts/check_pr_completion_policy.py .github/workflows/pr-completion-enforcer.yml tests/test_pr_completion_enforcer_policy.py REGRA-PR-FALHOU-CORRIGIR-NA-HORA.md
