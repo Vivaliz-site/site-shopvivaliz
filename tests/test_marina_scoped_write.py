@@ -47,6 +47,8 @@ class Operator:
 
 class ScopedWriteContract(unittest.TestCase):
     def setUp(self):
+        if os.geteuid() == 0:
+            self.skipTest("workspace writer must be tested as a non-root identity")
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name) / "workspace"
@@ -68,8 +70,6 @@ class ScopedWriteContract(unittest.TestCase):
         return m.execute(request or self.request, self.a if authority is None else authority, workspace=self.base)
 
     def test_create_replace_cas_audit_and_replay(self):
-        if os.geteuid() == 0:
-            self.skipTest("nonroot suite; root must never become writer")
         ok, report = self.call()
         self.assertTrue(ok, report)
         self.assertEqual(report["sha256"], hashlib.sha256(self.request["content_utf8"].encode()).hexdigest())
@@ -112,6 +112,13 @@ class ScopedWriteContract(unittest.TestCase):
         self.assertEqual(self.call(dict(self.request, expected_sha256="bad"))[1]["reason"], "invalid_compare_and_swap")
         self.assertEqual(self.call(dict(self.request, content_utf8="z" * 4097))[1]["reason"], "content_too_large")
         self.assertEqual(list(self.base.iterdir()), [])
+
+
+class NoAuthorityContract(unittest.TestCase):
+    def test_no_operator_fails_before_host_access(self):
+        ok, reason = m.execute({}, None)
+        self.assertFalse(ok)
+        self.assertEqual(reason["reason"], "invalid_request_shape")
 
 
 if __name__ == "__main__":
