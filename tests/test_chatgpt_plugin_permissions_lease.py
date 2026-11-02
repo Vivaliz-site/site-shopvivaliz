@@ -121,7 +121,7 @@ class PluginPermissionLeaseTests(unittest.TestCase):
                     m.verify_approved_pr(PR, TOKEN, now=NOW)
 
     def test_single_issue_writes_protected_receipt_and_replay_is_denied(self):
-        proof = {"pr_number": PR, "head_sha": HEAD, "merge_sha": MERGE}
+        proof = {"pr_number": PR, "head_sha": HEAD, "merge_sha": MERGE, "expires_at_utc": "2026-11-08T00:00:00Z"}
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             called = []
@@ -142,8 +142,17 @@ class PluginPermissionLeaseTests(unittest.TestCase):
                     m.issue_one_use(PR, proof)
                 self.assertEqual(1, len(called))
 
+    def test_issuance_never_uses_an_expired_approval(self):
+        proof = {"pr_number": PR, "head_sha": HEAD, "merge_sha": MERGE, "expires_at_utc": "2026-10-30T00:00:00Z"}
+        with tempfile.TemporaryDirectory() as temp, patch.object(m, "STATE_ROOT", Path(temp)), \
+             patch.object(m, "LEDGER_DIR", Path(temp) / "_desktop-plugin-permission-approvals"), \
+             patch.object(m.runtime_lock, "acquire_runtime_lock") as acquire:
+            with self.assertRaisesRegex(m.PermissionMaintenanceDenied, "owner_grant_expired_before_issuance"):
+                m.issue_one_use(PR, proof)
+            acquire.assert_not_called()
+
     def test_lock_contention_never_steals_another_owner(self):
-        proof = {"pr_number": PR, "head_sha": HEAD, "merge_sha": MERGE}
+        proof = {"pr_number": PR, "head_sha": HEAD, "merge_sha": MERGE, "expires_at_utc": "2026-11-08T00:00:00Z"}
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(m, "STATE_ROOT", Path(temp)), \
              patch.object(m, "LEDGER_DIR", Path(temp) / "_desktop-plugin-permission-approvals"), \
