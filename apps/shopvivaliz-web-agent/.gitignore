@@ -1,0 +1,7 @@
+node_modules/
+.private-profile/
+*.env
+.env
+state/
+*.log
+coverage/
