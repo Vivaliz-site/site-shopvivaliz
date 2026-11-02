@@ -27,7 +27,7 @@ class UpgradeOperatorSafety(unittest.TestCase):
         s = UPGRADE.read_text()
         for marker in ("SHOPVIVALIZ_MARINA_APPROVED_SHA", "SHOPVIVALIZ_MARINA_EXPECTED_CURRENT_SHA",
                        "unapproved_checkout", "stale_active_release", "dirty_checkout",
-                       "concurrent_upgrade", "safe_git", "source_file_unsafe",
+                       "concurrent_upgrade", "safe_git", "checkout_status_unavailable", "source_file_unsafe",
                        "existing_file_mismatch", "rollback", "ROLLED_BACK_AFTER_FAILURE",
                        "owner_grant_preflight_denied", "systemctl daemon-reload",
                        "local_auth_smoke.py", "CURRENT_UNCHANGED=true"):
