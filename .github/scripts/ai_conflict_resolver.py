@@ -80,6 +80,16 @@ BASE:\n{base[:50000]}\n--- OURS ---\n{ours[:50000]}\n--- THEIRS ---\n{theirs[:50
     return parse_model_content(envelope.get("response", ""), path)
 
 
+def load_rules():
+    trusted = os.getenv("TRUSTED_AI_CONFLICT_RULES", "").strip()
+    if trusted:
+        # Fail closed when the caller pinned a trusted main policy path.
+        return Path(trusted).read_text(encoding="utf-8")
+    # Manual/local caller retains the existing fallback.
+    rules_path = Path("AI_CONFLICT_RULES.md")
+    return rules_path.read_text(encoding="utf-8") if rules_path.exists() else "Preserve both compatible changes."
+
+
 def main():
     files = conflicted_files()
     if not files:
@@ -89,8 +99,7 @@ def main():
     if blocked:
         print("AI_RESOLVER=human_review protected=" + ",".join(blocked), file=sys.stderr)
         return 3
-    rules_path = Path("AI_CONFLICT_RULES.md")
-    rules = rules_path.read_text(encoding="utf-8") if rules_path.exists() else "Preserve both compatible changes."
+    rules = load_rules()
     for path in files:
         base, ours, theirs = (git_stage(path, n) for n in (1, 2, 3))
         if any("\x00" in text for text in (base, ours, theirs)):

@@ -1,12 +1,22 @@
 from pathlib import Path
 
-workflow = Path('.github/workflows/pr-conflict-auto-healer.yml').read_text(encoding='utf-8')
-healer = Path('scripts/pr_conflict_vm_heal.sh').read_text(encoding='utf-8')
-assert 'install -d -m 700 /home/ubuntu/.cache/shopvivaliz-pr-healer' in workflow, 'workflow staging parent must be private and writable by ubuntu SSH sessions'
-assert 'mktemp -d /home/ubuntu/.cache/shopvivaliz-pr-healer/run-' in workflow, 'workflow staging must use randomized private home directory'
-assert 'remote_base="${remote_dir}/healer"' in workflow, 'staged healer files must live inside the private directory'
-assert "rm -rf -- '${REMOTE_BASE%/*}'" in workflow, 'workflow cleanup must remove the private temp directory atomically'
-assert '/tmp/shopvivaliz-pr-heal-' not in healer, 'Oracle-side healer checkout must not use shared /tmp'
-assert 'work_parent=/home/ubuntu/.cache/shopvivaliz-pr-healer-work' in healer, 'Oracle-side healer must use a private home work parent'
-assert 'mktemp -d "${work_parent}/pr-${pr_number}-XXXXXX"' in healer, 'Oracle-side healer checkout must be randomized under the private home parent'
-print('pr-conflict-healer-staging-contract: ok')
+workflow = Path(".github/workflows/pr-conflict-auto-healer.yml").read_text()
+completion = Path(".github/workflows/pr-completion-enforcer.yml").read_text()
+healer = Path("scripts/pr_conflict_vm_heal.sh").read_text()
+assert "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]" in workflow
+assert "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]" in completion
+assert "independent_backend_operator_verified=true" in workflow
+assert "ssh -o BatchMode" not in workflow and "REMOTE_BASE" not in workflow
+assert "SHOPVIVALIZ_VM_SSH_KEY" not in workflow and "ORACLE_VM_SSH_KEY" not in workflow
+assert "trusted/.github/scripts/ai_conflict_resolver.py" in workflow
+assert "trusted/scripts/pr_conflict_vm_heal.sh" in workflow
+assert "/tmp/shopvivaliz-pr-heal-" not in healer
+assert "work_parent=/home/ubuntu/.cache/shopvivaliz-pr-healer-work" in healer
+assert "flock -n 9" in healer
+assert "GEMINI_ENV_FILE=\"$shared_env\"" in healer
+assert "OLLAMA_MODEL=qwen2.5-coder:1.5b" in healer
+assert "trusted_local_healer" in healer
+assert "pr_heal_concurrent_owner_busy" in healer
+assert "external_github_auth_used=true" in healer
+assert "pr_finalizer_host=always-free-arm-1787907847-26" in completion
+print("pr-conflict-healer-staging-contract: ok")

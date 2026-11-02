@@ -12,6 +12,8 @@ pr_number="${1:-}"
 head_ref="${2:-}"
 expected_head_sha="${3:-}"
 trusted_healer="${4:-}"
+trusted_local_healer="${5:-}"
+trusted_rules="${6:-}"
 external_github_auth_used=false
 
 fail() {
@@ -52,8 +54,31 @@ head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
 [[ "$remote_head_ref" == "$head_ref" ]] || fail 'PR head ref changed'
 [[ "$remote_head_sha" == "$expected_head_sha" ]] || fail 'PR head SHA changed'
 
+# The script will change into the untrusted PR worktree. Pin every helper
+# and instruction file to the caller's trusted main checkout first.
+trusted_healer="$(realpath -e "$trusted_healer")" || fail 'trusted_gemini_healer_missing'
+trusted_local_healer="$(realpath -e "$trusted_local_healer")" || fail 'trusted_ollama_healer_missing'
+trusted_rules="$(realpath -e "$trusted_rules")" || fail 'trusted_conflict_rules_missing'
+
+# Extra defense in depth: one formal human grant path must never be rewritten
+# by this autonomous helper, regardless of which trusted workflow invoked it.
+command -v gh >/dev/null || fail 'gh_unavailable_for_protected_path_check'
+changed_files="$(env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS gh api --paginate "repos/${repo}/pulls/${pr_number}/files?per_page=100" --jq '.[].filename')" || fail 'changed_files_unavailable_fail_closed'
+[[ -n "$changed_files" ]] || fail 'changed_files_empty_fail_closed'
+while IFS= read -r changed_file; do
+  case "$changed_file" in
+    security/owner-approvals/*|security/requests/*|.github/CODEOWNERS|docs/knowledge/security-approval-via-pr.md|scripts/validate-owner-pr-grant.py)
+      fail 'owner_protected_pr_head_cannot_be_mutated'
+      ;;
+  esac
+done <<< "$changed_files"
+
 work_parent=/home/ubuntu/.cache/shopvivaliz-pr-healer-work
+umask 077
 install -d -m 700 "$work_parent"
+# Single writer across the finalizer and conflict healer.
+exec 9>"${work_parent}/pr-${pr_number}.lock"
+flock -n 9 || fail "pr_heal_concurrent_owner_busy"
 work="$(mktemp -d "${work_parent}/pr-${pr_number}-XXXXXX")"
 cleanup() {
   rm -rf "$work"
@@ -82,12 +107,20 @@ if [[ "$merge_clean" -eq 0 ]]; then
   mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
   (( ${#unresolved[@]} > 0 )) || fail 'merge failed without conflict entries'
   printf 'pr_conflict_count=%s\n' "${#unresolved[@]}"
-  [[ -r "$trusted_healer" ]] || fail 'trusted healer unavailable'
-  [[ -r "$shared_env" ]] || fail 'private runtime env unavailable'
   command -v python3 >/dev/null || fail 'python3 unavailable on Oracle'
-  # Only real conflicts consume the private Gemini pool.
-  GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer" --credential-preflight
-  GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer"
+  # Never move a credential between hosts; use only already provisioned AI.
+  if [[ -r "$shared_env" ]]; then
+    [[ -r "$trusted_healer" ]] || fail 'trusted healer unavailable'
+    GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer" --credential-preflight
+    GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer"
+    echo 'conflict_ai_route=private_gemini'
+  else
+    [[ -r "$trusted_local_healer" ]] || fail 'trusted_local_ollama_healer_unavailable'
+    command -v ollama >/dev/null || fail 'local_ollama_cli_unavailable'
+    ollama show qwen2.5-coder:1.5b >/dev/null 2>&1 || fail 'free_local_ollama_model_unavailable'
+    TRUSTED_AI_CONFLICT_RULES="$trusted_rules" OLLAMA_MODEL=qwen2.5-coder:1.5b python3 "$trusted_local_healer" || fail 'local_ollama_conflict_unresolved'
+    echo 'conflict_ai_route=free_loopback_ollama'
+  fi
   [[ -z "$(git diff --name-only --diff-filter=U)" ]] || fail 'unmerged paths remain after Gemini'
   git diff --cached --check
   git commit -m "chore: auto-resolve PR #${pr_number} conflicts with main via Gemini" >/dev/null
