@@ -15,9 +15,17 @@ fail() {
 
 [[ "$pr_number" =~ ^[0-9]+$ ]] || fail 'invalid PR number'
 [[ "$expected_head_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'invalid expected head SHA'
-gh auth status --hostname github.com >/dev/null 2>&1 || fail 'Oracle GitHub authentication unavailable'
+# The Actions runner provides GH_TOKEN=github.token for orchestration, but
+# the finalizer must use the independent technical operator. Bot merges can
+# suppress downstream push/deploy workflows.
+technical_gh() {
+  env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS gh "$@"
+}
+independent_actor="$(technical_gh api user --jq .login 2>/dev/null)" \
+  || fail 'Oracle GitHub authentication unavailable'
+[[ "$independent_actor" == 'fredmourao-ai' ]] || fail 'independent_technical_actor_required'
 
-meta="$(gh api "repos/${repo}/pulls/${pr_number}")"
+meta="$(technical_gh api "repos/${repo}/pulls/${pr_number}")"
 state="$(jq -r '.state' <<<"$meta")"
 draft="$(jq -r '.draft' <<<"$meta")"
 base_ref="$(jq -r '.base.ref' <<<"$meta")"
@@ -40,7 +48,7 @@ fi
 if jq -e '[.labels[].name] | any(. == "no-auto-merge" or . == "blocked-by-runtime-lease" or . == "blocked-external")' <<<"$meta" >/dev/null; then
   fail 'PR has an explicit autonomous merge hold'
 fi
-changed_files="$(gh api --paginate "repos/${repo}/pulls/${pr_number}/files?per_page=100" --jq '.[].filename')" || fail 'PR files unavailable: refusing autonomous merge'
+changed_files="$(technical_gh api --paginate "repos/${repo}/pulls/${pr_number}/files?per_page=100" --jq '.[].filename')" || fail 'PR files unavailable: refusing autonomous merge'
 [[ -n "$changed_files" ]] || fail 'PR changed files empty: refusing autonomous merge'
 while IFS= read -r path; do
   case "$path" in
@@ -50,10 +58,10 @@ while IFS= read -r path; do
   esac
 done <<<"$changed_files"
 
-relation="$(gh api "repos/${repo}/compare/main...${head_sha}" --jq '.status')"
+relation="$(technical_gh api "repos/${repo}/compare/main...${head_sha}" --jq '.status')"
 [[ "$relation" == 'ahead' || "$relation" == 'identical' ]] || fail 'PR head does not contain current main'
 
-result="$(gh api --method PUT "repos/${repo}/pulls/${pr_number}/merge" \
+result="$(technical_gh api --method PUT "repos/${repo}/pulls/${pr_number}/merge" \
   -f sha="$head_sha" \
   -f merge_method='squash')"
 merged="$(jq -r '.merged // false' <<<"$result")"
