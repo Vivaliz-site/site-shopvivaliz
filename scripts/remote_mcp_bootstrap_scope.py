@@ -52,6 +52,11 @@ BACKEND_CONTROLLER_FILES = frozenset({
     "scripts/continuity/checkpoint_update_atomic.py",
     "tests/test_orquestrador_atomic_checkpoint.py",
     "tests/remote-control-mcp-test.py",
+    # E2E probe/schema updates are companion code to the constrained MCP.
+    # Routing mixed changes to disabled four-host bootstrap silently skips
+    # deployment of the already-tested MCP handler.
+    "scripts/task_continuity_e2e.py",
+    "tests/test_task_continuity_e2e.py",
     "scripts/remote_mcp_bootstrap_scope.py",
     "tests/test_remote_mcp_bootstrap_scope.py",
     ".github/workflows/remote-control-mcp-bootstrap.yml",
