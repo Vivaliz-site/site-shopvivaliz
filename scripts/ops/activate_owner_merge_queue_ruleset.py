@@ -34,6 +34,55 @@ def gh(*args: str):
     return json.loads(proc.stdout)
 
 
+EXPECTED_QUEUE_PARAMS = {
+    "check_response_timeout_minutes": 60,
+    "grouping_strategy": "ALLGREEN",
+    "max_entries_to_build": 1,
+    "max_entries_to_merge": 1,
+    "merge_method": "SQUASH",
+    "min_entries_to_merge": 1,
+    "min_entries_to_merge_wait_minutes": 0,
+}
+
+
+def verified_existing_queue(ruleset: object) -> bool:
+    """No new grant is needed to observe an already-enforced safe ruleset."""
+    if not isinstance(ruleset, dict):
+        return False
+    if (ruleset.get("id") != RULESET_ID or
+            ruleset.get("name") != RULESET_NAME or
+            ruleset.get("target") != "branch" or
+            ruleset.get("enforcement") != "active" or
+            ruleset.get("source_type") != "Repository" or
+            ruleset.get("bypass_actors") != [] or
+            ruleset.get("conditions") != {
+                "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}}):
+        return False
+    rules = ruleset.get("rules")
+    if not isinstance(rules, list) or len(rules) != 5:
+        return False
+    by_type = {r.get("type"): r for r in rules if isinstance(r, dict)}
+    if set(by_type) != {
+        "deletion", "non_fast_forward", "pull_request",
+        "required_status_checks", "merge_queue"
+    }:
+        return False
+    checks = by_type["required_status_checks"].get("parameters", {})
+    current = checks.get("required_status_checks")
+    if (checks.get("strict_required_status_checks_policy") is not True or
+            not isinstance(current, list) or len(current) != 2 or
+            {r.get("context"): r.get("integration_id") for r in current
+             if isinstance(r, dict)} != REQUIRED):
+        return False
+    params = by_type["pull_request"].get("parameters", {})
+    if (params.get("dismiss_stale_reviews_on_push") is not True or
+            params.get("required_approving_review_count") != 0 or
+            params.get("required_review_thread_resolution") is not True or
+            params.get("require_extra_approval_for_unattributed_changes") is not True):
+        return False
+    return by_type["merge_queue"].get("parameters") == EXPECTED_QUEUE_PARAMS
+
+
 def mutation_plan(ruleset: object) -> dict:
     if not isinstance(ruleset, dict):
         raise ValueError("invalid_ruleset")
@@ -70,19 +119,9 @@ def mutation_plan(ruleset: object) -> dict:
             or pull.get("required_review_thread_resolution") is not True):
         raise ValueError("pull_request_governance_changed")
     planned_rules = json.loads(json.dumps(rules))
-    for rule in planned_rules:
-        if rule["type"] == "required_status_checks":
-            # Native merge queue checks integration SHA, replacing strict HEAD updates.
-            rule["parameters"]["strict_required_status_checks_policy"] = False
-    planned_rules.append({"type": "merge_queue", "parameters": {
-        "check_response_timeout_minutes": 60,
-        "grouping_strategy": "ALLGREEN",
-        "max_entries_to_build": 1,
-        "max_entries_to_merge": 1,
-        "merge_method": "SQUASH",
-        "min_entries_to_merge": 1,
-        "min_entries_to_merge_wait_minutes": 0,
-    }})
+    # Native queue runs on integration SHA; never downgrade strict=true
+    # merely because the rule is being added.
+    planned_rules.append({"type": "merge_queue", "parameters": EXPECTED_QUEUE_PARAMS})
     return {"name": RULESET_NAME, "target": "branch", "enforcement": "active",
             "bypass_actors": [], "conditions": ruleset["conditions"], "rules": planned_rules}
 
@@ -146,6 +185,12 @@ def activate() -> int:
         raise ValueError("wrong_backend_host")
     if gh("api", "user").get("login") != OPERATOR:
         raise ValueError("wrong_technical_actor")
+    current = gh("api", f"repos/{REPO}/rulesets/{RULESET_ID}")
+    if any(r.get("type") == "merge_queue" for r in current.get("rules", [])):
+        if not verified_existing_queue(current):
+            raise ValueError("native_queue_active_but_security_invariants_changed")
+        print("OWNER_QUEUE_RULESET=ALREADY_ACTIVE_VERIFIED strict=true no_bypass=true")
+        return 0
     sha = os.getenv("GITHUB_SHA", "")
     found = grant_for_merged_pr(sha)
     if found is None:
@@ -155,7 +200,8 @@ def activate() -> int:
     validate_merged_human_grant(n, grant, sha)
     before = gh("api", f"repos/{REPO}/rulesets/{RULESET_ID}")
     if any(r.get("type") == "merge_queue" for r in before.get("rules", [])):
-        print("OWNER_QUEUE_RULESET=ALREADY_ACTIVE")
+        if not verified_existing_queue(before):
+            raise ValueError("concurrent_ruleset_changed_unsafely")
         return 0
     new = mutation_plan(before)
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="shopvivaliz-queue-ruleset-",

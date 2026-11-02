@@ -68,3 +68,19 @@ effective settings and records an audit signal. In a failed native
 merge-group test, halt enqueues, fix real CI defects and optionally
 rollback ruleset through the same formal owner-granted administrative
 path; do not silently downgrade protection.
+
+## Provider E2E post-merge (02 Nov 2026): technical merge attribution
+
+PR #3543 merged through the official queue with enqueuer and REST
+merged_by=shopvivaliz-human. PR #3554 merged through the same queue
+with enqueuer=fredmourao-ai; REST attributed merged_by to the technical
+enqueuer rather than the generic queue bot. Both approved HEADs
+remained immutable, both synthetic merge_group checks were GREEN,
+and main ruleset preserved strict=true and no bypass.
+
+The first grant verifier for #3554 incorrectly accepted only the
+hypothetical github-merge-queue bot identity, making the postmerge
+activation action #41519710001 fail despite an active queue.
+A security-maintaining fix requires real event, synthetic SHA and
+official required checks before accepting technical attribution.
+See security/requests/native-queue-merge-technical-attribution-20261102.md.

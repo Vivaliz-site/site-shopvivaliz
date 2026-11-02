@@ -128,7 +128,7 @@ jobs:
 
       - name: Validate exact owner-only approval and native merge queue security contract
         run: |
-          python3 -m unittest tests.test_owner_merge_queue_authorization tests.test_owner_required_review_gate -v
+          python3 -m unittest tests.test_owner_merge_queue_authorization tests.test_owner_technical_native_queue_merge tests.test_owner_required_review_gate -v
 
       - name: Validate current PR history lineage
         run: python3 scripts/maintenance/validate_current_history_lineage.py

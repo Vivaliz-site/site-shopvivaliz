@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  actions: read
+  checks: read
 
 concurrency:
   group: owner-native-merge-queue-activation

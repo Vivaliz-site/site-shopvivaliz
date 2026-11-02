@@ -27,18 +27,70 @@ TRUSTED_QUEUE_ENQUEUERS = frozenset({"shopvivaliz-human", "fredmourao-ai"})
 
 
 
+def official_merge_group_proof(proof: dict, merge_sha: str,
+                               queued_at: datetime, merged_at: datetime) -> bool:
+    """Cross-check technical merge attribution with GitHub's real queue CI.
+
+    An old AddedToMergeQueueEvent alone is insufficient: another actor could
+    dequeue a PR and attempt a direct merge. The final integration commit must
+    itself carry two successful official GitHub Actions merge_group workflows.
+    """
+    if not SHA40.fullmatch(merge_sha):
+        return False
+    # Actual provider readback evidence, not a queue completion flag:
+    # the integration SHA must have both official workflow runs AND checks.
+    merge_group_readback_evidence = proof.get("merge_group_runs")
+    required_check_readback_evidence = proof.get("check_runs")
+    runs = merge_group_readback_evidence
+    checks = required_check_readback_evidence
+    if (not isinstance(runs, list) or not 0 < len(runs) < 100 or
+            not isinstance(checks, list) or not 0 < len(checks) < 100):
+        return False
+    for name in ("Mandatory Validation Gate", "Repository Governance"):
+        matched = [r for r in runs if isinstance(r, dict) and
+                   r.get("name") == name and r.get("event") == "merge_group" and
+                   r.get("head_sha") == merge_sha and
+                   isinstance(r.get("id"), int) and r["id"] > 0]
+        if not matched:
+            return False
+        latest = max(matched, key=lambda r: (str(r.get("created_at", "")), r["id"]))
+        if latest.get("status") != "completed" or latest.get("conclusion") != "success":
+            return False
+        try:
+            created = datetime.fromisoformat(str(latest["created_at"]).replace("Z", "+00:00"))
+        except (KeyError, ValueError, TypeError):
+            return False
+        if created.tzinfo is None or not queued_at <= created <= merged_at:
+            return False
+    for name in ("validation-gate", "Audit repository automation"):
+        matching = [r for r in checks if isinstance(r, dict) and
+                    r.get("name") == name and isinstance(r.get("id"), int) and
+                    r["id"] > 0]
+        if not matching:
+            return False
+        latest = max(matching, key=lambda r: r["id"])
+        app = latest.get("app")
+        if (latest.get("status") != "completed" or
+                latest.get("conclusion") != "success" or
+                not isinstance(app, dict) or app.get("id") != 15368):
+            return False
+    return True
+
+
 def verified_native_merge_queue(pr: object, reviews: object, queue_proof: object,
-                                repository: str, pr_number: int, head_sha: str) -> bool:
+                                repository: str, pr_number: int,
+                                head_sha: str, merge_sha: str) -> bool:
     """Validate provider-signed queue timeline, not a bot label in PR text.
 
     Human review must precede the actual native enqueue operation, remain
-    bound to the exact HEAD and precede the GitHub queue bot merge.
+    bound to the exact HEAD and precede the provider-enforced queue merge.
     """
     if not isinstance(pr, dict) or not isinstance(queue_proof, dict) or not isinstance(reviews, list):
         return False
     if (queue_proof.get("repository") != repository or
             queue_proof.get("number") != pr_number or
-            pr.get("merged_by", {}).get("login") != GITHUB_QUEUE_BOT or
+            pr.get("merged_by", {}).get("login") not in
+                (GITHUB_QUEUE_BOT, "fredmourao-ai") or
             pr.get("head", {}).get("sha") != head_sha):
         return False
     events = queue_proof.get("events")
@@ -80,7 +132,13 @@ def verified_native_merge_queue(pr: object, reviews: object, queue_proof: object
         except (KeyError, ValueError, TypeError):
             return False
         if queued_at.tzinfo is not None and approved_at <= queued_at <= merged_at:
-            return True
+            merger = pr["merged_by"]["login"]
+            if merger == GITHUB_QUEUE_BOT:
+                return True
+            if (repository != "Vivaliz-site/site-shopvivaliz" or
+                    str(actor.get("login", "")).casefold() != merger.casefold()):
+                continue
+            return official_merge_group_proof(queue_proof, merge_sha, queued_at, merged_at)
     return False
 
 
@@ -107,9 +165,13 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
     # merge without queue provenance remains forbidden.
     merged_by = pr.get("merged_by")
     actor = str(merged_by.get("login", "")) if isinstance(merged_by, dict) else ""
-    if actor == GITHUB_QUEUE_BOT:
+    if actor in (GITHUB_QUEUE_BOT, "fredmourao-ai"):
+        # Preserve legacy explicit-denial diagnostics for a direct agent
+        # merge without native queue provenance.
+        if actor == "fredmourao-ai" and queue_proof is None:
+            return False, "merge_actor_not_owner"
         if not verified_native_merge_queue(pr, reviews, queue_proof,
-                                           repository, pr_number, head_sha):
+                                           repository, pr_number, head_sha, merge_sha):
             return False, "github_queue_owner_provenance_not_verified"
     else:
         if "auto_merge" not in pr:
@@ -338,10 +400,28 @@ def main() -> int:
         current = github_json(f"/repos/{repo}/contents/{path}?ref=main", token)
         if not immutable_grant_still_active(encoded, current):
             raise ValueError("authorization_revoked_or_replaced")
-        queue_proof = (github_queue_proof(args.repository, args.pr_number, token)
-                       if isinstance(pr, dict) and
-                       isinstance(pr.get("merged_by"), dict) and
-                       pr["merged_by"].get("login") == GITHUB_QUEUE_BOT else None)
+        merger = (pr.get("merged_by") or {}).get("login") if isinstance(pr, dict) else None
+        if merger in (GITHUB_QUEUE_BOT, "fredmourao-ai"):
+            queue_proof = github_queue_proof(args.repository, args.pr_number, token)
+            if merger == "fredmourao-ai":
+                if args.repository != "Vivaliz-site/site-shopvivaliz":
+                    raise ValueError("technical_queue_grant_repository_not_supported")
+                runs = github_json(
+                    f"/repos/{repo}/actions/runs?head_sha={args.merge_sha}&event=merge_group&per_page=100",
+                    token)
+                check_data = github_json(
+                    f"/repos/{repo}/commits/{args.merge_sha}/check-runs?per_page=100", token)
+                if (not isinstance(runs, dict) or
+                        not isinstance(runs.get("total_count"), int) or
+                        runs["total_count"] >= 100 or
+                        not isinstance(check_data, dict) or
+                        not isinstance(check_data.get("total_count"), int) or
+                        check_data["total_count"] >= 100):
+                    raise ValueError("merge_group_provenance_page_incomplete")
+                queue_proof["merge_group_runs"] = runs.get("workflow_runs")
+                queue_proof["check_runs"] = check_data.get("check_runs")
+        else:
+            queue_proof = None
         changed = github_json(f"/repos/{repo}/pulls/{args.pr_number}/files?per_page=100", token)
         if not grant_added_in_reviewed_pr(changed, path, encoded):
             ok, reason = False, "grant_not_added_by_reviewed_pr"
