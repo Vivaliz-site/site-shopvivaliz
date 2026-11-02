@@ -42,9 +42,10 @@ jobs:
           source=Path('marina-direct-mcp/root_broker.py').read_text()
           socket_unit=Path('marina-direct-mcp/systemd/shopvivaliz-marina-root-broker.socket').read_text()
           service=Path('marina-direct-mcp/systemd/shopvivaliz-marina-root-broker.service').read_text()
-          for marker in ('SO_PEERCRED', 'LISTEN_FDS', 'owner_pr_grant_denied',
-                         'maintenance_lease_or_replay_denied'):
+          for marker in ('SO_PEERCRED', 'LISTEN_FDS', 'owner_pr_grant_denied'):
               assert marker in source, marker
+          adapter=Path('marina-direct-mcp/operator_admin_route.py').read_text()
+          assert 'maintenance_lease_or_replay_denied' in adapter
           assert 'ListenStream=/run/' in socket_unit
           assert 'SocketMode=0660' in socket_unit
           assert 'SocketGroup=shopvivaliz-marina-mcp' in socket_unit
