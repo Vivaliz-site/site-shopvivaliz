@@ -34,6 +34,13 @@ class OperatorTests(unittest.TestCase):
         self.addCleanup(self.user.stop)
         self.addCleanup(self.host.stop)
         self.operator = m.ProtectedWorkspaceOperator(workspace=self.workspace, state=self.state)
+        self.proof_cache = patch.object(m, "_STATIC_PROOF", None)
+        self.proof_cache.start()
+        self.addCleanup(self.proof_cache.stop)
+        self.token_path = Path(self.temp.name) / "github-read-token"
+        self.token_setting = patch.object(m, "GITHUB_READ_TOKEN_FILE", self.token_path)
+        self.token_setting.start()
+        self.addCleanup(self.token_setting.stop)
 
     def test_durable_lease_replay_and_audit_append(self):
         if os.geteuid() == 0:
@@ -98,7 +105,7 @@ class OperatorTests(unittest.TestCase):
         current = dict(blob)
         if revoked:
             current["sha"] = "0" * 40
-        return (pr, review, files, blob, current)
+        return (pr, files, blob, review, current)
 
     def test_fresh_owner_approval_and_revocation(self):
         if os.geteuid() == 0:
@@ -106,14 +113,17 @@ class OperatorTests(unittest.TestCase):
         args = (3514, m.GRANT_HEAD, m.GRANT_MERGE, m.CAPABILITY, m.OPERATION, m.REPOSITORY)
         with patch.object(m, "_public_api", side_effect=self.fixture()):
             self.assertTrue(self.operator.grant_valid(*args))
-        with patch.object(m, "_public_api", side_effect=self.fixture(approved=False)):
-            self.assertFalse(self.operator.grant_valid(*args))
+        with patch.object(m, "_STATIC_PROOF", None):
+            with patch.object(m, "_public_api", side_effect=self.fixture(approved=False)):
+                self.assertFalse(self.operator.grant_valid(*args))
         with patch.object(m, "_public_api", side_effect=self.fixture(revoked=True)):
             self.assertFalse(self.operator.grant_valid(*args))
-        with patch.object(m, "_public_api", side_effect=self.fixture(extra_cap=True)):
-            self.assertFalse(self.operator.grant_valid(*args))
-        with patch.object(m, "_public_api", side_effect=self.fixture(expired=True)):
-            self.assertFalse(self.operator.grant_valid(*args))
+        with patch.object(m, "_STATIC_PROOF", None):
+            with patch.object(m, "_public_api", side_effect=self.fixture(extra_cap=True)):
+                self.assertFalse(self.operator.grant_valid(*args))
+        with patch.object(m, "_STATIC_PROOF", None):
+            with patch.object(m, "_public_api", side_effect=self.fixture(expired=True)):
+                self.assertFalse(self.operator.grant_valid(*args))
         with patch.object(m, "_public_api") as network:
             self.assertFalse(self.operator.grant_valid(3515, *args[1:]))
             network.assert_not_called()
