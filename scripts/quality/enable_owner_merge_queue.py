@@ -68,12 +68,12 @@ def approved_owner_p2(pr: dict, reviews: list, files: list, config: dict) -> boo
     must_include = {
         "config/owner-review-merge-queue.json",
         ".github/workflows/owner-human-review-autoqueue.yml",
+        ".github/workflows/mandatory-validation-gate.yml",
         ".github/workflows/repository-governance.yml",
         "scripts/validate-owner-pr-grant.py",
     }
-    # The mandatory gate merge_group trigger is already on main via
-    # preflight PR #3548, not reintroduced in this protected P2 diff.
-    # Require only files actually changed by this exact owner-reviewed PR.
+    # The required human-review gate is now materially changed inside this
+    # same P2 PR, and therefore MUST be included in the reviewed diff.
     if not must_include.issubset({
             f.get("filename") for f in files if isinstance(f, dict)}):
         return False
