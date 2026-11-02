@@ -1,0 +1,29 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3536,
+  "resource": "web-agent:chatgpt-private-ingress",
+  "principal": "shopvivaliz-web-agent-service",
+  "target_repository": "Vivaliz-site/site-shopvivaliz",
+  "host": "always-free-arm-1787907847-26",
+  "capabilities": [
+    "create_restricted_cloudflare_access_application",
+    "add_backend_tunnel_hostname",
+    "register_private_chatgpt_mcp"
+  ],
+  "operation": "web_agent_access_protected_ingress",
+  "allowed_hostnames": [
+    "mcp-web-agent.shopvivaliz.com.br",
+    "takeover-web-agent.shopvivaliz.com.br"
+  ],
+  "origin_loopback": "http://127.0.0.1:5598",
+  "access_policy": "deny-by-default, owner identity only, official MFA/OAuth",
+  "access_jwt_validation_required": true,
+  "secret_disclosure_allowed": false,
+  "browser_profile_sharing_allowed": false,
+  "root_or_shell_allowed": false,
+  "grant_scope_note": "Only implementation and validation of described Access-protected routes after independent provider authorization; no production writes or unrestricted admin powers",
+  "lease_fencing_required": true,
+  "audit_required": true,
+  "expires_at_utc": "2026-12-02T23:59:00Z"
+}
