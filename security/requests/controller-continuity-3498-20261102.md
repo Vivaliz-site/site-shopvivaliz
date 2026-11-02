@@ -30,4 +30,4 @@ Risk of overlapping mutable runtime operations, interruption of detached recover
 
 ## Notes for reviewers
 
-This PR intentionally contains the authorization request only. BEFORE any runtime privilege is exercised, the executor must provide and validate the canonical owner grant artifact and its exact resource/operation bindings if required by the authorization provider; such a subsequent change updates PR HEAD and must be re-approved. Approval here does not substitute external RBAC/MFA, nor is it permission to clear a live lock.
+This PR contains the grant at security/owner-approvals/3499.json, bound to resource mcp:controller, principal shopvivaliz-central-mcp, operation continuity_release_install, and the technical merge commit. The authorization verifier can check the grant, but an end-to-end runtime adapter for these exact capabilities must be confirmed before exercising them. The grant does not itself install that adapter or confer OS privileges. Approval on the final PR HEAD is required. Approval does not substitute external RBAC/MFA and cannot clear a live lock.
