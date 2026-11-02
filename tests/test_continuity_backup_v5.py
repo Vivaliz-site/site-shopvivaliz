@@ -83,6 +83,50 @@ class BackupStateV5Tests(unittest.TestCase):
         self.assertIn("_durable-metadata.json", archived)
         self.assertNotIn("_gemini-24x7-controller-lease.json", archived)
 
+    def evidence_sidecar(self):
+        return {
+            "timestamp": "2026-10-31T12:00:00Z",
+            "targets": 1,
+            "records": [{"result": "checked"}],
+            "rules_loaded": {"AGENTS.md": "verified"},
+            "checklist": [{"status": "complete"}],
+        }
+
+    def test_structured_evidence_sidecar_archived_without_fake_task_id(self):
+        sidecar = self.state / "olist-22-ml-returns-20261031-evidence.json"
+        evidence = self.evidence_sidecar()
+        sidecar.write_text(json.dumps(evidence))
+        result = self.run_backup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["task_records"], 1)
+        with tarfile.open(self.archives()[0], "r:gz") as tf:
+            self.assertEqual(json.load(tf.extractfile(sidecar.name)), evidence)
+            self.assertEqual(json.load(tf.extractfile("v5-test.json")), self.record)
+
+    def test_evidence_suffix_without_valid_structure_fails_closed(self):
+        variants = (
+            {"timestamp": "2026-10-31T12:00:00Z"},
+            {**self.evidence_sidecar(), "records": "not-list"},
+            {**self.evidence_sidecar(), "task_id": "different-task"},
+            {**self.evidence_sidecar(), "targets": True},
+        )
+        for index, invalid in enumerate(variants):
+            with self.subTest(index=index):
+                sidecar = self.state / "bad-evidence.json"
+                sidecar.write_text(json.dumps(invalid))
+                result = self.run_backup()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.archives(), [])
+                sidecar.unlink()
+
+    def test_evidence_sidecar_alone_is_not_a_task(self):
+        (self.state / "orphan-evidence.json").write_text(json.dumps(self.evidence_sidecar()))
+        (self.state / "v5-test.json").unlink()
+        result = self.run_backup()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no_task_checkpoints", result.stderr)
+        self.assertEqual(self.archives(), [])
+
     def test_invalid_task_json_blocks_publication(self):
         (self.state / "damaged.json").write_text("{broken")
         result = self.run_backup()
