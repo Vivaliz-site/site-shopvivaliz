@@ -527,13 +527,34 @@ def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bo
     return bool(str(request.get("fingerprint", "")).strip())
 
 
+DETACHED_PROMPT_MAX_BYTES = 60 * 1024  # Below Ollama's hard 64-KiB prompt-file gate.
+DETACHED_PROMPT_STATE_KEYS = (
+    "schema_version", "task_id", "agent_id", "repository", "status",
+    "created_at", "updated_at", "checkpoint_version", "browser_session",
+    "conversation_id", "recovery_state",
+)
+
+
 def _build_prompt(request: dict[str, Any], state: dict[str, Any]) -> str:
     task_id = str(state.get("task_id", "")).strip()
     repository = _safe_repository(state.get("repository", DEFAULT_REPOSITORY))
     goal = str(state.get("goal", "")).strip()
     next_action = str(state.get("next_action", "")).strip()
-    state_json = json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True)
-    return f"""DETACHED_CONTINUATION_EXECUTOR_V6
+    # Recovery history is an append-only operational audit, not executable
+    # task context. Including it grew real prompts past the local provider's
+    # limit (69,795 bytes with 544 retries) and may expose needless metadata.
+    # Only immutable routing/checkpoint identity goes to the detached provider;
+    # the full original record remains on disk and must not be altered here.
+    summary = {
+        key: value for key in DETACHED_PROMPT_STATE_KEYS
+        if (value := state.get(key)) is not None
+        and isinstance(value, (str, int, float, bool))
+    }
+    for key in ("history", "recovery_history"):
+        if isinstance(state.get(key), list):
+            summary[key + "_event_count"] = len(state[key])
+    state_json = json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True)
+    prompt = f"""DETACHED_CONTINUATION_EXECUTOR_V6
 
 You are executing one finite recovery turn for a ShopVivaliz task whose
 interactive ChatGPT stream stopped before terminal completion.
@@ -543,8 +564,11 @@ Repository: {repository}
 Original goal: {goal}
 Required next action: {next_action}
 
-Durable checkpoint:
+Durable checkpoint summary (bounded; historical events not reproduced):
 {state_json}
+
+Read the original state through the authorized local state CLI when details
+beyond this summary are necessary; do not guess missing approval or binding.
 
 Rules:
 - This is a real execution turn, not an acknowledgement or a plan-only reply.
@@ -571,6 +595,11 @@ Rules:
 - Do not wait for user confirmation for reversible actions already inside the
   original authorized scope.
 """
+    if len(prompt.encode("utf-8")) > DETACHED_PROMPT_MAX_BYTES:
+        # Fail closed instead of running a truncated objective or repeatedly
+        # sending an oversized prompt to the provider.
+        raise ValueError("detached_continuation_prompt_exceeds_safe_budget")
+    return prompt
 
 
 def _default_work_root() -> Path:
@@ -760,6 +789,10 @@ def _execute(
     except subprocess.TimeoutExpired:
         diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
         return "timeout", None, _load_json(_state_path(runtime_dir, task_id)), diagnostic
+    except ValueError:
+        diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
+        diagnostic["prompt_policy_error"] = "oversized_or_invalid"
+        return "executor_error", exit_code, _load_json(_state_path(runtime_dir, task_id)), diagnostic
     except (OSError, subprocess.SubprocessError):
         diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
         return "executor_error", exit_code, _load_json(_state_path(runtime_dir, task_id)), diagnostic
