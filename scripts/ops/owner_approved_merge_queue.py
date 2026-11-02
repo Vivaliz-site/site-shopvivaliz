@@ -14,6 +14,8 @@ import sys
 from datetime import datetime
 from typing import Any
 
+from scripts.pr_gate_scope import required_specialized_gates
+
 REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 HUMAN = "shopvivaliz-human"
 OPERATOR = "fredmourao-ai"
@@ -87,6 +89,27 @@ def required_green(checks: object) -> bool:
         for c in latest.values()))
 
 
+def specialized_workflows_green(files: list[dict], sha: str) -> bool:
+    """Retain existing path-based specialized CI gates before any queue entry."""
+    names = required_specialized_gates([f["filename"] for f in files])
+    if not names:
+        return True
+    if not SHA40.fullmatch(sha):
+        return False
+    payload = gh_json(f"repos/{REPOSITORY}/actions/runs?head_sha={sha}&per_page=100")
+    workflows = payload.get("workflow_runs") if isinstance(payload, dict) else None
+    if not isinstance(workflows, list) or len(workflows) >= 100:
+        return False
+    for name in names:
+        matches = [w for w in workflows if isinstance(w, dict) and w.get("name") == name]
+        if not matches:
+            return False
+        latest = max(matches, key=lambda w: (w.get("created_at") or "", w.get("id") or 0))
+        if latest.get("status") != "completed" or latest.get("conclusion") != "success":
+            return False
+    return True
+
+
 def queue_rules_enabled(rules: object) -> bool:
     if not isinstance(rules, list):
         return False
@@ -101,7 +124,8 @@ def queue_rules_enabled(rules: object) -> bool:
     return "merge_queue" in types and REQUIRED <= contexts and {"pull_request", "non_fast_forward"} <= types
 
 
-def eligible(pr: object, files: object, reviews: object, checks: object, rules: object) -> tuple[bool, str]:
+def eligible(pr: object, files: object, reviews: object, checks: object,
+             rules: object, *, specialized_check_completed: bool = False) -> tuple[bool, str]:
     if not queue_rules_enabled(rules):
         return False, "native_merge_queue_not_enabled"
     if not isinstance(pr, dict) or pr.get("state") != "open" or pr.get("draft") is not False:
@@ -112,27 +136,33 @@ def eligible(pr: object, files: object, reviews: object, checks: object, rules: 
         return False, "files_missing_or_pagination_boundary"
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "invalid_file_metadata"
-    if not any(protected(f["filename"]) for f in files):
-        return False, "technical_pr_not_owner_only"
+    is_owner_only = any(protected(f["filename"]) for f in files)
     creator = pr.get("user")
-    if not isinstance(creator, dict) or creator.get("login", "").casefold() == HUMAN:
-        return False, "protected_grant_author_must_be_distinct"
+    if not isinstance(creator, dict):
+        return False, "missing_author"
     labels = pr.get("labels")
-    if not isinstance(labels, list):
-        return False, "labels_unavailable"
-    if any((not isinstance(l, dict)) for l in labels):
+    if not isinstance(labels, list) or any(not isinstance(l, dict) for l in labels):
         return False, "labels_unavailable"
     holds = {l.get("name") for l in labels}
     if holds & {"blocked-by-runtime-lease", "blocked-external"}:
         return False, "active_operational_hold"
-    # Historical no-auto-merge label blocks pre-approval bots. Under the P2
-    # queue policy it does not block an exact human-approved HEAD.
     sha = pr.get("head", {}).get("sha", "")
-    if not approved_exact_head(reviews, sha):
-        return False, "owner_review_not_approved_on_exact_head"
+    if is_owner_only:
+        # Only the real protected owner may authorize these PRs, and only
+        # the immutable SHA they actually reviewed can enter the queue.
+        if creator.get("login", "").casefold() == HUMAN:
+            return False, "protected_grant_author_must_be_distinct"
+        if not approved_exact_head(reviews, sha):
+            return False, "owner_review_not_approved_on_exact_head"
+    elif "no-auto-merge" in holds:
+        # A business/operational hold on a common PR is never overridden.
+        return False, "technical_pr_manual_hold"
+    if not specialized_check_completed:
+        return False, "specialized_ci_gates_missing_or_failed"
     if not required_green(checks):
         return False, "official_required_checks_not_green"
-    return True, "approved_exact_head_ready_for_native_queue"
+    return True, ("owner_approved_exact_head_ready_for_native_queue"
+                  if is_owner_only else "technical_green_ready_for_native_queue")
 
 
 def run(limit: int = 30) -> int:
@@ -161,12 +191,14 @@ def run(limit: int = 30) -> int:
         if not isinstance(files, list) or not 0 < len(files) < 100:
             print(f"owner_queue_pr={number} state=fail_closed_files")
             continue
-        if not any(protected(f.get("filename", "")) for f in files if isinstance(f, dict)):
-            continue
-        reviews = gh_json(f"repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100")
+        is_owner_only = any(protected(f.get("filename", "")) for f in files if isinstance(f, dict))
+        reviews = (gh_json(f"repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100")
+                   if is_owner_only else [])
         sha = pr.get("head", {}).get("sha", "")
         checks = gh_json(f"repos/{REPOSITORY}/commits/{sha}/check-runs?per_page=100").get("check_runs")
-        allow, reason = eligible(pr, files, reviews, checks, rules)
+        specialized_ok = specialized_workflows_green(files, sha)
+        allow, reason = eligible(pr, files, reviews, checks, rules,
+                                 specialized_check_completed=specialized_ok)
         if not allow:
             print(f"owner_queue_pr={number} state=deferred reason={reason}")
             continue

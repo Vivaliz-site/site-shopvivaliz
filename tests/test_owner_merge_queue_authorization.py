@@ -97,15 +97,36 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         rules=[{"type":t,"parameters":{"required_status_checks":[{"context":n,"integration_id":15368}
                           for n in RUNNER.REQUIRED]}} if t=="required_status_checks" else {"type":t}
                           for t in ("pull_request","non_fast_forward","required_status_checks","merge_queue")]
-        self.assertEqual(RUNNER.eligible(pr,files,review,checks,rules)[0],True)
-        self.assertFalse(RUNNER.eligible(pr,files,[],checks,rules)[0])
-        self.assertFalse(RUNNER.eligible(pr,files,review,checks,rules[:-1])[0])
-        self.assertFalse(RUNNER.eligible(pr,files,review,checks[:-1],rules)[0])
+        self.assertEqual(RUNNER.eligible(pr,files,review,checks,rules,specialized_check_completed=True)[0],True)
+        self.assertFalse(RUNNER.eligible(pr,files,[],checks,rules,specialized_check_completed=True)[0])
+        self.assertFalse(RUNNER.eligible(pr,files,review,checks,rules[:-1],specialized_check_completed=True)[0])
+        self.assertFalse(RUNNER.eligible(pr,files,review,checks[:-1],rules,specialized_check_completed=True)[0])
         pr["head"]["sha"]="c"*40
-        self.assertFalse(RUNNER.eligible(pr,files,review,checks,rules)[0])
+        self.assertFalse(RUNNER.eligible(pr,files,review,checks,rules,specialized_check_completed=True)[0])
         pr["head"]["sha"]=HEAD
         pr["user"]["login"]="shopvivaliz-human"
-        self.assertFalse(RUNNER.eligible(pr,files,review,checks,rules)[0])
+        self.assertFalse(RUNNER.eligible(pr,files,review,checks,rules,specialized_check_completed=True)[0])
+    def test_common_p1_pr_is_automatically_queued_without_human_review(self):
+        pr={"state":"open","draft":False,"user":{"login":"fredmourao-ai"},
+            "base":{"ref":"main"},"head":{"sha":HEAD,"repo":{"full_name":REPO}},
+            "labels":[]}
+        files=[{"filename":"docs/ops/release-notes.md"}]
+        checks=[{"name":n,"status":"completed","conclusion":"success",
+                 "app":{"id":15368},"id":i+1} for i,n in enumerate(sorted(RUNNER.REQUIRED))]
+        rules=[{"type":t,"parameters":{"required_status_checks":[{"context":n,"integration_id":15368}
+                          for n in RUNNER.REQUIRED]}} if t=="required_status_checks" else {"type":t}
+                          for t in ("pull_request","non_fast_forward","required_status_checks","merge_queue")]
+        self.assertEqual(RUNNER.eligible(pr,files,[],checks,rules,
+                             specialized_check_completed=True),
+                         (True,"technical_green_ready_for_native_queue"))
+        self.assertFalse(RUNNER.eligible(pr,files,[],checks,rules)[0])
+        pr["labels"]=[{"name":"no-auto-merge"}]
+        self.assertFalse(RUNNER.eligible(pr,files,[],checks,rules,
+                                        specialized_check_completed=True)[0])
+        pr["labels"]=[]
+        self.assertFalse(RUNNER.eligible(pr,files,[],checks[:-1],rules,
+                                        specialized_check_completed=True)[0])
+
     def test_ruleset_activation_preserves_required_checks_and_mandates_queue(self):
         before={"id":24523478,"name":"Audit V5 - required PR and verified checks",
                 "enforcement":"active","target":"branch","source_type":"Repository",

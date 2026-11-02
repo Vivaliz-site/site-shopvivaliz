@@ -26,9 +26,12 @@ This PR requests formal owner approval to:
    The CI merge_group triggers were separately prepared by technical
    PR #3548, merged before this activation.
 2. Allow only fredmourao-ai on the existing backend runner to enqueue
-   SHA-bound PRs after the GitHub API proves APPROVED by
-   shopvivaliz-human, no newer dismissal/change request, current HEAD,
-   required original-head checks GREEN and no operational hold.
+   SHA-bound PRs. For protected P2 paths the official GitHub API must
+   prove APPROVED by shopvivaliz-human on the current exact HEAD with
+   no later dismissal/change request; ordinary P1 PRs require no human
+   review and are auto-enqueued by the same verified technical actor.
+   Always preserve required original-head checks GREEN, impacted
+   specialized CI workflows GREEN and explicit operational holds.
 3. Let the GitHub merge queue bot integrate only when it has validated
    BOTH required contexts against the synthetic merge commit.
 4. Recognize an internal security owner grant only with GraphQL

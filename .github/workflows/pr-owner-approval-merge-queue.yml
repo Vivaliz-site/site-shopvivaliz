@@ -3,6 +3,9 @@ name: Owner Approved Native Merge Queue
 on:
   pull_request_review:
     types: [submitted, dismissed]
+  workflow_run:
+    workflows: [Mandatory Validation Gate]
+    types: [completed]
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
