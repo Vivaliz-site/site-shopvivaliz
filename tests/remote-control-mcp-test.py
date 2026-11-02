@@ -1001,8 +1001,10 @@ class RemoteControlMcpTests(unittest.TestCase):
             set(specs["continuity_e2e"]["inputSchema"]["properties"]["browser_session"]["enum"]),
             {"dev", "atendimento"},
         )
-        with mock.patch.object(m, "_controller_origin_main_sha", return_value=sha), \\
-             mock.patch.object(m, "controller_status", return_value={"active_sha": sha, "service_active": True}):
+        with (
+            mock.patch.object(m, "_controller_origin_main_sha", return_value=sha),
+            mock.patch.object(m, "controller_status", return_value={"active_sha": sha, "service_active": True}),
+        ):
             result = m.continuity_e2e(cid, browser_session="dev", timeout_seconds=120)
         self.assertTrue(result["durable"])
         self.assertEqual(result["browser_session"], "dev")
