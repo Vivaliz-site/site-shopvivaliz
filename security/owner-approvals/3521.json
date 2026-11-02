@@ -1,0 +1,27 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3521,
+  "resource": "mcp:marina",
+  "principal": "marina-mcp-service",
+  "target_repository": "Vivaliz-site/site-shopvivaliz",
+  "host": "marina-a1-4c24g",
+  "capabilities": [
+    "access_manage"
+  ],
+  "operation": "configure_cloudflare_mcp_ingress",
+  "existing_tunnel_id": "6e55e29e-7c62-4a00-ac66-8e3f9df1145f",
+  "required_existing_tunnel_owner_verification": true,
+  "hostname": "mcp-marina.shopvivaliz.com.br",
+  "origin": "http://127.0.0.1:5580",
+  "mcp_path": "/mcp",
+  "isolation": "dedicated_access_app_deny_by_default",
+  "oauth": "cloudflare_managed_oauth_official_consent",
+  "automation": "service_auth_dedicated_credentials_no_interactive_mfa",
+  "no_new_tunnel": true,
+  "no_public_tcp_listener": true,
+  "no_root_privilege_grant": true,
+  "auditing_required": true,
+  "rollback": "remove_only_mcp_hostname_access_app_and_mcp_dns",
+  "expires_at_utc": "2026-12-02T23:59:00Z"
+}
