@@ -46,6 +46,19 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertNotIn("REMOTE_HEAL_SCRIPT", workflow)
         self.assertNotIn("ssh -o BatchMode", workflow)
 
+    def test_fanout_settles_only_impacted_workflows_before_finalizer(self) -> None:
+        workflow = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
+        hosted = workflow.split("  enforce:", 1)[0]
+        self.assertIn("mapfile -t changed_files", hosted)
+        self.assertIn("trusted/scripts/pr_gate_scope.py", hosted)
+        self.assertIn("settle_required=('Repository Governance'", hosted)
+        self.assertIn("fanout_applicable_required=", hosted)
+        self.assertIn("fanout_scope_unavailable=fail_closed", hosted)
+        self.assertNotIn("settle_required=(\\n              'Quality Gate'", hosted)
+        from scripts.pr_gate_scope import required_specialized_gates
+        self.assertEqual(required_specialized_gates(["scripts/pr_conflict_vm_heal.sh"]), ["PR Policy Enforcement"])
+        self.assertEqual(required_specialized_gates(["docs/ops/unrelated-note.md"]), [])
+
     def test_clean_stale_pr_sync_does_not_require_gemini(self) -> None:
         healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text(encoding="utf-8")
         merge_pos = healer.index('if [[ "$merge_clean" -eq 0 ]]')
