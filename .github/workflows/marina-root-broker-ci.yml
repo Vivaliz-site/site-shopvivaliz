@@ -48,6 +48,7 @@ jobs:
           assert 'maintenance_lease_or_replay_denied' in adapter
           assert 'ListenStream=/run/' in socket_unit
           assert 'SocketMode=0660' in socket_unit
+          assert 'DirectoryMode=0755' in socket_unit, 'group user needs path traversal; socket stays 0660'
           assert 'SocketGroup=shopvivaliz-marina-mcp' in socket_unit
           assert 'User=root' in service and 'NoNewPrivileges=yes' in service
           assert 'RestrictAddressFamilies=AF_UNIX' in service
