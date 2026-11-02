@@ -12,6 +12,7 @@ import base64
 import binascii
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -47,6 +48,9 @@ DESKTOP_ALIASES = {
     "Fred-Win": ("fred-win", "laptop-nig4ifuu"),
 }
 MAX_SCREENSHOT_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_SCREENSHOT_BYTES", str(8 * 1024 * 1024)))
+# Encoded MCP responses pass through a 1 MiB stdio adapter: keep image base64
+# and its envelope comfortably below that fixed bound, even on dual monitors.
+MAX_NATIVE_MCP_IMAGE_BYTES = 550_000
 MAX_XWD_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_XWD_BYTES", str(64 * 1024 * 1024)))
 MAX_TABS = max(1, min(int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_TABS", "32")), 64))
 
@@ -814,15 +818,73 @@ def browser_screenshot() -> dict[str, Any]:
     return capture_window(active_browser_window(), BROWSER_HOST, "shopvivaliz-browser-")
 
 
+def encode_large_native_png_for_mcp(raw: bytes, width: int, height: int) -> bytes:
+    """JPEG-encode an oversized native PNG, never resizing screen coordinates."""
+    try:
+        from PIL import Image
+    except ImportError:
+        raise RuntimeError("native_desktop_screenshot_encoder_unavailable") from None
+    try:
+        with Image.open(io.BytesIO(raw)) as source:
+            if source.format != "PNG" or source.size != (width, height):
+                raise ValueError("native_desktop_screenshot_geometry_mismatch")
+            source.load()
+            rgb = source.convert("RGB")
+        try:
+            for quality in (78, 67, 54, 42):
+                target = io.BytesIO()
+                rgb.save(target, format="JPEG", quality=quality, optimize=True)
+                encoded = target.getvalue()
+                if 100 <= len(encoded) <= MAX_NATIVE_MCP_IMAGE_BYTES:
+                    return encoded
+        finally:
+            rgb.close()
+    except (OSError, ValueError):
+        raise RuntimeError("native_desktop_screenshot_encoder_failed") from None
+    raise RuntimeError("native_desktop_screenshot_transport_budget_exceeded")
+
+
+def bounded_native_desktop_image(result: dict[str, Any], image_b64: object) -> tuple[str, str, int]:
+    """Return encoded image, actual MIME and size within the MCP response cap."""
+    if not isinstance(image_b64, str) or not image_b64:
+        raise RuntimeError("native_desktop_screenshot_missing")
+    if len(image_b64) > ((MAX_SCREENSHOT_BYTES + 2) // 3) * 4 + 8:
+        raise RuntimeError("native_desktop_screenshot_size_invalid")
+    try:
+        raw = base64.b64decode(image_b64, validate=True)
+    except (binascii.Error, ValueError):
+        raise RuntimeError("native_desktop_screenshot_invalid_base64") from None
+    if (len(raw) < 50 or len(raw) > MAX_SCREENSHOT_BYTES
+            or not raw.startswith(b"\x89PNG\r\n\x1a\n")
+            or raw[12:16] != b"IHDR"
+            or result.get("mime_type") != "image/png"):
+        raise RuntimeError("native_desktop_screenshot_invalid_png")
+    width, height = struct.unpack(">II", raw[16:24])
+    if (width < 1 or height < 1 or width * height > 16_777_216
+            or width != result.get("width") or height != result.get("height")
+            or len(raw) != result.get("bytes")):
+        raise RuntimeError("native_desktop_screenshot_geometry_mismatch")
+    if len(raw) <= MAX_NATIVE_MCP_IMAGE_BYTES:
+        return image_b64, "image/png", len(raw)
+    jpeg = encode_large_native_png_for_mcp(raw, width, height)
+    if len(jpeg) > MAX_NATIVE_MCP_IMAGE_BYTES:
+        raise RuntimeError("native_desktop_screenshot_transport_budget_exceeded")
+    return base64.b64encode(jpeg).decode("ascii"), "image/jpeg", len(jpeg)
+
+
 def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     if host == "Fred-Win":
         result = native_desktop_bridge(host, {"action": "screenshot"})
         image_b64 = result.pop("image_b64", None)
-        if not image_b64:
-            raise RuntimeError("native_desktop_screenshot_missing")
+        encoded, image_mime, image_size = bounded_native_desktop_image(result, image_b64)
         result["surface"] = "windows_interactive"
-        result["__mcp_image__"] = image_b64
+        result["mime_type"] = image_mime
+        result["bytes"] = image_size
+        result["sha256"] = hashlib.sha256(base64.b64decode(encoded)).hexdigest()
+        # JPEG changes encoding only, never geometry or desktop click coordinates.
+        result["transcoded_for_transport"] = image_mime == "image/jpeg"
+        result["__mcp_image__"] = encoded
         return result
     target_id = base.rustdesk_host_id(host)
     window = active_desktop_window(host, target_id)
@@ -1943,7 +2005,10 @@ class BrowserHandler(base.Handler):
                         output["audit_id"] = aid
                     content = [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]
                     if image_data:
-                        content.append({"type": "image", "data": image_data, "mimeType": "image/png"})
+                        image_mime = str(output.get("mime_type") or "")
+                        if image_mime not in {"image/png", "image/jpeg"}:
+                            raise RuntimeError("mcp_image_mime_not_allowed")
+                        content.append({"type": "image", "data": image_data, "mimeType": image_mime})
                     result = {"content": content, "structuredContent": output, "isError": not ok}
                 except base.ClientDisconnected:
                     audit(name, host, args, False, "client_disconnected_command_cancelled")
