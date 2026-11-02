@@ -38,6 +38,36 @@ def evaluate(active_rows, erp_details, cache_rows, site_rows, amazon_table=AMAZO
     return audit.evaluate(active_rows, erp_details, cache_rows, site_rows, amazon_table)
 
 
+class DetailRecoveryTests(unittest.TestCase):
+    def test_retries_only_missing_ids_and_recovers(self):
+        class API:
+            calls = []
+            def api_get(self, path, token, **kwargs):
+                self.calls.append(path)
+                if path.endswith("/2") and self.calls.count(path) == 1:
+                    raise RuntimeError("temporary_throttle")
+                return {"produto": {"id": path.split("/")[-1], "sku": "OK"}}
+        api = API()
+        details, errors = audit.fetch_details_with_targeted_retry(
+            api, "synthetic", [active(1, "A"), active(2, "B")], sleep=lambda _: None)
+        self.assertEqual(errors, [])
+        self.assertEqual(set(details), {"1", "2"})
+        self.assertEqual(api.calls, ["produtos/1", "produtos/2", "produtos/2"])
+
+    def test_persistent_failure_is_not_hidden(self):
+        class API:
+            calls = 0
+            def api_get(self, path, token, **kwargs):
+                self.calls += 1
+                raise RuntimeError("unavailable")
+        api = API()
+        details, errors = audit.fetch_details_with_targeted_retry(
+            api, "synthetic", [active(3, "C")], sleep=lambda _: None)
+        self.assertEqual(details, {})
+        self.assertEqual(api.calls, 3)
+        self.assertEqual(errors[0]["code"], "erp_detail_query_failed")
+
+
 class PriceParityTests(unittest.TestCase):
     def test_all_real_prices_match(self):
         data = evaluate(
