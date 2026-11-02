@@ -36,3 +36,16 @@ Rollback: recolocar backup íntegro através do mesmo caminho autorizado, revali
 - Controlador: \`continuity_ready=false\` por vínculos de conversas/sessões, não por sudo Linux.
 
 A restauração geral dessas camadas deve seguir suas issues e grants existentes, sem concluir falsamente que um \`chmod\` resolve tudo.
+
+## Segunda falha confirmada apos reparo de permissoes
+
+A instalacao da PR #3508 corrigiu o problema de UID 65534. Uma execucao real em 2026-11-02 03:12 UTC confirmou zero ocorrencias de Permission denied nos tres projetos. O consultorio obteve PASS_LOCAL_NOT_GITHUB_CHECK (3/3 testes). O site ainda falhou por comando CLI obsoleto (o --adapter-self-test foi removido pelo programa atual); legacy falhou por comandos que referem arquivos de agente inexistentes num repositorio deliberadamente congelado. Portanto sao contratos CI obsoletos, distintos de permissao Linux.
+
+### Alinhamento do contrato e migracao GitHub
+
+1. Site: checklist mantido e substituido flag inexistente por unittest tests.test_global_task_continuity_v8; comprovacao real Docker com UID 65534: 9 testes GREEN em commit 47e82774c288, sem rede/capabilities e com bind readonly.
+2. Consultorio: preservar tres testes reais e usar caminho oficial Vivaliz-site/solange-rolla-consultorio.
+3. Legacy: repositório oficialmente historico/supersedido Vivaliz-site/solange-rolla; nao contem adapter de producao nem o teste de checklist moderno por design. Substituir suites incorretas por containment real: README com marcador de supersedido, dois workflows sem push e com guarda de PR do proprio repositorio, continuidade existente, teste JS, certifier e merge provenance. Veredito especifico PASS_LEGACY_CONTAINMENT_ONLY, nunca certificacao global/APTO. Qualquer contrato rompido continua FAILED_TEST.
+4. Mirrors do CI no servidor ainda apontavam ao owner fredmourao-ai. Somente os dois URLs antigos oficialmente mapeados legacy e consultorio poderao ser trocados pelos repos Vivaliz-site exatos. Uma origem diferente falha fechada.
+
+A politica Docker segue readonly, offline, UID 65534, sem capabilities. O CI independente nao publica GitHub checks, nao comprova auditoria geral de producao e nao emite permissoes. Manter backup root-only, conferir SHA e retestar service apos merge.
