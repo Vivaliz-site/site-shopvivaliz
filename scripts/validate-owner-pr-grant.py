@@ -115,6 +115,31 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
                 grant.get("host") != "marina-a1-4c24g" or
                 grant.get("controller_host") != "always-free-arm-1787907847-26"):
             return False, "central_marina_scope_not_approved"
+
+    # Plugin permission maintenance is a narrowly named, one-use human grant.
+    # It NEVER changes ChatGPT provider policy or mints a runtime lock itself.
+    if resource == "mcp:fred-win:plugin-permissions":
+        exact_fields = {
+            "schema", "repository", "pr_number", "resource", "principal",
+            "host", "controller_host", "capabilities", "operation",
+            "allowed_actions", "target_origin", "permission_mode",
+            "one_use", "ttl_seconds", "expires_at_utc",
+        }
+        if (set(grant) != exact_fields or
+                principal != "shopvivaliz-central-mcp" or
+                capability != "desktop_plugin_permission_maintenance" or
+                caps != ["desktop_plugin_permission_maintenance"] or
+                operation != "configure_chatgpt_plugin_permissions" or
+                target_repository is not None or
+                grant.get("host") != "Fred-Win" or
+                grant.get("controller_host") != "always-free-arm-1787907847-26" or
+                grant.get("allowed_actions") != ["desktop_open", "desktop_click", "desktop_type"] or
+                grant.get("target_origin") != "https://chatgpt.com" or
+                grant.get("permission_mode") != "full_access" or
+                grant.get("one_use") is not True or
+                type(grant.get("ttl_seconds")) is not int or
+                grant["ttl_seconds"] != 180):
+            return False, "fred_win_plugin_permissions_scope_not_approved"
     if resource == "mcp:marina":
         if (not isinstance(target_repository, str) or
                 not REPO.fullmatch(target_repository) or

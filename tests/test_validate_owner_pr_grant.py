@@ -486,6 +486,92 @@ class GrantOriginBindingTests(unittest.TestCase):
             files, path, {"path": path, "sha": "c" * 40}))
 
 
+class FredWinPluginPermissionGrantTests(unittest.TestCase):
+    """Only the human-approved, one-use, short desktop maintenance operation."""
+
+    def sample(self):
+        pr, grant, opts = fixture()
+        grant.pop("target_repository")
+        opts["target_repository"] = None
+        grant.update({
+            "resource": "mcp:fred-win:plugin-permissions",
+            "principal": "shopvivaliz-central-mcp",
+            "host": "Fred-Win",
+            "controller_host": "always-free-arm-1787907847-26",
+            "capabilities": ["desktop_plugin_permission_maintenance"],
+            "operation": "configure_chatgpt_plugin_permissions",
+            "allowed_actions": ["desktop_open", "desktop_click", "desktop_type"],
+            "target_origin": "https://chatgpt.com",
+            "permission_mode": "full_access",
+            "one_use": True,
+            "ttl_seconds": 180,
+        })
+        opts.update({
+            "resource": "mcp:fred-win:plugin-permissions",
+            "principal": "shopvivaliz-central-mcp",
+            "capability": "desktop_plugin_permission_maintenance",
+            "operation": "configure_chatgpt_plugin_permissions",
+        })
+        return pr, grant, opts
+
+    def test_owner_reviewed_exact_fred_win_grant_is_accepted(self):
+        pr, grant, opts = self.sample()
+        self.assertEqual((True, "owner_authorization_verified"),
+                         grant_module.decide(pr, grant, **opts))
+
+    def test_wrong_host_and_expanded_desktop_actions_deny(self):
+        pr, grant, opts = self.sample()
+        wrong = [
+            ("host", "KOCEPSV"),
+            ("controller_host", "shopvivaliz-free-a1"),
+            ("allowed_actions", ["desktop_open", "desktop_click", "desktop_type", "admin_command_run"]),
+            ("target_origin", "https://sellercentral.amazon.com.br"),
+            ("permission_mode", "ask_before_writes"),
+            ("one_use", False),
+            ("ttl_seconds", 3600),
+            ("ttl_seconds", 180.0),
+            ("principal", "shopvivaliz-human"),
+            ("capabilities", ["desktop_plugin_permission_maintenance", "service_action"]),
+            ("operation", "other_operation"),
+        ]
+        for key, bad in wrong:
+            with self.subTest(key=key, value=bad):
+                invalid = dict(grant, **{key: bad})
+                self.assertFalse(grant_module.decide(pr, invalid, **opts)[0])
+        invalid = dict(grant, privileged_shell=True)
+        self.assertFalse(grant_module.decide(pr, invalid, **opts)[0])
+
+    def test_wrong_request_scope_is_never_accepted(self):
+        pr, grant, opts = self.sample()
+        for patch in (
+            {"capability": "admin_command_run"},
+            {"operation": None},
+            {"resource": "mcp:marina"},
+            {"principal": "shopvivaliz-human"},
+            {"target_repository": "Vivaliz-site/site-shopvivaliz"},
+        ):
+            with self.subTest(patch=patch):
+                self.assertFalse(grant_module.decide(pr, grant, **dict(opts, **patch))[0])
+
+    def test_human_only_review_and_merge_still_required(self):
+        pr, grant, opts = self.sample()
+        opts["reviews"] = []
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+        opts["reviews"] = [{"user": {"login": "shopvivaliz-human"},
+                            "state": "APPROVED", "commit_id": "c" * 40}]
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+        opts["reviews"] = [{"user": {"login": "shopvivaliz-human"},
+                            "state": "APPROVED", "commit_id": HEAD}]
+        pr["merged_by"]["login"] = "fredmourao-ai"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_old_or_expired_grant_cannot_reissue_maintenance(self):
+        pr, grant, opts = self.sample()
+        opts["now"] = datetime(2027, 1, 1, tzinfo=timezone.utc)
+        self.assertEqual((False, "authorization_expired"),
+                         grant_module.decide(pr, grant, **opts))
+
+
 # The existing Absolute Audit Governance workflow invokes this security suite.
 # Reuse it to exercise every Marina adapter negative test without changing
 # protected workflow YAML or enabling any runtime tool/permission.
@@ -497,6 +583,18 @@ assert MARINA_GATE_SPEC and MARINA_GATE_SPEC.loader
 marina_gate_tests = importlib.util.module_from_spec(MARINA_GATE_SPEC)
 MARINA_GATE_SPEC.loader.exec_module(marina_gate_tests)
 MarinaOwnerPrGateTests = marina_gate_tests.OwnerPrGateTests
+
+# Reuse the established security CI invocation to cover the new issuer's
+# one-use runtime-lock and GitHub owner-proof negative tests without a broader
+# unrelated workflow change.
+PLUGIN_ISSUER_TEST_PATH = Path(__file__).resolve().parent / "test_chatgpt_plugin_permissions_lease.py"
+PLUGIN_ISSUER_SPEC = importlib.util.spec_from_file_location(
+    "chatgpt_plugin_permission_issuer_tests", PLUGIN_ISSUER_TEST_PATH
+)
+assert PLUGIN_ISSUER_SPEC and PLUGIN_ISSUER_SPEC.loader
+plugin_issuer_tests = importlib.util.module_from_spec(PLUGIN_ISSUER_SPEC)
+PLUGIN_ISSUER_SPEC.loader.exec_module(plugin_issuer_tests)
+ChatgptPluginPermissionLeaseTests = plugin_issuer_tests.PluginPermissionLeaseTests
 
 
 if __name__ == "__main__":
