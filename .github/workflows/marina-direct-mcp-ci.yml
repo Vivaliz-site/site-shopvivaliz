@@ -5,6 +5,8 @@ on:
     paths:
       - 'marina-direct-mcp/**'
       - 'tests/test_marina_direct_mcp.py'
+      - 'tests/test_marina_broker_client.py'
+      - 'tests/test_marina_broker_integration.py'
       - 'tests/test_marina_cloudflare_access.py'
       - 'tests/test_marina_read_only_telemetry.py'
       - 'tests/test_marina_tunnel_preflight.py'
@@ -21,6 +23,8 @@ on:
     paths:
       - 'marina-direct-mcp/**'
       - 'tests/test_marina_direct_mcp.py'
+      - 'tests/test_marina_broker_client.py'
+      - 'tests/test_marina_broker_integration.py'
       - 'tests/test_marina_cloudflare_access.py'
       - 'tests/test_marina_read_only_telemetry.py'
       - 'tests/test_marina_tunnel_preflight.py'
@@ -56,6 +60,8 @@ jobs:
           python3 tests/test_marina_cloudflare_access.py -v
           python3 -m py_compile marina-direct-mcp/server.py marina-direct-mcp/operator_preflight.py tests/test_marina_direct_mcp.py tests/test_marina_tunnel_preflight.py marina-direct-mcp/read_only_telemetry.py tests/test_marina_read_only_telemetry.py
           python3 tests/test_marina_direct_mcp.py -v
+          python3 tests/test_marina_broker_client.py -v
+          python3 tests/test_marina_broker_integration.py -v
           python3 tests/test_marina_read_only_telemetry.py -v
           python3 tests/test_marina_tunnel_preflight.py -v
           python3 tests/test_marina_tunnel_units.py -v

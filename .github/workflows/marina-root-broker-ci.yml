@@ -4,17 +4,21 @@ on:
   pull_request:
     paths:
       - 'marina-direct-mcp/root_broker.py'
+      - 'marina-direct-mcp/broker_client.py'
       - 'marina-direct-mcp/operator_admin_route.py'
       - 'marina-direct-mcp/systemd/shopvivaliz-marina-root-broker.*'
       - 'tests/test_marina_root_broker.py'
+      - 'tests/test_marina_root_broker_sandbox.py'
       - '.github/workflows/marina-root-broker-ci.yml'
   push:
     branches: [main]
     paths:
       - 'marina-direct-mcp/root_broker.py'
+      - 'marina-direct-mcp/broker_client.py'
       - 'marina-direct-mcp/operator_admin_route.py'
       - 'marina-direct-mcp/systemd/shopvivaliz-marina-root-broker.*'
       - 'tests/test_marina_root_broker.py'
+      - 'tests/test_marina_root_broker_sandbox.py'
       - '.github/workflows/marina-root-broker-ci.yml'
 
 permissions:
@@ -35,6 +39,10 @@ jobs:
       - name: Exercise root-only broker in disposable temporary directory
         run: |
           sudo -n /usr/bin/python3 -B tests/test_marina_root_broker.py
+      - name: Exercise verifier child under the real service sandbox
+        run: |
+          test -d /run/systemd/system
+          sudo -n /usr/bin/python3 -B tests/test_marina_root_broker_sandbox.py
       - name: Assert no remote root, command, shell or TCP listener added
         run: |
           python3 - <<'PY'
@@ -51,7 +59,8 @@ jobs:
           assert 'DirectoryMode=0755' in socket_unit, 'group user needs path traversal; socket stays 0660'
           assert 'SocketGroup=shopvivaliz-marina-mcp' in socket_unit
           assert 'User=root' in service and 'NoNewPrivileges=yes' in service
-          assert 'RestrictAddressFamilies=AF_UNIX' in service
+          assert 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6' in service
+          assert 'sock.family != socket.AF_UNIX' in source
           assert 'ExecStart=/usr/bin/python3 -B /opt/' in service
           assert not any(x in source for x in ('shell=True', 'os.system(', '0.0.0.0',
                                                   'subprocess.Popen(', 'eval('))

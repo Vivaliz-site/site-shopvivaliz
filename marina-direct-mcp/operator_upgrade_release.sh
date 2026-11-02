@@ -66,6 +66,7 @@ exec 9>"$lock"
 flock -n 9 || refuse concurrent_upgrade
 required=(
     server.py
+    broker_client.py
     root_broker.py
     cloudflare_access_auth.py
     read_only_telemetry.py
@@ -76,6 +77,8 @@ required=(
     operator_preflight.py
     local_auth_smoke.py
     systemd/shopvivaliz-marina-mcp.service
+    systemd/shopvivaliz-marina-root-broker.service
+    systemd/shopvivaliz-marina-root-broker.socket
 )
 for name in "${required[@]}"; do
     f="$source_checkout/marina-direct-mcp/$name"
@@ -103,13 +106,17 @@ copy_immutable() {
         install -o root -g root -m 0444 "$source" "$target"
     fi
 }
-for name in server.py root_broker.py cloudflare_access_auth.py read_only_telemetry.py scoped_write.py trusted_write_operator.py operator_grant_readback.py operator_admin_route.py operator_preflight.py local_auth_smoke.py; do
+for name in server.py broker_client.py root_broker.py cloudflare_access_auth.py read_only_telemetry.py scoped_write.py trusted_write_operator.py operator_grant_readback.py operator_admin_route.py operator_preflight.py local_auth_smoke.py; do
     copy_immutable "$source_checkout/marina-direct-mcp/$name" "$release/$name"
 done
 copy_immutable "$verifier" "$release/validate_owner_pr_grant.py"
 # The readback independently verifies the real owner-approved grant as the service UID.
 sudo -n -u shopvivaliz-marina-mcp /usr/bin/python3 -B "$release/operator_grant_readback.py" >/dev/null || refuse approved_owner_grant_invalid
 copy_immutable "$source_checkout/marina-direct-mcp/systemd/shopvivaliz-marina-mcp.service" "$release/shopvivaliz-marina-mcp.service"
+# Inert broker templates are carried with the immutable release; installation
+# and socket activation require a separate exact owner-approved root grant.
+copy_immutable "$source_checkout/marina-direct-mcp/systemd/shopvivaliz-marina-root-broker.service" "$release/shopvivaliz-marina-root-broker.service"
+copy_immutable "$source_checkout/marina-direct-mcp/systemd/shopvivaliz-marina-root-broker.socket" "$release/shopvivaliz-marina-root-broker.socket"
 grep -Fqx 'User=shopvivaliz-marina-mcp' "$release/shopvivaliz-marina-mcp.service" || refuse service_user_invalid
 grep -Fqx 'NoNewPrivileges=yes' "$release/shopvivaliz-marina-mcp.service" || refuse service_privileges_invalid
 grep -Fqx 'ReadWritePaths=/var/lib/shopvivaliz-marina-mcp/workspace /var/lib/shopvivaliz-marina-mcp/state' "$release/shopvivaliz-marina-mcp.service" || refuse writable_paths_invalid

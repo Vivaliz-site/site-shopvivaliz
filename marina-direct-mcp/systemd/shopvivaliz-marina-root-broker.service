@@ -22,7 +22,9 @@ ProtectKernelModules=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 LockPersonality=yes
-RestrictAddressFamilies=AF_UNIX
+# Outbound HTTPS is required for fresh GitHub grant verification.
+# The only inbound listener is the inherited, validated AF_UNIX socket.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallArchitectures=native
 MemoryMax=128M
 TasksMax=24

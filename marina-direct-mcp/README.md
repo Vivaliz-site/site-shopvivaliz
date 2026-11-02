@@ -223,3 +223,44 @@ for permissions, workspace association, protected runtime key, authentication
 tests and actual ChatGPT connector verification. An admin-capable mutation
 surface additionally requires RBAC, maintenance leases, fencing, CAS,
 idempotency and real E2E validation. No `sudo` is granted by a tunnel.
+
+## Cliente administrativo local e broker protegido
+
+O cliente `broker_client.py` conecta o processo MCP sem root ao socket fixo
+`/run/shopvivaliz-marina-broker/mcp-root.sock`. A opção
+`--enable-approved-admin-broker` é desligada por padrão. Quando habilitada,
+exige metadados protegidos em
+`/etc/shopvivaliz/marina-root-broker/client-grant.json`, peer root comprovado
+por `SO_PEERCRED` e preflight atual do grant exato. O documento contém apenas
+`operation`, `pr_number`, `head_sha` e `merge_sha`; sua árvore é root-owned,
+sem escrita por grupo/outros, e o arquivo é regular e somente leitura pelo
+serviço. Nenhuma credencial entra nos argumentos MCP.
+
+As ferramentas `marina_olist_browser_restart_prepare` e
+`marina_olist_browser_restart` aparecem somente com esse cliente validado e
+autenticação pelo bearer local protegido. JWT do Cloudflare Access permanece
+limitado à leitura. O broker emite um ticket de 60 segundos; o execute exige
+o fence mais recente, grant idêntico e ticket ainda não utilizado. Perda da
+resposta do execute resulta em estado indeterminado, sem repetição automática.
+
+O upgrade inclui código e templates `shopvivaliz-marina-root-broker.service`
+e `.socket` como arquivos imutáveis da release. Esses templates não são
+instalados, habilitados nem iniciados pelo upgrade. O bootstrap
+`operator_stage_service.sh` continua restrito ao MCP inicial. A instalação
+do broker exige operador oficial e novo grant humano específico para
+`olist_browser_restart` no repositório `Vivaliz-site/amazon-returns-safet`;
+#3514 e #3521 não concedem essa operação.
+
+O processo root aceita somente o descritor AF_UNIX entregue pelo systemd.
+Seu sandbox permite AF_INET/AF_INET6 para a consulta HTTPS do verificador ao
+GitHub; restringir as famílias a AF_UNIX bloqueia também os subprocessos e
+inviabiliza a autorização real. O teste
+`tests/test_marina_root_broker_sandbox.py` executa um subprocesso HTTP contra
+fixture loopback dentro de um serviço systemd temporário com as mesmas
+restrições. O teste não usa credenciais, não altera serviços da aplicação
+e não certifica a ativação em Marina.
+
+Falha no bootstrap administrativo mantém o MCP disponível para leitura;
+`server.py --check --enable-approved-admin-broker` retorna erro. A ativação
+operacional ainda depende do grant, instalação protegida, token de leitura
+dedicado, testes negativos e validação E2E na Marina.
