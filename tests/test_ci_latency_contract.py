@@ -80,6 +80,16 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertIn("remote PR branch moved before publication", healer)
         self.assertIn("publication would not be fast-forward", healer)
 
+    def test_technical_merger_never_uses_actions_bot_for_postmerge(self) -> None:
+        finalizer = (ROOT / "scripts" / "merge_green_pr_via_vm.sh").read_text(encoding="utf-8")
+        self.assertIn("technical_gh()", finalizer)
+        self.assertIn("env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS", finalizer)
+        self.assertIn("independent_technical_actor_required", finalizer)
+        self.assertIn("result=\"$(technical_gh api --method PUT", finalizer)
+        self.assertNotIn("result=\"$(gh api --method PUT", finalizer)
+        self.assertIn("owner-protected PR must not be autonomously merged", finalizer)
+        self.assertIn("PR head does not contain current main", finalizer)
+
     def test_history_integrity_avoids_blob_downloads(self) -> None:
         workflow = (WF / "history-integrity.yml").read_text(encoding="utf-8")
         validator = (ROOT / "scripts" / "maintenance" / "validate_sanitized_history.py").read_text(encoding="utf-8")
