@@ -1,0 +1,29 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3541,
+  "resource": "commercial:derived-products-db",
+  "principal": "shopvivaliz-derived-products-maintainer",
+  "host": "marina-a1-4c24g",
+  "capabilities": [
+    "resolve_legacy_sku_conflict_once"
+  ],
+  "operation": "resolve_legacy_sku_conflict",
+  "one_time": true,
+  "legacy_local_id": 257,
+  "legacy_sku": "FLOREIRA-FLAT77",
+  "canonical_local_id": 15286,
+  "canonical_sku": "JFQFCQ77x2",
+  "conflicting_olist_id": "341443735",
+  "permitted_legacy_change": {
+    "active": 0,
+    "olist_id": null
+  },
+  "preserve_local_ids": true,
+  "erp_external_writes_allowed": false,
+  "requires_backup_restore_test": true,
+  "requires_lease_and_transaction": true,
+  "requires_recent_erp_revalidation": true,
+  "requires_zero_fk_or_reservation_impact": true,
+  "expires_at_utc": "2026-12-02T23:59:00Z"
+}
