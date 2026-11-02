@@ -30,11 +30,11 @@ def expected_repositories(script: Path) -> list[str]:
     tree = ast.parse(script.read_text(), filename=str(script))
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "EXPECTED_REPOSITORIES"
+            isinstance(t, ast.Name) and t.id in {"EXPECTED_REPOSITORIES", "REQUIRED_REPOSITORIES"}
             for t in node.targets
         ):
             return ast.literal_eval(node.value)
-    raise AssertionError(f"EXPECTED_REPOSITORIES constant missing in {script.name}")
+    raise AssertionError(f"repository allowlist constant missing in {script.name}")
 
 class PostMigrationGlobalAuditParityTests(unittest.TestCase):
     def test_manifest_current_repositories_only(self):
