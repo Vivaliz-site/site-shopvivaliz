@@ -1,0 +1,25 @@
+{
+  "schema": "SHOPVIVALIZ_GITHUB_MERGE_QUEUE_CHANGE_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "ruleset_id": 24523478,
+  "expected_ruleset_name": "Audit V5 - required PR and verified checks",
+  "owner_review_required": true,
+  "preserve_existing_rules": true,
+  "preserve_bypass_actors": [],
+  "required_status_checks": [
+    "Audit repository automation",
+    "validation-gate"
+  ],
+  "merge_queue_rule": {
+    "type": "merge_queue",
+    "parameters": {
+      "check_response_timeout_minutes": 40,
+      "grouping_strategy": "ALLGREEN",
+      "max_entries_to_build": 1,
+      "max_entries_to_merge": 1,
+      "merge_method": "SQUASH",
+      "min_entries_to_merge": 1,
+      "min_entries_to_merge_wait_minutes": 0
+    }
+  }
+}

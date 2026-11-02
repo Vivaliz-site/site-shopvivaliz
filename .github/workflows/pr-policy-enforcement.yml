@@ -106,7 +106,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 scripts/check_pr_completion_policy.py
-          python3 -m unittest tests.test_owner_review_required_workflow tests.test_owner_required_review_gate -v
+          python3 -m unittest tests.test_owner_review_required_workflow tests.test_owner_required_review_gate tests.test_github_merge_queue_p2_scope -v
 
       - name: Publish enforcement invariant
         shell: bash
