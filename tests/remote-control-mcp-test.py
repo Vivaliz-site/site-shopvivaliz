@@ -993,6 +993,25 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("--continuity-e2e-run", row["command"])
         self.assertIn(cid, row["command"])
 
+    def test_continuity_e2e_supports_exact_dev_browser_binding(self):
+        sha = "a" * 40
+        cid = "conversation_12345678"
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertEqual(
+            set(specs["continuity_e2e"]["inputSchema"]["properties"]["browser_session"]["enum"]),
+            {"dev", "atendimento"},
+        )
+        with mock.patch.object(m, "_controller_origin_main_sha", return_value=sha), \\
+             mock.patch.object(m, "controller_status", return_value={"active_sha": sha, "service_active": True}):
+            result = m.continuity_e2e(cid, browser_session="dev", timeout_seconds=120)
+        self.assertTrue(result["durable"])
+        self.assertEqual(result["browser_session"], "dev")
+        row = m.load_task(result["task_id"])
+        self.assertIn("--continuity-e2e-run", row["command"])
+        self.assertIn("dev", row["command"])
+        with self.assertRaisesRegex(ValueError, "continuity_e2e_browser_session_invalid"):
+            m.continuity_e2e(cid, browser_session="fred", timeout_seconds=120)
+
     def test_continuity_e2e_report_parser_accepts_multiline_json_after_probe_output(self):
         stdout = (
             "checkpoint created\n"
