@@ -160,10 +160,13 @@ trap rollback EXIT
 cp "$unit" "$backup"
 install -o root -g root -m 0644 "$release/shopvivaliz-marina-mcp.service" "$temp_unit"
 ln -s "releases/$sha" "$temp_link"
-# Safe atomic two-object switch with rollback, under exclusive operator lock.
+# Validate the active-release CAS again immediately before touching either live object.
+[[ "$(readlink "$root/current")" == "releases/$expected_current" ]] || refuse raced_current_release
+# Mark rollback as required BEFORE the first mutation: a failure after the
+# unit replacement but before symlink replacement must also recover.
+switched=yes
 mv -Tf "$temp_unit" "$unit"
 mv -Tf "$temp_link" "$root/current"
-switched=yes
 systemctl daemon-reload
 systemctl restart shopvivaliz-marina-mcp.service
 sudo -n -u shopvivaliz-marina-mcp /usr/bin/python3 -B "$release/local_auth_smoke.py"
