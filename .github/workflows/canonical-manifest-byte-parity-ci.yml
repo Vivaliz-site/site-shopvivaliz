@@ -1,0 +1,32 @@
+name: Canonical audit manifest byte-parity sync regression
+
+on:
+  pull_request:
+    paths:
+      - '.gitattributes'
+      - 'docs/quality/GLOBAL_AUDIT_MANIFEST.json'
+      - 'tests/test_manifest_byte_parity_sync.py'
+      - '.github/workflows/canonical-manifest-byte-parity-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.gitattributes'
+      - 'docs/quality/GLOBAL_AUDIT_MANIFEST.json'
+      - 'tests/test_manifest_byte_parity_sync.py'
+      - '.github/workflows/canonical-manifest-byte-parity-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  clean-checkout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate byte-exact canonical manifest and checkout parity
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests.test_manifest_byte_parity_sync -v

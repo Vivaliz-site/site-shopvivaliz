@@ -2,12 +2,75 @@
 **AVISO OPERACIONAL (2026-10-29):** a VM de origem `shopvivaliz-free-a1` foi excluída conforme confirmação do proprietário. As etapas históricas abaixo que requerem **manter, acessar, monitorar, validar, interromper ou recriar** essa VM (incluindo `NO_DECOMMISSION` e critérios dos "quatro hosts") **não são instruções executáveis atuais**. A produção web está em `marina-a1-4c24g`, o backend/controller em `always-free-arm-1787907847-26`. Não substituir aliases/SSH/tenancy da origem por Marina. Preservar backups e evidência acessível, rever gates ainda pertinentes e seguir `docs/knowledge/current-topology-and-access-2026-10-29.md`. A exclusão não prova `APTO`, integração de MCP novo, paridade de dados ou passagem de E2E; `GLOBAL_MIGRATION_STATUS=NAO_APTO` enquanto houver gates pendentes.
 <!-- /RETIRED_SOURCE_SUPERSEDES_HISTORICAL_GATES_20261029 -->
 
-# Marina independent MCP (read-only staging only)
+# Marina independent MCP (local read-only + owner-granted private write)
 
-**Status: source/staging candidate only. NOT INSTALLED, NOT CONNECTED, NOT AUTHORIZED FOR PRODUCTION.**
+**Verified local state 2026-11-02:** dedicated MCP daemon installed and running on
+`marina-a1-4c24g`, non-root `shopvivaliz-marina-mcp`, loopback port 5580,
+immutable release `6b77b74f5589b6afd7100126433851e70765adcc`.
+HTTP 401/200 local authorization, six read-only tools and one owner-approved
+bounded private-workspace write are validated. Positive write/readback and
+negative replay/stale-CAS E2E passed in the host's private workspace.
+The independent **OpenAI Platform runtime key / tunnel profile / ChatGPT E2E are
+still NOT PROVISIONED**. No blanket root or production write capability,
+and the GitHub API's unauthenticated 60/hour limit can temporarily refuse new
+writes safely. Historical staging-only text below is superseded by this block.
 Tracking: Vivaliz-site/site-shopvivaliz issues #3152 and #3156. The working direct
 ChatGPT route remains the separately connected Remote Desktop Commander.
 
+
+## Escrita controlada (codigo preparado, NAO HABILITADO)
+
+O modulo `scoped_write.py` prepara `marina_workspace_file_write` para criar ou
+substituir via SHA-256/CAS arquivos `.txt` e `.json` de ate 4 KiB **somente** em
+`/var/lib/shopvivaliz-marina-mcp/workspace`, diretorio privado da identidade
+`shopvivaliz-marina-mcp`. Os nomes nao admitem barras, caminhos relativos,
+scripts, symlinks ou arquivos de producao. A operacao exige grant humano
+`mcp:marina` + `file_write` + `marina_workspace_file_write` e repositorio exato,
+permissao efetiva do host, lease/fencing idempotente, auditoria preparada e
+confirmada, escrita atomica e leitura de verificacao.
+
+**Estado:** a release de codigo nao configura o operador protegido nem altera
+`ReadWritePaths` da unidade. O servidor so anuncia a ferramenta quando um
+`write_operator` **host-owned** e verificado for instalado no bootstrap oficial;
+sem ele, `tools/list` continua com as ferramentas de leitura e as chamadas de
+escrita sao rejeitadas. Os testes usam operador falso apenas em ambiente isolado:
+**nao representam concessao real nem E2E ChatGPT**. A ativacao precisa de PR de
+seguranca independente aprovada e integrada por `shopvivaliz-human`, verificacao
+de grant no runtime, auditoria/lease persistentes, permissao minima para esse
+workspace e tunel OpenAI proprio, seguidos de teste positivo e negativo real.
+Operacoes de servicos, deploy, banco, jobs e outros arquivos exigem executores
+adicionais de escopo especifico; nunca converter o daemon publico em root ou
+usar comandos fornecidos pelo solicitante.
+
+
+### GitHub authorization availability (2026-11-02)
+
+The writer must verify **current** owner reviews and the exact unchanged grant
+file on GitHub `main` immediately before **every** write. A revoked, edited,
+expired or unverified grant always fails closed. The process may memoize only
+immutable PR/merge/blob-at-merge evidence (three read-only API requests at
+bootstrap) to avoid consuming GitHub API quota on every call. The two
+mutable pieces — human review status and live grant blob — are never cached.
+Without a GitHub credential, GitHub's shared-IP unauthenticated rate limit
+may return HTTP 403, in which case **writes are denied and read-only tools stay
+available**, without bypassing that provider limit.
+
+An independently approved GitHub **fine-grained read-only credential** can
+optionally be installed by the official host operator as the dedicated service
+account at
+`/var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/github-read-token`.
+It must be a non-symlink regular file owned by the MCP service account,
+`0600`, beneath its `0700` configuration directory. Restrict the token to
+`Vivaliz-site/site-shopvivaliz`, only **Contents: Read** and
+**Pull requests: Read**, with an expiration and revocation process. It must
+be newly and officially provisioned, never copied from a personal CLI,
+browser, backend, RDC, worker or OpenAI tunnel key. The MCP never prints the
+token, and refuses unsafe present files; an absent file uses GitHub's
+ordinary unauthenticated API and still fails closed on throttling.
+
+This GitHub read credential is **not** an OpenAI Secure MCP Tunnel runtime
+key and does not link a ChatGPT workspace. The direct Marina connection
+remains a separate Platform admin task.
 
 ## Cobertura administrativa em todos os projetos (nova exigencia 2026-11-01)
 

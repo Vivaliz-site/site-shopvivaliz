@@ -38,9 +38,9 @@ jobs:
             slug: shopvivaliz-m365
           - repository: Vivaliz-site/buscador
             slug: buscador
-          - repository: fredmourao-ai/mei-mg-email
+          - repository: Vivaliz-site/mei-mg-email
             slug: mei-mg-email
-          - repository: fredmourao-ai/solange-rolla-consultorio
+          - repository: Vivaliz-site/solange-rolla-consultorio
             slug: solange-rolla-consultorio
 
     steps:
