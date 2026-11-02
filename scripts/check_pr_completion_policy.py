@@ -122,7 +122,9 @@ REQUIRED = {
     "scripts/pr_conflict_vm_heal.sh": [
         "ALLOW_SCOPED_PUSH",
         "protected branch publication is forbidden",
-        "Oracle GitHub authentication unavailable",
+        "independent_github_auth_unavailable",
+        "independent_github_actor_not_approved",
+        "env -u GH_TOKEN -u GITHUB_TOKEN",
         "GEMINI_ENV_FILE=\"$shared_env\"",
         "remote PR branch moved before publication",
         "publication would not be fast-forward",
