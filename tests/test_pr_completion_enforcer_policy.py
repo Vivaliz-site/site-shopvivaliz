@@ -14,7 +14,9 @@ def test_enforcer_uses_only_latest_run_per_required_workflow():
 def test_enforcer_syncs_stale_branch_with_external_vm_auth():
     assert "repair-pr-branch" in WORKFLOW
     assert "external_auth_branch_sync=true" in WORKFLOW
-    assert "REMOTE_HEAL_SCRIPT" in WORKFLOW
+    # The current enforcer invokes the audited VM-heal helper directly; it
+    # deliberately does not copy external auth into Actions env/secrets.
+    assert 'if bash trusted/scripts/pr_conflict_vm_heal.sh \\' in WORKFLOW
     assert "scripts/pr_conflict_vm_heal.sh" in WORKFLOW
     assert "update-branch" not in WORKFLOW
     assert "ai-stale-pr-repair.yml" not in WORKFLOW
@@ -31,7 +33,11 @@ def test_draft_prs_are_not_silently_ignored():
     assert 'blocked-by-runtime-lease' in WORKFLOW
     assert 'blocked-external' in WORKFLOW
     assert 'no-auto-merge' in WORKFLOW
-    assert 'select(.head.repo.full_name == $repo and (.draft | not))' in WORKFLOW
+    # The scheduled fair selector may inventory drafts, but the actual
+    # finalizer MUST branch explicitly before any repair/merge action.
+    assert 'is_draft="$(jq -r \'.draft\' <<<"$meta")"' in WORKFLOW
+    assert 'if [[ "$is_draft" == \'true\' ]]; then' in WORKFLOW
+    assert WORKFLOW.index('if [[ "$is_draft" == \'true\' ]]; then') < WORKFLOW.index('if bash trusted/scripts/pr_conflict_vm_heal.sh')
 
 
 def test_stale_repair_uses_free_local_ai_and_git_data_api():
