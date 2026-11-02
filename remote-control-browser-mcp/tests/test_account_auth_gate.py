@@ -90,6 +90,52 @@ class AccountAuthGateTests(unittest.TestCase):
                     self.assertIn("Input.insertText", argv[3])
                     self.assertEqual(["dev", "example-tab", "fill_password"], argv[-3:])
 
+    def test_native_saved_password_uses_only_existing_account_lease(self):
+        fake = {"exit_code": 0, "stdout": '{"ok":true,"native_autofill":true}', "stderr": ""}
+        request = payload(session="atendimento", action="fill_password", value="")
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("atendimento")),
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value=fake) as runner,
+        ):
+            result = m.browser_auth_action(request)
+            self.assertTrue(result["ok"])
+            argv, value, *_ = runner.call_args.args
+            self.assertEqual("", value)
+            self.assertEqual(argv[-3:], ["atendimento", "example-tab", "fill_password"])
+            self.assertNotIn("atendimento@shopvivaliz.com.br", " ".join(argv))
+
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")),
+        ):
+            with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
+                m.browser_auth_action(request)
+
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
+                m.browser_auth_action({k: v for k, v in request.items()
+                                       if k != "runtime_lease_id"})
+
+    def test_native_autofill_cannot_read_or_export_password(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn("const native_password=", source)
+        self.assertIn("action==='fill_password'&&native_password", source)
+        self.assertIn("u.hostname!=='auth.openai.com'||u.pathname!=='/log-in/password'", source)
+        self.assertIn("auth_account_mismatch", source)
+        self.assertIn("auth_challenge_needs_human", source)
+        self.assertIn("Input.dispatchMouseEvent", source)
+        self.assertIn("Input.dispatchKeyEvent", source)
+        self.assertIn(":-webkit-autofill", source)
+        self.assertIn("auth_native_autofill_unconfirmed", source)
+        self.assertIn("typed:false,native_autofill:true", source)
+        self.assertNotIn("document.cookie", source)
+        self.assertNotIn("password_value", source)
+        self.assertNotIn("localStorage", source)
+
     def test_verification_code_format_is_constrained(self):
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
             with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("dev")):
