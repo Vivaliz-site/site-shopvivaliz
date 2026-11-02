@@ -17,9 +17,12 @@ while true; do
     cd "$ROOT"
     echo "[$(date -Is)] Iniciando ciclo de sincronizacao de produtos ativos"
     if /usr/bin/python3 daemon-sync-products.py --once --workers 4; then
-        # O daemon canonico consulta lista Amazon + estoque ERP e aplica
-        # revision guard; nunca executar o importador PHP de precos base.
-        php sync-daemon-to-db.php
+        # MYSQL_DERIVED_HUMAN_ONLY: price/stock and ID reconciliation of the
+        # legacy products table is a one-time, owner-approved commercial action.
+        # Cache/ERP reconciliation may run automatically, but the legacy MySQL
+        # importer has no transaction, backup, CAS or owner-approved write gate.
+        # Never launch it from this unattended loop.
+        printf '%s\n' 'MYSQL_DERIVED_WRITE=SKIPPED reason=human_only_commercial_sync'
     else
         echo "[$(date -Is)] Falha ao buscar produtos ativos do Tiny; pulando aplicacao no banco neste ciclo"
     fi
