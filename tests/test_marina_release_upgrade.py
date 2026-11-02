@@ -46,7 +46,7 @@ class UpgradeOperatorSafety(unittest.TestCase):
         self.assertIn("ReadWritePaths=/var/lib/shopvivaliz-marina-mcp/workspace /var/lib/shopvivaliz-marina-mcp/state", service)
         self.assertIn("--enable-approved-scoped-write", service)
         self.assertNotIn("User=root", service)
-        self.assertNotIn("ReadWritePaths=/", service)
+        self.assertNotIn("ReadWritePaths=/", service.splitlines())
         source = SERVER.read_text()
         self.assertIn("--enable-approved-scoped-write", source)
         self.assertIn('owner_approved_scoped_write_grant_unavailable', source)
