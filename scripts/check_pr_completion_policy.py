@@ -146,6 +146,8 @@ REQUIRED = {
     ],
     "scripts/merge_green_pr_via_vm.sh": [
         "Oracle GitHub authentication unavailable",
+        "independent_technical_actor_required",
+        "technical_gh api --method PUT",
         "PR head SHA changed before merge",
         "PR head does not contain current main",
         "merge_method='squash'",
