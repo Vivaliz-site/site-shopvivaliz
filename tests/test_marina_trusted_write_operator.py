@@ -116,8 +116,9 @@ class OperatorTests(unittest.TestCase):
         with patch.object(m, "_STATIC_PROOF", None):
             with patch.object(m, "_public_api", side_effect=self.fixture(approved=False)):
                 self.assertFalse(self.operator.grant_valid(*args))
-        with patch.object(m, "_public_api", side_effect=self.fixture(revoked=True)):
-            self.assertFalse(self.operator.grant_valid(*args))
+        with patch.object(m, "_STATIC_PROOF", None):
+            with patch.object(m, "_public_api", side_effect=self.fixture(revoked=True)):
+                self.assertFalse(self.operator.grant_valid(*args))
         with patch.object(m, "_STATIC_PROOF", None):
             with patch.object(m, "_public_api", side_effect=self.fixture(extra_cap=True)):
                 self.assertFalse(self.operator.grant_valid(*args))
@@ -127,6 +128,59 @@ class OperatorTests(unittest.TestCase):
         with patch.object(m, "_public_api") as network:
             self.assertFalse(self.operator.grant_valid(3515, *args[1:]))
             network.assert_not_called()
+
+    def test_historical_proof_cache_keeps_reviews_and_main_fresh(self):
+        args = (3514, m.GRANT_HEAD, m.GRANT_MERGE, m.CAPABILITY, m.OPERATION, m.REPOSITORY)
+        first = self.fixture()
+        with patch.object(m, "_public_api", side_effect=first + (first[3], first[4])) as fetch:
+            self.assertTrue(self.operator.grant_valid(*args))
+            self.assertTrue(self.operator.grant_valid(*args))
+            self.assertEqual(fetch.call_count, 7)
+            self.assertIn("/reviews", fetch.call_args_list[-2].args[0])
+            self.assertTrue(fetch.call_args_list[-1].args[0].endswith("?ref=main"))
+        dismissed = self.fixture()
+        dismissed[3][0]["state"] = "DISMISSED"
+        with patch.object(m, "_public_api", side_effect=(dismissed[3], dismissed[4])) as fetch:
+            self.assertFalse(self.operator.grant_valid(*args))
+            self.assertEqual(fetch.call_count, 2)
+        revoked = self.fixture(revoked=True)
+        with patch.object(m, "_public_api", side_effect=(revoked[3], revoked[4])) as fetch:
+            self.assertFalse(self.operator.grant_valid(*args))
+            self.assertEqual(fetch.call_count, 2)
+
+    def test_optional_private_github_token_metadata_and_symlink(self):
+        self.assertIsNone(m._read_protected_github_token())
+        sample = "github_pat_" + "a" * 76
+        self.token_path.write_text(sample, encoding="ascii")
+        self.token_path.chmod(0o600)
+        self.assertEqual(m._read_protected_github_token(), sample)
+        self.token_path.chmod(0o644)
+        with self.assertRaises(RuntimeError):
+            m._read_protected_github_token()
+        self.token_path.chmod(0o600)
+        self.token_path.unlink()
+        target = Path(self.temp.name) / "target"
+        target.write_text(sample, encoding="ascii")
+        self.token_path.symlink_to(target)
+        with self.assertRaises(OSError):
+            m._read_protected_github_token()
+
+    def test_private_token_used_only_for_pinned_api_without_leak(self):
+        from unittest.mock import Mock
+        sample = "github_pat_" + "x" * 76
+        self.token_path.write_text(sample + "\n", encoding="ascii")
+        self.token_path.chmod(0o600)
+        response = Mock(status=200)
+        response.read.return_value = b'{"ok":true}'
+        manager = Mock()
+        manager.__enter__ = Mock(return_value=response)
+        manager.__exit__ = Mock(return_value=None)
+        with patch.object(m, "urlopen", return_value=manager) as api:
+            self.assertEqual(m._public_api("/repos/Vivaliz-site/site-shopvivaliz/pulls/3514"), {"ok": True})
+            headers = dict(api.call_args.args[0].header_items())
+            self.assertEqual(headers.get("Authorization"), "Bearer " + sample)
+        with self.assertRaises(RuntimeError):
+            m._public_api("/repos/another-user/another-repo/pulls/3514")
 
     def test_network_failure_and_expired_grant_fail_closed(self):
         if os.geteuid() == 0:
