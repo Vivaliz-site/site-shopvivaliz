@@ -1,3 +1,17 @@
+<!-- OWNER_APPROVAL_ONLY_MERGE_QUEUE_CONDITIONAL_20261102 -->
+> **Regra condicionada à PR P2 de fila GitHub:** somente APÓS a PR com pedido
+> security/requests/owner-review-merge-queue-20261102.md ser aprovada pela
+> conta humana exclusiva, integrada pessoalmente e ruleset 24523478
+> comprovadamente conter merge_queue, uma PR protegida já APPROVED no HEAD
+> exato pode ser ENFILEIRADA pelo agente técnico via API oficial. O merge é
+> executado pelo GitHub Merge Queue após os checks merge_group, SEM atualizar
+> HEAD aprovado e SEM exigir ao dono clique adicional em Enable auto-merge
+> ou Merge. Antes dessa ativação, continua válido o fluxo legado de merge
+> exclusivamente humano. Nenhum agente pode revisar como shopvivaliz-human,
+> usar suas credenciais, executar merge direto/admin ou relaxar gates.
+> Readback da fila e teste E2E devem comprovar a transição.
+<!-- /OWNER_APPROVAL_ONLY_MERGE_QUEUE_CONDITIONAL_20261102 -->
+
 <!-- MARINA_CLOUDFLARE_EXISTING_TUNNEL_ROUTE_20261102 -->
 > **Instrucao atualizada do proprietario (2026-11-02, prevalece sobre instrucoes anteriores de OpenAI Secure MCP Tunnel para Marina):** o **MCP independente de `marina-a1-4c24g` usara o Cloudflare Tunnel JA EXISTENTE nesta VM**, `shopvivaliz-oci-marina-admin` / `shopvivaliz-cloudflared-admin.service`, com **published application/hostname separado** `mcp-marina.shopvivaliz.com.br` encaminhando o caminho `/mcp` a `http://127.0.0.1:5580/mcp`. Reutilizar o mesmo tunnel ID e conector; **nao criar outro Cloudflare Tunnel e nao depender de `OPENAI_ADMIN_KEY`, `runtime-key`, `tunnel-profile.yaml` nem do tunnel-client OpenAI para esta rota**. Nao alterar `admin-marina.shopvivaliz.com.br`, outros ingress, tokens, site, DB ou workers.
 > **Gate de exposicao:** a decisao de transporte nao e concessao de acesso. Antes de publicar DNS/ingress, confirmar tunnel ID/account e configuracao existente pelo painel/API oficial; criar **Access application e politica proprias** deny-by-default para MCP (isoladas do admin); usar OAuth compativel com ChatGPT e validar JWT de `Cf-Access-Jwt-Assertion` (issuer/audience/assinatura/expiracao/permissoes) em componente de origem revisado. **O bearer local ja provisionado nao pode ser enviado como token ChatGPT, nem substituido por token do cloudflared**. Se Access Managed OAuth for usado, o origin deve verificar seu JWT; sem protecao provada, NAO PUBLICAR. Ampliacao de superficie de seguranca exige grant PR humana especifica, distinta da PR #3514 de escrita local; nao solicitar nova aprovacao da #3514. Preservar RBAC, CAS, lease, `0600`, readback, negativacoes e rollback.

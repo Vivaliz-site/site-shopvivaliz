@@ -7,6 +7,6 @@ class SecurityMergeGuardTest(unittest.TestCase):
         self.assertIn("security/owner-approvals/*",script)
         self.assertIn("security/requests/*",script)
         self.assertIn("owner-protected PR must not be autonomously merged",script)
-        self.assertLess(script.index("changed_files="),script.index("result=\"$(gh api --method PUT"))
+        self.assertLess(script.index("changed_files="),script.index("result=\"$(technical_gh api --method PUT"))
 
 if __name__=="__main__": unittest.main()

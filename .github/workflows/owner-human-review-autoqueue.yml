@@ -1,0 +1,72 @@
+name: Owner-Approved PR Merge Queue
+
+on:
+  pull_request_review:
+    types: [submitted]
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: owner-review-queue-${{ github.event.pull_request.number || sweep }}
+  cancel-in-progress: false
+
+jobs:
+  owner-approval-enqueue:
+    name: Enqueue human-approved exact HEAD in protected merge queue
+    if: >-
+      ${{ github.event_name != pull_request_review ||
+          (github.event.review.state == approved &&
+           github.event.review.user.login == shopvivaliz-human) }}
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted main, never untrusted PR code
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate code, backend host and independent technical identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname -s)" = always-free-arm-1787907847-26
+          test "$(id -un)" = ubuntu
+          python3 -m py_compile trusted/scripts/quality/owner_review_queue.py
+          test "$(env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS \
+            gh api user --jq .login)" = fredmourao-ai
+          echo "owner_queue_trusted_operator=true"
+
+      - name: Queue only P2 grants APPROVED by shopvivaliz-human on exact HEAD
+        shell: bash
+        env:
+          TRIGGER_PR: ${{ github.event.pull_request.number }}
+          TRIGGER_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == pull_request_review ]]; then
+            test -n "$TRIGGER_PR"
+            test -n "$TRIGGER_HEAD"
+            python3 trusted/scripts/quality/owner_review_queue.py \
+              --pr "$TRIGGER_PR" --expected-head "$TRIGGER_HEAD"
+          else
+            python3 trusted/scripts/quality/owner_review_queue.py
+          fi
+
+      - name: Security boundary
+        if: always()
+        shell: bash
+        run: |
+          echo "human_review_generated_by_agent=false"
+          echo "protected_pr_head_rewritten=false"
+          echo "requires_active_merge_queue=true"
+          echo "merge_queue_required_checks_unchanged=true"
+          echo "github_write_token_copied_from_actions=false"

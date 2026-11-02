@@ -2,6 +2,8 @@ name: Repository Governance
 
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   push:
     branches:
       - main
@@ -64,6 +66,9 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          QUEUE_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          QUEUE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          QUEUE_BASE_REF: ${{ github.event.merge_group.base_ref }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           REPLAY_BASE_SHA: ${{ inputs.base_sha }}
           REPLAY_HEAD_SHA: ${{ inputs.head_sha }}
@@ -75,6 +80,14 @@ jobs:
           if [ "$EVENT_NAME" = "pull_request" ] && git cat-file -e origin/main^{commit} 2>/dev/null; then
             PR_CONTEXT="true"
             base="$(git merge-base HEAD origin/main)"
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            test "$QUEUE_BASE_REF" = refs/heads/main
+            test -n "$QUEUE_HEAD_SHA" && test "$QUEUE_HEAD_SHA" = "$head"
+            test -n "$QUEUE_BASE_SHA"
+            git cat-file -e "$QUEUE_BASE_SHA^{commit}"
+            git merge-base --is-ancestor "$QUEUE_BASE_SHA" "$head"
+            PR_CONTEXT="true"
+            base="$QUEUE_BASE_SHA"
           elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$REPLAY_BASE_SHA" ] && [ -n "$REPLAY_HEAD_SHA" ]; then
             git cat-file -e "${REPLAY_BASE_SHA}^{commit}"
             git cat-file -e "${REPLAY_HEAD_SHA}^{commit}"

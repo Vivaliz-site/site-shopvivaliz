@@ -1,5 +1,25 @@
 # Autorizacao humana de seguranca por Pull Request — ShopVivaliz
 
+## Fluxo condicionado à ativação P2 da fila (2026-11-02)
+
+Após a PR específica de security/requests/owner-review-merge-queue-20261102.md
+ter sido APPROVED no SHA exato pela identidade exclusivamente humana
+shopvivaliz-human e mesclada pessoalmente, o ruleset principal deve
+receber merge_queue mantendo ambos os required checks, strict=true e
+reviews exatas. Sob esta configuração ativa, o proprietário precisa
+SOMENTE dar APPROVED no HEAD atual da PR protegida. O workflow técnico
+pode ENFILEIRAR pelo GitHub, mas não aprovar, alterar HEAD ou fazer merge
+direto; GitHub valida merge_group e integra sem segunda ação humana.
+
+O autorizador de grants aceita github-merge-queue[bot] como executor
+apenas com timeline GraphQL oficial comprovando que fredmourao-ai
+enfileirou após APPROVED humano no SHA exato, sem remoção posterior.
+Todos os vínculos, escopo, arquivo imutável, TTL e RBAC persistem.
+Sem fila ativa/prova, permanece a regra humana de merge/auto-merge
+explicada abaixo, sem bypass. Provedores externos têm mecanismos
+próprios e não recebem permissão automática deste fluxo.
+
+
 ## Decisao vigente do proprietario (2026-11-01)
 **Somente PRs que EXIGEM autorizacao humana formal** (seguranca, privilegio, acesso ou decisao comercial protegida) devem solicitar aprovacao de `shopvivaliz-human`. A identidade GitHub `shopvivaliz-human` pertence exclusivamente ao proprietario: **nenhum agente, bot, connector, runner ou workflow possui ou pode usar acesso a essa conta**. O autor da PR e obrigatoriamente outra identidade. A unica aprovacao de autorizacao aceita e o evento GitHub **APPROVED desse usuario, no SHA exato da PR**. Apos aprovar, o proprietario pode habilitar **auto-merge nativo do GitHub** sem acompanhar checks; o GitHub so integra quando as protecoes forem satisfeitas. Merge manual pelo proprietario tambem e valido. A transicao Ready for review nao aprova. **PRs tecnicas/comuns nao exigem revisao desse usuario e podem ser integradas por agentes autorizados apos seus gates**. Aprovacao em chat nao substitui o evento GitHub para privilegios.
 

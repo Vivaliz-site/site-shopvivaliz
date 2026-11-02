@@ -24,10 +24,57 @@ REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 OPERATION = re.compile(r"^[a-z][a-z0-9_]{3,63}$")
 
 
+MERGE_QUEUE_BOT = "github-merge-queue[bot]"
+QUEUE_TECHNICAL_ACTOR = "fredmourao-ai"
+
+
+def valid_owner_approved_queue_history(events: object, approved_at: str,
+                                       merged_at: str) -> bool:
+    """Only the GitHub queue bot, after owner approval, can finalize this path.
+
+    Proof is retrieved from official GraphQL by the caller, never from PR
+    description, labels, branch contents or an agent-provided claim.
+    """
+    if not isinstance(events, list) or not 0 < len(events) < 100:
+        return False
+    try:
+        approved = datetime.fromisoformat(approved_at.replace("Z", "+00:00"))
+        merged = datetime.fromisoformat(merged_at.replace("Z", "+00:00"))
+    except (ValueError, AttributeError, TypeError):
+        return False
+    if approved.tzinfo is None or merged.tzinfo is None or merged < approved:
+        return False
+    active_add = False
+    for item in events:
+        if not isinstance(item, dict):
+            return False
+        try:
+            when = datetime.fromisoformat(item["createdAt"].replace("Z", "+00:00"))
+        except (ValueError, KeyError, AttributeError, TypeError):
+            return False
+        if when > merged:
+            continue
+        event_type = item.get("__typename")
+        if event_type == "AddedToMergeQueueEvent":
+            actor = item.get("enqueuer") or item.get("actor")
+            if (isinstance(actor, dict)
+                    and actor.get("login") == QUEUE_TECHNICAL_ACTOR
+                    and approved <= when):
+                active_add = True
+            else:
+                active_add = False
+        elif event_type == "RemovedFromMergeQueueEvent":
+            active_add = False
+        else:
+            return False
+    return active_add
+
+
+
 def decide(pr: object, grant: object, *, repository: str, pr_number: int,
            owner_login: str, merge_sha: str, head_sha: str, resource: str,
            principal: str, capability: str, operation: str | None = None, target_repository: str | None = None, reviews: object = None,
-           now: datetime | None = None) -> tuple[bool, str]:
+           now: datetime | None = None, queue_events: object = None) -> tuple[bool, str]:
     """Require authenticated owner merger and exact immutable scope match."""
     if not (isinstance(pr, dict) and isinstance(grant, dict)):
         return False, "invalid_response_shape"
@@ -56,7 +103,8 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
                 str(enabled_by.get("login", "")).casefold() != owner_login.casefold() or
                 auto_merge.get("merge_method") not in ("merge", "squash", "rebase")):
             return False, "owner_auto_merge_not_authorized"
-    if str(pr.get("merged_by", {}).get("login", "")).casefold() != owner_login.casefold():
+    merge_actor = str(pr.get("merged_by", {}).get("login", ""))
+    if merge_actor.casefold() != owner_login.casefold() and merge_actor != MERGE_QUEUE_BOT:
         return False, "merge_actor_not_owner"
     author = pr.get("user")
     author_login = str(author.get("login", "")) if isinstance(author, dict) else ""
@@ -81,6 +129,10 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
     if (latest_owner_review is None or latest_owner_review.get("state") != "APPROVED"
             or latest_owner_review.get("commit_id") != head_sha):
         return False, "security_pr_not_approved_by_human"
+    if merge_actor == MERGE_QUEUE_BOT and not valid_owner_approved_queue_history(
+            queue_events, latest_owner_review.get("submitted_at"),
+            pr.get("merged_at")):
+        return False, "owner_reviewed_merge_queue_proof_missing"
     base = pr.get("base")
     if not isinstance(base, dict) or base.get("ref") != "main" or base.get("repo", {}).get("full_name") != repository:
         return False, "unexpected_merge_target"
@@ -199,6 +251,48 @@ def github_json(path: str, token: str) -> object:
         return json.load(response)
 
 
+def official_merge_queue_events(repository: str, number: int, token: str) -> list:
+    """Read server-authored timeline events with complete pagination guard."""
+    query = """
+      query($owner:String!,$name:String!,$number:Int!){
+        repository(owner:$owner,name:$name){
+          pullRequest(number:$number){
+            timelineItems(last:100,itemTypes:[
+              ADDED_TO_MERGE_QUEUE_EVENT,REMOVED_FROM_MERGE_QUEUE_EVENT
+            ]){
+              totalCount nodes{
+                __typename
+                ... on AddedToMergeQueueEvent{
+                  actor{login} enqueuer{login} createdAt
+                }
+                ... on RemovedFromMergeQueueEvent{createdAt actor{login}}
+              }
+            }
+          }
+        }
+      }
+    """
+    owner, name = repository.split("/", 1)
+    payload = json.dumps({"query": query, "variables": {
+        "owner": owner, "name": name, "number": number}}).encode("utf-8")
+    request = Request("https://api.github.com/graphql", data=payload, headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token,
+        "User-Agent": "shopvivaliz-owner-pr-authorization",
+    })
+    with urlopen(request, timeout=15) as response:
+        result = json.load(response)
+    if not isinstance(result, dict) or result.get("errors"):
+        raise ValueError("queue_history_graphql_error")
+    timeline = (result.get("data", {}).get("repository", {})
+                .get("pullRequest", {}).get("timelineItems", {}))
+    if (not isinstance(timeline, dict) or not isinstance(timeline.get("nodes"), list)
+            or not isinstance(timeline.get("totalCount"), int)
+            or timeline["totalCount"] >= 100):
+        raise ValueError("queue_history_incomplete")
+    return timeline["nodes"]
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repository", required=True)
@@ -237,11 +331,15 @@ def main() -> int:
         else:
             raw = base64.b64decode(encoded["content"].replace("\n", ""), validate=True)
             grant = json.loads(raw.decode("utf-8"))
+            queue_events = None
+            if pr.get("merged_by", {}).get("login") == MERGE_QUEUE_BOT:
+                queue_events = official_merge_queue_events(
+                    args.repository, args.pr_number, token)
             ok, reason = decide(pr, grant, repository=args.repository,
                                 pr_number=args.pr_number, owner_login=owner,
                                 merge_sha=args.merge_sha, head_sha=args.head_sha,
                                 resource=args.resource, principal=args.principal,
-                                capability=args.capability, operation=args.operation, target_repository=args.target_repository, reviews=reviews)
+                                capability=args.capability, operation=args.operation, target_repository=args.target_repository, reviews=reviews, queue_events=queue_events)
     except Exception:
         ok, reason = False, "verification_unavailable"
     print(f"OWNER_PR_GRANT={'AUTHORIZED' if ok else 'DENIED'} reason={reason}")
