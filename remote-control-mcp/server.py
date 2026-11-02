@@ -584,8 +584,10 @@ def _parse_trailing_json_report(stdout: str) -> dict[str, Any]:
     return {}
 
 
-def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) -> dict[str, Any]:
+def _continuity_e2e_sync(conversation_id: str, *, browser_session: str = "atendimento", timeout_seconds: int = 240) -> dict[str, Any]:
     cid = _validate_conversation_id(conversation_id)
+    if browser_session not in {"dev", "atendimento"}:
+        raise ValueError("continuity_e2e_browser_session_invalid")
     timeout_seconds = max(30, min(int(timeout_seconds), 600))
     status = controller_status()
     active_sha = str(status.get("active_sha") or "")
@@ -605,6 +607,7 @@ def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) ->
                 "--poll-interval-seconds", "2",
                 "--repository", "Vivaliz-site/site-shopvivaliz",
                 "--conversation-id", cid,
+                "--browser-session", browser_session,
             ],
             timeout=timeout_seconds + 45,
         )
@@ -630,13 +633,20 @@ def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) ->
         _remove_controller_worktree(worktree)
 
 
-def _durable_operation_command(operation: str, value: str, timeout: int) -> str:
+def _durable_operation_command(operation: str, value: str, timeout: int, *, browser_session: str = "atendimento") -> str:
     if operation not in {"controller-promote", "continuity-e2e", "claude-reconcile"}:
         raise ValueError("unsupported_durable_operation")
     if operation in {"controller-promote", "claude-reconcile"}:
         _validate_expected_sha(value)
     else:
         _validate_conversation_id(value)
+    if operation == "continuity-e2e":
+        if browser_session not in {"dev", "atendimento"}:
+            raise ValueError("continuity_e2e_browser_session_invalid")
+        return (
+            "/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py "
+            f"--{operation}-run {value} {int(timeout)} {browser_session}"
+        )
     return (
         "/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py "
         f"--{operation}-run {value} {int(timeout)}"
@@ -719,15 +729,17 @@ def controller_promote(expected_sha: str, *, timeout: int = 240) -> dict[str, An
     return {**task, "ok": True, "durable": True, "operation": "controller_promote", "expected_sha": sha}
 
 
-def continuity_e2e(conversation_id: str, *, timeout_seconds: int = 240) -> dict[str, Any]:
+def continuity_e2e(conversation_id: str, *, browser_session: str = "atendimento", timeout_seconds: int = 240) -> dict[str, Any]:
     cid = _validate_conversation_id(conversation_id)
+    if browser_session not in {"dev", "atendimento"}:
+        raise ValueError("continuity_e2e_browser_session_invalid")
     timeout_seconds = max(30, min(int(timeout_seconds), 600))
     status = controller_status()
     active_sha = str(status.get("active_sha") or "")
     origin_main = _controller_origin_main_sha(refresh=True)
     if not active_sha or active_sha != origin_main:
         raise RuntimeError("controller_not_current")
-    command = _durable_operation_command("continuity-e2e", cid, timeout_seconds)
+    command = _durable_operation_command("continuity-e2e", cid, timeout_seconds, browser_session=browser_session)
     task = execute_tool(
         "task_submit",
         {
@@ -741,6 +753,7 @@ def continuity_e2e(conversation_id: str, *, timeout_seconds: int = 240) -> dict[
         "ok": True,
         "durable": True,
         "operation": "continuity_e2e",
+        "browser_session": browser_session,
         "controller_sha": active_sha,
     }
 
@@ -2560,6 +2573,7 @@ def execute_tool(
     if name == "continuity_e2e":
         return continuity_e2e(
             _validate_conversation_id(args.get("conversation_id")),
+            browser_session=str(args.get("browser_session") or "atendimento"),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
     if name in {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}:
@@ -2822,7 +2836,7 @@ TOOLS = [
     ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
     ("checkpoint_update_atomic", "Update only the non-secret Orquestrador recovery checkpoint metadata with a global state lock, idempotency, observed runtime counters, fsync and independent readback. Never binds chats, completes tasks or changes host settings.", {"request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$"}, "expected_last_checked_at": {"type": "string", "maxLength": 60}, "rules_sha_by_path": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}, "audit_ids": {"type": "array", "maxItems": 32, "items": {"type": "string"}}, "next_action": {"type": "string", "minLength": 10, "maxLength": 1800}}, False, False),
-    ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
+    ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "browser_session": {"type": "string", "enum": ["dev", "atendimento"]}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
     ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
     ("browser_auth_status", "Read exact ChatGPT user.email identity from the dedicated Dev/Atendimento profile via /api/auth/session; return only sanitized booleans, status and counts, never cookies or tokens.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
@@ -3183,9 +3197,10 @@ if __name__ == "__main__":
         except Exception as exc:
             print(json.dumps({"ok": False, "error": redact_text(str(exc))}, ensure_ascii=False))
             raise SystemExit(1)
-    if len(sys.argv) == 4 and sys.argv[1] == "--continuity-e2e-run":
+    if len(sys.argv) in (4, 5) and sys.argv[1] == "--continuity-e2e-run":
         try:
-            result = _continuity_e2e_sync(_validate_conversation_id(sys.argv[2]), timeout_seconds=int(sys.argv[3]))
+            session = sys.argv[4] if len(sys.argv) == 5 else "atendimento"
+            result = _continuity_e2e_sync(_validate_conversation_id(sys.argv[2]), browser_session=session, timeout_seconds=int(sys.argv[3]))
             print(json.dumps(result, ensure_ascii=False))
             raise SystemExit(0 if result.get("ok") else 1)
         except Exception as exc:

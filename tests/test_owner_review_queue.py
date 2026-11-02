@@ -119,6 +119,27 @@ class OwnerQueueTests(unittest.TestCase):
                 self.assertTrue(MOD.protected_path(path))
                 self.assertTrue(guard.is_protected_path(path))
 
+    def test_required_owner_gate_and_verifier_protected_in_both_policies(self):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location(
+            "trusted_verifier", ROOT/"scripts/quality/verify_owner_protected_pr_review.py")
+        guard=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        for protected in (
+            ".github/workflows/mandatory-validation-gate.yml",
+            "scripts/quality/verify_owner_protected_pr_review.py",
+        ):
+            with self.subTest(protected=protected):
+                self.assertTrue(MOD.protected_path(protected))
+                self.assertTrue(guard.is_protected_path(protected))
+
+    def test_owner_review_event_strings_quoted_for_real_github_actions(self):
+        text=(ROOT/".github/workflows/owner-human-review-autoqueue.yml").read_text()
+        self.assertIn("github.event_name != 'pull_request_review'",text)
+        self.assertIn("github.event.review.state == 'approved'",text)
+        self.assertIn("github.event.review.user.login == 'shopvivaliz-human'",text)
+        self.assertIn("github.event.pull_request.number || 'sweep'",text)
+
     def test_workflow_trust_syntax(self):
         text = (ROOT / ".github/workflows/owner-human-review-autoqueue.yml").read_text()
         self.assertIn("ref: main", text)

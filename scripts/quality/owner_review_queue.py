@@ -25,6 +25,8 @@ PROTECTED_EXACT = frozenset((
     ".github/workflows/owner-human-review-autoqueue.yml",
     ".github/workflows/owner-review-merge-queue-enable.yml",
     ".github/workflows/repository-governance.yml",
+    ".github/workflows/mandatory-validation-gate.yml",
+    "scripts/quality/verify_owner_protected_pr_review.py",
     "config/owner-review-merge-queue.json",
     "scripts/quality/owner_review_queue.py",
     "scripts/quality/enable_owner_merge_queue.py",
