@@ -1,0 +1,27 @@
+[Unit]
+Description=ShopVivaliz Web Agent isolated browser MCP (local only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shopvivaliz-web-agent
+Group=shopvivaliz-web-agent
+WorkingDirectory=/opt/shopvivaliz-web-agent/current
+EnvironmentFile=/etc/shopvivaliz-web-agent/service.env
+ExecStart=/usr/local/bin/node src/server.mjs
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/shopvivaliz-web-agent
+MemoryMax=1100M
+TasksMax=160
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
