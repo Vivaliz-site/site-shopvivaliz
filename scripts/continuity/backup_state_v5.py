@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import sys
 import tarfile
@@ -32,6 +33,31 @@ def _require_dir(path: Path, *, private: bool = False) -> None:
         raise BackupError("required_directory_unavailable_or_symlink")
     if private and stat.S_IMODE(path.stat().st_mode) != 0o700:
         raise BackupError("backup_directory_must_be_mode_0700")
+
+
+def _is_attached_root_evidence(filename: str, parent: dict) -> bool:
+    """Accept a non-task evidence JSON only when its real parent task links it."""
+    if not filename.endswith("-evidence.json") or not isinstance(parent, dict):
+        return False
+    task_id = filename.removesuffix("-evidence.json")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", task_id):
+        return False
+    if str(parent.get("task_id", "")).strip() != task_id:
+        return False
+    literal_reference = re.compile(
+        r"(?<![A-Za-z0-9_.-])" + re.escape(filename) + r"(?![A-Za-z0-9_.-])"
+    )
+
+    def contains_reference(value: object) -> bool:
+        if isinstance(value, str):
+            return literal_reference.search(value) is not None
+        if isinstance(value, list):
+            return any(contains_reference(child) for child in value)
+        if isinstance(value, dict):
+            return any(contains_reference(child) for child in value.values())
+        return False
+
+    return contains_reference(parent.get("evidence")) or contains_reference(parent.get("history"))
 
 
 def _safe_members(root: Path) -> tuple[list[Path], int]:
@@ -62,9 +88,20 @@ def _safe_members(root: Path) -> tuple[list[Path], int]:
                 if not isinstance(item, dict):
                     raise BackupError("invalid_json_checkpoint_type")
                 if base == root and not name.startswith("_"):
-                    if str(item.get("task_id", "")).strip() != path.stem:
-                        raise BackupError("checkpoint_task_id_mismatch")
-                    task_count += 1
+                    if str(item.get("task_id", "")).strip() == path.stem:
+                        task_count += 1
+                    else:
+                        parent_id = name.removesuffix("-evidence.json")
+                        parent_path = root / (parent_id + ".json")
+                        if (not name.endswith("-evidence.json") or parent_path.is_symlink()
+                                or not parent_path.is_file()):
+                            raise BackupError("checkpoint_task_id_mismatch")
+                        try:
+                            parent = json.loads(parent_path.read_text(encoding="utf-8"))
+                        except (OSError, ValueError) as exc:
+                            raise BackupError("invalid_parent_checkpoint") from exc
+                        if not _is_attached_root_evidence(name, parent):
+                            raise BackupError("unlinked_root_evidence")
             members.append(path)
     if not task_count:
         raise BackupError("no_task_checkpoints")
@@ -82,6 +119,7 @@ def _digest(path: Path) -> str:
 def _verify_archive(path: Path, expected_members: int, expected_tasks: int) -> None:
     count = 0
     tasks = 0
+    root_json: dict[str, dict] = {}
     with tarfile.open(path, "r:gz") as archive:
         for member in archive:
             name = member.name
@@ -100,7 +138,15 @@ def _verify_archive(path: Path, expected_members: int, expected_tasks: int) -> N
                 if not isinstance(data, dict):
                     raise BackupError("invalid_json_in_archive")
                 if "/" not in name and not name.startswith("_"):
-                    tasks += 1
+                    root_json[name] = data
+    for name, data in root_json.items():
+        if str(data.get("task_id", "")).strip() == Path(name).stem:
+            tasks += 1
+        else:
+            parent_id = name.removesuffix("-evidence.json")
+            parent = root_json.get(parent_id + ".json")
+            if not _is_attached_root_evidence(name, parent):
+                raise BackupError("archive_has_unlinked_root_json")
     if count != expected_members or tasks != expected_tasks:
         raise BackupError("backup_readback_mismatch")
 
