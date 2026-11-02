@@ -3386,7 +3386,7 @@ async function run() {
     fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING'}));
     assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'unbound global tasks must not activate the Fred reinforcement browser');
     fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', conversation_id: 'legacyFredConversation1'}));
-    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'legacy Fred tasks remain eligible only when bound to a conversation');
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'orphaned legacy conversation IDs do not prove Fred browser ownership');
     fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'fred', conversation_id: 'fredConversation123'}));
     assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'explicit Fred browser tasks remain eligible');
     fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'atendimento', conversation_id: 'atendimentoConversation123'}));

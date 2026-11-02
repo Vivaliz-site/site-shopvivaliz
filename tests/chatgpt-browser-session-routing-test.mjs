@@ -38,8 +38,16 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         assert.equal(api.hasActiveContinuityCheckpoint(isolated), true);
         fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING' }));
         assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        // An orphaned conversation ID proves neither ownership nor a Fred
+        // browser binding; it must not wake the personal reinforcement loop.
         fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', conversation_id: 'legacy-bound-conversation' }));
-        assert.equal(api.hasActiveContinuityCheckpoint(isolated), true);
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: null, conversation_id: 'legacy-bound-conversation' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: '', conversation_id: 'legacy-bound-conversation' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: 'dev', conversation_id: 'corporate-dev-conversation' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
       } finally { fs.rmSync(isolated, { recursive: true, force: true }); }
     }],
     ['corporate checkpoint reaches CDP9556, never personal CDP9555', async () => {
