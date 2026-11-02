@@ -66,6 +66,29 @@ jobs:
             echo 'reuse=false' >> "$GITHUB_OUTPUT"
             echo 'review_code_validation_reuse=validation_error_full_required'
           fi
+      # Only trusted target-branch code can make the human consent decision.
+      - name: Checkout trusted owner-review policy from protected base
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-owner-review
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Enforce human owner APPROVED review on exact protected PR HEAD
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test -f trusted-owner-review/scripts/quality/verify_owner_protected_pr_review.py || {
+            echo 'OWNER_REVIEW_GATE=DENIED reason=trusted_verifier_missing'
+            exit 3
+          }
+          python3 trusted-owner-review/scripts/quality/verify_owner_protected_pr_review.py             --repo "$GITHUB_REPOSITORY" --pr "$PR_NUMBER" --head "$HEAD_SHA"
       - name: Select fail-closed impact scope
         id: impact
         shell: bash
