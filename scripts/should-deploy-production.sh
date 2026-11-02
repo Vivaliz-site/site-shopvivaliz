@@ -35,7 +35,9 @@ tests/should-deploy-production-test.sh)
     # neither is an application runtime script. Do not generate a new public
     # release just because a governance policy/verifier changed.
     # Any other scripts/* and all real web/PHP payloads stay deployment-triggering.
-    # Independent backend Web Agent is not part of the Marina/site release.\n    # A mixed diff with any storefront/unknown file still requires a deploy.\n    apps/shopvivaliz-web-agent/*|\
+    # Independent backend Web Agent is not part of the Marina/site release.
+    # A mixed diff with any storefront/unknown file still requires a deploy.
+    apps/shopvivaliz-web-agent/*|\
     *.md|docs/*|.codex/*|.github/*|tests/*|\
 scripts/check_pr_completion_policy.py|\
 scripts/should-deploy-production.sh)
