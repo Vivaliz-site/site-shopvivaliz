@@ -12,6 +12,7 @@ on:
       - 'tests/test_marina_scoped_write.py'
       - 'tests/test_marina_mcp_write_gate.py'
       - 'tests/test_marina_trusted_write_operator.py'
+      - 'tests/test_marina_main_startup_grants.py'
       - 'tests/test_marina_release_upgrade.py'
       - '.github/workflows/marina-direct-mcp-ci.yml'
   push:
@@ -26,6 +27,7 @@ on:
       - 'tests/test_marina_scoped_write.py'
       - 'tests/test_marina_mcp_write_gate.py'
       - 'tests/test_marina_trusted_write_operator.py'
+      - 'tests/test_marina_main_startup_grants.py'
       - 'tests/test_marina_release_upgrade.py'
       - '.github/workflows/marina-direct-mcp-ci.yml'
 
@@ -55,6 +57,7 @@ jobs:
           python3 tests/test_marina_scoped_write.py -v
           python3 tests/test_marina_mcp_write_gate.py -v
           python3 tests/test_marina_trusted_write_operator.py -v
+          python3 tests/test_marina_main_startup_grants.py -v
           bash -n marina-direct-mcp/operator_upgrade_release.sh
           python3 tests/test_marina_release_upgrade.py -v
       - name: Assert no bootstrap transport or remote actions are added
