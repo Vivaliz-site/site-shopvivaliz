@@ -1118,6 +1118,21 @@ try {
         "if(choices.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
         "choices[0].click();return {clicked:true};" +
         "}" +
+        "if(action==='fill_password'&&!input){" +
+        // Existing approved login surface only; never invoke the password manager
+        // on an unrelated page, profile or account.
+        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in/password')throw Error('auth_stage_not_allowed');" +
+        "const fields=[...document.querySelectorAll('input[type=password]')];" +
+        "if(fields.length!==1||fields[0].disabled||fields[0].readOnly)throw Error('auth_field_unavailable');" +
+        "const expected={dev:'dev@shopvivaliz.com.br',atendimento:'atendimento@shopvivaliz.com.br'}[" + JSON.stringify(session) + "];" +
+        "const ids=[...document.querySelectorAll('input[type=email],input[type=text],input[name=username]')];" +
+        "if(!ids.some(e=>String(e.value||'').trim().toLowerCase()===expected))throw Error('auth_account_mismatch');" +
+        "const f=fields[0];const b=f.getBoundingClientRect();" +
+        "if(b.width<40||b.height<14||b.top<0||b.left<0||b.right>innerWidth||b.bottom>innerHeight)throw Error('auth_field_unavailable');" +
+        "const unsafe=!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(unsafe)throw Error('auth_challenge_needs_human');" +
+        "f.focus();return {ready:true,native:true,x:b.left+b.width/2,y:b.top+b.height/2};" +
+        "}" +
         "if(action.startsWith('fill_')){" +
         "let e=null;" +
         "if(action==='fill_email')e=document.querySelector('input[type=email],input[name=email]');" +
@@ -1181,7 +1196,36 @@ try {
     const r = await c.send("Runtime.evaluate",{expression:expr,returnByValue:true,awaitPromise:true});
     if (r.exceptionDetails) throw new Error("auth_ui_preflight_failed");
     const state = r.result?.value || {};
-    if (action.startsWith("fill_")) {
+    if (action === "fill_password" && input === "") {
+        if (state.ready !== true || state.native !== true ||
+            !Number.isFinite(state.x) || !Number.isFinite(state.y))
+            throw new Error("auth_native_autofill_preflight_failed");
+        // Only Chrome's own password manager can supply the secret. Do not
+        // inspect password_value, call OS decryption APIs or log any secret.
+        await c.send("Input.dispatchMouseEvent", {
+            type:"mousePressed",x:state.x,y:state.y,button:"left",clickCount:1
+        });
+        await c.send("Input.dispatchMouseEvent", {
+            type:"mouseReleased",x:state.x,y:state.y,button:"left",clickCount:1
+        });
+        await new Promise(resolve=>setTimeout(resolve,300));
+        for (const [key,code,vkey] of [["ArrowDown","ArrowDown",40],["Enter","Enter",13]]) {
+            await c.send("Input.dispatchKeyEvent", {
+                type:"rawKeyDown",key,code,windowsVirtualKeyCode:vkey
+            });
+            await c.send("Input.dispatchKeyEvent", {
+                type:"keyUp",key,code,windowsVirtualKeyCode:vkey
+            });
+        }
+        await new Promise(resolve=>setTimeout(resolve,350));
+        const probe = await c.send("Runtime.evaluate", {
+            expression:"(()=>{const p=[...document.querySelectorAll('input[type=password]')];return p.length===1&&p[0].matches(':-webkit-autofill')})()",
+            returnByValue:true,awaitPromise:false
+        });
+        if (probe.exceptionDetails || probe.result?.value !== true)
+            throw new Error("auth_native_autofill_unconfirmed");
+        console.log(JSON.stringify({ok:true,session,action,typed:false,native_autofill:true}));
+    } else if (action.startsWith("fill_")) {
         if (state.ready !== true) throw new Error("auth_field_unavailable");
         await c.send("Input.insertText", {text:input});
         console.log(JSON.stringify({ok:true,session,action,typed:true}));
@@ -1664,6 +1708,12 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
         if not any(t["tab_id"] == tab_id and t["stage"] == "/mfa-challenge" for t in tabs):
             raise ValueError("account_auth_mfa_stage_required")
         value = account_auth_local_totp(session)
+    elif action == "fill_password" and not value:
+        # Backwards-compatible, no-secret native Chrome password-manager
+        # attempt. Uses the pre-existing account-scoped browser_auth_action
+        # lease and only the official login field. The Node worker performs
+        # a fresh exact-email and stage check before any simulated click.
+        pass
     elif action.startswith("fill_"):
         if not value or len(value) > 512 or "\x00" in value or "\n" in value:
             raise ValueError("account_auth_value_invalid")
