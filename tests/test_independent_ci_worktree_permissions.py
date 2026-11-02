@@ -9,6 +9,8 @@ import importlib.util
 from pathlib import Path
 import os
 import stat
+import subprocess
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -92,6 +94,56 @@ class IndependentCiCheckoutAccessTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "checkout_contains_special_file"):
                 ci.prepare_public_checkout_for_isolated_tests(checkout)
             self.assertEqual(stat.S_IMODE(fifo.lstat().st_mode), 0o600)
+
+
+    def test_migrated_mirror_origin_reconciles_only_known_previous_url(self):
+        with tempfile.TemporaryDirectory() as outer, patch.object(ci, "ROOT", Path(outer)):
+            base = Path(outer) / "mirrors"
+            old_repo = "fredmourao-ai/solange-rolla-consultorio"
+            current_repo = "Vivaliz-site/solange-rolla-consultorio"
+            mirror = ci.ensure_mirror("consultorio", old_repo)
+            self.assertEqual((base / "consultorio.git"), mirror)
+            self.assertEqual(
+                "https://github.com/" + old_repo + ".git",
+                subprocess.check_output(["git", "--git-dir", str(mirror), "remote", "get-url", "origin"],
+                                        text=True).strip(),
+            )
+            ci.ensure_mirror("consultorio", current_repo)
+            for _ in range(2):
+                ci.ensure_mirror("consultorio", current_repo)
+            self.assertEqual(
+                "https://github.com/" + current_repo + ".git",
+                subprocess.check_output(["git", "--git-dir", str(mirror), "remote", "get-url", "origin"],
+                                        text=True).strip(),
+            )
+            subprocess.run(["git", "--git-dir", str(mirror), "remote", "set-url",
+                            "origin", "https://untrusted.example/repo.git"], check=True)
+            with self.assertRaisesRegex(RuntimeError, "untrusted mirror origin"):
+                ci.ensure_mirror("consultorio", current_repo)
+            self.assertEqual(
+                "https://untrusted.example/repo.git",
+                subprocess.check_output(["git", "--git-dir", str(mirror), "remote", "get-url", "origin"],
+                                        text=True).strip(),
+            )
+
+    def test_target_contracts_match_canonical_migrated_repositories(self):
+        self.assertEqual("Vivaliz-site/solange-rolla-consultorio", ci.TARGETS["consultorio"][0])
+        self.assertEqual("Vivaliz-site/solange-rolla", ci.TARGETS["legacy"][0])
+        self.assertEqual("Vivaliz-site/site-shopvivaliz", ci.TARGETS["site"][0])
+        site = dict(ci.TARGETS["site"][1])
+        self.assertIn("continuity-v8", site)
+        self.assertEqual("python3 -m unittest tests.test_global_task_continuity_v8 -q",
+                         site["continuity-v8"])
+        legacy = dict(ci.TARGETS["legacy"][1])
+        self.assertIn("legacy-containment", legacy)
+        self.assertIn("REPOSITÓRIO HISTÓRICO / SUPERSEDIDO", legacy["legacy-containment"])
+        self.assertIn("github.event.pull_request.head.repo.full_name == github.repository",
+                      legacy["legacy-containment"])
+        self.assertNotIn("agent-adapter", legacy)
+        self.assertNotIn("audit-governance", legacy)
+        source = SCRIPT.read_text()
+        self.assertIn("PASS_LEGACY_CONTAINMENT_ONLY", source)
+        self.assertIn('"certifies_global_audit_or_production": False', source)
 
     def test_docker_is_still_offline_readonly_and_unprivileged(self):
         source = SCRIPT.read_text()
