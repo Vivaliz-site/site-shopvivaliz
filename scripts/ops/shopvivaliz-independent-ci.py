@@ -23,23 +23,36 @@ import uuid
 ROOT = Path("/var/lib/shopvivaliz-independent-ci")
 IMAGE = "node@sha256:18a6d90fd60542269850c80ca03b29b1d9b14d6b221ac7ee8e35b0d33ef904bd"
 TARGETS = {
-    "legacy": ("fredmourao-ai/solange-rolla", [
-        ("agent-contract", "python3 -m unittest tests.test_agent_checklist_contract_v1 -q"),
-        ("agent-adapter", "python3 scripts/agent_task_state.py --adapter-self-test"),
+    # This repo is explicitly frozen/superseded. Certify containment, not
+    # non-existent current-site agent adapters or production readiness.
+    "legacy": ("Vivaliz-site/solange-rolla", [
+        ("legacy-containment",
+         "grep -Fq 'REPOSITÓRIO HISTÓRICO / SUPERSEDIDO' README.md && "
+         "grep -Fq 'solange-rolla-consultorio' README.md && "
+         "for workflow in .github/workflows/ci.yml .github/workflows/repository-governance.yml; do "
+         "grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' \"$workflow\" || exit 1; "
+         "if grep -Eq '^[[:space:]]*push:' \"$workflow\"; then exit 1; fi; "
+         "done"),
         ("continuity-policy", "bash scripts/agent-continuity-validate.sh"),
         ("javascript-contract", "node tests/workflow-continuity.test.mjs && node --check app.js"),
         ("audit-selftest", "python3 -m unittest tests.test_certify_audit_manifest -q"),
-        ("audit-governance", "python3 scripts/validate-audit-governance.py --output-dir /tmp/local-governance"),
+        ("merge-provenance", "python3 -m unittest tests.test_validate_main_merge_provenance -q"),
     ]),
-    "consultorio": ("fredmourao-ai/solange-rolla-consultorio", [
+    "consultorio": ("Vivaliz-site/solange-rolla-consultorio", [
         ("audit-ledger-contract", "python3 -m unittest tests.test_validate_audit_ledger_delta -q"),
         ("global-audit-selftest", "python3 -m unittest tests.test_certify_audit_manifest -q"),
         ("global-audit-governance", "python3 scripts/validate-audit-governance.py --output-dir /tmp/local-governance"),
     ]),
     "site": ("Vivaliz-site/site-shopvivaliz", [
         ("agent-checklist", "python3 -m unittest tests.test_mandatory_agent_checklist -q"),
-        ("continuity-adapter", "python3 scripts/agent_task_state.py --adapter-self-test"),
+        ("continuity-v8", "python3 -m unittest tests.test_global_task_continuity_v8 -q"),
     ]),
+}
+# Previous, publicly redirected remotes are allowed only for a one-time,
+# explicit org-migration reconciliation. Never rewrite an unexpected remote.
+RETIRED_MIRROR_REMOTES = {
+    "legacy": "https://github.com/fredmourao-ai/solange-rolla.git",
+    "consultorio": "https://github.com/fredmourao-ai/solange-rolla-consultorio.git",
 }
 ALLOWED_REF = re.compile(r"^(refs/heads/[A-Za-z0-9][A-Za-z0-9._/-]{0,160}|refs/pull/[1-9][0-9]{0,7}/head)$")
 SHA = re.compile(r"^[a-f0-9]{40}$")
@@ -59,15 +72,30 @@ def call(args, timeout=120, cwd=None):
 
 def ensure_mirror(target, repo):
     d = ROOT / "mirrors" / (target + ".git")
+    canonical = "https://github.com/" + repo + ".git"
     if not d.exists():
         d.parent.mkdir(parents=True, exist_ok=True)
         x = call(["git", "init", "--bare", str(d)], timeout=15)
         if x.returncode:
             raise RuntimeError("git init bare failed: " + x.stderr[-400:])
         x = call(["git", "--git-dir", str(d), "remote", "add", "origin",
-                  "https://github.com/" + repo + ".git"], timeout=15)
+                  canonical], timeout=15)
         if x.returncode:
             raise RuntimeError("git remote setup failed: " + x.stderr[-400:])
+    else:
+        x = call(["git", "--git-dir", str(d), "remote", "get-url", "origin"], timeout=15)
+        if x.returncode:
+            raise RuntimeError("git mirror origin unavailable")
+        current = x.stdout.strip()
+        if current != canonical:
+            if current != RETIRED_MIRROR_REMOTES.get(target):
+                raise RuntimeError("untrusted mirror origin; refusing remote mutation")
+            x = call(["git", "--git-dir", str(d), "remote", "set-url", "origin", canonical], timeout=15)
+            if x.returncode:
+                raise RuntimeError("canonical mirror origin update failed")
+            verified = call(["git", "--git-dir", str(d), "remote", "get-url", "origin"], timeout=15)
+            if verified.returncode or verified.stdout.strip() != canonical:
+                raise RuntimeError("canonical mirror origin readback mismatch")
     return d
 
 def fetch_source(mirror, target, ref, offline):
@@ -179,6 +207,9 @@ def run_target(target, ref, offline=False, expected_sha=None):
         shutil.rmtree(scratch, ignore_errors=True)
     verdict = "FAILED_TEST" if any(not x["ok"] for x in results) else (
         "PASS_LOCAL_NOT_GITHUB_CHECK" if fresh else "STALE_SOURCE_LOCAL_PASS_ONLY")
+    if target == "legacy" and verdict != "FAILED_TEST":
+        # This does NOT certify the old UI, production, or global V5 audit.
+        verdict = "PASS_LEGACY_CONTAINMENT_ONLY" if fresh else "STALE_LEGACY_CONTAINMENT_ONLY"
     report = {
         "schema": "SHOPVIVALIZ_INDEPENDENT_CI_V1",
         "run_id": runid, "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -202,7 +233,7 @@ def run_target(target, ref, offline=False, expected_sha=None):
     print(json.dumps({"target":target,"ref":ref,"sha":commit,"source_fresh":fresh,
                       "verdict":verdict,"evidence":str(evidence),
                       "failed_steps":[x["step"] for x in results if not x["ok"]]}))
-    return verdict == "PASS_LOCAL_NOT_GITHUB_CHECK"
+    return verdict in {"PASS_LOCAL_NOT_GITHUB_CHECK", "PASS_LEGACY_CONTAINMENT_ONLY"}
 
 def main():
     p = argparse.ArgumentParser()
