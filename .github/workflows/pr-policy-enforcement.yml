@@ -29,6 +29,7 @@ on:
       - 'tests/test_pr_gate_scope.py'
       - 'scripts/pr_conflict_vm_heal.sh'
       - 'scripts/merge_green_pr_via_vm.sh'
+      - 'tests/test_owner_security_merge_guard.py'
       - 'tests/test_pr_conflict_gemini_healer.py'
       - 'tests/test_pr_gate_replay.py'
       - '.github/workflows/pr-policy-enforcement.yml'
@@ -88,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest tests.test_ci_latency_contract tests.test_pr_completion_scheduler tests.test_pr_owner_review_visibility -v
+          python3 -m unittest tests.test_ci_latency_contract tests.test_pr_completion_scheduler tests.test_pr_owner_review_visibility tests.test_owner_security_merge_guard -v
 
       - name: Verify V5 agent preflight rejects missing and stale rules
         shell: bash
