@@ -62,7 +62,7 @@ class OperatorTests(unittest.TestCase):
         other = m.ProtectedWorkspaceOperator(workspace=alias, state=self.state)
         self.assertFalse(other.runtime_permission_valid())
 
-    def fixture(self, *, approved=True, revoked=False, extra_cap=False):
+    def fixture(self, *, approved=True, revoked=False, extra_cap=False, expired=False):
         grant = {
             "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
             "repository": m.REPOSITORY,
@@ -80,7 +80,7 @@ class OperatorTests(unittest.TestCase):
             "lease_fencing_required": True,
             "audit_required": True,
             "root_or_shell_allowed": False,
-            "expires_at_utc": "2026-12-02T03:49:00Z",
+            "expires_at_utc": "2026-01-01T00:00:00Z" if expired else "2026-12-02T03:49:00Z",
         }
         raw = base64.b64encode(json.dumps(grant).encode()).decode()
         sha = hashlib.sha1(raw.encode()).hexdigest()
@@ -111,6 +111,8 @@ class OperatorTests(unittest.TestCase):
         with patch.object(m, "_public_api", side_effect=self.fixture(revoked=True)):
             self.assertFalse(self.operator.grant_valid(*args))
         with patch.object(m, "_public_api", side_effect=self.fixture(extra_cap=True)):
+            self.assertFalse(self.operator.grant_valid(*args))
+        with patch.object(m, "_public_api", side_effect=self.fixture(expired=True)):
             self.assertFalse(self.operator.grant_valid(*args))
         with patch.object(m, "_public_api") as network:
             self.assertFalse(self.operator.grant_valid(3515, *args[1:]))
