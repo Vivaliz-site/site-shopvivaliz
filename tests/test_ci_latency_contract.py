@@ -52,6 +52,21 @@ class CiLatencyContractTests(unittest.TestCase):
         credential_pos = healer.index("--credential-preflight")
         self.assertGreater(credential_pos, merge_pos)
 
+    def test_branch_sync_never_publishes_with_actions_bot_token(self) -> None:
+        # A GITHUB_TOKEN-authenticated branch push creates action_required CI
+        # approval runs; the independent GitHub technical identity avoids it.
+        healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text(encoding="utf-8")
+        self.assertIn("independent_actor=", healer)
+        self.assertIn('[[ "$independent_actor" == \'fredmourao-ai\' ]]', healer)
+        self.assertIn("fail 'independent_github_auth_unavailable'", healer)
+        self.assertIn("fail 'independent_github_actor_not_approved'", healer)
+        self.assertIn("env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS", healer)
+        self.assertIn("gh auth setup-git", healer)
+        self.assertIn('    git push origin "HEAD:refs/heads/\\u0024{head_ref}"', healer)
+        self.assertNotIn('  git push origin "HEAD:refs/heads/\\u0024{head_ref}"', healer)
+        self.assertIn("remote PR branch moved before publication", healer)
+        self.assertIn("publication would not be fast-forward", healer)
+
     def test_history_integrity_avoids_blob_downloads(self) -> None:
         workflow = (WF / "history-integrity.yml").read_text(encoding="utf-8")
         validator = (ROOT / "scripts" / "maintenance" / "validate_sanitized_history.py").read_text(encoding="utf-8")
