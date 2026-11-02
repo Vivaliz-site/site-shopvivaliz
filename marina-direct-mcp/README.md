@@ -9,6 +9,30 @@ Tracking: Vivaliz-site/site-shopvivaliz issues #3152 and #3156. The working dire
 ChatGPT route remains the separately connected Remote Desktop Commander.
 
 
+## Escrita controlada (codigo preparado, NAO HABILITADO)
+
+O modulo `scoped_write.py` prepara `marina_workspace_file_write` para criar ou
+substituir via SHA-256/CAS arquivos `.txt` e `.json` de ate 4 KiB **somente** em
+`/var/lib/shopvivaliz-marina-mcp/workspace`, diretorio privado da identidade
+`shopvivaliz-marina-mcp`. Os nomes nao admitem barras, caminhos relativos,
+scripts, symlinks ou arquivos de producao. A operacao exige grant humano
+`mcp:marina` + `file_write` + `marina_workspace_file_write` e repositorio exato,
+permissao efetiva do host, lease/fencing idempotente, auditoria preparada e
+confirmada, escrita atomica e leitura de verificacao.
+
+**Estado:** a release de codigo nao configura o operador protegido nem altera
+`ReadWritePaths` da unidade. O servidor so anuncia a ferramenta quando um
+`write_operator` **host-owned** e verificado for instalado no bootstrap oficial;
+sem ele, `tools/list` continua com as ferramentas de leitura e as chamadas de
+escrita sao rejeitadas. Os testes usam operador falso apenas em ambiente isolado:
+**nao representam concessao real nem E2E ChatGPT**. A ativacao precisa de PR de
+seguranca independente aprovada e integrada por `shopvivaliz-human`, verificacao
+de grant no runtime, auditoria/lease persistentes, permissao minima para esse
+workspace e tunel OpenAI proprio, seguidos de teste positivo e negativo real.
+Operacoes de servicos, deploy, banco, jobs e outros arquivos exigem executores
+adicionais de escopo especifico; nunca converter o daemon publico em root ou
+usar comandos fornecidos pelo solicitante.
+
 ## Cobertura administrativa em todos os projetos (nova exigencia 2026-11-01)
 
 O proprietario exige que a experiencia MCP recupere as **rotinas administrativas historicas de todos os 11 repositorios**, nao apenas o restart Olist. Ver especificacao `docs/superpowers/specs/2026-11-01-mcp-admin-cross-repository-parity.md`, plano e inventario `docs/ops/mcp-admin-repositories-2026-11-01.json`.
