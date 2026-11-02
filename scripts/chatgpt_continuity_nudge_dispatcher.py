@@ -53,6 +53,24 @@ except ImportError:  # direct CLI execution from repository root
     )
     from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
+def _browser_session_authenticated(session: str) -> bool:
+    """Check the exact isolated corporate profile, never aggregate Dev health.
+
+    The backend dispatcher owns the already-governed readonly auth probe.
+    A failed read or mismatched account is not a restored login.
+    """
+    if session not in {"dev", "atendimento"}:
+        return False
+    try:
+        try:
+            from .task_resume_dispatcher import _bound_session_authenticated
+        except ImportError:
+            from task_resume_dispatcher import _bound_session_authenticated
+        return bool(_bound_session_authenticated(session))
+    except Exception:
+        return False
+
+
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 LOCK_FILE = "_continuity-execution.lock"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php"
@@ -437,6 +455,7 @@ def _run_once_locked(
     retry_attempted = 0
     progress_followup_attempted = 0
     skipped_session_unavailable = 0
+    session_recovered = 0
     skipped_attempt_limit = 0
     skipped_foreground_active = 0
     skipped_ownership_busy = 0
@@ -590,13 +609,19 @@ def _run_once_locked(
                         detail_code = observed_detail_code or detail_code
 
             if worker_status == "ERROR" and detail_code == "BOUND_SESSION_IDENTITY_MISMATCH":
-                # This is a missing prerequisite, not a transient generation
-                # failure. Re-enqueueing the immutable checkpoint cannot
-                # authenticate the bound browser profile and only creates a
-                # retry storm. Keep the failure visible until the session or
-                # checkpoint changes.
-                skipped_session_unavailable += 1
-                continue
+                # Identity failure is sticky while authentication is absent;
+                # but a genuinely restored, exact corporate account is a
+                # material prerequisite change even if checkpoint is unchanged.
+                # Grant ONE bounded re-entry per fingerprint, not a retry
+                # storm or a bypass of the worker's independent identity check.
+                session = _attested_browser_session(
+                    root, task_id, resolved_conversation_id, fingerprint,
+                )
+                if (not session or previous.get("session_reentry_attempted")
+                        or not _browser_session_authenticated(session)):
+                    skipped_session_unavailable += 1
+                    continue
+                session_recovered += 1
 
             if worker_status == "PROGRESS_CONFIRMED":
                 # A real assistant response proves only that this continuation
@@ -676,6 +701,11 @@ def _run_once_locked(
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
         previous_row = ledger.get(fingerprint) or {}
+        session_recovery_for_request = bool(
+            previous_row.get("worker_status") == "ERROR"
+            and previous_row.get("detail_code") == "BOUND_SESSION_IDENTITY_MISMATCH"
+            and not previous_row.get("session_reentry_attempted")
+        )
         previous_attempt_count = int(previous_row.get("attempt_count") or 0)
         previous_send_attempt_count = int(previous_row.get("send_attempt_count") or 0)
         if (
@@ -696,6 +726,14 @@ def _run_once_locked(
             "attempt_count": previous_attempt_count + 1,
             "send_attempt_count": previous_send_attempt_count,
         }
+        # Preserve the one-shot authenticated re-entry marker after any
+        # subsequent worker result; only a new checkpoint fingerprint resets it.
+        if previous_row.get("session_reentry_attempted") or (
+            previous_row.get("worker_status") == "ERROR"
+            and previous_row.get("detail_code") == "BOUND_SESSION_IDENTITY_MISMATCH"
+            and session_recovery_for_request
+        ):
+            ledger_row["session_reentry_attempted"] = True
         if resolved_conversation_id:
             ledger_row["conversation_id"] = resolved_conversation_id
         _append_ledger(root, ledger_row)
@@ -762,6 +800,7 @@ def _run_once_locked(
         "retry_attempted": retry_attempted,
         "progress_followup_attempted": progress_followup_attempted,
         "skipped_session_unavailable": skipped_session_unavailable,
+        "session_recovered": session_recovered,
         "skipped_attempt_limit": skipped_attempt_limit,
         "skipped_foreground_active": skipped_foreground_active,
         "skipped_ownership_busy": skipped_ownership_busy,

@@ -546,6 +546,79 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(result["failed"], 1)
         self.assertEqual(self.calls, [])
 
+    def test_verified_bound_profile_recovers_once_after_identity_failure(self) -> None:
+        self._stale_checkpoint_and_request()
+        path = self.runtime / "task-1.json"
+        state_payload = json.loads(path.read_text(encoding="utf-8"))
+        state_payload["browser_session"] = "dev"
+        path.write_text(json.dumps(state_payload), encoding="utf-8")
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        ledger.write_text(json.dumps({
+            "fingerprint": fingerprint, "task_id": "task-1",
+            "repository": state.DEFAULT_REPOSITORY,
+            "dispatched_at": "2020-01-01T00:00:00Z",
+            "bridge_ok": True, "http_status": 200,
+            "worker_status": "ERROR",
+            "detail_code": "BOUND_SESSION_IDENTITY_MISMATCH",
+            "attempt_count": 26, "send_attempt_count": 0,
+        })+"\n", encoding="utf-8")
+        with mock.patch.object(self.dispatcher, "_browser_session_authenticated", return_value=True) as verified:
+            recovered = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token", enqueue=self._fake_enqueue_ok,
+            )
+        verified.assert_called_once_with("dev")
+        self.assertEqual(recovered["dispatched"], 1)
+        self.assertEqual(recovered["session_recovered"], 1)
+        self.assertEqual(len(self.calls), 1)
+        rows = [json.loads(x) for x in ledger.read_text().splitlines()]
+        self.assertTrue(rows[-1]["session_reentry_attempted"])
+        self.assertEqual(rows[-1]["send_attempt_count"], 0)
+
+        # A second worker identity failure on this unchanged checkpoint is
+        # not allowed to turn into a new five-minute retry storm.
+        rows[-1]["worker_status"] = "ERROR"
+        rows[-1]["detail_code"] = "BOUND_SESSION_IDENTITY_MISMATCH"
+        rows[-1]["dispatched_at"] = "2020-01-01T00:00:00Z"
+        ledger.write_text("\n".join(json.dumps(x) for x in rows)+"\n")
+        with mock.patch.object(self.dispatcher, "_browser_session_authenticated", return_value=True):
+            second = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token", enqueue=self._fake_enqueue_ok,
+            )
+        self.assertEqual(second["dispatched"], 0)
+        self.assertEqual(second["skipped_session_unavailable"], 1)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_identity_failure_cannot_retry_without_exact_verified_profile(self) -> None:
+        self._stale_checkpoint_and_request()
+        path = self.runtime / "task-1.json"
+        payload = json.loads(path.read_text())
+        payload["browser_session"] = "atendimento"
+        path.write_text(json.dumps(payload))
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        (self.runtime / self.dispatcher.LEDGER_FILE).write_text(json.dumps({
+            "fingerprint": fingerprint, "task_id": "task-1",
+            "repository": state.DEFAULT_REPOSITORY,
+            "dispatched_at": "2020-01-01T00:00:00Z",
+            "bridge_ok": True, "worker_status": "ERROR",
+            "detail_code": "BOUND_SESSION_IDENTITY_MISMATCH",
+            "attempt_count": 460, "send_attempt_count": 0,
+        })+"\n")
+        with mock.patch.object(self.dispatcher, "_browser_session_authenticated", return_value=False) as verified:
+            r = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token", enqueue=self._fake_enqueue_ok,
+            )
+        verified.assert_called_once_with("atendimento")
+        self.assertEqual(r["skipped_session_unavailable"], 1)
+        self.assertEqual(r["dispatched"], 0)
+        self.assertEqual(self.calls, [])
+
     def test_error_does_not_consume_real_send_budget(self) -> None:
         self._stale_checkpoint_and_request()
         fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
