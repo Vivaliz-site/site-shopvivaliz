@@ -54,7 +54,7 @@ class LocalAuthTest(unittest.TestCase):
             root = Path(temp) / "private"
             root.mkdir()
             self.setup_tree(root)
-            (root / ".config").chmod(0o755)
+            (root / ".config").chmod(0o777)
             self.assertEqual(self.invoke(root), "REFUSED_PRIVATE_DIRECTORY_UNSAFE")
             (root / ".config").chmod(0o700)
             (root / ".config" / m.SERVICE_ACCOUNT / "auth-token").symlink_to("/nonexistent")
