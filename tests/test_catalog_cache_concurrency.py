@@ -114,26 +114,26 @@ class CatalogConcurrencyTest(unittest.TestCase):
         # A prior 35/202 partial stock refresh returned True, misleading
         # systemd into reporting a healthy run while stock was fail-closed.
         summaries = [{"id": "10"}, {"id": "11"}]
-        with patch.object(daemon, "cache_revision", return_value=None), \\
-             patch.object(daemon, "get_token", return_value="synthetic"), \\
-             patch.object(daemon, "fetch_amazon_table", return_value=(0, {})), \\
-             patch.object(daemon, "fetch_products_active", return_value=summaries), \\
-             patch.object(daemon, "enrich_products", return_value=([row(45)], 1)), \\
-             patch.object(daemon, "apply_amazon_prices", return_value=0), \\
-             patch.object(daemon, "apply_kit_stock", return_value=0), \\
+        with patch.object(daemon, "cache_revision", return_value=None), \
+             patch.object(daemon, "get_token", return_value="synthetic"), \
+             patch.object(daemon, "fetch_amazon_table", return_value=(0, {})), \
+             patch.object(daemon, "fetch_products_active", return_value=summaries), \
+             patch.object(daemon, "enrich_products", return_value=([row(45)], 1)), \
+             patch.object(daemon, "apply_amazon_prices", return_value=0), \
+             patch.object(daemon, "apply_kit_stock", return_value=0), \
              patch.object(daemon, "save_products", return_value=self.target) as save:
             self.assertFalse(daemon.sync_once(1))
             save.assert_called_once()
 
     def test_complete_stock_reconcile_reports_success(self):
         summaries = [{"id": "10"}]
-        with patch.object(daemon, "cache_revision", return_value=None), \\
-             patch.object(daemon, "get_token", return_value="synthetic"), \\
-             patch.object(daemon, "fetch_amazon_table", return_value=(0, {})), \\
-             patch.object(daemon, "fetch_products_active", return_value=summaries), \\
-             patch.object(daemon, "enrich_products", return_value=([row(45)], 0)), \\
-             patch.object(daemon, "apply_amazon_prices", return_value=0), \\
-             patch.object(daemon, "apply_kit_stock", return_value=0), \\
+        with patch.object(daemon, "cache_revision", return_value=None), \
+             patch.object(daemon, "get_token", return_value="synthetic"), \
+             patch.object(daemon, "fetch_amazon_table", return_value=(0, {})), \
+             patch.object(daemon, "fetch_products_active", return_value=summaries), \
+             patch.object(daemon, "enrich_products", return_value=([row(45)], 0)), \
+             patch.object(daemon, "apply_amazon_prices", return_value=0), \
+             patch.object(daemon, "apply_kit_stock", return_value=0), \
              patch.object(daemon, "save_products", return_value=self.target):
             self.assertTrue(daemon.sync_once(1))
 
