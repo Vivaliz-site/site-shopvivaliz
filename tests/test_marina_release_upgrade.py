@@ -56,7 +56,7 @@ class UpgradeOperatorSafety(unittest.TestCase):
         s = UPGRADE.read_text()
         for basename in ("scoped_write.py", "trusted_write_operator.py",
                          "operator_admin_route.py", "server.py", "read_only_telemetry.py",
-                         "validate_owner_pr_grant.py", "local_auth_smoke.py"):
+                         "validate_owner_pr_grant.py", "operator_grant_readback.py", "local_auth_smoke.py"):
             self.assertIn(basename, s)
         self.assertIn("grep -Fqx 'NoNewPrivileges=yes'", s)
 
