@@ -69,11 +69,11 @@ def _read_protected_github_token() -> str | None:
             raise RuntimeError("github_read_token_metadata_unsafe")
         raw = os.read(fd, 4097)
         if (not 20 <= len(raw) <= 4096
-                or any(c < 33 or c > 126 for c in raw.rstrip(b"\\r\\n"))
-                or raw.rstrip(b"\\r\\n").find(b" ") != -1):
+                or any(c < 33 or c > 126 for c in raw.rstrip(b"\r\n"))
+                or raw.rstrip(b"\r\n").find(b" ") != -1):
             raise RuntimeError("github_read_token_invalid")
-        token = raw.rstrip(b"\\r\\n").decode("ascii")
-        if not 20 <= len(token) <= 4096 or "\\n" in token or "\\r" in token:
+        token = raw.rstrip(b"\r\n").decode("ascii")
+        if not 20 <= len(token) <= 4096 or "\n" in token or "\r" in token:
             raise RuntimeError("github_read_token_invalid")
         return token
     finally:
@@ -117,7 +117,7 @@ def _immutable_owner_proof() -> tuple | None:
                 or not _VERIFIER["grant_added_in_reviewed_pr"](changed, GRANT_PATH, blob)):
             return None
         grant = json.loads(base64.b64decode(
-            blob["content"].replace("\\n", ""), validate=True).decode("utf-8"))
+            blob["content"].replace("\n", ""), validate=True).decode("utf-8"))
         # This fixed, narrowly scoped data never changes without a different
         # main-branch blob, which is checked live on EVERY operation.
         if (not isinstance(grant, dict)
