@@ -62,8 +62,8 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertIn("fail 'independent_github_actor_not_approved'", healer)
         self.assertIn("env -u GH_TOKEN -u GITHUB_TOKEN -u GIT_ASKPASS -u SSH_ASKPASS", healer)
         self.assertIn("gh auth setup-git", healer)
-        self.assertIn('    git push origin "HEAD:refs/heads/\\u0024{head_ref}"', healer)
-        self.assertNotIn('  git push origin "HEAD:refs/heads/\\u0024{head_ref}"', healer)
+        self.assertIn('    git push origin "HEAD:refs/heads/', healer)
+        self.assertNotIn('  git push origin "HEAD:refs/heads/', healer)
         self.assertIn("remote PR branch moved before publication", healer)
         self.assertIn("publication would not be fast-forward", healer)
 
