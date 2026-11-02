@@ -1,3 +1,40 @@
+<!-- OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2_20261102 -->
+## Regra aprovada por owner P2: uma revisao humana e fluxo automatico
+
+Apos o merge formal da PR P2 de ativacao e comprovacao do ruleset nativo
+merge_queue, a UNICA acao humana exigida numa PR protegida e o GitHub
+APPROVED autenticado de shopvivaliz-human no HEAD exato. Apos isso, o
+operador tecnico autorizado fredmourao-ai pode APENAS enfileirar
+o HEAD imutavel na fila nativa. O GitHub merge queue bot realiza o merge
+somente depois dos status checks oficiais no SHA sintetico da integracao,
+sem atualizar a branch aprovada e sem exigir que o proprietario habilite
+auto-merge. O autorizador exige prova GraphQL de AddedToMergeQueueEvent
+posterior a revisao humana, enqueuer permitido, HEAD idêntico, merge
+por github-merge-queue[bot], grant vigente e escopo identico. Nunca
+aceitar merge direto por agente, revisao simulada, checks nao oficiais,
+force-push, bypass admin, permissao externa automatica ou falta de lease.
+
+Enquanto o ruleset nativo nao estiver ativado pelo grant P2 oficial,
+as regras antigas de integracao somente humana continuam vinculantes.
+A aprovacao passada permanece valida somente para o HEAD exato e a
+alteracao posterior da branch protegida exige nova revisao, nao uma
+reaprovacao informal em chat.
+<!-- /OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2_20261102 -->
+
+### Evidencia real de fila GitHub e identidade do merged_by (2026-11-02)
+
+GitHub pode registrar merged_by.login como o enqueuer tecnico
+fredmourao-ai mesmo com merge efetivado somente pela fila nativa.
+A identidade nao substitui shopvivaliz-human. A excecao P2 somente
+reconhece esse caso com review humano APPROVED no SHA exato,
+AddedToMergeQueueEvent autenticado posterior no mesmo SHA e pelo
+mesmo enqueuer, ambos workflows obrigatorios merge_group e checks
+oficiais GREEN no commit sintetico final, grant imutavel/escopo/TTL.
+Sem todas as evidencias, merged_by=fredmourao-ai permanece proibido.
+O fluxo manual humano historico nao e flexibilizado.
+
+
+
 # Autorizacao humana de seguranca por Pull Request — ShopVivaliz
 
 ## Decisao vigente do proprietario (2026-11-01)

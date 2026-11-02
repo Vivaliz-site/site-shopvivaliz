@@ -1,0 +1,44 @@
+name: Owner Approved Native Merge Queue
+
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+  workflow_run:
+    workflows: [Mandatory Validation Gate]
+    types: [completed]
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: owner-approved-merge-queue
+  cancel-in-progress: false
+
+jobs:
+  enqueue:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout trusted code from protected main, never PR HEAD
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify canonical host and independent technical identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname -s)" = 'always-free-arm-1787907847-26'
+          test "$(id -un)" = 'ubuntu'
+          test "$(env -u GH_TOKEN -u GITHUB_TOKEN gh api user --jq .login)" = 'fredmourao-ai'
+      - name: Verify reviewed owner-only PR and enqueue on native GitHub merge queue
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          env -u GH_TOKEN -u GITHUB_TOKEN python3 scripts/ops/owner_approved_merge_queue.py

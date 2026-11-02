@@ -1,5 +1,20 @@
 # Autonomous PR healing and completion
 
+> **Atualizacao (2026-11-02, substitui rota SSH/Marina citada abaixo):**
+> Finalizador e auto-healer usam o runner JA EXISTENTE `shopvivaliz-backend-browser`
+> na VM backend `always-free-arm-1787907847-26`, sob `ubuntu`, com
+> identidade tecnica GitHub independente `fredmourao-ai` ja autenticada.
+> Nenhuma credencial e copiada entre hosts ou exposta a Actions; `GH_TOKEN`
+> e `GITHUB_TOKEN` sao removidos das operacoes Git de escrita.
+> Conflitos reais preferem pool Gemini PRIVADO do proprio host, caso instalado;
+> na ausencia desse pool, usam Ollama LOCAL gratuito `qwen2.5-coder:1.5b`
+> com codigo e regras lidos do checkout confiavel em `main`, nunca da PR.
+> O helper usa flock por PR, CAS, push fast-forward, checks e protecoes.
+> PRs de grants humanos nao podem ter HEAD atualizado autonomamente.
+> A rota antiga SSH/Marina abaixo e HISTORICA, nao fundamento para reviver
+> acesso antigo, burlar approval, MFA, RBAC ou editar dados comerciais.
+
+
 This repository enforces `REGRA-PR-FALHOU-CORRIGIR-NA-HORA.md` with three workflows:
 
 - `PR Conflict Auto-Healer`: keeps same-repository PR branches current with `main` and uses a rotating Gemini credential pool to resolve textual Git conflicts.

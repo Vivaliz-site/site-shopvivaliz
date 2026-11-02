@@ -69,6 +69,24 @@ jobs:
             echo 'reuse=false' >> "$GITHUB_OUTPUT"
             echo 'review_code_validation_reuse=validation_error_full_required'
           fi
+      - name: Checkout trusted owner approval gate from protected base
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-owner-gate
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Enforce exact human APPROVED review on owner-protected PR heads
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OWNER_PR_NUMBER: ${{ github.event.pull_request.number }}
+          OWNER_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          python3 trusted-owner-gate/scripts/quality/verify_owner_protected_pr_review.py             --repo "$GITHUB_REPOSITORY"             --pr "$OWNER_PR_NUMBER"             --head "$OWNER_HEAD_SHA"
       - name: Select fail-closed impact scope
         id: impact
         shell: bash
@@ -107,6 +125,10 @@ jobs:
           python3 -m unittest tests.test_mandatory_agent_checklist -v
           python3 -m unittest tests.test_git_as_repo_owner -v
           python3 scripts/check_universal_agent_policy.py
+
+      - name: Validate exact owner-only approval and native merge queue security contract
+        run: |
+          python3 -m unittest tests.test_owner_merge_queue_authorization tests.test_owner_technical_native_queue_merge tests.test_owner_required_review_gate -v
 
       - name: Validate current PR history lineage
         run: python3 scripts/maintenance/validate_current_history_lineage.py

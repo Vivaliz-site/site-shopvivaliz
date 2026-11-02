@@ -1,0 +1,11 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3554,
+  "resource": "github:site-shopvivaliz:merge_queue",
+  "principal": "fredmourao-ai",
+  "target_repository": "Vivaliz-site/site-shopvivaliz",
+  "capabilities": ["github_ruleset_manage"],
+  "operation": "activate_native_merge_queue",
+  "expires_at_utc": "2026-12-01T00:00:00Z"
+}

@@ -90,6 +90,36 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertIn("owner-protected PR must not be autonomously merged", finalizer)
         self.assertIn("PR head does not contain current main", finalizer)
 
+    def test_backend_finalizer_reuses_independent_technical_auth(self) -> None:
+        workflow = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
+        enforce = workflow.split("  enforce:", 1)[1]
+        self.assertIn("runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]", enforce)
+        self.assertIn("pr_finalizer_host=always-free-arm-1787907847-26", enforce)
+        self.assertIn("trusted/.github/scripts/ai_conflict_resolver.py", enforce)
+        self.assertNotIn("pr_finalizer_host=marina-a1-4c24g", enforce)
+
+    def test_backend_healer_uses_preexisting_technical_identity_not_runner_bot(self) -> None:
+        workflow = (WF / "pr-conflict-auto-healer.yml").read_text(encoding="utf-8")
+        heal = workflow.split("  heal:", 1)[1]
+        self.assertIn("runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]", heal)
+        self.assertIn("independent_backend_operator_verified=true", heal)
+        self.assertNotIn("SHOPVIVALIZ_VM_SSH_KEY", heal)
+        self.assertNotIn("ssh -o BatchMode", heal)
+        healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text()
+        self.assertIn("flock -n 9", healer)
+        self.assertIn("conflict_ai_route=free_loopback_ollama", healer)
+        self.assertIn("owner_protected_pr_head_cannot_be_mutated", healer)
+        self.assertLess(healer.index("owner_protected_pr_head_cannot_be_mutated"), healer.index("git clone -q"))
+
+    def test_owner_grants_skipped_before_head_mutation_in_both_workflows(self) -> None:
+        completion = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
+        enforce = completion.split("  enforce:", 1)[1]
+        self.assertLess(enforce.index("pr_${pr}_owner_review_only=true"), enforce.index('relation="$(gh api'))
+        conflict = (WF / "pr-conflict-auto-healer.yml").read_text(encoding="utf-8")
+        heal = conflict.split("  heal:", 1)[1]
+        self.assertIn("pr_${pr}_owner_protected_no_autosync=true", heal)
+        self.assertLess(heal.index("pr_${pr}_owner_protected_no_autosync=true"), heal.index("bash trusted/scripts/pr_conflict_vm_heal.sh"))
+
     def test_history_integrity_avoids_blob_downloads(self) -> None:
         workflow = (WF / "history-integrity.yml").read_text(encoding="utf-8")
         validator = (ROOT / "scripts" / "maintenance" / "validate_sanitized_history.py").read_text(encoding="utf-8")
