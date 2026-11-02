@@ -133,6 +133,20 @@ ADMIN_TOOL = {
 }
 
 
+# Produces a host-issued lease; never accepts a caller-selected service/socket.
+ADMIN_PREPARE_TOOL = {
+    "name": "marina_olist_browser_restart_prepare",
+    "description": "Prepare a short-lived host-issued fenced ticket for the one owner-approved local Olist browser restart. Does not restart a service.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {key: ADMIN_TOOL["inputSchema"]["properties"][key]
+                       for key in ("operation", "pr_number", "head_sha", "merge_sha")},
+        "required": ["operation", "pr_number", "head_sha", "merge_sha"],
+        "additionalProperties": False,
+    },
+}
+
+
 def load_token(path: Path) -> bytes:
     # Open once with O_NOFOLLOW: no lstat-to-open symlink/rename race.
     # Do not reveal filesystem paths, token bytes or syscall details on errors.
@@ -179,6 +193,7 @@ def create_server(
     service_reader=inspect_service,
     write_operator=None,
     admin_operator=None,
+    admin_client=None,
     access_verifier=None,
 ) -> ThreadingHTTPServer:
     if host != "127.0.0.1":
@@ -324,7 +339,8 @@ def create_server(
                 elif method == "tools/list":
                     result = {"tools": TOOLS
                               + ([WRITE_TOOL] if write_operator is not None and self.local_bearer else [])
-                              + ([ADMIN_TOOL] if admin_operator is not None and self.local_bearer else [])}
+                              + ([ADMIN_TOOL] if (admin_operator is not None or admin_client is not None) and self.local_bearer else [])
+                              + ([ADMIN_PREPARE_TOOL] if admin_client is not None and self.local_bearer else [])}
                 elif method == "tools/call":
                     params = request.get("params")
                     if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
@@ -347,6 +363,13 @@ def create_server(
                         output = _TELEMETRY["public_telemetry_read"](arguments["source"])
                     elif name == "marina_kernel_telemetry_batch" and set(arguments) == {"sources"}:
                         output = _TELEMETRY["public_telemetry_batch"](arguments["sources"])
+                    elif name in {"marina_olist_browser_restart_prepare", "marina_olist_browser_restart"} and admin_client is not None and self.local_bearer:
+                        # Privilege/grant/lease checks happen in the root peer;
+                        # the HTTP service never pretends to have root identity.
+                        output = (admin_client.prepare(arguments)
+                                  if name == "marina_olist_browser_restart_prepare"
+                                  else admin_client.execute(arguments))
+                        tool_failed = output.get("ok") is not True
                     elif name == "marina_olist_browser_restart" and admin_operator is not None and self.local_bearer:
                         admin_ok, reason = _ADMIN["execute_admin_operation"](arguments, admin_operator)
                         tool_failed = not admin_ok
@@ -418,6 +441,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Check identity and secret metadata without binding")
     parser.add_argument("--enable-approved-scoped-write", action="store_true",
                         help="Enable owner-approved private-workspace writes only after protected local preflight")
+    parser.add_argument("--enable-approved-admin-broker", action="store_true",
+                        help="Use the fixed local root broker only after protected metadata and fresh owner-grant preflight")
     args = parser.parse_args()
     if socket.gethostname().split(".")[0] != EXPECTED_HOST:
         raise SystemExit("MARINA_MCP_REFUSED=host_identity_mismatch")
@@ -446,14 +471,26 @@ def main() -> int:
                     raise
                 print("MARINA_MCP_SCOPED_WRITE_DISABLED=" + type(exc).__name__, file=sys.stderr)
                 write_operator = None
+        admin_client = None
+        if args.enable_approved_admin_broker:
+            try:
+                broker_module = runpy.run_path(str(Path(__file__).with_name("broker_client.py")))
+                admin_client = broker_module["bootstrap_client"]()
+            except (OSError, RuntimeError, ValueError) as exc:
+                if args.check:
+                    raise
+                print("MARINA_MCP_ADMIN_DISABLED=" + type(exc).__name__, file=sys.stderr)
+                admin_client = None
         if args.check and args.enable_approved_scoped_write and write_operator is None:
             raise RuntimeError("owner_approved_scoped_write_grant_unavailable")
         if args.check:
+            if admin_client is not None:
+                print("MARINA_MCP_ADMIN_BROKER_PREFLIGHT=PASS")
             print("MARINA_MCP_SCOPED_WRITE_PREFLIGHT=PASS" if write_operator is not None
                   else "MARINA_MCP_READONLY_PREFLIGHT=PASS")
             return 0
         server = create_server(token, args.port, write_operator=write_operator,
-                               access_verifier=access_verifier)
+                               admin_client=admin_client, access_verifier=access_verifier)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"MARINA_MCP_REFUSED={str(exc)}", file=sys.stderr)
         return 1

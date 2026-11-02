@@ -19,6 +19,7 @@ import struct
 import subprocess
 import sys
 import time
+from contextlib import closing
 from pathlib import Path
 
 HOST = "marina-a1-4c24g"
@@ -103,16 +104,20 @@ def _db(path: Path) -> sqlite3.Connection:
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
         os.close(fd)
     con = sqlite3.connect(str(target), timeout=3, isolation_level=None)
-    con.execute("PRAGMA busy_timeout=3000")
-    con.execute("PRAGMA trusted_schema=OFF")
-    con.execute("""CREATE TABLE IF NOT EXISTS leases(
-        fence INTEGER PRIMARY KEY AUTOINCREMENT,
-        request_id TEXT NOT NULL UNIQUE,
-        pr INTEGER NOT NULL,
-        head TEXT NOT NULL,
-        merge TEXT NOT NULL,
-        expires_at INTEGER NOT NULL,
-        used INTEGER NOT NULL DEFAULT 0)""")
+    try:
+        con.execute("PRAGMA busy_timeout=3000")
+        con.execute("PRAGMA trusted_schema=OFF")
+        con.execute("""CREATE TABLE IF NOT EXISTS leases(
+            fence INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id TEXT NOT NULL UNIQUE,
+            pr INTEGER NOT NULL,
+            head TEXT NOT NULL,
+            merge TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0)""")
+    except BaseException:
+        con.close()
+        raise
     return con
 
 
@@ -189,11 +194,12 @@ class BrokerOperator:
         if operation != OPERATION or self._bound_pr is None:
             return False
         try:
-            with _db(self.state) as db:
+            with closing(_db(self.state)) as db, db:
                 db.execute("BEGIN IMMEDIATE")
                 result = db.execute("""UPDATE leases SET used=1
                     WHERE request_id=? AND fence=? AND pr=? AND head=? AND merge=?
-                      AND expires_at>=? AND used=0""",
+                      AND expires_at>? AND used=0
+                      AND fence=(SELECT MAX(fence) FROM leases)""",
                     (request_id, fencing, *self._bound_pr, int(time.time())) )
                 valid = result.rowcount == 1
                 db.execute("COMMIT" if valid else "ROLLBACK")
@@ -215,7 +221,8 @@ class BrokerOperator:
         except (OSError, subprocess.TimeoutExpired):
             return False
 
-    def prepare(self, data: object) -> dict:
+    def preflight(self, data: object) -> dict:
+        """Fresh authorization without issuing a lease or changing the host."""
         fields = _grant_fields(data)
         if fields is None:
             return {"ok": False, "reason": "invalid_grant_request"}
@@ -225,10 +232,19 @@ class BrokerOperator:
             return {"ok": False, "reason": "protected_olist_runtime_not_ready"}
         if not self.grant_checker(*fields, CAPABILITY, OPERATION, TARGET_REPOSITORY):
             return {"ok": False, "reason": "owner_pr_grant_denied"}
+        return {"ok": True, "operation": OPERATION}
+
+    def prepare(self, data: object) -> dict:
+        allowed = self.preflight(data)
+        if allowed.get("ok") is not True:
+            return allowed
+        fields = _grant_fields(data)
+        if fields is None:
+            return {"ok": False, "reason": "invalid_grant_request"}
         rid = "broker-" + secrets.token_hex(16)
         expires = int(time.time()) + LEASE_TTL_SECONDS
         try:
-            with _db(self.state) as db:
+            with closing(_db(self.state)) as db, db:
                 db.execute("BEGIN IMMEDIATE")
                 record = db.execute(
                     "INSERT INTO leases (request_id,pr,head,merge,expires_at) VALUES (?,?,?,?,?)",
@@ -276,6 +292,8 @@ def _serve_connection(conn: socket.socket, operator: BrokerOperator,
                     if (not isinstance(data, dict) or set(data) != {"action", "request"}
                             or not isinstance(data["request"], dict)):
                         result = {"ok": False, "reason": "request_shape_invalid"}
+                    elif data["action"] == "preflight":
+                        result = operator.preflight(data["request"])
                     elif data["action"] == "prepare":
                         result = operator.prepare(data["request"])
                     elif data["action"] == "execute":

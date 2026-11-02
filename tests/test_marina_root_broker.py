@@ -62,6 +62,141 @@ class RootBrokerTests(unittest.TestCase):
             "operation", "pr_number", "head_sha", "merge_sha",
             "idempotency_key", "fencing_token")}
 
+    def test_preflight_checks_grant_without_issuing_lease_or_mutating(self):
+        self.assertTrue(hasattr(self.op, "preflight"), "broker lacks side-effect-free preflight")
+        self.assertEqual(self.op.preflight(REQUEST), {"ok": True, "operation": broker.OPERATION})
+        self.assertFalse((self.state / "leases.sqlite3").exists())
+        self.assertFalse((self.state / "broker-audit.jsonl").exists())
+        self.assertFalse(any(x[1] == "restart" for x in self.calls))
+        self.op.grant_checker = lambda *args: False
+        self.assertEqual(self.op.preflight(REQUEST)["reason"], "owner_pr_grant_denied")
+        self.assertEqual(self.op.preflight({**REQUEST, "command": "id"})["reason"], "invalid_grant_request")
+
+    def test_client_real_unix_roundtrip_and_replay_without_real_systemctl(self):
+        import runpy
+        module = runpy.run_path(str(SOURCE.with_name("broker_client.py")))
+        cls = module["BrokerClient"]
+        path = str(self.state / "fixture.sock")
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.bind(path)
+        listener.listen(5)
+        listener.settimeout(5)
+        failures = []
+        def serve():
+            try:
+                for _ in range(4):
+                    conn, _ = listener.accept()
+                    with conn:
+                        broker._serve_connection(conn, self.op, os.geteuid())
+            except Exception as exc:
+                failures.append(type(exc).__name__)
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        try:
+            with patch.dict(cls._call.__globals__, {"SOCKET_PATH": path}):
+                client = cls(REQUEST)
+                self.assertTrue(client.preflight(REQUEST)["ok"])
+                self.assertFalse((self.state / "leases.sqlite3").exists())
+                ticket = client.prepare(REQUEST)
+                self.assertTrue(ticket["ok"], ticket)
+                request = self.ticket_to_request(ticket)
+                self.assertTrue(client.execute(request)["ok"])
+                self.assertEqual(client.execute(request)["reason"], "maintenance_lease_or_replay_denied")
+        finally:
+            thread.join(5)
+            listener.close()
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(failures, [])
+        self.assertEqual(sum(x[1] == "restart" for x in self.calls), 1)
+
+    def test_client_config_requires_protected_real_file_and_ancestors(self):
+        import runpy
+        module = runpy.run_path(str(SOURCE.with_name("broker_client.py")))
+        load = module["load_grant_config"]
+        with tempfile.TemporaryDirectory(dir="/root") as tmp:
+            directory = Path(tmp)
+            config = directory / "grant.json"
+            config.write_text(json.dumps(REQUEST))
+            config.chmod(0o644)
+            with patch.dict(load.__globals__, {"GRANT_CONFIG": config}):
+                self.assertEqual(load(), REQUEST)
+                for mode in (0o666, 0o775):
+                    config.chmod(mode)
+                    with self.assertRaises(RuntimeError):
+                        load()
+                config.chmod(0o644)
+                os.chown(config, 65534, 65534)
+                with self.assertRaises(RuntimeError):
+                    load()
+                os.chown(config, 0, 0)
+                config.write_text('{"operation":"olist_browser_restart","pr_number":1,"pr_number":2}')
+                with self.assertRaises(RuntimeError):
+                    load()
+                config.write_text(json.dumps(REQUEST))
+                directory.chmod(0o777)
+                with self.assertRaises(RuntimeError):
+                    load()
+                directory.chmod(0o700)
+                target = directory / "real.json"
+                config.rename(target)
+                config.symlink_to(target)
+                with self.assertRaises(RuntimeError):
+                    load()
+
+
+    def test_newer_fencing_ticket_invalidates_previous_unconsumed_ticket(self):
+        first = self.ticket_to_request(self.op.prepare(REQUEST))
+        second = self.ticket_to_request(self.op.prepare(REQUEST))
+        self.assertGreater(second["fencing_token"], first["fencing_token"])
+        self.assertEqual(self.op.execute(first),
+                         {"ok": False, "reason": "maintenance_lease_or_replay_denied"})
+        self.assertTrue(self.op.execute(second)["ok"])
+        self.assertEqual(sum(x[1] == "restart" for x in self.calls), 1)
+
+    def test_lease_is_expired_at_exact_deadline(self):
+        with patch.object(broker.time, "time", return_value=1000):
+            ticket = self.op.prepare(REQUEST)
+        with patch.object(broker.time, "time", return_value=ticket["expires_at"]):
+            result = self.op.execute(self.ticket_to_request(ticket))
+        self.assertEqual(result, {"ok": False, "reason": "maintenance_lease_or_replay_denied"})
+        self.assertFalse(any(x[1] == "restart" for x in self.calls))
+
+    def test_ledger_connections_close_after_prepare_and_denied_reservation(self):
+        opened = []
+        connect = sqlite3.connect
+        def tracked(*args, **kwargs):
+            con = connect(*args, **kwargs)
+            opened.append(con)
+            return con
+        with patch.object(broker.sqlite3, "connect", side_effect=tracked):
+            ticket = self.op.prepare(REQUEST)
+            request = self.ticket_to_request(ticket)
+            denied = self.op.execute({**request, "fencing_token": ticket["fencing_token"] + 1})
+        self.assertFalse(denied["ok"])
+        self.assertEqual(len(opened), 2)
+        for con in opened:
+            with self.assertRaises(sqlite3.ProgrammingError):
+                con.execute("SELECT 1")
+
+    def test_ledger_initialization_error_closes_connection(self):
+        opened = []
+        connect = sqlite3.connect
+        class BrokenSchemaConnection(sqlite3.Connection):
+            def execute(self, sql, *args):
+                if sql.startswith("CREATE TABLE"):
+                    raise sqlite3.OperationalError("controlled_schema_failure")
+                return super().execute(sql, *args)
+        def tracked(*args, **kwargs):
+            con = connect(*args, factory=BrokenSchemaConnection, **kwargs)
+            opened.append(con)
+            return con
+        with patch.object(broker.sqlite3, "connect", side_effect=tracked):
+            result = self.op.prepare(REQUEST)
+        self.assertEqual(result, {"ok": False, "reason": "protected_lease_unavailable"})
+        self.assertEqual(len(opened), 1)
+        with self.assertRaises(sqlite3.ProgrammingError):
+            opened[0].execute("SELECT 1")
+
     def test_positive_fixed_restart_and_one_time_lease(self):
         lease = self.op.prepare(REQUEST)
         self.assertTrue(lease["ok"])
