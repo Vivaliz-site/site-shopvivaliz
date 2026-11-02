@@ -154,6 +154,10 @@ class OperatorTests(unittest.TestCase):
         self.token_path.write_text(sample, encoding="ascii")
         self.token_path.chmod(0o600)
         self.assertEqual(m._read_protected_github_token(), sample)
+        Path(self.temp.name).chmod(0o755)
+        with self.assertRaises(RuntimeError):
+            m._read_protected_github_token()
+        Path(self.temp.name).chmod(0o700)
         self.token_path.chmod(0o644)
         with self.assertRaises(RuntimeError):
             m._read_protected_github_token()
