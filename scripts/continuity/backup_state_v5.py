@@ -22,6 +22,22 @@ DEFAULT_BACKUPS = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-
 # archive one creates a TOCTOU backup failure and could restore stale ownership.
 EPHEMERAL_ROOT_FILES = frozenset({"_gemini-24x7-controller-lease.json"})
 
+# Explicit evidence sidecars are durable documents, not task checkpoints.
+# Keep them in the private archive, but do not count them as task records.
+# Restrict by filename AND structure to avoid hiding malformed task JSON.
+def _is_evidence_sidecar(name: str, item: dict) -> bool:
+    return (
+        name.endswith("-evidence.json")
+        and "task_id" not in item
+        and isinstance(item.get("timestamp"), str)
+        and bool(item["timestamp"].strip())
+        and isinstance(item.get("records"), list)
+        and isinstance(item.get("rules_loaded"), dict)
+        and isinstance(item.get("checklist"), list)
+        and type(item.get("targets")) is int
+        and item["targets"] >= 0
+    )
+
 
 class BackupError(RuntimeError):
     pass
@@ -62,9 +78,12 @@ def _safe_members(root: Path) -> tuple[list[Path], int]:
                 if not isinstance(item, dict):
                     raise BackupError("invalid_json_checkpoint_type")
                 if base == root and not name.startswith("_"):
-                    if str(item.get("task_id", "")).strip() != path.stem:
-                        raise BackupError("checkpoint_task_id_mismatch")
-                    task_count += 1
+                    if _is_evidence_sidecar(name, item):
+                        pass  # Retain evidence in archive without a fictitious task_id.
+                    else:
+                        if str(item.get("task_id", "")).strip() != path.stem:
+                            raise BackupError("checkpoint_task_id_mismatch")
+                        task_count += 1
             members.append(path)
     if not task_count:
         raise BackupError("no_task_checkpoints")
@@ -100,7 +119,10 @@ def _verify_archive(path: Path, expected_members: int, expected_tasks: int) -> N
                 if not isinstance(data, dict):
                     raise BackupError("invalid_json_in_archive")
                 if "/" not in name and not name.startswith("_"):
-                    tasks += 1
+                    if not _is_evidence_sidecar(name, data):
+                        if str(data.get("task_id", "")).strip() != Path(name).stem:
+                            raise BackupError("checkpoint_task_id_mismatch")
+                        tasks += 1
     if count != expected_members or tasks != expected_tasks:
         raise BackupError("backup_readback_mismatch")
 
