@@ -1,3 +1,16 @@
+<!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
+## Execucao continua deste atendimento, sem atualizacoes intermediarias
+
+**Instrucao expressa do proprietario, 03/11/2026:** quando disser "prossiga ate concluir", "siga sem pausas", "sem atualizacoes parciais" ou equivalente, o agente ChatGPT que recebeu a tarefa deve continuar executando **na propria interacao atual**, usando as ferramentas autorizadas, em vez de encerrar com uma promessa, um relatorio de bloqueios, uma issue de acompanhamento ou a proposta de usar uma controladora externa. Registrar checkpoint e util, mas nao substitui solucionar, testar, integrar e validar o que for executavel.
+
+**Nao confundir com o controlador 24x7:** ele e um componente independente e opcional para esta ordem. Seu estado degradado, a falta de vinculo de sessao ou a ausencia de automacao em background NAO impedem a execucao direta do agente, mediante acessos e permissoes oficiais existentes. Nao condicionar a retomada de PRs, Marina ou outros reparos a consertar a controladora.
+
+**Conduta diante de bloqueios:** diagnosticar a causa e a diferenca em relacao ao estado anterior, procurar rotas tecnicas independentes **ja autorizadas** e corrigir paralelamente outros defeitos; nao parar apenas na descricao. Em cada correcao verificar RED/GREEN, efeitos e persistencia. Respeitar recusas explicitas do provedor, permissoes de terceiros, MFA, identidades distintas, grants P2, revisao humana formal, branch protection, leasings/fencing, segredos e rollback; uma rota alternativa nao pode ser usada para contornar uma negativa. Nao criar demandas de aprovacao repetidas para grants vigentes.
+
+**Entrega:** obedecer ao pedido de nao enviar atualizacoes parciais; responder somente depois de completar a execucao viavel nessa interacao ou de comprovar precisamente a dependencia externa intransponivel, descrevendo acoes concretas e o que permanece aberto. Nao prometer que o mesmo ChatGPT continuara executando sozinho apos o turno terminar; isso exige mecanismo persistente realmente configurado e verificado. Nao declarar o trabalho completo com somente auditoria/diagnostico/checkpoint.
+
+<!-- /OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
+
 <!-- OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2_20261102 -->
 ## Regra aprovada por owner P2: uma revisao humana e fluxo automatico
 
