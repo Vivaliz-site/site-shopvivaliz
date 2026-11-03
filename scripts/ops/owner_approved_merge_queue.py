@@ -37,6 +37,11 @@ PROTECTED_FILES = {
     ".github/workflows/pr-owner-approval-merge-queue.yml",
     "scripts/ops/owner_approved_merge_queue.py",
     "scripts/ops/activate_owner_merge_queue_ruleset.py",
+    # Marina administrative route: its grant, attestation and activator decide
+    # who may run privileged commands, so they need the exact owner approval.
+    "remote-control-mcp/server.py",
+    "remote-control-mcp/test_marina_admin_gate.py",
+    "scripts/ops/activate-mcp-central-marina-readonly.py",
 }
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
