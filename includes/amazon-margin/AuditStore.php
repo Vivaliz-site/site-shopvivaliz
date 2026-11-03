@@ -11,12 +11,23 @@ final class SvAmazonMarginStore
             skus_json LONGTEXT NOT NULL,
             state VARCHAR(20) NOT NULL DEFAULT 'queued',
             attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            next_attempt_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME NULL,
             finished_at DATETIME NULL,
             error_code VARCHAR(90) NULL,
             KEY margin_request_queue (state, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Idempotent upgrade of the initial production request table.
+        $probe = $db->query("SHOW COLUMNS FROM amazon_margin_audit_requests LIKE 'next_attempt_at'");
+        if (!$probe || !$probe->fetch(PDO::FETCH_ASSOC)) {
+            try {
+                $db->exec("ALTER TABLE amazon_margin_audit_requests ADD COLUMN next_attempt_at DATETIME NULL");
+            } catch (PDOException $e) {
+                // A second process may have completed the same migration.
+                if ((int)($e->errorInfo[1] ?? 0) !== 1060) throw $e;
+            }
+        }
         $db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_runs (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             request_id BIGINT UNSIGNED NULL,
@@ -59,11 +70,13 @@ final class SvAmazonMarginStore
         $db->beginTransaction();
         try {
             $stmt = $db->query("SELECT id,scope,skus_json FROM amazon_margin_audit_requests
-                WHERE state = 'queued' ORDER BY id LIMIT 1 FOR UPDATE");
+                WHERE state = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= UTC_TIMESTAMP())
+                ORDER BY id LIMIT 1 FOR UPDATE");
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) { $db->commit(); return null; }
             $upd = $db->prepare("UPDATE amazon_margin_audit_requests
-                SET state='running', attempts=attempts+1, started_at=UTC_TIMESTAMP() WHERE id=? AND state='queued'");
+                SET state='running', attempts=attempts+1, next_attempt_at=NULL,
+                    started_at=UTC_TIMESTAMP(), finished_at=NULL WHERE id=? AND state='queued'");
             $upd->execute([$row['id']]);
             $db->commit();
             $row['skus'] = json_decode((string)$row['skus_json'], true, 512, JSON_THROW_ON_ERROR);
@@ -91,9 +104,22 @@ final class SvAmazonMarginStore
     public static function fail(PDO $db, int $requestId, string $code): void
     {
         if ($requestId <= 0) return;
+        $code = substr(preg_replace('/[^a-zA-Z0-9_:-]/','_', $code) ?: 'unknown', 0, 90);
+        if ($code === 'AMAZON_QUOTA_429') {
+            // SP-API quota is external/transient, not a corrupt audit. Do not
+            // burn the 3 attempts while requests remain throttled.
+            $upd = $db->prepare("UPDATE amazon_margin_audit_requests
+                SET state='queued', attempts=GREATEST(0, attempts-1),
+                    next_attempt_at=UTC_TIMESTAMP()+INTERVAL 20 MINUTE,
+                    finished_at=NULL, error_code=? WHERE id=?");
+            $upd->execute([$code,$requestId]);
+            return;
+        }
         $upd = $db->prepare("UPDATE amazon_margin_audit_requests
-            SET state=IF(attempts<3,'queued','failed'), finished_at=UTC_TIMESTAMP(), error_code=? WHERE id=?");
-        $upd->execute([substr(preg_replace('/[^a-zA-Z0-9_:-]/','_', $code) ?: 'unknown', 0, 90),$requestId]);
+            SET state=IF(attempts<3,'queued','failed'),
+                next_attempt_at=IF(attempts<3,UTC_TIMESTAMP()+INTERVAL 5 MINUTE,NULL),
+                finished_at=UTC_TIMESTAMP(), error_code=? WHERE id=?");
+        $upd->execute([$code,$requestId]);
     }
 
     public static function latest(PDO $db): ?array
@@ -107,7 +133,7 @@ final class SvAmazonMarginStore
 
     public static function requests(PDO $db): array
     {
-        return $db->query('SELECT id,scope,state,attempts,created_at,started_at,finished_at,error_code
+        return $db->query('SELECT id,scope,state,attempts,next_attempt_at,created_at,started_at,finished_at,error_code
             FROM amazon_margin_audit_requests ORDER BY id DESC LIMIT 12')->fetchAll(PDO::FETCH_ASSOC);
     }
 }
