@@ -121,7 +121,7 @@ const price=v=>v===null||v===undefined?'—':'R$ '+Number(v).toLocaleString('pt-
 const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
 function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'DBA':'UNKNOWN');}
 function state(r){if(r.margin_min_bps===null||r.margin_min_bps===undefined)return 'pending';return r.margin_min_bps<1000?'low':'healthy';}
-function refreshSelection(){el('selected-count').textContent=selected.size+' anúncio(s) selecionado(s)'+(selected.size===0?' (exportação incluirá todos)':'');el('run-selected').disabled=selected.size===0||selected.size>100;}
+function refreshSelection(){el('selected-count').textContent=selected.size+' anúncio(s) selecionado(s)'+(selected.size===0?' (exportação incluirá todos)':'');el('run-selected').disabled=selected.size===0||selected.size>1000;}
 function filtered(){const q=el('search').value.trim().toLowerCase(),p=el('program').value,s=el('status').value;
  return data.filter(r=>(!q||[r.seller_sku,r.erp_sku,r.asin,r.title].some(x=>String(x??'').toLowerCase().includes(q)))&&(!p||program(r)===p)&&(!s||state(r)===s));}
 function render(){
@@ -161,7 +161,7 @@ async function load(){
  }catch(e){showError(e);el('rows').innerHTML='<tr><td colspan="10">Auditoria inicial ainda não disponível. A fila depende do serviço coletor.</td></tr>';}
 }
 async function requestRun(scope){
- if(scope==='selected'&&(!selected.size||selected.size>100))return;
+ if(scope==='selected'&&(!selected.size||selected.size>1000))return;
  el('feedback').textContent='Registrando solicitação…';
  try{
  const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},credentials:'same-origin',body:JSON.stringify({action:'request',scope,skus:scope==='selected'?[...selected]:[]})});
