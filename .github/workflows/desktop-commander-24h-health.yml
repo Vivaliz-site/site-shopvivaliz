@@ -142,7 +142,7 @@ jobs:
           php tests/windows-desktop-commander-stale-cooldown-contract-test.php
 
   runtime:
-    if: ${{ false }} # RETIRED_SOURCE_JOB_GUARD_20261029; preserve contract job
+    if: ${{ false }} # runtime maintenance remains disabled until its own authorized validation
     needs: contract
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 12
@@ -301,7 +301,7 @@ jobs:
               )
               return {'host': name, 'state': state, 'watchdog': watchdog, 'canonical': canonical, 'auth': auth_text, 'recovery': recovery}
 
-          def vm_status(peer=False):
+          def vm_status():
               command = r'''set -Eeuo pipefail
           device=false
           test -f "$HOME/.desktop-commander-device/device.json" && device=true
@@ -324,9 +324,6 @@ jobs:
           done < <(if pgrep -af 'desktop-commander/dist/index[.]js remote --persist-session' 2>/dev/null; then :; else rc=$?; test "$rc" -eq 1; fi)
           printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$provider"
           '''
-              if peer:
-                  peer_ssh = ['ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', command]
-                  command = ' '.join(shlex.quote(part) for part in peer_ssh)
               ok, out = ssh_run(command, timeout=120)
               return ok, parse_safe(out)
 
@@ -342,8 +339,8 @@ jobs:
                   and is_true(values.get('PROVIDER_CONNECTED'))
               )
 
-          def vm_probe(name, peer=False):
-              ok, values = vm_status(peer=peer)
+          def vm_probe(name):
+              ok, values = vm_status()
               if not ok:
                   return {'host': name, 'state': 'unreachable', 'watchdog': 'unreachable', 'canonical': '—', 'auth': 'unknown', 'recovery': 'vm_ssh_unreachable'}
               if vm_healthy(values):
@@ -370,13 +367,10 @@ jobs:
                       'git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; '
                       'sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
                   )
-                  if peer:
-                      peer_ssh = ['ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', repair]
-                      repair = ' '.join(shlex.quote(part) for part in peer_ssh)
                   repair_ok, _ = ssh_run(repair, timeout=260)
                   recovery = 'repair_requested' if repair_ok else 'repair_failed'
                   time.sleep(15)
-                  ok2, values2 = vm_status(peer=peer)
+                  ok2, values2 = vm_status()
                   if ok2:
                       values = values2
               healthy = vm_healthy(values)
@@ -395,14 +389,13 @@ jobs:
           results = [
               win_probe('LAPTOP-NIG4IFUU', 5557, 'fredwin-desktop-commander-status.ps1', 'fredwin-desktop-commander-supervisor.ps1', 'fredwin-remote-bootstrap.ps1', expected_logon='interactive'),
               win_probe('DESKTOP-KOCEPSV', 5558, 'desktopkocepsv-desktop-commander-status.ps1', 'desktopkocepsv-desktop-commander-supervisor.ps1', 'desktopkocepsv-remote-bootstrap.ps1', expected_logon='s4u'),
-              vm_probe('shopvivaliz-a1-backend', peer=False),
-              vm_probe('shopvivaliz-free-a1', peer=True),
-          ]
+              vm_probe('shopvivaliz-a1-backend'),
+           ]
           now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
           run_id = os.environ.get('RUN_ID', 'unknown')
           lines = [
               '# Desktop Commander 24h Control Plane Status', '',
-              'Sanitized four-host health only. Provider credentials, session data, private keys and device-state contents are never published here.', '',
+              'Sanitized three-host health only. Provider credentials, session data, private keys and device-state contents are never published here.', '',
               '| Host | State | Watchdog | Canonical agents | Auth required | Last check | Recovery |',
               '|---|---|---|---:|---|---|---|',
           ]
@@ -440,7 +433,7 @@ jobs:
           python3 - <<'PY'
           import json
           data=json.load(open('/tmp/dc-control-plane-status.json',encoding='utf-8'))
-          critical_hosts = {'LAPTOP-NIG4IFUU', 'DESKTOP-KOCEPSV', 'shopvivaliz-a1-backend', 'shopvivaliz-free-a1'}
+          critical_hosts = {'LAPTOP-NIG4IFUU', 'DESKTOP-KOCEPSV', 'shopvivaliz-a1-backend'}
           if any(item.get('host') in critical_hosts and item.get('state') != 'healthy' for item in data):
               raise SystemExit(1)
           PY
