@@ -22,3 +22,10 @@ class ZeroFilesGateTests(unittest.TestCase):
 
     def test_invalid_head_still_fails_for_zero_files(self):
         self.assertEqual(GATE.decide([], [], "x", 0), (False, "invalid_head_sha"))
+
+
+class ZeroFilesMainPathTests(unittest.TestCase):
+    def test_main_does_not_reject_empty_files_page_before_decide(self):
+        source = PATH.read_text()
+        self.assertNotIn("not 0 < len(files) < 100", source)
+        self.assertIn("len(files) >= 100:\n            raise ValueError(\"pr_files_unavailable_or_incomplete\")", source)
