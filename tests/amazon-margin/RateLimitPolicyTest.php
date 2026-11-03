@@ -2,8 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../../includes/amazon-margin/RateLimitPolicy.php';
 
-assert(SvAmazonMarginRateLimitPolicy::retryable(429));
-assert(SvAmazonMarginRateLimitPolicy::retryable(503));
+if (!SvAmazonMarginRateLimitPolicy::retryable(429) || !SvAmazonMarginRateLimitPolicy::retryable(503)) {
+    throw new RuntimeException('expected SP-API quota retry');
+}
 foreach ([200,201,400,401,403,404,409,422] as $code) {
     if (SvAmazonMarginRateLimitPolicy::retryable($code)) {
         throw new RuntimeException('unexpected retry on HTTP '.$code);
