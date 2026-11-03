@@ -27,24 +27,52 @@ continuity_suites_needed() {
 }
 
 
+# Relevance: a suite runs only when the PR diff names it, imports it or changes what it tests.
+# Gate-core changes, push and merge_group runs (no PR diff) run every suite.
+CI_CHANGED_LIST="$(mktemp)"
+trap 'rm -f "$CI_CHANGED_LIST"' EXIT
+case "${GITHUB_EVENT_NAME:-}" in
+  pull_request|pull_request_review)
+    if [ -n "${GITHUB_BASE_REF:-}" ]; then
+      git diff --name-only "$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"..HEAD > "$CI_CHANGED_LIST" || : > "$CI_CHANGED_LIST"
+    fi ;;
+  merge_group)
+    if [ -n "${MERGE_GROUP_BASE_SHA:-}" ]; then
+      git diff --name-only "$MERGE_GROUP_BASE_SHA"..HEAD > "$CI_CHANGED_LIST" || : > "$CI_CHANGED_LIST"
+    fi ;;
+  push)
+    if [ -n "${PUSH_BEFORE_SHA:-}" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
+      git diff --name-only "$PUSH_BEFORE_SHA"..HEAD > "$CI_CHANGED_LIST" || : > "$CI_CHANGED_LIST"
+    fi ;;
+esac
+run_suite() {
+  local verdict
+  verdict="$(python3 scripts/ci_suite_relevance.py --command "$*" --changed-list "$CI_CHANGED_LIST")" || verdict="RUN	relevance_helper_failed"
+  case "$verdict" in
+    RUN*) echo "RUN suite: ${verdict#RUN	} :: $*"; "$@" ;;
+    *) echo "SKIP suite: ${verdict#SKIP	} :: $*" ;;
+  esac
+}
+
 # Prevent blanket GitHub human review requests before expensive CI.
-python3 scripts/check_pr_review_routing.py
-python3 -m unittest tests/test_pr_review_routing.py -v
+python3 -m unittest tests.test_ci_suite_relevance -v
+run_suite python3 scripts/check_pr_review_routing.py
+run_suite python3 -m unittest tests/test_pr_review_routing.py -v
 bash -n .githooks/pre-commit .githooks/pre-push scripts/repository-governance-validate.sh
-python3 scripts/validate-recurring-ai-policy.py
-python3 scripts/validate-retired-windows-tasks.py
-python3 scripts/validate-final-response-deploy-gate.py
-python3 scripts/validate-audit-governance.py
-bash tests/disk-hygiene-policy-contract-test.sh
-bash tests/backend-disk-hygiene-reconcile-contract-test.sh
-python3 tests/test_retired_source_workflow_guards.py
-python3 tests/test_workspace_housekeeper_safety.py
-python3 tests/test_production_functional_audit_security.py
-python3 scripts/validate-task-continuity-enforcement.py
+run_suite python3 scripts/validate-recurring-ai-policy.py
+run_suite python3 scripts/validate-retired-windows-tasks.py
+run_suite python3 scripts/validate-final-response-deploy-gate.py
+run_suite python3 scripts/validate-audit-governance.py
+run_suite bash tests/disk-hygiene-policy-contract-test.sh
+run_suite bash tests/backend-disk-hygiene-reconcile-contract-test.sh
+run_suite python3 tests/test_retired_source_workflow_guards.py
+run_suite python3 tests/test_workspace_housekeeper_safety.py
+run_suite python3 tests/test_production_functional_audit_security.py
+run_suite python3 scripts/validate-task-continuity-enforcement.py
 # Agent docs preflight is a merge gate, not an optional README instruction.
-python3 scripts/check-agent-docs-enforcement.py
-python3 -m unittest tests.test_agent_docs_gate tests.test_agent_operations_docs_scope -v
-bash tests/chatgpt-account-diagnostic-contract-test.sh
+run_suite python3 scripts/check-agent-docs-enforcement.py
+run_suite python3 -m unittest tests.test_agent_docs_gate tests.test_agent_operations_docs_scope -v
+run_suite bash tests/chatgpt-account-diagnostic-contract-test.sh
 if ! continuity_suites_needed; then
   echo 'SKIP CHATGPT_CONTINUITY_SUITES=no_related_paths_changed_on_pull_request'
 elif python3 -c 'import fcntl' >/dev/null 2>&1; then
@@ -63,33 +91,33 @@ elif [ "$(uname -s)" = "Linux" ]; then
 else
   echo "SKIP POSIX_BRIDGE_WORKER_TEST=$(uname -s); required in Linux CI"
 fi
-bash -n scripts/install-chatgpt-continuity-backend-bridge.sh
-python3 -m unittest tests.test_executor_fallback_order -v
+run_suite bash -n scripts/install-chatgpt-continuity-backend-bridge.sh
+run_suite python3 -m unittest tests.test_executor_fallback_order -v
 if [ "$(uname -s)" = "Linux" ]; then
-  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES python3 -m unittest tests.test_background_gemini_runner -v
+  run_suite env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES python3 -m unittest tests.test_background_gemini_runner -v
 else
   echo "SKIP POSIX_BACKGROUND_GEMINI_TEST=$(uname -s); required in Linux CI"
 fi
-python3 -m unittest tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_pr_gate_replay -v
+run_suite python3 -m unittest tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_pr_gate_replay -v
 if [ "$(uname -s)" = "Linux" ]; then
-  python3 -m unittest tests.test_pr_owner_review_recovery tests.test_pr_owner_recovery_workflow tests.test_ci_php_lint_scope -v
+  run_suite python3 -m unittest tests.test_pr_owner_review_recovery tests.test_pr_owner_recovery_workflow tests.test_ci_php_lint_scope -v
 else
   echo "SKIP POSIX_OWNER_RECOVERY_TEST=$(uname -s); required in Linux CI"
 fi
-python3 -m unittest tests.test_workflow_latency_budget tests.unit.test_runtime_deploy_reconciliation tests.test_ci_performance_monitor -v
-python3 tests/test_ci_performance_monitor_workflow.py
-python3 tests/shopvivaliz-mail-legacy-provider-guard-test.py
-php tests/cloudflare-email-titan-finalize-test.php
-php tests/shopvivaliz-brevo-mailer-contract-test.php
-php -d zend.assertions=1 -d assert.exception=1 tests/shopvivaliz-brevo-mailer-runtime-test.php
+run_suite python3 -m unittest tests.test_workflow_latency_budget tests.unit.test_runtime_deploy_reconciliation tests.test_ci_performance_monitor -v
+run_suite python3 tests/test_ci_performance_monitor_workflow.py
+run_suite python3 tests/shopvivaliz-mail-legacy-provider-guard-test.py
+run_suite php tests/cloudflare-email-titan-finalize-test.php
+run_suite php tests/shopvivaliz-brevo-mailer-contract-test.php
+run_suite php -d zend.assertions=1 -d assert.exception=1 tests/shopvivaliz-brevo-mailer-runtime-test.php
 if [ "$(uname -s)" = "Linux" ]; then
-  python3 -m unittest tests.test_stock_alerts_brevo_mail -v
+  run_suite python3 -m unittest tests.test_stock_alerts_brevo_mail -v
 else
   echo "SKIP POSIX_STOCK_ALERTS_TEST=$(uname -s); required in Linux CI"
 fi
-python3 -m unittest tests.test_shopee_logistics_worker -v
+run_suite python3 -m unittest tests.test_shopee_logistics_worker -v
 if [ "$(uname -s)" = "Linux" ]; then
-  python3 -m unittest tests.test_ci_performance_fetch -v
+  run_suite python3 -m unittest tests.test_ci_performance_fetch -v
 else
   echo "SKIP POSIX_CI_PERFORMANCE_FETCH_TEST=$(uname -s); required in Linux CI"
 fi
@@ -159,7 +187,12 @@ if [ "$phase" = "ci" ]; then
   if command -v composer >/dev/null 2>&1 && [ ! -d vendor ]; then
     composer install --no-interaction --prefer-dist
   fi
-  if [ -x vendor/bin/phpunit ]; then
+  php_relevant=true
+  if [ -s "$CI_CHANGED_LIST" ] && ! grep -Eq '\.(php|phpt)$|^composer\.(json|lock)$|^phpunit\.xml' "$CI_CHANGED_LIST"; then
+    php_relevant=false
+    echo 'SKIP phpunit: no PHP or Composer files changed in this diff'
+  fi
+  if [ "$php_relevant" = true ] && [ -x vendor/bin/phpunit ]; then
     if [ -f phpunit.xml ] || [ -f phpunit.xml.dist ]; then
       vendor/bin/phpunit
     elif [ -d tests ] && find tests -type f \( -name '*Test.php' -o -name '*.phpt' \) -print -quit | grep -q .; then
