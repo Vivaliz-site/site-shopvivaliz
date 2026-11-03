@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS = ROOT / "requirements.txt"
-PATCH_FLOORS = {"pyjwt": (2, 14, 0), "aiohttp": (3, 14, 4)}
+PATCH_FLOORS = {"pyjwt": (2, 15, 0), "aiohttp": (3, 14, 4)}
 PIN = re.compile(r"^([A-Za-z][A-Za-z0-9_.-]*)==([0-9]+(?:\.[0-9]+){1,3})$")
 
 
@@ -45,7 +45,7 @@ class SecurityDependencyMinimumsTests(unittest.TestCase):
         for old in ("PyJWT==2.13.0", "aiohttp==3.14.1"):
             with self.subTest(old=old):
                 if old.startswith("PyJWT"):
-                    bad = raw.replace("PyJWT==2.14.0", old)
+                    bad = raw.replace("PyJWT==2.15.0", old)
                 else:
                     bad = raw.replace("aiohttp==3.14.4", old)
                 self.assertNotEqual(raw, bad)
@@ -55,10 +55,10 @@ class SecurityDependencyMinimumsTests(unittest.TestCase):
     def test_missing_pin_does_not_pass_silently(self):
         raw = REQUIREMENTS.read_text(encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "security_floor_not_met_pyjwt"):
-            verify_security_floors(raw.replace("PyJWT==2.14.0\n", ""))
+            verify_security_floors(raw.replace("PyJWT==2.15.0\n", ""))
 
     def test_duplicate_normalized_package_rejected(self):
-        raw = REQUIREMENTS.read_text(encoding="utf-8") + "\npyjwt==2.14.0\n"
+        raw = REQUIREMENTS.read_text(encoding="utf-8") + "\npyjwt==2.15.0\n"
         with self.assertRaisesRegex(ValueError, "duplicate_requirement_name"):
             verify_security_floors(raw)
 
