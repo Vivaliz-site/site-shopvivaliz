@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 import unittest
 
 
@@ -35,6 +36,39 @@ class RepositoryGovernanceSecretDebtTests(unittest.TestCase):
         self.assertNotIn("|| true", text)
         self.assertNotIn("set +e", text)
         self.assertNotIn("\n            exit 0\n", text)
+
+
+class SecretAuditDiffScopeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "audit_secret_references", ROOT / "scripts" / "maintenance" / "audit_secret_references.py")
+        cls.audit = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.audit
+        spec.loader.exec_module(cls.audit)
+        cls.files = [ROOT / "api" / "cart" / "add.php", ROOT / "docs" / "x.md", ROOT / "scripts" / "y.py"]
+
+    def test_application_only_diff_scans_only_changed_files(self):
+        files, scope = self.audit.scoped_files(self.files, ["api/cart/add.php", "docs/x.md"])
+        self.assertEqual(scope, "pull_request_diff")
+        self.assertEqual([p.relative_to(ROOT).as_posix() for p in files], ["api/cart/add.php", "docs/x.md"])
+
+    def test_governance_change_forces_full_scan(self):
+        for changed in (
+            ["api/cart/add.php", ".github/workflows/x.yml"],
+            ["scripts/maintenance/audit_secret_references.py"],
+            ["security/owner-approvals/1.json"],
+        ):
+            files, scope = self.audit.scoped_files(self.files, changed)
+            self.assertEqual(scope, "repository", changed)
+            self.assertEqual(len(files), len(self.files), changed)
+
+    def test_unknown_or_empty_diff_scans_everything(self):
+        for changed in (None, []):
+            files, scope = self.audit.scoped_files(self.files, changed)
+            self.assertEqual(scope, "repository")
+            self.assertEqual(len(files), len(self.files))
 
 
 if __name__ == "__main__":

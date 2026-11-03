@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from dataclasses import asdict, dataclass
@@ -224,8 +225,33 @@ def write_report(payload: dict) -> None:
     (REPORT_DIR / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# Changes to these paths can alter what the audit itself reads or enforces, so
+# they always trigger the full repository scan.
+FULL_SCAN_PREFIXES = (".github/", "scripts/maintenance/", "scripts/governance/", "security/")
+
+
+def pull_request_changes() -> list[str] | None:
+    """Paths changed by this pull request, or None when no trustworthy diff exists."""
+    if os.environ.get("GITHUB_EVENT_NAME") != "pull_request" or not os.environ.get("GITHUB_BASE_REF"):
+        return None
+    try:
+        base = git_output("merge-base", "HEAD", f"origin/{os.environ['GITHUB_BASE_REF']}").decode().strip()
+        raw = git_output("diff", "--name-only", "-z", f"{base}..HEAD")
+    except subprocess.CalledProcessError:
+        return None
+    return [item.decode("utf-8", errors="replace") for item in raw.split(b"\0") if item]
+
+
+def scoped_files(files: list[Path], changed: list[str] | None) -> tuple[list[Path], str]:
+    """Pull request diff files, or every tracked file when the diff is unknown or touches governance code."""
+    if not changed or any(rel.startswith(FULL_SCAN_PREFIXES) for rel in changed):
+        return files, "repository"
+    wanted = set(changed)
+    return [path for path in files if path.relative_to(ROOT).as_posix() in wanted], "pull_request_diff"
+
+
 def main() -> int:
-    files = tracked_files()
+    files, scope = scoped_files(tracked_files(), pull_request_changes())
     active = active_surfaces(files)
     findings: list[Finding] = []
     references: set[str] = set()
@@ -243,6 +269,7 @@ def main() -> int:
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "files_scanned": len(files),
+        "scope": scope,
         "active_surfaces": sorted(active),
         "secret_references": sorted(references),
         "approved_secret_mutations": sorted(approved),
