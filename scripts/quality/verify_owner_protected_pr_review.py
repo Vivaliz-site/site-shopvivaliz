@@ -35,11 +35,15 @@ def is_protected_path(path: str) -> bool:
     return path in PROTECTED_EXACT or any(path.startswith(p) for p in PROTECTED_PREFIXES)
 
 
-def decide(files: object, reviews: object, head_sha: str) -> tuple[bool, str]:
+def decide(files: object, reviews: object, head_sha: str, changed_files: object = None) -> tuple[bool, str]:
     """Fail closed for untrusted/incomplete GitHub pages and stale approvals."""
     if not isinstance(head_sha, str) or not SHA40.fullmatch(head_sha):
         return False, "invalid_head_sha"
-    if not isinstance(files, list) or not 0 < len(files) < 100:
+    if not isinstance(files, list) or len(files) >= 100:
+        return False, "pr_files_unavailable_or_incomplete"
+    if not files:
+        if changed_files == 0:
+            return True, "non_protected_pr"
         return False, "pr_files_unavailable_or_incomplete"
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "pr_files_invalid"
@@ -119,7 +123,7 @@ def main(argv=None) -> int:
                         for f in files if isinstance(f, dict))
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
-        approved, reason = decide(files, reviews, args.head)
+        approved, reason = decide(files, reviews, args.head, pr.get("changed_files"))
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         print("OWNER_REVIEW_GATE=DENIED reason=github_verification_unavailable")
         print(f"OWNER_REVIEW_DIAGNOSTIC={type(exc).__name__}")
