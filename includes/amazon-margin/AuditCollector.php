@@ -34,17 +34,25 @@ final class SvAmazonMarginCollector
 
     private function a(string $method, string $path, array $query = []): array
     {
-        for ($attempt = 0; $attempt < 3; $attempt++) {
+        // Exponential, bounded backoff for the SP-API per-operation token bucket.
+        // A few fast retries are not sufficient when a shared seller/application
+        // exhausted an operation quota during a complete catalog scan.
+        $delays = [5, 12, 25, 45, 80];
+        foreach ($delays as $attempt => $seconds) {
             try {
                 $r = $this->amazon->request($method, $path, $query);
                 if ($r['status'] !== 200) throw new RuntimeException('amazon_http_unexpected');
                 return $r['data'];
             } catch (SvMarketplaceException $e) {
-                if ($e->httpStatus !== 429 || $attempt === 2) throw $e;
-                sleep(2 + (3 * $attempt));
+                if (!in_array($e->httpStatus, [429, 503], true)) throw $e;
+                sleep($seconds);
             }
         }
-        throw new RuntimeException('amazon_max_retries');
+        // The final request is still protected by the persistent queue
+        // cooldown; do not loop forever when Amazon denies capacity.
+        $r = $this->amazon->request($method, $path, $query);
+        if ($r['status'] !== 200) throw new RuntimeException('amazon_http_unexpected');
+        return $r['data'];
     }
 
     private function tiny(string $path): array
@@ -134,7 +142,9 @@ final class SvAmazonMarginCollector
                     $listings[$sku]['fulfillment_channel'] = 'UNKNOWN';
                 }
             }
-            usleep(260000);
+            // Pricing calls are much more restricted than Listings search.
+            // Pace batches instead of relying on burst capacity.
+            usleep(2100000);
         }
     }
 
