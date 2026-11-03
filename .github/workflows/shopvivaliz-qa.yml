@@ -283,6 +283,10 @@ jobs:
         run: |
           php tests/official-site-reference-http-policy-test.php
           php scripts/quality/validate-official-site-reference.php
+      - name: Origem aposentada nao ganha novas referencias
+        run: |
+          python3 -m unittest tests.test_retired_origin_host_guard
+          python3 scripts/quality/validate-retired-origin-host.py
       - name: Politica premium de otimizacao por marketplace
         run: php tests/catalog-optimization-policy-test.php
       - name: Workflow inteligente do Admin de otimizacao
