@@ -44,3 +44,10 @@ site, banco, workers e todos os dados. Nao reutilizar a VM encerrada.
 Somente shopvivaliz-human emite APPROVED no HEAD final. Integracao pelo fluxo
 formal vigente, sem bypass ou aprovacao pelo agente. Apos concessao valida,
 nao repetir o pedido para o mesmo escopo. Grants #3514 e #3521 permanecem intactos.
+
+## Decisao do owner (2026-11-03): padrao de nome para restart
+- Escopo ampliado: `systemctl restart` em qualquer unit `shopvivaliz-*.service` na `marina-a1-4c24g`, sem novo PR por servico.
+- Continuam proibidos: start, stop, enable, disable, edicao de unit, shell generico, comando arbitrario, rede, banco, pagamento e permissao.
+- Exige lease, fencing, ticket de uso unico, auditoria e reconciliacao, sem repetir restart indeterminado.
+- Enforcement pendente: a concessao vigente (`security/owner-approvals/3560.json`) ainda lista `allowed_units` explicitas. O verificador `scripts/validate-owner-pr-grant.py` e o broker precisam aceitar o padrao em PR proprio, revisado pelo owner, antes de valer na pratica.
+
