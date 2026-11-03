@@ -160,7 +160,6 @@ jobs:
         env:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
-          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
         run: bash scripts/repository-governance-validate.sh ci "$MERGE_GROUP_BASE_SHA"
       - name: Validate isolated impact with mandatory security guardrails
         if: steps.impact.outputs.mode == 'scoped'
