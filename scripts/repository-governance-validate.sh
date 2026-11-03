@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 root="$(git rev-parse --show-toplevel)"; cd "$root"
 phase="${1:-manual}"
+# Queue base SHA reaches only the lint phase as a plain shell variable. It is not
+# exported, so unit tests run by this script never inherit it.
+merge_group_lint_base_sha="${2:-}"
 
 if [ "$phase" = "absolute-audit" ]; then
   exec bash scripts/absolute-audit-governance-validate.sh ci
@@ -27,14 +30,11 @@ python3 scripts/check-agent-docs-enforcement.py
 python3 -m unittest tests.test_agent_docs_gate tests.test_agent_operations_docs_scope -v
 bash tests/chatgpt-account-diagnostic-contract-test.sh
 if python3 -c 'import fcntl' >/dev/null 2>&1; then
-  python3 -m unittest tests.test_task_continuity_enforcement -v
-  python3 -m unittest tests.test_task_continuation_watchdog -v
-  python3 -m unittest tests.test_task_resume_dispatcher -v
-  python3 -m unittest tests.test_task_resume_queue -v
-  python3 -m unittest tests.test_global_task_continuity_v8 -v
-  python3 -m unittest tests.test_checkpoint_first_zero_window -v
-  python3 -m unittest tests.test_chatgpt_continuity_nudge_dispatcher -v
-  python3 -m unittest tests.test_chatgpt_continuity_backend_runtime -v
+  # One interpreter start for the whole continuity suite; any failing module still fails the step.
+  python3 -m unittest tests.test_task_continuity_enforcement tests.test_task_continuation_watchdog \
+    tests.test_task_resume_dispatcher tests.test_task_resume_queue tests.test_global_task_continuity_v8 \
+    tests.test_checkpoint_first_zero_window tests.test_chatgpt_continuity_nudge_dispatcher \
+    tests.test_chatgpt_continuity_backend_runtime -v
 else
   echo 'SKIP POSIX_CONTINUITY_UNIT_SUITE=fcntl_unavailable; required in Linux CI'
 fi
@@ -50,17 +50,13 @@ if [ "$(uname -s)" = "Linux" ]; then
 else
   echo "SKIP POSIX_BACKGROUND_GEMINI_TEST=$(uname -s); required in Linux CI"
 fi
-python3 -m unittest tests.test_ci_feedback_optimization -v
-python3 -m unittest tests.test_pr_gate_scope -v
-python3 -m unittest tests.test_pr_gate_replay -v
+python3 -m unittest tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_pr_gate_replay -v
 if [ "$(uname -s)" = "Linux" ]; then
   python3 -m unittest tests.test_pr_owner_review_recovery tests.test_pr_owner_recovery_workflow tests.test_ci_php_lint_scope -v
 else
   echo "SKIP POSIX_OWNER_RECOVERY_TEST=$(uname -s); required in Linux CI"
 fi
-python3 -m unittest tests.test_workflow_latency_budget -v
-python3 -m unittest tests.unit.test_runtime_deploy_reconciliation -v
-python3 -m unittest tests.test_ci_performance_monitor -v
+python3 -m unittest tests.test_workflow_latency_budget tests.unit.test_runtime_deploy_reconciliation tests.test_ci_performance_monitor -v
 python3 tests/test_ci_performance_monitor_workflow.py
 python3 tests/shopvivaliz-mail-legacy-provider-guard-test.py
 php tests/cloudflare-email-titan-finalize-test.php
@@ -112,6 +108,12 @@ case "$phase" in
   ci)
     if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" || "${GITHUB_EVENT_NAME:-}" == "pull_request_review" ]] && [ -n "${GITHUB_BASE_REF:-}" ]; then
       base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+      git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
+      lint_php_list "$tmp_php_list"
+    elif [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ] && [ -n "${merge_group_lint_base_sha:-}" ]; then
+      # The queue candidate differs from main only by the PR change set; untouched
+      # PHP was already linted on main. Without a base SHA this falls through to full.
+      base_ref="$(git merge-base HEAD "$merge_group_lint_base_sha")"
       git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
       lint_php_list "$tmp_php_list"
     elif [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ -n "${PUSH_BEFORE_SHA:-}" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then

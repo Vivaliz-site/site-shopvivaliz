@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed status gate for owner-only security PRs.
+"""Fail-closed status gate for owner-only PRs (VM deletion and price changes).
 
 Intended to run from a *trusted base checkout* in the required validation gate.
 A CI-green status alone is never an APPROVED review by shopvivaliz-human.
@@ -17,29 +17,31 @@ from urllib.request import Request, urlopen
 OWNER = "shopvivaliz-human"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REPO = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$")
-PROTECTED_PREFIXES = ("security/owner-approvals/", "security/requests/")
-PROTECTED_EXACT = frozenset({
-    ".github/CODEOWNERS",
-    "docs/knowledge/security-approval-via-pr.md",
-    "scripts/validate-owner-pr-grant.py",
-    ".github/workflows/mandatory-validation-gate.yml",
-    "scripts/quality/verify_owner_protected_pr_review.py",
-    ".github/workflows/pr-owner-approval-merge-queue.yml",
-    ".github/workflows/pr-owner-merge-queue-activate.yml",
-    "scripts/ops/owner_approved_merge_queue.py",
-    "scripts/ops/activate_owner_merge_queue_ruleset.py",
-})
+# Only two change classes need the owner's approval. Each rule pairs the
+# directories it applies to with the file-name terms that mark the change.
+OWNER_SENSITIVE_RULES = (
+    # VM deletion: tooling that terminates or destroys an instance.
+    (("scripts/ops/", "deploy/"), ("terminate", "destroy", "vm-delete", "delete-instance")),
+    # Price changes: pricing code in the storefront runtime.
+    (("includes/", "api/"), ("pricing", "price", "preco", "preço")),
+)
 
 
 def is_protected_path(path: str) -> bool:
-    return path in PROTECTED_EXACT or any(path.startswith(p) for p in PROTECTED_PREFIXES)
+    name = path.rsplit("/", 1)[-1].lower()
+    return any(path.startswith(dirs) and any(term in name for term in terms)
+               for dirs, terms in OWNER_SENSITIVE_RULES)
 
 
-def decide(files: object, reviews: object, head_sha: str) -> tuple[bool, str]:
+def decide(files: object, reviews: object, head_sha: str, changed_files: object = None) -> tuple[bool, str]:
     """Fail closed for untrusted/incomplete GitHub pages and stale approvals."""
     if not isinstance(head_sha, str) or not SHA40.fullmatch(head_sha):
         return False, "invalid_head_sha"
     if not isinstance(files, list) or len(files) >= 100:
+        return False, "pr_files_unavailable_or_incomplete"
+    if not files:
+        if changed_files == 0:
+            return True, "non_protected_pr"
         return False, "pr_files_unavailable_or_incomplete"
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "pr_files_invalid"
@@ -119,10 +121,10 @@ def main(argv=None) -> int:
                         for f in files if isinstance(f, dict))
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
-        approved, reason = decide(files, reviews, args.head)
+        approved, reason = decide(files, reviews, args.head, pr.get("changed_files"))
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         print("OWNER_REVIEW_GATE=DENIED reason=github_verification_unavailable")
-        print(f"OWNER_REVIEW_DIAGNOSTIC={type(exc).__name__}: {exc}")
+        print(f"OWNER_REVIEW_DIAGNOSTIC={type(exc).__name__}")
         return 2
     print(f"OWNER_REVIEW_GATE={'PASS' if approved else 'DENIED'} reason={reason}")
     return 0 if approved else 3

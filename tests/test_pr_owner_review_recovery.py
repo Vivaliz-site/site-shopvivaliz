@@ -14,7 +14,7 @@ HEAD = 'a' * 40
 PR = {'number': 3560, 'state': 'open', 'draft': False,
       'head': {'sha': HEAD, 'ref': 'security/example', 'repo': {'full_name': REPO}},
       'base': {'ref': 'main'}, 'labels': [{'name': 'no-auto-merge'}]}
-FILES = [{'filename': 'security/owner-approvals/3560.json'}]
+FILES = [{'filename': 'includes/pricing-sync-3560.php'}]
 REVIEWS = [{'user': {'login': 'shopvivaliz-human'}, 'state': 'APPROVED',
             'commit_id': HEAD, 'submitted_at': '2026-11-02T23:19:13Z'}]
 RUN = {'id': 100, 'run_attempt': 1, 'name': 'Mandatory Validation Gate',
