@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MarginMath.php';
+require_once __DIR__ . '/RateLimitPolicy.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -37,14 +38,14 @@ final class SvAmazonMarginCollector
         // Exponential, bounded backoff for the SP-API per-operation token bucket.
         // A few fast retries are not sufficient when a shared seller/application
         // exhausted an operation quota during a complete catalog scan.
-        $delays = [5, 12, 25, 45, 80];
+        $delays = SvAmazonMarginRateLimitPolicy::delays();
         foreach ($delays as $attempt => $seconds) {
             try {
                 $r = $this->amazon->request($method, $path, $query);
                 if ($r['status'] !== 200) throw new RuntimeException('amazon_http_unexpected');
                 return $r['data'];
             } catch (SvMarketplaceException $e) {
-                if (!in_array($e->httpStatus, [429, 503], true)) throw $e;
+                if (!SvAmazonMarginRateLimitPolicy::retryable($e->httpStatus)) throw $e;
                 sleep($seconds);
             }
         }
