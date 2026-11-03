@@ -1,0 +1,209 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../includes/admin-guard.php';
+if (empty($_SESSION['sv_margin_csrf_token'])) {
+    $_SESSION['sv_margin_csrf_token']=bin2hex(random_bytes(32));
+}
+$csrf=(string)$_SESSION['sv_margin_csrf_token'];
+?>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Auditoria de Margens Amazon — ShopVivaliz</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+:root{--a:#17365d;--b:#0d9488;--muted:#64748b;--line:#dce4ed;--bg:#f5f7fb}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:#16263b}
+header{background:var(--a);color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+header a{color:#fff;font-weight:700}
+main{max-width:1460px;margin:auto;padding:22px}
+h1{margin:0;font-size:1.35rem}h2{margin:0;font-size:1.05rem}
+small,.muted{color:var(--muted)}.small{font-size:.85rem}
+.card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:18px;margin-bottom:18px}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.metric strong{display:block;font-size:1.75rem;margin-top:6px}.metric span{font-size:.82rem;color:var(--muted)}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+input[type=search],input[type=number],select{font:inherit;border:1px solid #cbd5e1;border-radius:7px;padding:10px;background:white;color:#152b43}
+input[type=search]{min-width:240px;flex:2}
+select{min-width:140px}
+button{padding:10px 13px;border-radius:8px;border:1px solid #bac8d8;background:white;color:#17365d;cursor:pointer;font-weight:650}
+button.primary{background:var(--a);color:white;border-color:var(--a)}
+button.teal{background:var(--b);color:white;border-color:var(--b)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:hover:not(:disabled){filter:brightness(.96)}
+.table-scroller{overflow:auto;margin-top:13px}
+table{border-collapse:collapse;width:100%;font-size:.88rem;min-width:1120px}
+thead{background:#f0f4f9}
+th,td{padding:11px 9px;text-align:left;border-bottom:1px solid #e7edf4;white-space:nowrap}
+th{font-weight:700;color:#44546b;font-size:.76rem;text-transform:uppercase;letter-spacing:.025em}
+td strong{display:block}td code{font-size:.83rem;color:#284965}
+.right{text-align:right}.positive{color:#13794f;font-weight:750}.danger{color:#bd3429;font-weight:750}.warning{color:#ab6a11;font-weight:750}
+.pill{display:inline-block;font-size:.75rem;padding:3px 7px;border-radius:6px;background:#e9eff6;color:#345}
+.alert{border-left:4px solid #b45309;background:#fff7ed;padding:13px 16px;margin-bottom:15px;border-radius:8px}
+.note{font-size:.84rem;line-height:1.5;color:#475569}
+#feedback{min-height:1.4em;color:#17365d;font-weight:650}
+#simulator[hidden]{display:none}
+#simulator .controls{margin-top:12px}
+@media(max-width:920px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}main{padding:12px}.card{padding:12px}}
+@media(max-width:550px){.cards{grid-template-columns:1fr 1fr}header{padding:12px}input[type=search]{min-width:100%;width:100%}button{flex:1}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Auditoria de Margens Amazon</h1><div class="small">ShopVivaliz · Olist/Tiny + SP-API</div></div>
+  <a href="/admin/">Voltar ao Admin</a>
+</header>
+<main>
+  <div class="alert">Primeira fase: <strong>auditoria e relatórios somente leitura</strong>. Alterações de preço serão liberadas apenas após validação da sincronização individual Amazon/ERP e do impacto no site.</div>
+  <div class="cards">
+    <div class="card metric"><span>Anúncios auditados</span><strong id="n-total">—</strong></div>
+    <div class="card metric"><span>Abaixo de 10%</span><strong class="danger" id="n-risk">—</strong></div>
+    <div class="card metric"><span>Margem confirmada ≥10%</span><strong class="positive" id="n-good">—</strong></div>
+    <div class="card metric"><span>Pendentes / sem confirmação</span><strong class="warning" id="n-pending">—</strong></div>
+  </div>
+  <section class="card">
+    <div class="controls" style="justify-content:space-between">
+      <div><h2>Seleção e atualização</h2><span class="muted small" id="last-run">Carregando auditoria…</span></div>
+      <div class="controls">
+        <button type="button" class="primary" id="run-selected" disabled>Auditar selecionados</button>
+        <button type="button" class="teal" id="run-all">Auditar todos</button>
+      </div>
+    </div>
+    <p class="note">Os pedidos entram na fila. O coletor autorizado da VM executa a consulta real às APIs e registra as evidências. Clique em Atualizar para acompanhar.</p>
+    <div class="controls">
+      <button type="button" id="reload">Atualizar dados</button>
+      <button type="button" id="pdf" disabled>Exportar PDF</button>
+      <button type="button" id="xlsx" disabled>Exportar Excel</button>
+      <span id="selected-count" class="muted small">Nenhum selecionado (exportação incluirá todos)</span>
+    </div>
+    <div id="feedback" role="status" aria-live="polite"></div>
+  </section>
+  <section class="card">
+    <h2>Anúncios Amazon</h2>
+    <div class="controls" style="margin-top:12px">
+      <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
+      <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
+      <select id="status"><option value="">Todos os resultados</option><option value="low">Abaixo de 10%</option><option value="healthy">≥ 10%</option><option value="pending">Pendente</option></select>
+      <button type="button" id="select-visible">Selecionar visíveis</button>
+      <button type="button" id="clear-selected">Limpar seleção</button>
+    </div>
+    <div class="table-scroller">
+      <table>
+        <thead><tr><th><input id="select-page" type="checkbox" aria-label="Selecionar página"></th><th>SKU Amazon</th><th>Produto ERP</th><th>Modalidade</th><th class="right">Preço</th><th class="right">Custo</th><th class="right">Vendas</th><th class="right">Margem</th><th>Situação</th><th>Ações</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="10">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="controls" style="margin-top:12px"><span id="count" class="muted small"></span><button id="more" type="button" hidden>Mostrar mais</button></div>
+  </section>
+  <section class="card" id="simulator" hidden>
+    <h2>Simulação de preço</h2>
+    <p class="note">Esta prévia não modifica ERP nem Amazon. Recalcula os impostos usando a taxa configurada, mas mantém as demais tarifas absolutas da última amostra. Pode mudar a comissão e a faixa logística; o resultado <strong>não é margem confirmada</strong>.</p>
+    <div class="controls"><strong id="sim-name"></strong><label for="sim-price">Novo preço (R$)</label><input type="number" id="sim-price" step="0.01" min="0.01"><button id="sim-calc" type="button">Simular</button><button type="button" id="sim-close">Fechar</button></div>
+    <p id="sim-result" role="status"></p>
+  </section>
+  <section class="card">
+    <h2>Histórico das solicitações</h2>
+    <div class="table-scroller"><table style="min-width:520px"><thead><tr><th>ID</th><th>Escopo</th><th>Situação</th><th>Solicitada em</th><th>Concluída em</th></tr></thead><tbody id="requests"><tr><td colspan="5">—</td></tr></tbody></table></div>
+  </section>
+</main>
+<script>
+'use strict';
+const CSRF=<?php echo json_encode($csrf,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_THROW_ON_ERROR); ?>;
+const API='/api/admin/amazon-margin.php';
+const el=id=>document.getElementById(id);
+const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let data=[], selected=new Set(), displayed=[], shown=75, taxBps=1400, currentSim=null;
+const price=v=>v===null||v===undefined?'—':'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
+function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'DBA':'UNKNOWN');}
+function state(r){if(r.margin_min_bps===null||r.margin_min_bps===undefined)return 'pending';return r.margin_min_bps<1000?'low':'healthy';}
+function refreshSelection(){el('selected-count').textContent=selected.size+' anúncio(s) selecionado(s)'+(selected.size===0?' (exportação incluirá todos)':'');el('run-selected').disabled=selected.size===0||selected.size>1000;}
+function filtered(){const q=el('search').value.trim().toLowerCase(),p=el('program').value,s=el('status').value;
+ return data.filter(r=>(!q||[r.seller_sku,r.erp_sku,r.asin,r.title].some(x=>String(x??'').toLowerCase().includes(q)))&&(!p||program(r)===p)&&(!s||state(r)===s));}
+function render(){
+ displayed=filtered();const subset=displayed.slice(0,shown);
+ el('rows').innerHTML=subset.map(r=>{
+   const sku=String(r.seller_sku||'');const chosen=selected.has(sku);const st=state(r);
+   return '<tr><td><input type="checkbox" class="row-check" data-sku="'+escapeHtml(sku)+'" '+(chosen?'checked':'')+' aria-label="Selecionar '+escapeHtml(sku)+'"></td>'
+    +'<td><strong><code>'+escapeHtml(sku)+'</code></strong><span class="small muted">'+escapeHtml((r.title||'').slice(0,48))+'</span></td>'
+    +'<td>'+escapeHtml(r.erp_sku||'—')+'<br><span class="small muted">'+escapeHtml(r.asin||'—')+'</span></td>'
+    +'<td>'+escapeHtml(program(r)==='FBA_ONSITE'?'FBA Onsite':program(r))+'</td>'
+    +'<td class="right">'+price(r.price)+'</td><td class="right">'+price(r.last_cost)+'</td>'
+    +'<td class="right">'+Number(r.confirmed_sales||0)+'</td><td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+margin(r.margin_weighted_bps)+'</td>'
+    +'<td><span class="pill">'+escapeHtml(r.status)+'</span></td>'
+    +'<td><button type="button" data-sim="'+escapeHtml(sku)+'">Simular</button></td></tr>';
+ }).join('')||'<tr><td colspan="10">Nenhum anúncio neste filtro.</td></tr>';
+ el('count').textContent=displayed.length+' anúncio(s) encontrados, '+subset.length+' exibidos';
+ el('more').hidden=shown>=displayed.length;
+ el('select-page').checked=subset.length>0&&subset.every(r=>selected.has(r.seller_sku));
+ refreshSelection();
+}
+function showError(e){el('feedback').textContent=String(e.message||e).slice(0,200);}
+async function load(){
+ el('feedback').textContent='Consultando última auditoria…';
+ try{
+ const res=await fetch(API+'?action=latest',{credentials:'same-origin',cache:'no-store'});
+ const json=await res.json();
+ if(!res.ok||!json.ok)throw Error(json.error||'Falha na consulta');
+ data=json.latest?.snapshot?.rows||[];taxBps=Number(json.latest?.snapshot?.tax_bps||1400);
+ const good=data.filter(r=>state(r)==='healthy').length,low=data.filter(r=>state(r)==='low').length;
+ el('n-total').textContent=data.length;el('n-risk').textContent=low;
+ el('n-good').textContent=good;el('n-pending').textContent=data.length-good-low;
+ el('last-run').textContent=json.latest?'Execução #'+json.latest.run_id+' · '+json.latest.generated_at+' · '+json.latest.scope:'Nenhuma auditoria persistida';
+ el('pdf').disabled=el('xlsx').disabled=data.length===0;
+ el('requests').innerHTML=(json.requests||[]).map(j=>'<tr><td>'+Number(j.id)+'</td><td>'+escapeHtml(j.scope)+'</td><td>'+escapeHtml(j.state)+'</td><td>'+escapeHtml(j.created_at)+'</td><td>'+escapeHtml(j.finished_at||'—')+'</td></tr>').join('')||'<tr><td colspan="5">Nenhuma solicitação.</td></tr>';
+ selected=new Set([...selected].filter(s=>data.some(r=>r.seller_sku===s)));
+ render();el('feedback').textContent='Dados atualizados.';
+ }catch(e){showError(e);el('rows').innerHTML='<tr><td colspan="10">Auditoria inicial ainda não disponível. A fila depende do serviço coletor.</td></tr>';}
+}
+async function requestRun(scope){
+ if(scope==='selected'&&(!selected.size||selected.size>1000))return;
+ el('feedback').textContent='Registrando solicitação…';
+ try{
+ const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},credentials:'same-origin',body:JSON.stringify({action:'request',scope,skus:scope==='selected'?[...selected]:[]})});
+ const json=await res.json();if(!res.ok||!json.ok)throw Error(json.error||'Falha');
+ el('feedback').textContent='Solicitação #'+json.request_id+' registrada. Execute o worker autorizado ou aguarde sua rotina de processamento.';
+ await load();
+ }catch(e){showError(e);}
+}
+async function download(format){
+ el('feedback').textContent='Gerando '+format.toUpperCase()+'…';
+ try{
+  const res=await fetch(API,{method:'POST',credentials:'same-origin',
+   headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
+   body:JSON.stringify({action:'export',format,skus:[...selected]})});
+  if(!res.ok){const j=await res.json().catch(()=>({error:'Falha na exportação'}));throw Error(j.error||'Falha');}
+  const blob=await res.blob();
+  const href=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=href;a.download='shopvivaliz-margens-amazon.'+format;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(href),1200);
+  el('feedback').textContent='Relatório gerado.';
+ }catch(e){showError(e);}
+}
+el('run-selected').onclick=()=>requestRun('selected');el('run-all').onclick=()=>requestRun('all');
+el('pdf').onclick=()=>download('pdf');el('xlsx').onclick=()=>download('xlsx');
+el('reload').onclick=load;
+el('search').oninput=()=>{shown=75;render();};
+el('program').onchange=el('status').onchange=()=>{shown=75;render();};
+el('select-visible').onclick=()=>{displayed.forEach(r=>selected.add(r.seller_sku));render();};
+el('clear-selected').onclick=()=>{selected.clear();render();};
+el('select-page').onchange=e=>{displayed.slice(0,shown).forEach(r=>e.target.checked?selected.add(r.seller_sku):selected.delete(r.seller_sku));render();};
+el('more').onclick=()=>{shown+=75;render();};
+el('rows').addEventListener('change',e=>{const s=e.target.getAttribute('data-sku');if(!s)return;e.target.checked?selected.add(s):selected.delete(s);refreshSelection();});
+el('rows').addEventListener('click',e=>{const button=e.target.closest('[data-sim]');if(!button)return;currentSim=data.find(r=>r.seller_sku===button.dataset.sim);if(!currentSim)return;el('sim-name').textContent=currentSim.seller_sku;el('sim-price').value=currentSim.price||'';el('sim-result').textContent='';el('simulator').hidden=false;el('simulator').scrollIntoView({behavior:'smooth'});});
+el('sim-close').onclick=()=>{el('simulator').hidden=true;currentSim=null;};
+el('sim-calc').onclick=()=>{if(!currentSim)return;const next=Number(el('sim-price').value),old=Number(currentSim.price),oldMargin=currentSim.margin_weighted_bps;if(!Number.isFinite(next)||next<=0||!old||oldMargin===null||oldMargin===undefined){el('sim-result').textContent='Preço inválido ou margem histórica indisponível.';return;}
+ const approximateProfit=old*oldMargin/10000+(next-old)*(1-taxBps/10000);
+ const estimate=100*approximateProfit/next;
+ el('sim-result').textContent='Margem hipotética: '+estimate.toFixed(2).replace('.',',')+'% · Lucro hipotético: '+price(approximateProfit)+' por unidade. NÃO publicar a partir desta simulação; comissão e tarifas precisam ser recalculadas.';
+};
+load();
+</script>
+</body>
+</html>

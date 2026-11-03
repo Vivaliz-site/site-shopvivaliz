@@ -1,0 +1,202 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Self-contained, dependency-free PDF/XLSX export of an authenticated audit.
+ * No caller-supplied formula is emitted to spreadsheets.
+ */
+final class SvAmazonMarginExport
+{
+    /** @return array<string,string|int|float|null> */
+    private static function values(array $row): array
+    {
+        $margin = $row['margin_weighted_bps'] ?? null;
+        return [
+            'SKU Amazon'=>(string)($row['seller_sku'] ?? ''),
+            'Produto ERP'=>(string)($row['erp_sku'] ?? ''),
+            'ASIN'=>(string)($row['asin'] ?? ''),
+            'Canal'=>(string)($row['program'] ?? $row['fulfillment_channel'] ?? ''),
+            'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
+            'Custo ERP (R$)'=>self::num($row['last_cost'] ?? null),
+            'Unidades confirmadas'=>(int)($row['confirmed_units'] ?? 0),
+            'Vendas pendentes'=>(int)($row['pending_sales'] ?? 0),
+            'Margem ponderada (%)'=>$margin===null ? null : round($margin/100, 2),
+            'Margem minima (%)'=>isset($row['margin_min_bps']) ? round($row['margin_min_bps']/100,2) : null,
+            'Lucro confirmado (R$)'=>isset($row['profit_cents']) ? round(((int)$row['profit_cents'])/100,2) : null,
+            'Data ultimo custo'=>(string)($row['last_cost_date'] ?? ''),
+            'Situacao'=>(string)($row['status'] ?? 'unverified'),
+        ];
+    }
+
+    private static function num(mixed $value): ?float
+    {
+        return is_numeric($value) ? (float)$value : null;
+    }
+
+    /** @return list<array<string,string|int|float|null>> */
+    public static function rows(array $snapshot, array $skus = []): array
+    {
+        $selected = array_fill_keys($skus, true);
+        $result = [];
+        foreach ($snapshot['rows'] ?? [] as $row) {
+            if (!is_array($row)) continue;
+            if ($selected && !isset($selected[$row['seller_sku'] ?? ''])) continue;
+            $result[] = self::values($row);
+        }
+        return $result;
+    }
+
+    /** @param list<array<string,string|int|float|null>> $data */
+    public static function xlsx(array $data): string
+    {
+        if (!class_exists(ZipArchive::class)) throw new RuntimeException('zip_extension_missing');
+        $head = array_keys($data[0] ?? self::values([]));
+        $all = [array_combine($head, $head)];
+        array_push($all, ...$data);
+        $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            . '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+            . '<sheetFormatPr defaultRowHeight="17"/><cols>';
+        foreach ($head as $i=>$title) {
+            $width = max(15,min(32,strlen($title)+4));
+            $xml .= '<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
+        }
+        $xml .= '</cols><sheetData>';
+        foreach ($all as $idx=>$row) {
+            $r=$idx+1;
+            $xml .= '<row r="'.$r.'">';
+            $i=0;
+            foreach ($row as $val) {
+                $i++;
+                $ref=self::column($i).$r;
+                $style=$r===1?'1':(is_numeric($val)&&$val!==null?'2':'0');
+                if (is_int($val)||is_float($val)) {
+                    $xml .= '<c r="'.$ref.'" s="'.$style.'"><v>'.(string)$val.'</v></c>';
+                } else {
+                    $string=htmlspecialchars((string)($val??''),ENT_XML1|ENT_QUOTES,'UTF-8');
+                    $xml .= '<c r="'.$ref.'" s="'.$style.'" t="inlineStr"><is><t xml:space="preserve">'.$string.'</t></is></c>';
+                }
+            }
+            $xml .= '</row>';
+        }
+        $last=self::column(count($head)).count($all);
+        $xml .= '</sheetData><autoFilter ref="A1:'.$last.'"/></worksheet>';
+
+        $tmp=tempnam(sys_get_temp_dir(),'sv-margin-xlsx-');
+        if ($tmp===false) throw new RuntimeException('xlsx_tmp_failed');
+        $zip=new ZipArchive();
+        try {
+            if ($zip->open($tmp,ZipArchive::OVERWRITE)!==true) throw new RuntimeException('xlsx_zip_open_failed');
+            $entries=[
+                '[Content_Types].xml'=>'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                    .'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                    .'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                    .'<Default Extension="xml" ContentType="application/xml"/>'
+                    .'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                    .'<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+                    .'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
+                '_rels/.rels'=>'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                    .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+                    .'</Relationships>',
+                'xl/workbook.xml'=>'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                    .'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+                    .'<sheets><sheet name="Auditoria Amazon" sheetId="1" r:id="rId1"/></sheets></workbook>',
+                'xl/_rels/workbook.xml.rels'=>'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                    .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                    .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+                    .'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+                    .'</Relationships>',
+                'xl/styles.xml'=>'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                    .'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                    .'<fonts count="2"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>'
+                    .'<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF17365D"/><bgColor indexed="64"/></patternFill></fill></fills>'
+                    .'<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+                    .'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+                    .'<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" applyFill="1" applyFont="1"/><xf numFmtId="2" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/></cellXfs>'
+                    .'</styleSheet>',
+                'xl/worksheets/sheet1.xml'=>$xml,
+            ];
+            foreach($entries as $path=>$body)$zip->addFromString($path,$body);
+            $zip->close();
+            $bin=file_get_contents($tmp);
+            if ($bin===false) throw new RuntimeException('xlsx_read_failed');
+            return $bin;
+        } finally {
+            if (is_file($tmp)) unlink($tmp);
+        }
+    }
+
+    private static function column(int $index): string
+    {
+        $r='';
+        do {$index--; $r=chr(65+($index%26)).$r;$index=intdiv($index,26);}
+        while($index>0);
+        return $r;
+    }
+
+    /** @param list<array<string,string|int|float|null>> $data */
+    public static function pdf(array $data, string $date): string
+    {
+        $groups = array_chunk($data,23);
+        if (!$groups) $groups=[[]];
+        $fontId=3;
+        $objects=[];
+        $objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+        $pageIds=[];
+        for($i=0;$i<count($groups);$i++)$pageIds[]=(4+2*$i).' 0 R';
+        $objects[2]='<< /Type /Pages /Kids ['.implode(' ',$pageIds).'] /Count '.count($groups).' >>';
+        $objects[3]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+
+        foreach($groups as $index=>$group){
+            $content = self::pdfText(27,553,17,'SHOPVIVALIZ  |  AUDITORIA DE MARGENS AMAZON');
+            $content .= self::pdfText(27,532,10,'Data da auditoria: '.$date.'    Anuncios exportados: '.count($data));
+            $content .= self::pdfText(27,510,9,'SKU Amazon');
+            $content .= self::pdfText(191,510,9,'ERP');
+            $content .= self::pdfText(275,510,9,'Canal');
+            $content .= self::pdfText(389,510,9,'Preco');
+            $content .= self::pdfText(448,510,9,'Custo');
+            $content .= self::pdfText(509,510,9,'Margem');
+            $content .= self::pdfText(568,510,9,'Vendas');
+            $content .= self::pdfText(627,510,9,'Situacao');
+            $content .= "0.72 w 27 504 m 813 504 l S\n";
+            foreach($group as $i=>$row){
+                $y=487-$i*19;
+                $get=static fn(string $k):string => (string)($row[$k]??'-');
+                $content .= self::pdfText(27,$y,8,mb_strimwidth($get('SKU Amazon'),0,28,'...'));
+                $content .= self::pdfText(191,$y,8,mb_strimwidth($get('Produto ERP'),0,15,'...'));
+                $content .= self::pdfText(275,$y,8,mb_strimwidth($get('Canal'),0,17,'...'));
+                $content .= self::pdfText(389,$y,8,$get('Preco Amazon (R$)'));
+                $content .= self::pdfText(448,$y,8,$get('Custo ERP (R$)'));
+                $content .= self::pdfText(509,$y,8,$get('Margem ponderada (%)'));
+                $content .= self::pdfText(568,$y,8,$get('Unidades confirmadas'));
+                $content .= self::pdfText(627,$y,8,mb_strimwidth($get('Situacao'),0,28,'...'));
+                if($i%2===1)$content.="0.86 w 27 ".($y-7)." m 813 ".($y-7)." l S\n";
+            }
+            $content .= self::pdfText(27,24,8,'FBA Onsite e DBA: tarifas separadas. Margens ausentes nao sao confirmadas.');
+            $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
+            $pg=4+2*$index;$ct=$pg+1;
+            $objects[$pg]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 '.$fontId.' 0 R >> >> /Contents '.$ct.' 0 R >>';
+            $objects[$ct]='<< /Length '.strlen($content)." >>\nstream\n".$content."endstream";
+        }
+        $pdf="%PDF-1.4\n%ShopVivaliz\n";$offsets=[0];
+        ksort($objects);
+        foreach($objects as $id=>$dataObject){
+            $offsets[$id]=strlen($pdf);
+            $pdf.=$id." 0 obj\n".$dataObject."\nendobj\n";
+        }
+        $start=strlen($pdf);$count=count($objects)+1;
+        $pdf.="xref\n0 ".$count."\n0000000000 65535 f \n";
+        for($i=1;$i<$count;$i++)$pdf.=sprintf('%010d 00000 n ', $offsets[$i])."\n";
+        $pdf.="trailer\n<< /Size ".$count." /Root 1 0 R >>\nstartxref\n".$start."\n%%EOF\n";
+        return $pdf;
+    }
+
+    private static function pdfText(int $x,int $y,int $size,string $message):string
+    {
+        $latin=iconv('UTF-8','Windows-1252//TRANSLIT', $message);
+        if ($latin===false)$latin='';
+        $escaped=str_replace(['\\','(',')'],['\\\\','\\(','\\)'],$latin);
+        return 'BT /F1 '.$size.' Tf '.$x.' '.$y.' Td ('.$escaped.") Tj ET\n";
+    }
+}
