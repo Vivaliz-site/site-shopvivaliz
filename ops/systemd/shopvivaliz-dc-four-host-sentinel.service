@@ -1,5 +1,5 @@
 [Unit]
-Description=ShopVivaliz Desktop Commander four-host sentinel
+Description=ShopVivaliz Desktop Commander three-host sentinel (legacy unit name)
 After=network-online.target shopvivaliz-desktop-commander.service
 Wants=network-online.target
 
