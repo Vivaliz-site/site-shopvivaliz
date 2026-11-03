@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import os
 from pathlib import Path
+import sys
 import unittest
 from unittest import mock
 
@@ -75,6 +79,60 @@ class UnitPatternAuthorizationTests(unittest.TestCase):
         with mock.patch.object(grant_module, "github_json", side_effect=responses):
             self.assertEqual(grant_module.github_unit_change_pr(
                 "Vivaliz-site/site-shopvivaliz", UNIT, "token"), (None, None))
+
+
+
+class UnitCliTests(unittest.TestCase):
+    REPO = "Vivaliz-site/site-shopvivaliz"
+
+    def run_cli(self, argv, env, lookup=None):
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", ["validate-owner-pr-grant.py"] + argv), \
+                mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(grant_module, "github_unit_change_pr", side_effect=lookup), \
+                contextlib.redirect_stdout(out):
+            try:
+                code = grant_module.main()
+            except SystemExit as exc:
+                code = exc.code
+        return code, out.getvalue()
+
+    def owner_env(self):
+        return {"SHOPVIVALIZ_SECURITY_OWNER_LOGIN": "shopvivaliz-human", "GITHUB_TOKEN": "token"}
+
+    def test_authorized_unit_prints_authorized_and_exits_zero(self):
+        code, out = self.run_cli(["--repository", self.REPO, "--unit", UNIT], self.owner_env(),
+                                 lookup=lambda *a: (merged_pr(), [review()]))
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "UNIT_PATTERN=AUTHORIZED reason=unit_change_approved_by_human")
+
+    def test_unapproved_unit_prints_denied_and_exits_one(self):
+        code, out = self.run_cli(["--repository", self.REPO, "--unit", UNIT], self.owner_env(),
+                                 lookup=lambda *a: (merged_pr(), []))
+        self.assertEqual(code, 1)
+        self.assertIn("UNIT_PATTERN=DENIED reason=unit_change_not_approved_by_human", out)
+
+    def test_missing_token_or_non_owner_is_denied_before_lookup(self):
+        env = {"SHOPVIVALIZ_SECURITY_OWNER_LOGIN": "shopvivaliz-human"}
+        code, out = self.run_cli(["--repository", self.REPO, "--unit", UNIT], env,
+                                 lookup=AssertionError("must not look up"))
+        self.assertEqual(code, 1)
+        self.assertIn("missing_trusted_configuration", out)
+        env = {"SHOPVIVALIZ_SECURITY_OWNER_LOGIN": "some-other-user", "GITHUB_TOKEN": "token"}
+        code, out = self.run_cli(["--repository", self.REPO, "--unit", UNIT], env,
+                                 lookup=AssertionError("must not look up"))
+        self.assertEqual(code, 1)
+        self.assertIn("configured_owner_not_authorized", out)
+
+    def test_lookup_error_fails_closed(self):
+        code, out = self.run_cli(["--repository", self.REPO, "--unit", UNIT], self.owner_env(),
+                                 lookup=OSError("network"))
+        self.assertEqual(code, 1)
+        self.assertIn("unit_change_lookup_failed", out)
+
+    def test_grant_mode_still_requires_its_arguments(self):
+        code, _ = self.run_cli(["--repository", self.REPO], self.owner_env())
+        self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":
