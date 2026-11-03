@@ -48,6 +48,7 @@ class MarinaAdminGateTests(unittest.TestCase):
         self.key = self.tmp / "key"
         self.pinned = self.tmp / "known_hosts"
         self.grant = self.tmp / "grant.json"
+        self.admin_grant = self.tmp / "admin-grant.json"
         for p in (self.key, self.pinned):
             p.write_text("x")
             p.chmod(0o600)
@@ -55,6 +56,7 @@ class MarinaAdminGateTests(unittest.TestCase):
             mock.patch.object(server, "MARINA_SSH_KEY", self.key),
             mock.patch.object(server, "MARINA_PINNED_HOSTS", self.pinned),
             mock.patch.object(server, "MARINA_CENTRAL_OWNER_ATTESTATION", self.grant),
+            mock.patch.object(server, "MARINA_CENTRAL_ADMIN_OWNER_ATTESTATION", self.admin_grant),
         ]
         for patch in self.patches:
             patch.start()
@@ -68,7 +70,7 @@ class MarinaAdminGateTests(unittest.TestCase):
     def test_admin_denied_without_flag(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED", None)
-            _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY])
+            _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY])
             with self.assertRaises(PermissionError):
                 server.marina_admin_ssh_invocation("echo hi")
 
@@ -76,19 +78,32 @@ class MarinaAdminGateTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             server.marina_admin_ssh_invocation("echo hi")
 
+    def test_admin_grant_never_authorizes_readonly_route(self) -> None:
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY])
+        self.assertFalse(server.marina_central_readonly_grant_active())
+        self.assertTrue(server.marina_central_admin_grant_active())
+
+    def test_enabling_admin_does_not_touch_readonly_attestation(self) -> None:
+        _write_grant(self.grant, ["marina_readonly"])
+        before = self.grant.read_text()
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY])
+        self.assertEqual(self.grant.read_text(), before)
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": "approved-v1"}):
+            self.assertTrue(server.marina_central_readonly_grant_active())
+
     def test_readonly_grant_never_authorizes_admin(self) -> None:
         _write_grant(self.grant, ["marina_readonly"])
         with self.assertRaises(PermissionError):
             server.marina_admin_ssh_invocation("echo hi")
 
     def test_admin_grant_does_not_authorize_readonly_allowlist(self) -> None:
-        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY])
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY])
         with mock.patch.dict(os.environ, {"SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED": "approved-v1"}):
             with self.assertRaises(PermissionError):
                 server.marina_readonly_ssh_invocation(server.health_command("linux"))
 
     def test_admin_granted_builds_hardened_argv(self) -> None:
-        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY])
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY])
         argv = server.marina_admin_ssh_invocation("echo hi")
         self.assertEqual(argv[:4], ["/usr/sbin/runuser", "-u", "ubuntu", "--"])
         self.assertIn("StrictHostKeyChecking=yes", argv)
@@ -97,23 +112,23 @@ class MarinaAdminGateTests(unittest.TestCase):
         self.assertEqual(argv[-1], "sh -c 'echo hi'")
 
     def test_empty_and_oversized_commands_rejected(self) -> None:
-        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY])
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY])
         for bad in ("", "   ", "x" * (server.MAX_MARINA_ADMIN_COMMAND_BYTES + 1)):
             with self.assertRaises(ValueError):
                 server.marina_admin_ssh_invocation(bad)
 
     def test_key_with_group_or_world_access_rejected(self) -> None:
-        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY])
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY])
         self.key.chmod(0o640)
         with self.assertRaises(PermissionError):
             server.marina_admin_ssh_invocation("echo hi")
 
     def test_either_owner_account_may_merge_admin_grant(self) -> None:
-        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY], merger="fredmourao-ai")
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY], merger="fredmourao-ai")
         self.assertTrue(server.marina_central_admin_grant_active())
 
     def test_unknown_merger_cannot_authorize_admin_grant(self) -> None:
-        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY], merger="some-agent-account")
+        _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY], merger="some-agent-account")
         self.assertFalse(server.marina_central_admin_grant_active())
 
     def test_marina_durable_jobs_stay_disabled(self) -> None:
