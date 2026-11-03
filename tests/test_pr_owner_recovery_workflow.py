@@ -93,5 +93,61 @@ class RecoveryWorkflowTests(unittest.TestCase):
         self.assertEqual(state['writes'], [])
 
 
+class NativeQueueHandoffTests(unittest.TestCase):
+    """Exercise the exact trusted workflow guard, never fabricate a merge."""
+    def run_guard(self, payload, api_failure=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'rules.json').write_text(json.dumps(payload))
+            gh = root / 'gh'
+            gh.write_text('#!/bin/sh\n'
+                          'test "$1" = api || exit 80\n'
+                          'test "$2" = repos/Vivaliz-site/site-shopvivaliz/rules/branches/main || exit 81\n'
+                          'test "$RULES_FAIL" = 0 || exit 82\n'
+                          'cat "$RULES_FILE"\n')
+            gh.chmod(0o755)
+            text = (ROOT / '.github/workflows/pr-completion-enforcer.yml').read_text()
+            start = '            # BEGIN NATIVE QUEUE HANDOFF\n'
+            end = '            # END NATIVE QUEUE HANDOFF\n'
+            # Before the fix the finalizer falls through into the direct merge.
+            block = text.split(start, 1)[1].split(end, 1)[0] if start in text else ''
+            block = textwrap.dedent(block)
+            code = ('set -Eeuo pipefail\nwaiting_count=0\nmerged_count=0\n'
+                    'for pr in 3563; do\n' + block +
+                    '\necho would_attempt_direct_merge=true\n'
+                    'done\necho waiting_count=$waiting_count\necho merged_count=$merged_count\n')
+            env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'],
+                       RULES_FILE=str(root / 'rules.json'), RULES_FAIL='1' if api_failure else '0',
+                       REPO=REPO)
+            return subprocess.run(['bash', '-c', code], env=env, text=True,
+                                  capture_output=True, timeout=10)
+
+    def test_native_queue_is_waiting_not_direct_merge_or_false_merged(self):
+        result = self.run_guard([{'type': 'pull_request'}, {'type': 'merge_queue'}])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('pr_3563_native_queue_handoff=true', result.stdout)
+        self.assertIn('waiting_count=1', result.stdout)
+        self.assertIn('merged_count=0', result.stdout)
+        self.assertNotIn('would_attempt_direct_merge', result.stdout)
+
+    def test_nonqueue_repository_retains_existing_merge_route(self):
+        result = self.run_guard([{'type': 'pull_request'}])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('would_attempt_direct_merge=true', result.stdout)
+        self.assertIn('waiting_count=0', result.stdout)
+
+    def test_rules_api_failure_never_falls_through_to_merge(self):
+        result = self.run_guard([], api_failure=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('would_attempt_direct_merge', result.stdout)
+
+    def test_missing_or_malformed_rules_never_fall_through_to_merge(self):
+        for payload in [None, {}, [None], ['merge_queue'], [{'type': None}]]:
+            with self.subTest(payload=payload):
+                result = self.run_guard(payload)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn('would_attempt_direct_merge', result.stdout)
+
+
 if __name__ == '__main__':
     unittest.main()
