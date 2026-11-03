@@ -39,7 +39,6 @@ PROTECTED_FILES = {
     "scripts/ops/activate_owner_merge_queue_ruleset.py",
     # Marina administrative route: its grant, attestation and activator decide
     # who may run privileged commands, so they need the exact owner approval.
-    "remote-control-mcp/server.py",
     "remote-control-mcp/test_marina_admin_gate.py",
     "scripts/ops/activate-mcp-central-marina-readonly.py",
 }
