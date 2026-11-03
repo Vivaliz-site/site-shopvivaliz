@@ -169,10 +169,11 @@ Não declarar verde por evidência apenas estrutural. Produção funcional exige
 
 ### Amazon Returns / SAFE-T
 
-- Reembolso proativo FBA até 50 dias.
-- Após o prazo, recorrer via SAFE-T conforme elegibilidade.
-- Encerramento real somente após crédito reconciliado (`CREDIT_CONFIRMED`).
-- D+75 e auditoria de 100% dos casos elegíveis.
+- **Regra operacional prevalente SHOPVIVALIZ D+45:** a primeira checagem e tentativa de abertura de SAFE-T ocorre em **D+45**, contado de `refund_at` (reembolso ao comprador). **D+60 não é checkpoint interno**. Auditar individualmente os casos de D+45 a D+89; casos com mais de 90 dias não devem gerar nova abertura, preservando histórico e protocolos existentes.
+- D+45 **não garante elegibilidade externa** nem autoriza escrita automaticamente: confirmar na Amazon/Seller Central a janela e o programa aplicáveis. Em caso de bloqueio oficial, preservar resposta e data indicada, sem insistir por outra via.
+- Antes da abertura, comprovar reembolso iniciado pela Amazon (origem `UNKNOWN` exige prova), zero `WAREHOUSE PHYSICAL_RECEIVED`, débito financeiro ainda não recuperado, inexistência de SAFE-T ou suporte equivalente e ausência de submissão duplicada. Outbox `PENDING` não demonstra ID de reivindicação aceito; exigir readback externo e idempotência.
+- O acionamento externo requer principal/lease/fencing/grant efetivamente autorizados, kill switch com restauração segura, perfil restrito a `SAFE_T_SUBMIT` e canary exata dos casos aprovados; nunca habilitar os demais canais por simplesmente desligar o kill switch global.
+- Encerramento real somente após crédito comprovado e reconciliado independentemente (`CREDIT_CONFIRMED`). Auditoria de 100% dos casos elegíveis, sem confundir saldo nominal com recuperação.
 - Arquitetura alvo multi-tenant com credenciais e workers isolados por seller.
 
 ### Mercado Livre Returns
