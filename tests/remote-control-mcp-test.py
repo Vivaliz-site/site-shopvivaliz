@@ -175,7 +175,7 @@ class RemoteControlMcpTests(unittest.TestCase):
                 ("controller_host", "shopvivaliz-free-a1"),
                 ("principal", "root"),
                 ("reviewer", "fredmourao-ai"),
-                ("merged_by", "fredmourao-ai"),
+                ("merged_by", "some-agent-account"),
                 ("head_sha", "bad"),
                 ("pr_number", True),
             ):
