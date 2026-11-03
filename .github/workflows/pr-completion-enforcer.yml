@@ -435,6 +435,24 @@ jobs:
             else
               echo "pr_${pr}_repair_label_absent=true"
             fi
+            # BEGIN NATIVE QUEUE HANDOFF
+            # The native queue controller owns integration when this rule is
+            # active. A queued PR is waiting, not failed and not yet merged.
+            if ! native_rules="$(gh api "repos/${REPO}/rules/branches/main")"; then
+              echo "pr_${pr}_native_queue_rules_unavailable=fail_closed"
+              exit 1
+            fi
+            if ! jq -e 'type == "array" and all(.[]; type == "object" and (.type | type) == "string")' <<<"$native_rules" >/dev/null; then
+              echo "pr_${pr}_native_queue_rules_invalid=fail_closed"
+              exit 1
+            fi
+            if jq -e 'any(.[]; .type == "merge_queue")' <<<"$native_rules" >/dev/null; then
+              echo "pr_${pr}_native_queue_handoff=true"
+              waiting_count=$((waiting_count + 1))
+              continue
+            fi
+            # END NATIVE QUEUE HANDOFF
+
             bash trusted/scripts/merge_green_pr_via_vm.sh "${pr}" "${head_sha}"
             merged_count=$((merged_count + 1))
             echo "pr_${pr}_merged_via_oracle=true"
@@ -472,6 +490,7 @@ jobs:
           echo 'historical_failed_run_blocks_newer_success=false'
           echo 'draft_internal_pr_silently_ignored=false'
           echo 'green_pr_without_current_main_merge_allowed=false'
+          echo 'native_queue_pr_counted_as_merged=false'
           echo 'fork_pr_auto_merge_allowed=false'
           echo 'github_write_token_copied_to_actions=false'
           echo 'secret_values_printed=false'

@@ -53,7 +53,7 @@ nao e uma promessa de tempo fixo: fila, testes e runner tambem influenciam.
 
 ## Validacao e limites
 
-28 testes locais: seletor de lint com historicos Git reais; negativos de
+32 testes locais: seletor de lint com historicos Git reais; negativos de
 revisao, SHA, hold, app, motivo de falha e corrida; idempotencia; e execucao
 do shell real do finalizador com somente a API GitHub substituida por
 respostas locais. Regressao RED comprovada antes da implementacao, seguida
@@ -64,3 +64,18 @@ Sem novo daemon, credenciais, root, DNS, grants, revisores obrigatorios
 universais, merge direto de P2 ou alteracao de branch aprovada.
 Rollback: reverter esta PR tecnica; o fluxo anterior de fila e os controles
 de aprovacao permanecem intactos.
+
+## Concorrencia com a fila nativa
+
+O run do finalizador `41549622144` confirmou um segundo defeito real:
+a PR #3563 ja estava na fila nativa, com checks verdes, mas o finalizador
+legado tentou PUT de merge direto e recebeu HTTP 405. Isso nao e falha
+do codigo aprovado nem justificativa para mudar a branch.
+
+Depois dos gates verdes e da releitura do HEAD, o finalizador agora le
+as regras efetivas da main. Quando merge_queue esta ativo, entrega a
+integracao ao controlador nativo existente e contabiliza espera, nunca
+merge concluido. Nao tenta PUT de merge, nao cancela a fila e nao muda
+regras. Falha de API ou resposta de regras invalida continua explicita.
+Os quatro testes novos executam o bloco shell real e verificam fila,
+rota sem fila, erro de API e metadados invalidos.
