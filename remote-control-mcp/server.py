@@ -120,6 +120,8 @@ MARINA_PRIVATE_ADDRESS = "100.118.170.46"
 MARINA_SSH_KEY = Path("/home/ubuntu/.ssh/oci-marina-a1-2026")
 MARINA_PINNED_HOSTS = Path("/home/ubuntu/.ssh/known_hosts_marina_verified")
 MARINA_CENTRAL_OWNER_ATTESTATION = STATE_DIR / "marina-central-owner-grant.json"
+MARINA_ADMIN_CAPABILITY = "marina_admin_command"
+MAX_MARINA_ADMIN_COMMAND_BYTES = 8192
 MARINA_READONLY_SERVICES = frozenset({
     "shopvivaliz-marina-mcp.service",
     "shopvivaliz-marina-mcp-tunnel.service",
@@ -132,7 +134,7 @@ MARINA_READONLY_SERVICES = frozenset({
 HOSTS[MARINA_HOST] = {
     "platform": "linux", "transport": "private_ssh_read_only",
     "role": "production web/deploy/database/workers",
-    "service_user_owner": "ubuntu", "capability": "read_only_pending_owner_grant",
+    "service_user_owner": "ubuntu", "capability": "owner_grant_required",
 }
 
 # Terminally retired source. Never advertised, routed, queued or bootstrapped.
@@ -1360,13 +1362,23 @@ def marina_readonly_service_command(service: str) -> str:
 
 
 def marina_central_readonly_grant_active() -> bool:
+    return marina_central_grant_active("marina_readonly", "SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED")
+
+
+def marina_central_admin_grant_active() -> bool:
+    return marina_central_grant_active(MARINA_ADMIN_CAPABILITY, "SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED")
+
+
+def marina_central_grant_active(capability: str, enable_env: str) -> bool:
     """A flag alone must never authorize the Marina route.
 
     The protected attestation is minted only by an official operator after
     checking the separately merged human grant with the GitHub verifier.
-    It is rechecked for permissions, scope and expiry on every read.
+    It is rechecked for permissions, scope and expiry on every read. The
+    attestation grants exactly one capability, so a read-only grant can
+    never satisfy the administrative route.
     """
-    if os.environ.get("SHOPVIVALIZ_MARINA_CENTRAL_READONLY_ENABLED") != "approved-v1":
+    if os.environ.get(enable_env) != "approved-v1":
         return False
     try:
         fd = os.open(MARINA_CENTRAL_OWNER_ATTESTATION,
@@ -1392,7 +1404,7 @@ def marina_central_readonly_grant_active() -> bool:
             or grant.get("principal") != "shopvivaliz-central-mcp"
             or grant.get("host") != MARINA_HOST
             or grant.get("controller_host") != CONTROLLER_BACKEND_HOST
-            or grant.get("capabilities") != ["marina_readonly"]
+            or grant.get("capabilities") != [capability]
             or grant.get("reviewer") != "shopvivaliz-human"
             or grant.get("merged_by") != "shopvivaliz-human"
             or not isinstance(grant.get("head_sha"), str)
@@ -1410,16 +1422,7 @@ def marina_central_readonly_grant_active() -> bool:
     return deadline.tzinfo is not None and datetime.now(timezone.utc) < deadline
 
 
-def marina_readonly_ssh_invocation(command: str) -> list[str]:
-    # This flag must be set by the officially authorized host administrator
-    # after a distinct human-only security PR review; default denies transport.
-    if not marina_central_readonly_grant_active():
-        raise PermissionError("marina_central_route_not_approved")
-    allowed = {health_command("linux")} | {
-        marina_readonly_service_command(svc) for svc in MARINA_READONLY_SERVICES
-    }
-    if not isinstance(command, str) or command not in allowed:
-        raise ValueError("marina_central_command_not_allowlisted")
+def marina_ssh_argv(command: str) -> list[str]:
     for path in (MARINA_SSH_KEY, MARINA_PINNED_HOSTS):
         if path.is_symlink() or not path.is_file() or (path.stat().st_mode & 0o022):
             raise PermissionError("marina_central_pinned_identity_not_ready")
@@ -1439,6 +1442,31 @@ def marina_readonly_ssh_invocation(command: str) -> list[str]:
         f"ubuntu@{MARINA_PRIVATE_ADDRESS}",
         "sh -c " + shlex.quote(command),
     ]
+
+
+def marina_readonly_ssh_invocation(command: str) -> list[str]:
+    # This flag must be set by the officially authorized host administrator
+    # after a distinct human-only security PR review; default denies transport.
+    if not marina_central_readonly_grant_active():
+        raise PermissionError("marina_central_route_not_approved")
+    allowed = {health_command("linux")} | {
+        marina_readonly_service_command(svc) for svc in MARINA_READONLY_SERVICES
+    }
+    if not isinstance(command, str) or command not in allowed:
+        raise ValueError("marina_central_command_not_allowlisted")
+    return marina_ssh_argv(command)
+
+
+def marina_admin_ssh_invocation(command: str) -> list[str]:
+    # Owner-grant gated, inline-only administrative command as ubuntu, never a
+    # root shell. Caveat for reviewers: ubuntu holds passwordless sudo, so the
+    # command text can still escalate. Durable jobs stay off (quota 0).
+    if not marina_central_admin_grant_active():
+        raise PermissionError("marina_central_admin_route_not_approved")
+    if (not isinstance(command, str) or not command.strip()
+            or len(command.encode()) > MAX_MARINA_ADMIN_COMMAND_BYTES):
+        raise ValueError("marina_admin_command_invalid")
+    return marina_ssh_argv(command)
 
 
 def remote_invocation(host: str, command: str) -> list[str]:
@@ -1610,7 +1638,10 @@ def run_host_command(
     cancel_check: Callable[[], bool] | None = None,
     *,
     recover_transport: bool = True,
+    marina_admin: bool = False,
 ) -> dict[str, Any]:
+    if marina_admin and host != MARINA_HOST:
+        raise ValueError("marina_admin_host_mismatch")
     timeout = validate_timeout(timeout)
     started = time.monotonic()
     deadline = started + timeout
@@ -1618,7 +1649,9 @@ def run_host_command(
         raise RuntimeError("controller_busy_retry_or_use_task_submit")
 
     def run_once() -> dict[str, Any]:
-        invocation = isolated_invocation(remote_invocation(host, command))
+        invocation = isolated_invocation(
+            marina_admin_ssh_invocation(command) if marina_admin else remote_invocation(host, command)
+        )
         proc = None
         try:
             proc = subprocess.Popen(
@@ -2822,7 +2855,9 @@ def execute_tool(
         if not command.strip():
             raise ValueError("command_required")
         validate_admin_command_policy(str(host), command)
-        result = run_host_command(str(host), command, timeout, cancel_check)
+        result = run_host_command(
+            str(host), command, timeout, cancel_check, marina_admin=(host == MARINA_HOST),
+        )
     else:
         raise ValueError("unknown_tool")
     result["ok"] = result["exit_code"] == 0
