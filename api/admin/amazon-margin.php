@@ -40,11 +40,25 @@ try {
             sv_margin_api_json(403,['ok'=>false,'error'=>'csrf_denied']);
         }
         $raw=file_get_contents('php://input');
-        if (!is_string($raw)||strlen($raw)>15000) sv_margin_api_json(413,['ok'=>false,'error'=>'payload_too_large']);
+        if (!is_string($raw)||strlen($raw)>100000) sv_margin_api_json(413,['ok'=>false,'error'=>'payload_too_large']);
         $body=json_decode($raw,true,512,JSON_THROW_ON_ERROR);
-        if (!is_array($body)||($body['action']??'')!=='request') {
-            sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_action']);
+        if (!is_array($body)) sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_action']);
+        if (($body['action']??'')==='export') {
+            $latest=SvAmazonMarginStore::latest($db);
+            if (!$latest)sv_margin_api_json(404,['ok'=>false,'error'=>'no_audit_snapshot']);
+            $format=(string)($body['format']??'');
+            if (!in_array($format,['pdf','xlsx'],true))sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_format']);
+            $skus=sv_margin_api_selected($body['skus']??[]);
+            $rows=SvAmazonMarginExport::rows($latest['snapshot'],$skus);
+            if (!$rows)sv_margin_api_json(404,['ok'=>false,'error'=>'no_matching_rows']);
+            $date=substr((string)$latest['generated_at'],0,10);
+            $bytes=$format==='pdf' ? SvAmazonMarginExport::pdf($rows,$date) : SvAmazonMarginExport::xlsx($rows);
+            header('Content-Type: '.($format==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+            header('Content-Disposition: attachment; filename="shopvivaliz-margens-amazon-'.$date.'.'.$format.'"');
+            header('Content-Length: '.strlen($bytes));
+            echo $bytes;exit;
         }
+        if (($body['action']??'')!=='request')sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_action']);
         $scope=(string)($body['scope']??'');
         $skus=sv_margin_api_selected($body['skus']??[]);
         $id=SvAmazonMarginStore::request($db,$scope,$skus);
