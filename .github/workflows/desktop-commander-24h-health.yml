@@ -175,7 +175,6 @@ jobs:
           import json
           import os
           import pathlib
-          import shlex
           import subprocess
           import time
 
@@ -390,7 +389,7 @@ jobs:
               win_probe('LAPTOP-NIG4IFUU', 5557, 'fredwin-desktop-commander-status.ps1', 'fredwin-desktop-commander-supervisor.ps1', 'fredwin-remote-bootstrap.ps1', expected_logon='interactive'),
               win_probe('DESKTOP-KOCEPSV', 5558, 'desktopkocepsv-desktop-commander-status.ps1', 'desktopkocepsv-desktop-commander-supervisor.ps1', 'desktopkocepsv-remote-bootstrap.ps1', expected_logon='s4u'),
               vm_probe('shopvivaliz-a1-backend'),
-           ]
+          ]
           now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
           run_id = os.environ.get('RUN_ID', 'unknown')
           lines = [
