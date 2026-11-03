@@ -10,6 +10,22 @@ if [ "$phase" = "absolute-audit" ]; then
   exec bash scripts/absolute-audit-governance-validate.sh ci
 fi
 
+# ChatGPT continuity and browser suites are expensive (~70s of Node and
+# unittest runtime). On pull_request they run only when the diff touches their
+# paths. Push to main and merge_group always run them, so main and the merge
+# queue keep full coverage. Any doubt, including an uncomputable diff, runs them.
+continuity_suites_needed() {
+  case "${GITHUB_EVENT_NAME:-}" in
+    pull_request|pull_request_review) ;;
+    *) return 0 ;;
+  esac
+  [ -n "${GITHUB_BASE_REF:-}" ] || return 0
+  local base_ref changed
+  base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF" 2>/dev/null)" || return 0
+  changed="$(git diff --name-only "$base_ref"..HEAD 2>/dev/null)" || return 0
+  printf '%s\n' "$changed" | grep -Eq '^(scripts/chatgpt-continuity/|scripts/install-chatgpt-continuity|scripts/validate-task-continuity|scripts/agent_task_state\.py|scripts/repository-governance-validate\.sh|tests/chatgpt-|tests/test_chatgpt_|tests/test_task_|tests/test_global_task_continuity|tests/test_checkpoint_first|tests/test_executor_fallback_order|remote-control-browser-mcp/|scripts/(chatgpt|agent-bridge|continuity))'
+}
+
 
 # Prevent blanket GitHub human review requests before expensive CI.
 python3 scripts/check_pr_review_routing.py
@@ -29,7 +45,9 @@ python3 scripts/validate-task-continuity-enforcement.py
 python3 scripts/check-agent-docs-enforcement.py
 python3 -m unittest tests.test_agent_docs_gate tests.test_agent_operations_docs_scope -v
 bash tests/chatgpt-account-diagnostic-contract-test.sh
-if python3 -c 'import fcntl' >/dev/null 2>&1; then
+if ! continuity_suites_needed; then
+  echo 'SKIP CHATGPT_CONTINUITY_SUITES=no_related_paths_changed_on_pull_request'
+elif python3 -c 'import fcntl' >/dev/null 2>&1; then
   # One interpreter start for the whole continuity suite; any failing module still fails the step.
   python3 -m unittest tests.test_task_continuity_enforcement tests.test_task_continuation_watchdog \
     tests.test_task_resume_dispatcher tests.test_task_resume_queue tests.test_global_task_continuity_v8 \
@@ -38,7 +56,9 @@ if python3 -c 'import fcntl' >/dev/null 2>&1; then
 else
   echo 'SKIP POSIX_CONTINUITY_UNIT_SUITE=fcntl_unavailable; required in Linux CI'
 fi
-if [ "$(uname -s)" = "Linux" ]; then
+if ! continuity_suites_needed; then
+  echo 'SKIP POSIX_BRIDGE_WORKER_TEST=no_related_paths_changed_on_pull_request'
+elif [ "$(uname -s)" = "Linux" ]; then
   node tests/chatgpt-continuity-bridge-worker-test.mjs
 else
   echo "SKIP POSIX_BRIDGE_WORKER_TEST=$(uname -s); required in Linux CI"
