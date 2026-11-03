@@ -25,14 +25,31 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
         for path in ("apps/shopvivaliz-web-agent/src/browser.mjs", "docs/ops/notes.md"):
             self.assertEqual(self.decide([path]), (True, "non_protected_pr"))
 
-    def test_security_and_gate_files_no_longer_require_human(self):
-        for path in ("security/owner-approvals/3539.json",
-                     "security/requests/web-agent-owner-grant-corrective-20261102.md",
-                     ".github/CODEOWNERS",
-                     ".github/workflows/mandatory-validation-gate.yml",
-                     "scripts/quality/verify_owner_protected_pr_review.py"):
+    def test_security_grants_and_gate_self_changes_require_human(self):
+        protected = (
+            "security/owner-approvals/3539.json",
+            "security/requests/web-agent-owner-grant-corrective-20261102.md",
+            ".github/CODEOWNERS",
+            "docs/knowledge/security-approval-via-pr.md",
+            "scripts/validate-owner-pr-grant.py",
+            ".github/workflows/mandatory-validation-gate.yml",
+            "scripts/quality/verify_owner_protected_pr_review.py",
+            ".github/workflows/pr-owner-approval-merge-queue.yml",
+            ".github/workflows/pr-owner-merge-queue-activate.yml",
+            "scripts/ops/owner_approved_merge_queue.py",
+            "scripts/ops/activate_owner_merge_queue_ruleset.py",
+        )
+        for path in protected:
             with self.subTest(path=path):
-                self.assertEqual(self.decide([path]), (True, "non_protected_pr"))
+                self.assertEqual(self.decide([path]), (False, "owner_approval_missing"))
+                self.assertEqual(
+                    self.decide([path], [review(commit=OTHER)]),
+                    (False, "approval_not_bound_to_current_head"),
+                )
+                self.assertEqual(
+                    self.decide([path], [review()]),
+                    (True, "owner_review_approved_exact_head"),
+                )
 
     def test_vm_deletion_and_price_changes_require_human(self):
         for path in ("scripts/ops/terminate-oci-instance.sh",
