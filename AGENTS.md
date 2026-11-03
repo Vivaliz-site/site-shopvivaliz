@@ -65,6 +65,14 @@ A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso 
 <!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
 > O MCP ShopVivaliz **central** tambem deve alcancar `marina-a1-4c24g`, alem do MCP proprio da Marina, que deve permanecer independente do backend/RDC. Paridade com RDC exige capacidades por host e operacao comprovadas por E2E, sem shell/root universal. Rota central read-only em PR nao equivale a runtime conectado; nunca ativar sem grant oficial, lease e autorizacao. Fonte: `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
 <!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
+<!-- MARINA_BROKER_SERVICE_RESTART_PATTERN_20261103 -->
+> **Decisao do owner (2026-11-03): restart de servicos Marina por padrao de nome.** Na `marina-a1-4c24g`, o broker administrativo root pode **reiniciar** (`systemctl restart`) qualquer unit cujo nome case com `shopvivaliz-*.service`, sem novo PR por servico. Vale somente para restart. Nao autoriza start, stop, enable, disable, edicao de unit, criacao de arquivo, shell generico, comando arbitrario, mudanca de rede, banco, pagamento ou permissao. Toda execucao exige lease de manutencao, fencing emitido pelo host, ticket de uso unico, auditoria persistente e reconciliacao do resultado, sem repetir restart indeterminado. Units fora do padrao continuam exigindo concessao explicita por PR. **Atencao:** esta regra so vale como enforcement quando o verificador de concessao (`scripts/validate-owner-pr-grant.py`) e o broker aceitarem o padrao; ate la, a execucao usa apenas `allowed_units` explicitas da concessao vigente (`security/owner-approvals/3560.json`). Nao presumir cobertura de um servico novo sem confirmar no codigo. Fonte: `docs/ops/marina-root-broker-activation-2026-11-02.md`.
+### Instrucao para agente que cria servico novo na Marina
+1. Crie a unit em `deploy/systemd/shopvivaliz-<nome>.service` por PR. Nao instale, edite nem crie unit diretamente na VM (SSH, RDC ou shell), nem para teste.
+2. A unit so passa a valer para restart quando a PR que a introduziu ou alterou for mergeada com aprovacao final de `shopvivaliz-human` no head exato. A aprovacao humana na PR e a unica condicao; nao ha PR separada por servico.
+3. O nome com o prefixo nao autoriza nada por si so. O verificador (`scripts/validate-owner-pr-grant.py`, funcao `unit_pattern_authorized`) confere a PR e a aprovacao antes de aceitar o restart.
+4. Sem aprovacao humana na PR, a unit nao esta coberta. Pare e abra a PR.
+<!-- /MARINA_BROKER_SERVICE_RESTART_PATTERN_20261103 -->
 
 <!-- MANDATORY_AGENT_CHECKLIST_V1 -->
 ## Checklist transacional obrigatorio: todos os agentes e todas as IAs

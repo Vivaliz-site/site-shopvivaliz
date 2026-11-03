@@ -1,0 +1,12 @@
+[Unit]
+Description=Process ShopVivaliz Amazon margin requests every 3 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=3min
+RandomizedDelaySec=10s
+Persistent=true
+Unit=shopvivaliz-amazon-margin-audit.service
+
+[Install]
+WantedBy=timers.target

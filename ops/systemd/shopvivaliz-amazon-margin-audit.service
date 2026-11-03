@@ -1,0 +1,19 @@
+[Unit]
+Description=ShopVivaliz Amazon margin audit read-only queued worker
+After=network-online.target mysql.service
+Wants=network-online.target
+ConditionPathExists=/home/ubuntu/shopvivaliz-deploy/current/scripts/amazon-margin/run.php
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+Environment=SHOPVIVALIZ_SHARED_DIR=/home/ubuntu/shopvivaliz-deploy/shared
+ExecStart=/usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/scripts/amazon-margin/run.php --next
+TimeoutStartSec=3600
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared
+UMask=0077
