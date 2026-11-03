@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 root="$(git rev-parse --show-toplevel)"; cd "$root"
 phase="${1:-manual}"
+# Queue base SHA reaches only the lint phase as a plain shell variable. It is not
+# exported, so unit tests run by this script never inherit it.
+merge_group_lint_base_sha="${2:-}"
 
 if [ "$phase" = "absolute-audit" ]; then
   exec bash scripts/absolute-audit-governance-validate.sh ci
@@ -107,10 +110,10 @@ case "$phase" in
       base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
       git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
       lint_php_list "$tmp_php_list"
-    elif [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ] && [ -n "${MERGE_GROUP_BASE_SHA:-}" ]; then
+    elif [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ] && [ -n "${merge_group_lint_base_sha:-}" ]; then
       # The queue candidate differs from main only by the PR change set; untouched
       # PHP was already linted on main. Without a base SHA this falls through to full.
-      base_ref="$(git merge-base HEAD "$MERGE_GROUP_BASE_SHA")"
+      base_ref="$(git merge-base HEAD "$merge_group_lint_base_sha")"
       git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
       lint_php_list "$tmp_php_list"
     elif [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ -n "${PUSH_BEFORE_SHA:-}" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then

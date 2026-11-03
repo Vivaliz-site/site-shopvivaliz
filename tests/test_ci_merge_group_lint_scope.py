@@ -5,6 +5,7 @@ contract can be reviewed on its own.
 """
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -47,11 +48,15 @@ class MergeGroupLintScopeTests(unittest.TestCase):
         source = (ROOT / 'scripts/repository-governance-validate.sh').read_text()
         start = source.index('lint_php_list() {')
         end = source.index('\nif [ "$phase" = "ci" ]; then', start)
-        code = 'set -Eeuo pipefail\n' + source[start:end]
+        # The lint block reads the queue base from a plain shell variable, exactly as
+        # the script does when it receives it as its second argument.
+        code = ('set -Eeuo pipefail\n'
+                f'merge_group_lint_base_sha={shlex.quote(merge_base)}\n'
+                + source[start:end])
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ['PATH'],
                    LINT_LOG=str(self.root / 'lint.log'), phase='ci',
                    GITHUB_EVENT_NAME='merge_group', GITHUB_BASE_REF='',
-                   PUSH_BEFORE_SHA='', MERGE_GROUP_BASE_SHA=merge_base)
+                   PUSH_BEFORE_SHA='')
         for key in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX'):
             env.pop(key, None)
         result = subprocess.run(['bash', '-c', code], cwd=self.root, env=env,
