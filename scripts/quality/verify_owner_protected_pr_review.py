@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed status gate for owner-only PRs (VM deletion and price changes).
+"""Fail-closed owner gate for security grants, controls, VM deletion and pricing.
 
 Intended to run from a *trusted base checkout* in the required validation gate.
 A CI-green status alone is never an APPROVED review by shopvivaliz-human.
@@ -17,8 +17,21 @@ from urllib.request import Request, urlopen
 OWNER = "shopvivaliz-human"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REPO = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$")
-# Only two change classes need the owner's approval. Each rule pairs the
-# directories it applies to with the file-name terms that mark the change.
+# Security grants and the verifier itself must never self-declassify.
+PROTECTED_PREFIXES = ("security/owner-approvals/", "security/requests/")
+PROTECTED_EXACT = frozenset({
+    ".github/CODEOWNERS",
+    "docs/knowledge/security-approval-via-pr.md",
+    "scripts/validate-owner-pr-grant.py",
+    ".github/workflows/mandatory-validation-gate.yml",
+    "scripts/quality/verify_owner_protected_pr_review.py",
+    ".github/workflows/pr-owner-approval-merge-queue.yml",
+    ".github/workflows/pr-owner-merge-queue-activate.yml",
+    "scripts/ops/owner_approved_merge_queue.py",
+    "scripts/ops/activate_owner_merge_queue_ruleset.py",
+})
+# Additional conventions for VM deletion and pricing. Filename heuristics
+# never replace the explicit security grants and self-change protection.
 OWNER_SENSITIVE_RULES = (
     # VM deletion: tooling that terminates or destroys an instance.
     (("scripts/ops/", "deploy/"), ("terminate", "destroy", "vm-delete", "delete-instance")),
@@ -28,6 +41,8 @@ OWNER_SENSITIVE_RULES = (
 
 
 def is_protected_path(path: str) -> bool:
+    if path in PROTECTED_EXACT or any(path.startswith(prefix) for prefix in PROTECTED_PREFIXES):
+        return True
     name = path.rsplit("/", 1)[-1].lower()
     return any(path.startswith(dirs) and any(term in name for term in terms)
                for dirs, terms in OWNER_SENSITIVE_RULES)
