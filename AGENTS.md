@@ -67,6 +67,12 @@ A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso 
 <!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
 <!-- MARINA_BROKER_SERVICE_RESTART_PATTERN_20261103 -->
 > **Decisao do owner (2026-11-03): restart de servicos Marina por padrao de nome.** Na `marina-a1-4c24g`, o broker administrativo root pode **reiniciar** (`systemctl restart`) qualquer unit cujo nome case com `shopvivaliz-*.service`, sem novo PR por servico. Vale somente para restart. Nao autoriza start, stop, enable, disable, edicao de unit, criacao de arquivo, shell generico, comando arbitrario, mudanca de rede, banco, pagamento ou permissao. Toda execucao exige lease de manutencao, fencing emitido pelo host, ticket de uso unico, auditoria persistente e reconciliacao do resultado, sem repetir restart indeterminado. Units fora do padrao continuam exigindo concessao explicita por PR. **Atencao:** esta regra so vale como enforcement quando o verificador de concessao (`scripts/validate-owner-pr-grant.py`) e o broker aceitarem o padrao; ate la, a execucao usa apenas `allowed_units` explicitas da concessao vigente (`security/owner-approvals/3560.json`). Nao presumir cobertura de um servico novo sem confirmar no codigo. Fonte: `docs/ops/marina-root-broker-activation-2026-11-02.md`.
+### Instrucao para agente que cria servico novo na Marina
+1. Crie a unit em `deploy/systemd/shopvivaliz-<nome>.service` no repositorio, por PR revisado e mergeado. Nome com o prefixo nao basta.
+2. Adicione a unit ao manifesto de release revisado usado pelo deploy da Marina. Sem entrada no manifesto, ela nao esta coberta pelo padrao.
+3. Nunca crie, edite ou instale unit diretamente na VM por SSH, RDC ou shell. Nao crie unit com nome `shopvivaliz-*` fora do fluxo de PR, mesmo para teste.
+4. Cobertura de restart so vale para units presentes no manifesto revisado. O verificador deve comparar o nome com esse manifesto antes de aceitar o restart, e nao apenas o padrao de nome.
+5. Se a unit nao estiver no manifesto, pare e abra PR para inclui-la. Nao tente restart por outra via.
 <!-- /MARINA_BROKER_SERVICE_RESTART_PATTERN_20261103 -->
 
 <!-- MANDATORY_AGENT_CHECKLIST_V1 -->
