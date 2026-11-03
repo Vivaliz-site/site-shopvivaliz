@@ -170,7 +170,22 @@ async function requestRun(scope){
  await load();
  }catch(e){showError(e);}
 }
-function download(format){const params=new URLSearchParams({action:'export',format});if(selected.size)params.set('skus',[...selected].join(','));location.href=API+'?'+params.toString();}
+async function download(format){
+ el('feedback').textContent='Gerando '+format.toUpperCase()+'…';
+ try{
+  const res=await fetch(API,{method:'POST',credentials:'same-origin',
+   headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
+   body:JSON.stringify({action:'export',format,skus:[...selected]})});
+  if(!res.ok){const j=await res.json().catch(()=>({error:'Falha na exportação'}));throw Error(j.error||'Falha');}
+  const blob=await res.blob();
+  const href=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=href;a.download='shopvivaliz-margens-amazon.'+format;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(href),1200);
+  el('feedback').textContent='Relatório gerado.';
+ }catch(e){showError(e);}
+}
 el('run-selected').onclick=()=>requestRun('selected');el('run-all').onclick=()=>requestRun('all');
 el('pdf').onclick=()=>download('pdf');el('xlsx').onclick=()=>download('xlsx');
 el('reload').onclick=load;
