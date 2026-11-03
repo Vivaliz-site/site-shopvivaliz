@@ -126,14 +126,45 @@ class OwnerAuthorizationTests(unittest.TestCase):
         pr, grant, opts = fixture()
         self.assertEqual((True, "owner_authorization_verified"), grant_module.decide(pr, grant, **opts))
 
-    def test_configured_owner_must_be_exclusive_human_account(self):
+    def test_unknown_configured_owner_is_denied(self):
         pr, grant, opts = fixture()
-        opts["owner_login"] = "fredmourao-ai"
-        pr["merged_by"]["login"] = "fredmourao-ai"
+        opts["owner_login"] = "some-agent-account"
         self.assertEqual(
-            (False, "configured_owner_is_not_shopvivaliz_human"),
+            (False, "configured_owner_not_authorized"),
             grant_module.decide(pr, grant, **opts),
         )
+
+    def test_approval_by_fredmourao_account_does_not_count_as_human_review(self):
+        pr, grant, opts = fixture()
+        opts["reviews"] = [{"user": {"login": "fredmourao-ai"}, "state": "APPROVED", "commit_id": HEAD}]
+        self.assertEqual((False, "security_pr_not_approved_by_human"),
+                         grant_module.decide(pr, grant, **opts))
+
+    def test_owner_account_fredmourao_is_a_configured_owner(self):
+        pr, grant, opts = fixture()
+        opts["owner_login"] = "fredmourao-ai"
+        ok, reason = grant_module.decide(pr, grant, **opts)
+        self.assertNotEqual("configured_owner_not_authorized", reason)
+
+    def test_central_marina_admin_capability_scoped_exactly(self):
+        pr, grant, opts = fixture()
+        grant.update(resource="mcp:central:marina", principal="shopvivaliz-central-mcp",
+                     capabilities=["marina_admin_command"], target_repository=None,
+                     host="marina-a1-4c24g", controller_host="always-free-arm-1787907847-26")
+        opts.update(resource="mcp:central:marina", principal="shopvivaliz-central-mcp",
+                    capability="marina_admin_command", target_repository=None)
+        ok, reason = grant_module.decide(pr, grant, **opts)
+        self.assertTrue(ok, reason)
+
+    def test_central_marina_admin_capability_denied_with_readonly_grant(self):
+        pr, grant, opts = fixture()
+        grant.update(resource="mcp:central:marina", principal="shopvivaliz-central-mcp",
+                     capabilities=["marina_readonly", "marina_admin_command"], target_repository=None,
+                     host="marina-a1-4c24g", controller_host="always-free-arm-1787907847-26")
+        opts.update(resource="mcp:central:marina", principal="shopvivaliz-central-mcp",
+                    capability="marina_admin_command", target_repository=None)
+        self.assertEqual((False, "central_marina_scope_not_approved"),
+                         grant_module.decide(pr, grant, **opts))
 
     def test_human_account_must_not_author_own_security_authorization(self):
         pr, grant, opts = fixture()

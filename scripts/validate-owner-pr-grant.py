@@ -18,6 +18,13 @@ from urllib.request import Request, urlopen
 
 SCHEMA = "SHOPVIVALIZ_OWNER_PR_GRANT_V1"
 SECURITY_HUMAN_LOGIN = "shopvivaliz-human"
+# Both accounts belong to the repository owner; neither is an agent identity.
+SECURITY_OWNER_LOGINS = frozenset({SECURITY_HUMAN_LOGIN, "fredmourao-ai"})
+CENTRAL_MARINA_CAPABILITIES = frozenset({"marina_readonly", "marina_admin_command"})
+
+
+def is_security_owner(login: object) -> bool:
+    return isinstance(login, str) and login.casefold() in {x.casefold() for x in SECURITY_OWNER_LOGINS}
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 LOGIN = re.compile(r"^[A-Za-z0-9-]{1,39}$")
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -153,8 +160,8 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
             SHA40.fullmatch(merge_sha) and SHA40.fullmatch(head_sha) and
             isinstance(pr_number, int) and pr_number > 0):
         return False, "invalid_trust_parameters"
-    if owner_login.casefold() != SECURITY_HUMAN_LOGIN:
-        return False, "configured_owner_is_not_shopvivaliz_human"
+    if not is_security_owner(owner_login):
+        return False, "configured_owner_not_authorized"
     if not resource or not principal or not capability:
         return False, "missing_requested_scope"
     if not (pr.get("merged") is True and pr.get("state") == "closed" and
@@ -187,7 +194,7 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
             return False, "merge_actor_not_owner"
     author = pr.get("user")
     author_login = str(author.get("login", "")) if isinstance(author, dict) else ""
-    if not LOGIN.fullmatch(author_login) or author_login.casefold() == SECURITY_HUMAN_LOGIN:
+    if not LOGIN.fullmatch(author_login):
         return False, "security_pr_author_must_be_distinct"
     if pr.get("merge_commit_sha") != merge_sha or pr.get("head", {}).get("sha") != head_sha:
         return False, "commit_binding_mismatch"
@@ -208,6 +215,9 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
     if (latest_owner_review is None or latest_owner_review.get("state") != "APPROVED"
             or latest_owner_review.get("commit_id") != head_sha):
         return False, "security_pr_not_approved_by_human"
+    approver_login = str(latest_owner_review["user"].get("login", ""))
+    if approver_login.casefold() == author_login.casefold():
+        return False, "security_pr_author_must_be_distinct"
     base = pr.get("base")
     if not isinstance(base, dict) or base.get("ref") != "main" or base.get("repo", {}).get("full_name") != repository:
         return False, "unexpected_merge_target"
@@ -234,8 +244,8 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
     # permissions, unrelated target repositories, or an unbound operation.
     if resource == "mcp:central:marina":
         if (principal != "shopvivaliz-central-mcp" or
-                capability != "marina_readonly" or
-                caps != ["marina_readonly"] or
+                capability not in CENTRAL_MARINA_CAPABILITIES or
+                caps != [capability] or
                 operation is not None or target_repository is not None or
                 grant.get("operation") is not None or
                 grant.get("target_repository") is not None or
@@ -385,8 +395,8 @@ def main() -> int:
     if not owner or not token or not REPO.fullmatch(args.repository) or args.pr_number <= 0:
         print("OWNER_PR_GRANT=DENIED reason=missing_trusted_configuration")
         return 1
-    if owner.casefold() != SECURITY_HUMAN_LOGIN:
-        print("OWNER_PR_GRANT=DENIED reason=configured_owner_is_not_shopvivaliz_human")
+    if not is_security_owner(owner):
+        print("OWNER_PR_GRANT=DENIED reason=configured_owner_not_authorized")
         return 1
     path = "security/owner-approvals/" + str(args.pr_number) + ".json"
     repo = quote(args.repository, safe="/")
