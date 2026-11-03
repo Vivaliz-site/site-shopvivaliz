@@ -94,6 +94,15 @@ jobs:
               exit 1
             fi
             if [[ -z "$changed_list" ]]; then
+              # A PR with zero changed files has nothing to fan out to. Accept
+              # that only when the PR itself reports changed_files == 0; any
+              # other empty page is an unavailable scope and stays fail-closed.
+              changed_count="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${target_pr}" --jq '.changed_files')"
+              if [[ "$changed_count" == '0' ]]; then
+                echo 'should_run=false' >> "$GITHUB_OUTPUT"
+                echo 'pr_has_no_changed_files=true'
+                exit 0
+              fi
               echo 'should_run=false' >> "$GITHUB_OUTPUT"
               echo 'fanout_scope_unavailable=fail_closed'
               exit 1
