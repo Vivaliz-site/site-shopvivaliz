@@ -438,20 +438,44 @@ def github_queue_proof(repository: str, number: int, token: str) -> dict:
     return {"repository": repository, "number": number, "events": items["nodes"]}
 
 
+def unit_main(repository: str, unit: str, owner: str, token: str) -> int:
+    if not owner or not token or not REPO.fullmatch(repository):
+        print("UNIT_PATTERN=DENIED reason=missing_trusted_configuration")
+        return 1
+    if not is_security_owner(owner):
+        print("UNIT_PATTERN=DENIED reason=configured_owner_not_authorized")
+        return 1
+    try:
+        pr, reviews = github_unit_change_pr(repository, unit, token)
+    except (OSError, ValueError):
+        print("UNIT_PATTERN=DENIED reason=unit_change_lookup_failed")
+        return 1
+    ok, reason = unit_pattern_authorized(unit, pr, reviews)
+    print(f"UNIT_PATTERN={'AUTHORIZED' if ok else 'DENIED'} reason={reason}")
+    return 0 if ok else 1
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repository", required=True)
-    p.add_argument("--pr-number", required=True, type=int)
-    p.add_argument("--merge-sha", required=True)
-    p.add_argument("--head-sha", required=True)
-    p.add_argument("--resource", required=True)
-    p.add_argument("--principal", required=True)
-    p.add_argument("--capability", required=True)
+    p.add_argument("--unit", default=None, help="Check the Marina restart pattern for this unit instead of a grant")
+    p.add_argument("--pr-number", type=int)
+    p.add_argument("--merge-sha")
+    p.add_argument("--head-sha")
+    p.add_argument("--resource")
+    p.add_argument("--principal")
+    p.add_argument("--capability")
     p.add_argument("--operation", default=None, help="Exact privileged operation bound to this grant")
     p.add_argument("--target-repository", default=None, help="Exact project repository bound to this grant")
     args = p.parse_args()
     owner = os.environ.get("SHOPVIVALIZ_SECURITY_OWNER_LOGIN", "").strip()
     token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if args.unit is not None:
+        return unit_main(args.repository, args.unit, owner, token)
+    missing = [name for name in ("pr_number", "merge_sha", "head_sha", "resource", "principal", "capability")
+               if getattr(args, name) in (None, "")]
+    if missing:
+        p.error("the following arguments are required: " + ", ".join("--" + m.replace("_", "-") for m in missing))
     if not owner or not token or not REPO.fullmatch(args.repository) or args.pr_number <= 0:
         print("OWNER_PR_GRANT=DENIED reason=missing_trusted_configuration")
         return 1
