@@ -10,6 +10,7 @@ final class SvAmazonMarginStore
             scope VARCHAR(20) NOT NULL,
             skus_json LONGTEXT NOT NULL,
             state VARCHAR(20) NOT NULL DEFAULT 'queued',
+            attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME NULL,
             finished_at DATETIME NULL,
@@ -50,6 +51,11 @@ final class SvAmazonMarginStore
     public static function next(PDO $db): ?array
     {
         self::ensureSchema($db);
+        // Exclusive runner lock is held by the caller. Reclaim only crashed jobs.
+        $db->exec("UPDATE amazon_margin_audit_requests SET state='queued', started_at=NULL
+            WHERE state='running' AND attempts<3 AND started_at<UTC_TIMESTAMP()-INTERVAL 90 MINUTE");
+        $db->exec("UPDATE amazon_margin_audit_requests SET state='failed', finished_at=UTC_TIMESTAMP(), error_code='stale_attempt_limit'
+            WHERE state='running' AND attempts>=3 AND started_at<UTC_TIMESTAMP()-INTERVAL 90 MINUTE");
         $db->beginTransaction();
         try {
             $stmt = $db->query("SELECT id,scope,skus_json FROM amazon_margin_audit_requests
@@ -57,7 +63,7 @@ final class SvAmazonMarginStore
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) { $db->commit(); return null; }
             $upd = $db->prepare("UPDATE amazon_margin_audit_requests
-                SET state='running', started_at=UTC_TIMESTAMP() WHERE id=? AND state='queued'");
+                SET state='running', attempts=attempts+1, started_at=UTC_TIMESTAMP() WHERE id=? AND state='queued'");
             $upd->execute([$row['id']]);
             $db->commit();
             $row['skus'] = json_decode((string)$row['skus_json'], true, 512, JSON_THROW_ON_ERROR);
@@ -76,7 +82,7 @@ final class SvAmazonMarginStore
         $stmt->execute([$requestId ?: null, $scope, count($snapshot['rows'] ?? []), $payload]);
         $runId = (int)$db->lastInsertId();
         if ($requestId > 0) {
-            $upd = $db->prepare("UPDATE amazon_margin_audit_requests SET state='done', finished_at=UTC_TIMESTAMP() WHERE id=?");
+            $upd = $db->prepare("UPDATE amazon_margin_audit_requests SET state='done', error_code=NULL, finished_at=UTC_TIMESTAMP() WHERE id=?");
             $upd->execute([$requestId]);
         }
         return $runId;
@@ -86,7 +92,7 @@ final class SvAmazonMarginStore
     {
         if ($requestId <= 0) return;
         $upd = $db->prepare("UPDATE amazon_margin_audit_requests
-            SET state='failed', finished_at=UTC_TIMESTAMP(), error_code=? WHERE id=?");
+            SET state=IF(attempts<3,'queued','failed'), finished_at=UTC_TIMESTAMP(), error_code=? WHERE id=?");
         $upd->execute([substr(preg_replace('/[^a-zA-Z0-9_:-]/','_', $code) ?: 'unknown', 0, 90),$requestId]);
     }
 
@@ -101,7 +107,7 @@ final class SvAmazonMarginStore
 
     public static function requests(PDO $db): array
     {
-        return $db->query('SELECT id,scope,state,created_at,started_at,finished_at,error_code
+        return $db->query('SELECT id,scope,state,attempts,created_at,started_at,finished_at,error_code
             FROM amazon_margin_audit_requests ORDER BY id DESC LIMIT 12')->fetchAll(PDO::FETCH_ASSOC);
     }
 }
