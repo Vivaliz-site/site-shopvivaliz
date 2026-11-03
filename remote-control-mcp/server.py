@@ -120,6 +120,8 @@ MARINA_PRIVATE_ADDRESS = "100.118.170.46"
 MARINA_SSH_KEY = Path("/home/ubuntu/.ssh/oci-marina-a1-2026")
 MARINA_PINNED_HOSTS = Path("/home/ubuntu/.ssh/known_hosts_marina_verified")
 MARINA_CENTRAL_OWNER_ATTESTATION = STATE_DIR / "marina-central-owner-grant.json"
+# Separate attestation so enabling the administrative route never rewrites the read-only grant.
+MARINA_CENTRAL_ADMIN_OWNER_ATTESTATION = STATE_DIR / "marina-central-admin-owner-grant.json"
 MARINA_ADMIN_CAPABILITY = "marina_admin_command"
 OWNER_LOGINS = frozenset({"shopvivaliz-human", "fredmourao-ai"})
 MAX_MARINA_ADMIN_COMMAND_BYTES = 8192
@@ -1367,10 +1369,13 @@ def marina_central_readonly_grant_active() -> bool:
 
 
 def marina_central_admin_grant_active() -> bool:
-    return marina_central_grant_active(MARINA_ADMIN_CAPABILITY, "SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED")
+    return marina_central_grant_active(
+        MARINA_ADMIN_CAPABILITY, "SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED",
+        MARINA_CENTRAL_ADMIN_OWNER_ATTESTATION)
 
 
-def marina_central_grant_active(capability: str, enable_env: str) -> bool:
+def marina_central_grant_active(capability: str, enable_env: str,
+                                attestation: Path | None = None) -> bool:
     """A flag alone must never authorize the Marina route.
 
     The protected attestation is minted only by an official operator after
@@ -1382,7 +1387,7 @@ def marina_central_grant_active(capability: str, enable_env: str) -> bool:
     if os.environ.get(enable_env) != "approved-v1":
         return False
     try:
-        fd = os.open(MARINA_CENTRAL_OWNER_ATTESTATION,
+        fd = os.open(attestation or MARINA_CENTRAL_OWNER_ATTESTATION,
                      os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
         with os.fdopen(fd, "r", encoding="utf-8") as source:
             st = os.fstat(source.fileno())
