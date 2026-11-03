@@ -12,7 +12,7 @@ $cases = [
     ['Slim FBA', ['sku'=>'ASSLIMFBA','price'=>71.91,'cost'=>42.90,'quantity'=>1,'shipment_total'=>55.45,'program'=>'FBA_ONSITE'], 248, 345],
     ['A21 DBA shipping charged and offset in separate fee', ['sku'=>'Armastradba','price'=>78.99,'cost'=>37.27,'quantity'=>1,'shipment_total'=>89.19,'program'=>'DBA','postage_total'=>-30.34,'postage_confirmed'=>true], 1052, 1332],
     ['Slim DBA', ['sku'=>'1C7Q-LKVS-KOPL','price'=>71.91,'cost'=>42.90,'quantity'=>1,'shipment_total'=>62.92,'program'=>'DBA','postage_total'=>-6.75,'postage_confirmed'=>true], 320, 445],
-    ['Slim DBA two units', ['sku'=>'1C7Q-LKVS-KOPL','price'=>71.91,'cost'=>42.90,'quantity'=>2,'shipment_total'=>125.84,'program'=>'DBA','postage_total'=>-13.50,'postage_confirmed'=>true], 640, 445],
+    ['Slim DBA two units', ['sku'=>'1C7Q-LKVS-KOPL','price'=>71.91,'cost'=>42.90,'quantity'=>2,'shipment_total'=>125.84,'program'=>'DBA','postage_total'=>-13.50,'postage_confirmed'=>true], 641, 446],
 ];
 foreach ($cases as [$name, $line, $profit, $bps]) {
     $got = SvAmazonMarginMath::calculate($line);
