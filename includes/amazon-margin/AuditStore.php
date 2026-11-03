@@ -34,7 +34,7 @@ final class SvAmazonMarginStore
     {
         if (!in_array($scope, ['selected','all'], true)) throw new InvalidArgumentException('invalid_scope');
         $skus = array_values(array_unique(array_map('trim', $skus)));
-        if ($scope === 'selected' && (count($skus) < 1 || count($skus) > 100)) {
+        if ($scope === 'selected' && (count($skus) < 1 || count($skus) > 1000)) {
             throw new InvalidArgumentException('selected_sku_count_invalid');
         }
         if ($scope === 'all') $skus = [];
