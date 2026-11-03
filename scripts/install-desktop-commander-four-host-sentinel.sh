@@ -8,8 +8,6 @@ TIMER="$REPO/ops/systemd/shopvivaliz-dc-four-host-sentinel.timer"
 test -f "$SCRIPT"
 test -f "$SERVICE"
 test -f "$TIMER"
-test -f /home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
-test -f /home/ubuntu/.ssh/known_hosts
 
 sudo install -d -m 755 /usr/local/lib/shopvivaliz
 sudo install -m 755 "$SCRIPT" /usr/local/lib/shopvivaliz/desktop-commander-four-host-sentinel.sh
