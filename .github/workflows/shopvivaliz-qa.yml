@@ -283,7 +283,7 @@ jobs:
         run: |
           php tests/official-site-reference-http-policy-test.php
           php scripts/quality/validate-official-site-reference.php
-      - name: Origem aposentada (10.0.1.112) nao ganha novas referencias
+      - name: Origem aposentada nao ganha novas referencias
         run: |
           python3 -m unittest tests.test_retired_origin_host_guard
           python3 scripts/quality/validate-retired-origin-host.py
