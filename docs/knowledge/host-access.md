@@ -1,3 +1,19 @@
+<!-- GITHUB_ADMIN_TOKEN_LOCATIONS_20261103 -->
+## GitHub administrative credential discovery (2026-11-03)
+
+The operator reports creating a separate GitHub administrative token on 2026-11-02. **Do not confuse this with the GitHub CLI OAuth session.** Credential locator candidates from the operator's prior operational record (verify existence and permissions before use; these paths have not all been independently checked in this documentation change):
+
+- Fred-Win original handoff: `C:\\Users\\FRED\\Downloads\\gitadm.txt` (sensitive plaintext; avoid copying or printing).
+- Fred-Win DPAPI-protected copy: `%USERPROFILE%\\.shopvivaliz\\secrets\\SHOPVIVALIZ_GITHUB_ADMIN_TOKEN.dpapi`.
+- Marina protected runtime secret: `/home/ubuntu/.shopvivaliz/secrets/SHOPVIVALIZ_GITHUB_ADMIN_TOKEN`.
+- GitHub Actions secret name: `SHOPVIVALIZ_GITHUB_ADMIN_TOKEN` (repository/environment placement must be verified).
+- Environment variable name: `SHOPVIVALIZ_GITHUB_ADMIN_TOKEN` (availability is process/user dependent).
+
+Separately, the backend VM `always-free-arm-1787907847-26` has an authenticated `gh` session under OS user `ubuntu`, using `/home/ubuntu/.config/gh/hosts.yml` and GitHub account `fredmourao-ai`; a root-context `gh auth status` is not a valid test of that user's session. This session has `repo` and `workflow` token scopes, but that alone does not establish organization administrator privileges.
+
+Never store credential values in Git, shell output, issues, logs, or chat. Check only file existence and authenticated permissions, and follow branch protection, formal owner approval, and lease controls.
+<!-- /GITHUB_ADMIN_TOKEN_LOCATIONS_20261103 -->
+
 <!-- CENTRAL_MARINA_REQUIRED_DUAL_ROUTE_20261101 -->
 > **Atualizacao operacional confirmada 2026-11-01:** o MCP central reconhece `marina-a1-4c24g` pelo transporte privado read-only, com grant humano atestado e `hosts_list.route_enabled=true` (audit `402aa25d-e002-4559-8cb0-dd99d029bb54`). As ferramentas especificas `marina_host_health`/`marina_service_status` estao instaladas no servidor, mas **NAO aparecem no snapshot do app ChatGPT** ate um administrador atualizar/publicar as acoes em Workspace Settings > Apps. A chamada central->Marina ainda nao tem E2E pelo ChatGPT; nao afirmar paridade administrativa nem invocar outra rota para contornar schema/provedor. O MCP independente direto da Marina permanece obrigatorio, inativo e sem tunel OpenAI autenticamente validado. A VM excluida nunca deve voltar a ser usada. Detalhes: `docs/ops/mcp-central-marina-dual-route-2026-11-01.md` e issue #3152.
 <!-- /CENTRAL_MARINA_REQUIRED_DUAL_ROUTE_20261101 -->
