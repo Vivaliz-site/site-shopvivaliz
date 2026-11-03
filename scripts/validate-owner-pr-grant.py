@@ -325,6 +325,66 @@ def grant_added_in_reviewed_pr(changed_files: object, path: str, approved_blob: 
             and not matches[0].get("previous_filename"))
 
 
+# Marina restart pattern: units named shopvivaliz-*.service may be restarted
+# only when the unit file on main was last changed by a merged PR whose final
+# human review is APPROVED on its exact head. The name alone never authorizes.
+UNIT_PATTERN = re.compile(r"^shopvivaliz-[a-z0-9][a-z0-9-]*\.service$")
+UNIT_PATH = "deploy/systemd/{unit}"
+
+
+def unit_pattern_authorized(unit: str, pr: object, reviews: object) -> tuple[bool, str]:
+    if not isinstance(unit, str) or not UNIT_PATTERN.fullmatch(unit):
+        return False, "unit_name_not_in_pattern"
+    if not (isinstance(pr, dict) and pr.get("merged") is True and pr.get("state") == "closed"):
+        return False, "unit_change_pr_not_merged"
+    base = pr.get("base")
+    if not isinstance(base, dict) or base.get("ref") != "main":
+        return False, "unit_change_unexpected_base"
+    head = pr.get("head")
+    head_sha = head.get("sha") if isinstance(head, dict) else None
+    if not (isinstance(head_sha, str) and SHA40.fullmatch(head_sha)):
+        return False, "unit_change_head_unverified"
+    if not isinstance(reviews, list) or not 0 < len(reviews) < 100:
+        return False, "unit_change_not_approved_by_human"
+    latest_owner_review = None
+    for review in reviews:
+        if not isinstance(review, dict):
+            return False, "unit_change_not_approved_by_human"
+        actor = review.get("user")
+        reviewer_login = str(actor.get("login", "")) if isinstance(actor, dict) else ""
+        if reviewer_login.casefold() != SECURITY_HUMAN_LOGIN:
+            continue
+        if review.get("state") in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED"):
+            latest_owner_review = review
+    if (latest_owner_review is None or latest_owner_review.get("state") != "APPROVED"
+            or latest_owner_review.get("commit_id") != head_sha):
+        return False, "unit_change_not_approved_by_human"
+    return True, "unit_change_approved_by_human"
+
+
+def github_unit_change_pr(repository: str, unit: str, token: str) -> tuple[object, object]:
+    repo = quote(repository, safe="/")
+    path = quote(UNIT_PATH.format(unit=unit), safe="/")
+    commits = github_json(f"/repos/{repo}/commits?sha=main&path={path}&per_page=1", token)
+    if not isinstance(commits, list) or len(commits) != 1 or not isinstance(commits[0], dict):
+        return None, None
+    commit_sha = commits[0].get("sha")
+    if not (isinstance(commit_sha, str) and SHA40.fullmatch(commit_sha)):
+        return None, None
+    pulls = github_json(f"/repos/{repo}/commits/{commit_sha}/pulls", token)
+    if not isinstance(pulls, list):
+        return None, None
+    merged = [item for item in pulls if isinstance(item, dict) and item.get("merged_at")]
+    if len(merged) != 1:
+        return None, None
+    number = merged[0].get("number")
+    if not isinstance(number, int) or number <= 0:
+        return None, None
+    pr = github_json(f"/repos/{repo}/pulls/{number}", token)
+    reviews = github_json(f"/repos/{repo}/pulls/{number}/reviews?per_page=100", token)
+    return pr, reviews
+
+
 def github_json(path: str, token: str) -> object:
     request = Request("https://api.github.com" + path, headers={
         "Accept": "application/vnd.github+json",
