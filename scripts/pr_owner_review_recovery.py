@@ -70,7 +70,7 @@ def approval(pr, files, reviews, repo, head):
     return datetime.fromisoformat(stamp.replace('Z', '+00:00'))
 
 
-def original_failure(run, repo, number, head, branch):
+def original_failure(run, repo, number, head, branch, associated_pr=None):
     return (isinstance(run, dict) and positive(run.get('id'))
             and run.get('path') == WORKFLOW and run.get('event') == 'pull_request'
             and run.get('status') == 'completed' and run.get('conclusion') == 'failure'
@@ -78,8 +78,9 @@ def original_failure(run, repo, number, head, branch):
             and run.get('head_sha') == head and run.get('head_branch') == branch
             and run.get('head_repository', {}).get('full_name') == repo
             and isinstance(run.get('pull_requests'), list)
-            and any(p.get('number') == number and p.get('head', {}).get('sha') == head
-                    for p in run['pull_requests'] if isinstance(p, dict)))
+            and (any(p.get('number') == number and p.get('head', {}).get('sha') == head
+                     for p in run['pull_requests'] if isinstance(p, dict))
+                 or (run['pull_requests'] == [] and associated_pr == number)))
 
 
 def page(payload, key):
@@ -132,7 +133,13 @@ def recover(repo, number, api=github_api):
     if not originals:
         return 0
     for run in [max(originals, key=lambda r: r['id'])]:
-        if not original_failure(run, repo, number, head, branch):
+        associated_pr = None
+        if run.get('pull_requests') == []:
+            # GitHub also omits this association on original PR runs. Require
+            # an independent, unambiguous exact-HEAD association instead.
+            associated_pr = resolve_target(
+                api(f'{prefix}/commits/{head}/pulls?per_page=100'), repo, head)
+        if not original_failure(run, repo, number, head, branch, associated_pr):
             continue
         run_path = f'{prefix}/actions/runs/{run["id"]}'
         jobs = page(api(run_path + '/jobs?per_page=100'), 'jobs')
@@ -165,7 +172,11 @@ def recover(repo, number, api=github_api):
             current_reviews = api(pr_path + '/reviews?per_page=100')
             if approval(current, files, current_reviews, repo, head) != approved_at:
                 return 0
-            if not original_failure(api(run_path), repo, number, head, branch):
+            current_run = api(run_path)
+            if current_run.get('pull_requests') == []:
+                associated_pr = resolve_target(
+                    api(f'{prefix}/commits/{head}/pulls?per_page=100'), repo, head)
+            if not original_failure(current_run, repo, number, head, branch, associated_pr):
                 return 0
             api(f'{prefix}/actions/jobs/{job["id"]}/rerun', method='POST')
             print(f'owner_review_recovery_pr={number} job={job["id"]} head={head} state=replayed')
