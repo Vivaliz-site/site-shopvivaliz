@@ -1,5 +1,5 @@
 [Unit]
-Description=Run ShopVivaliz Desktop Commander four-host sentinel every 5 minutes
+Description=Run ShopVivaliz Desktop Commander three-host sentinel (legacy unit name) every 5 minutes
 
 [Timer]
 OnBootSec=2min
