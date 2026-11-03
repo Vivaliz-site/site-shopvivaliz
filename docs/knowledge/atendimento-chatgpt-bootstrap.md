@@ -143,9 +143,11 @@ Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
 - `Vivaliz-site/amazon-returns-safet` — Amazon Returns / SAFE-T.
 - `Vivaliz-site/mercadolivre-returns-recovery` — devoluções Mercado Livre.
 - `Vivaliz-site/-shopvivaliz-pipeline` — pipeline e automações.
-- `fredmourao-ai/mei-mg-email` — automação MEI-MG.
-- `fredmourao-ai/solange-rolla-consultorio` — repositório canônico Solange Rolla.
-- `fredmourao-ai/solange-rolla` — legado/supersedido; não tratar como canônico.
+- `Vivaliz-site/mei-mg-email` — automação MEI-MG.
+- `Vivaliz-site/solange-rolla-consultorio` — repositório canônico Solange Rolla.
+- `Vivaliz-site/solange-rolla` — legado/supersedido; não tratar como canônico.
+
+**Alias GitHub após transferência (verificado em 03/11/2026):** os caminhos antigos `fredmourao-ai/{solange-rolla-consultorio,mei-mg-email,solange-rolla}` redirecionam para os três repositórios em `Vivaliz-site`. O endpoint de metadados (`get_repo`) resolve esses aliases, mas a busca de PRs com `repo:fredmourao-ai/...` responde HTTP 422. **Antes de inventariar PRs**, resolver e conferir `repository_full_name`/ID canônico no GitHub e executar a busca no `Vivaliz-site/...`, preservando paginação. Não interpretar 422 do alias como bloqueio de permissão ou como PRs inexistentes.
 
 ## Regras operacionais críticas
 
@@ -190,7 +192,7 @@ Não declarar verde por evidência apenas estrutural. Produção funcional exige
 
 ### Solange Rolla
 
-- Usar `fredmourao-ai/solange-rolla-consultorio` como canônico.
+- Usar `Vivaliz-site/solange-rolla-consultorio` como canônico.
 - Não retomar trabalho novo no repositório legado.
 
 ## Daybreak / uso defensivo
