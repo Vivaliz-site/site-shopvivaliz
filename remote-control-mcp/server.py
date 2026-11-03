@@ -121,6 +121,7 @@ MARINA_SSH_KEY = Path("/home/ubuntu/.ssh/oci-marina-a1-2026")
 MARINA_PINNED_HOSTS = Path("/home/ubuntu/.ssh/known_hosts_marina_verified")
 MARINA_CENTRAL_OWNER_ATTESTATION = STATE_DIR / "marina-central-owner-grant.json"
 MARINA_ADMIN_CAPABILITY = "marina_admin_command"
+OWNER_LOGINS = frozenset({"shopvivaliz-human", "fredmourao-ai"})
 MAX_MARINA_ADMIN_COMMAND_BYTES = 8192
 MARINA_READONLY_SERVICES = frozenset({
     "shopvivaliz-marina-mcp.service",
@@ -1406,7 +1407,7 @@ def marina_central_grant_active(capability: str, enable_env: str) -> bool:
             or grant.get("controller_host") != CONTROLLER_BACKEND_HOST
             or grant.get("capabilities") != [capability]
             or grant.get("reviewer") != "shopvivaliz-human"
-            or grant.get("merged_by") != "shopvivaliz-human"
+            or grant.get("merged_by") not in OWNER_LOGINS
             or not isinstance(grant.get("head_sha"), str)
             or not FULL_SHA_RE.fullmatch(grant["head_sha"])
             or not isinstance(grant.get("merge_sha"), str)

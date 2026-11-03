@@ -22,7 +22,7 @@ import server  # noqa: E402
 SHA = "a" * 40
 
 
-def _write_grant(path: Path, capabilities: list[str]) -> None:
+def _write_grant(path: Path, capabilities: list[str], merger: str = "shopvivaliz-human") -> None:
     grant = {
         "schema": "SHOPVIVALIZ_CENTRAL_MARINA_RUNTIME_GRANT_V1",
         "repository": "Vivaliz-site/site-shopvivaliz",
@@ -35,7 +35,7 @@ def _write_grant(path: Path, capabilities: list[str]) -> None:
         "head_sha": SHA,
         "merge_sha": SHA,
         "reviewer": "shopvivaliz-human",
-        "merged_by": "shopvivaliz-human",
+        "merged_by": merger,
         "expires_at_utc": (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     path.write_text(json.dumps(grant))
@@ -107,6 +107,14 @@ class MarinaAdminGateTests(unittest.TestCase):
         self.key.chmod(0o640)
         with self.assertRaises(PermissionError):
             server.marina_admin_ssh_invocation("echo hi")
+
+    def test_either_owner_account_may_merge_admin_grant(self) -> None:
+        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY], merger="fredmourao-ai")
+        self.assertTrue(server.marina_central_admin_grant_active())
+
+    def test_unknown_merger_cannot_authorize_admin_grant(self) -> None:
+        _write_grant(self.grant, [server.MARINA_ADMIN_CAPABILITY], merger="some-agent-account")
+        self.assertFalse(server.marina_central_admin_grant_active())
 
     def test_marina_durable_jobs_stay_disabled(self) -> None:
         self.assertEqual(server.HOST_DURABLE_LIMITS[server.MARINA_HOST], 0)
