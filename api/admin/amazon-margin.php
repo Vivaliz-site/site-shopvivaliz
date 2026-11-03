@@ -19,7 +19,7 @@ function sv_margin_api_json(int $status, array $data): never
 function sv_margin_api_selected(mixed $value): array
 {
     if (!is_array($value)) throw new InvalidArgumentException('skus_must_be_array');
-    if (count($value)>100) throw new InvalidArgumentException('too_many_skus');
+    if (count($value)>1000) throw new InvalidArgumentException('too_many_skus');
     $selected=[];
     foreach ($value as $sku) {
         if (!is_string($sku)||$sku===''||strlen($sku)>80)throw new InvalidArgumentException('invalid_sku');
@@ -68,9 +68,9 @@ try {
             ? SvAmazonMarginExport::pdf($data,$date)
             : SvAmazonMarginExport::xlsx($data);
         $filename='shopvivaliz-margens-amazon-'.$date.'.'.$format;
-        header('Content-Type: '.$format==='pdf'
+        header('Content-Type: '.($format==='pdf'
             ? 'application/pdf'
-            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
         header('Content-Disposition: attachment; filename="'.$filename.'"');
         header('Content-Length: '.strlen($bytes));
         echo $bytes;exit;
