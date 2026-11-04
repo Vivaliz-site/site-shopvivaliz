@@ -37,16 +37,16 @@ class UpgradeOperatorSafety(unittest.TestCase):
                           "systemctl restart mysql", "systemctl restart docker"):
             self.assertNotIn(forbidden, s)
 
-    def test_exact_nonroot_minimal_write_unit(self):
+    def test_unprivileged_http_unit_with_sudo_admin_shell(self):
         service = UNIT.read_text()
         self.assertIn("User=shopvivaliz-marina-mcp", service)
-        self.assertIn("NoNewPrivileges=yes", service)
-        self.assertIn("ProtectSystem=strict", service)
-        self.assertIn("CapabilityBoundingSet=\n", service)
-        self.assertIn("ReadWritePaths=/var/lib/shopvivaliz-marina-mcp/workspace /var/lib/shopvivaliz-marina-mcp/state", service)
+        # Grant 3619: sudo must work for the admin shell, so privilege gain is not blocked.
+        self.assertIn("NoNewPrivileges=no", service)
+        self.assertNotIn("NoNewPrivileges=yes", service)
+        self.assertIn("--enable-admin-shell", service)
+        self.assertIn("--enable-gui-browser", service)
         self.assertIn("--enable-approved-scoped-write", service)
         self.assertNotIn("User=root", service)
-        self.assertNotIn("ReadWritePaths=/", service.splitlines())
         source = SERVER.read_text()
         self.assertIn("--enable-approved-scoped-write", source)
         self.assertIn('owner_approved_scoped_write_grant_unavailable', source)
@@ -72,7 +72,9 @@ class UpgradeOperatorSafety(unittest.TestCase):
                          "operator_admin_route.py", "server.py", "read_only_telemetry.py",
                          "validate_owner_pr_grant.py", "operator_grant_readback.py", "local_auth_smoke.py"):
             self.assertIn(basename, s)
-        self.assertIn("grep -Fqx 'NoNewPrivileges=yes'", s)
+        self.assertIn("grep -Fqx 'NoNewPrivileges=no'", s)
+        self.assertIn("visudo -cf", s)
+        self.assertIn("mcp-admin-grant.json", s)
 
 
 if __name__ == "__main__":

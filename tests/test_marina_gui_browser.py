@@ -27,15 +27,20 @@ class GrantTests(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "grant.json"
-            data = dict(gui.EXPECTED_GRANT, root_or_shell_allowed=True)
+            data = dict(gui.EXPECTED_GRANT, root_http_daemon_allowed=True)
             path.write_text(json.dumps(data), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "gui_browser_grant_mismatch"):
                 gui.load_grant(path)
 
-    def test_grant_forbids_stored_credentials_and_root(self):
+    def test_grant_forbids_stored_credentials_and_root_daemon(self):
         self.assertIs(gui.EXPECTED_GRANT["stored_credentials_allowed"], False)
-        self.assertIs(gui.EXPECTED_GRANT["root_or_shell_allowed"], False)
-        self.assertIs(gui.EXPECTED_GRANT["sudo_allowed"], False)
+        self.assertIs(gui.EXPECTED_GRANT["root_http_daemon_allowed"], False)
+
+    def test_gui_and_shell_pin_the_same_grant(self):
+        spec = importlib.util.spec_from_file_location("marina_admin_shell_for_gui", ROOT / "admin_shell.py")
+        other = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(other)
+        self.assertEqual(gui.EXPECTED_GRANT, other.EXPECTED_GRANT)
 
 
 class IdentityTests(unittest.TestCase):

@@ -35,24 +35,34 @@ MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 120
 
-GRANT_FILE = Path(__file__).with_name("gui-browser-grant.json")
+GRANT_FILE = Path(__file__).with_name("mcp-admin-grant.json")
+# Keep identical to admin_shell.py and security/owner-approvals/3619.json.
 EXPECTED_GRANT = {
     "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
     "repository": "Vivaliz-site/site-shopvivaliz",
-    "pr_number": GRANT_PR,
+    "pr_number": 3619,
     "resource": "mcp:marina",
     "principal": "marina-mcp-service",
     "target_repository": "Vivaliz-site/site-shopvivaliz",
     "host": "marina-a1-4c24g",
-    "capabilities": ["gui_session", "browser_automation"],
-    "operation": "gui_browser_execute",
-    "run_as_user": SERVICE_USER,
-    "display": DISPLAY,
-    "browser_profile": str(PROFILE_DIR),
-    "stored_credentials_allowed": False,
-    "root_or_shell_allowed": False,
-    "sudo_allowed": False,
+    "capabilities": [
+        "admin_shell",
+        "admin_shell_root",
+        "gui_session",
+        "browser_automation"
+    ],
+    "operation": "marina_admin_execute",
+    "run_as_user": "shopvivaliz-marina-mcp",
+    "arbitrary_shell_allowed": True,
+    "root_via_sudo_allowed": True,
+    "root_or_shell_allowed": True,
+    "sudo_allowed": True,
+    "root_http_daemon_allowed": False,
+    "external_jwt_admin_allowed": False,
     "requires_access_jwt": True,
+    "display": ":99",
+    "browser_profile": "/var/lib/shopvivaliz-marina-mcp/browser-profile",
+    "stored_credentials_allowed": False
 }
 
 GUI_BROWSER_TOOLS = [

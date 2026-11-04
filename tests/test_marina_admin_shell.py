@@ -21,12 +21,20 @@ spec.loader.exec_module(shell)
 
 class GrantTests(unittest.TestCase):
     def test_shipped_grant_matches_pinned_owner_approval(self):
-        self.assertEqual(shell.load_grant()["pr_number"], 3616)
+        self.assertEqual(shell.load_grant(), shell.EXPECTED_GRANT)
+        self.assertEqual(shell.load_grant()["pr_number"], shell.GRANT_PR)
+
+    def test_grant_allows_root_only_through_sudo_never_an_http_root_daemon(self):
+        grant = shell.EXPECTED_GRANT
+        self.assertIs(grant["root_via_sudo_allowed"], True)
+        self.assertIs(grant["sudo_allowed"], True)
+        self.assertIs(grant["root_http_daemon_allowed"], False)
+        self.assertIs(grant["requires_access_jwt"], True)
 
     def test_grant_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "grant.json"
-            bad = dict(shell.EXPECTED_GRANT, sudo_allowed=True)
+            bad = dict(shell.EXPECTED_GRANT, root_http_daemon_allowed=True)
             path.write_text(json.dumps(bad))
             with self.assertRaises(RuntimeError):
                 shell.load_grant(path)
@@ -86,6 +94,43 @@ class ExecutionTests(unittest.TestCase):
         result = shell.run_admin_shell({"command": "yes"}, home="/tmp", audit=self.audit, runner=runner)
         self.assertEqual(len(result["stdout"]), shell.MAX_OUTPUT_BYTES)
         self.assertTrue(result["truncated"])
+
+    def test_default_runs_as_service_user_without_sudo(self):
+        seen = {}
+        def runner(argv, **kwargs):
+            seen["argv"] = argv
+            return subprocess.CompletedProcess(argv, 0)
+        shell.run_admin_shell({"command": "id"}, home="/tmp", audit=self.audit, runner=runner)
+        self.assertEqual(seen["argv"][0], "/bin/bash")
+        self.assertIs(self.audit_entries[0]["as_root"], False)
+
+    def test_as_root_goes_through_sudo_with_root_side_timeout(self):
+        seen = {}
+        def runner(argv, **kwargs):
+            seen.update(argv=argv, env=kwargs["env"], timeout=kwargs["timeout"])
+            return subprocess.CompletedProcess(argv, 0)
+        result = shell.run_admin_shell({"command": "id", "as_root": True, "timeout_seconds": 20},
+                                       home="/tmp", audit=self.audit, runner=runner)
+        argv = seen["argv"]
+        self.assertEqual(argv[:4], [shell.SUDO, "-n", "-H", "--"])
+        self.assertEqual(argv[4:9], [shell.TIMEOUT_BIN, "-k", "5", "20", "/bin/bash"])
+        self.assertIn("/usr/sbin", seen["env"]["PATH"])
+        self.assertGreater(seen["timeout"], 20)
+        self.assertIs(self.audit_entries[0]["as_root"], True)
+        self.assertTrue(result["ok"])
+
+    def test_as_root_exit_124_is_reported_as_timeout(self):
+        runner = lambda argv, **kw: subprocess.CompletedProcess(argv, 124)
+        result = shell.run_admin_shell({"command": "sleep 99", "as_root": True, "timeout_seconds": 1},
+                                       home="/tmp", audit=self.audit, runner=runner)
+        self.assertTrue(result["timed_out"])
+        self.assertIs(result["ok"], False)
+
+    def test_as_root_must_be_a_boolean(self):
+        for bad in ("yes", 1, None):
+            with self.subTest(bad=bad):
+                result = shell.run_admin_shell({"command": "id", "as_root": bad}, home="/tmp", audit=self.audit)
+                self.assertEqual(result["reason"], "invalid_arguments")
 
     def test_invalid_arguments_are_rejected(self):
         for bad in ({}, {"command": ""}, {"command": "id", "extra": 1},

@@ -1,7 +1,7 @@
 # STAGING TEMPLATE ONLY. Official host administrator review/install required.
 # Never install or execute through GitHub Actions or an unapproved RDC privilege route.
 [Unit]
-Description=ShopVivaliz Marina independent MCP (grant-scoped private writes)
+Description=ShopVivaliz Marina independent MCP (grant-scoped admin shell, GUI and browser)
 After=network.target
 ConditionPathExists=/var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/auth-token
 
@@ -14,25 +14,11 @@ ExecStart=/usr/bin/python3 /opt/shopvivaliz-marina-mcp/current/server.py --port 
 Restart=on-failure
 RestartSec=5s
 UMask=0077
-NoNewPrivileges=yes
-CapabilityBoundingSet=
-AmbientCapabilities=
+# Owner grant PR 3619: the admin shell may run commands as root through sudo, so
+# the sandbox that would block privilege gain is intentionally absent. The HTTP
+# process itself still runs as the unprivileged service account.
+NoNewPrivileges=no
 PrivateTmp=yes
-PrivateDevices=yes
-ProtectSystem=strict
-# Fixed directories needed for durable CAS, fencing and append-only redacted audit.
-ReadWritePaths=/var/lib/shopvivaliz-marina-mcp/workspace /var/lib/shopvivaliz-marina-mcp/state
-ProtectHome=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictSUIDSGID=yes
-RestrictRealtime=yes
-LockPersonality=yes
-SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-MemoryMax=128M
-TasksMax=32
 StandardOutput=journal
 StandardError=journal
 

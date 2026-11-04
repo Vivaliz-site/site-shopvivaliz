@@ -7,15 +7,21 @@
   "target_repository": "Vivaliz-site/site-shopvivaliz",
   "host": "marina-a1-4c24g",
   "capabilities": [
+    "admin_shell",
+    "admin_shell_root",
     "gui_session",
     "browser_automation"
   ],
-  "operation": "gui_browser_execute",
+  "operation": "marina_admin_execute",
   "run_as_user": "shopvivaliz-marina-mcp",
+  "arbitrary_shell_allowed": true,
+  "root_via_sudo_allowed": true,
+  "root_or_shell_allowed": true,
+  "sudo_allowed": true,
+  "root_http_daemon_allowed": false,
+  "external_jwt_admin_allowed": false,
+  "requires_access_jwt": true,
   "display": ":99",
   "browser_profile": "/var/lib/shopvivaliz-marina-mcp/browser-profile",
-  "stored_credentials_allowed": false,
-  "root_or_shell_allowed": false,
-  "sudo_allowed": false,
-  "requires_access_jwt": true
+  "stored_credentials_allowed": false
 }
