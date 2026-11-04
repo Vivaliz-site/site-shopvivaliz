@@ -48,3 +48,9 @@ A API `/v1/listings` precisa entregar `status` por MLB a partir do valor oficial
 Uma auditoria já em execução na mesma conta é reaproveitada pelo backend por idempotência mesmo que o filtro de status tenha sido alterado; verificar o `scope` real da execução antes de interpretar o resultado. **Não** publicar resultado como auditoria somente de ativos quando o backend reutilizou uma execução anterior de todos os anúncios.
 
 Este filtro é aditivo/read-only; não autoriza preços, estoque, anúncios, compras ou alterações no ERP. O aceite exige implantação comprovada do backend (PRs #67/#68/#69/#70/#71), vínculo MLRR e custos V3 com grant real, autenticação UI e E2E nos botões na sessão do administrador, testes de report PDF/XLSX e reconciliação dos 453 anúncios ativos. Sem esses elementos, permanecer `NAO_VALIDADO_UI`.
+
+## Concorrência real: auditoria de todos x somente ativos
+
+O backend ML Pricing (PR #73) reaproveita uma execução apenas quando escopo e **conjunto exato de IDs MLB** são iguais. Quando existe uma execução da mesma conta com outro conjunto (por exemplo, ALL incluindo anúncios pausados versus seleção apenas ativos), o gateway repassa HTTP **409 / AUDIT_ALREADY_RUNNING_DIFFERENT_SELECTION**. O painel informa em português que há outra auditoria em andamento, sem criar uma segunda execução, sem dizer que selecionados e todos são equivalentes e sem expor run IDs de outras sessões. Após o encerramento verdadeiro da execução ativa, o operador pode tentar a seleção novamente. O estado do filtro não altera retrospectivamente o escopo de uma execução em andamento.
+
+A interface não deve ocultar o erro, ignorar a concorrência, trocar para ALL nem desabilitar os controles de execução do backend. Teste de contrato verifica o mapeamento da mensagem. Esta mudança não configura credenciais de ML Pricing nem representa um E2E autenticado.
