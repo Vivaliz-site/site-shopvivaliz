@@ -19,6 +19,12 @@ final class SvAmazonMarginCollector
     private $onProgress = null;
     private string $marketplace;
 
+    // Numeric-only Seller SKUs become integer array keys in PHP.
+    public static function skuExcerpt(string|int $sku): string
+    {
+        return substr((string)$sku,0,80);
+    }
+
     private function note(string $stage,int $done=0,?int $total=null): void
     {
         if ($this->onProgress !== null) ($this->onProgress)($stage,$done,$total);
@@ -116,7 +122,7 @@ final class SvAmazonMarginCollector
             usleep(260000);
         } while (is_string($next) && $next !== '');
         foreach ($selectedSkus as $sku) {
-            if (!isset($seen[$sku])) $this->warnings[] = 'not_found_listing:' . substr($sku, 0, 80);
+            if (!isset($seen[$sku])) $this->warnings[] = 'not_found_listing:' . self::skuExcerpt($sku);
         }
         return $seen;
     }
@@ -344,7 +350,7 @@ final class SvAmazonMarginCollector
                 $row = array_merge($row,$prod);
             } catch (Throwable $e) {
                 $row['status']='erp_or_catalog_read_failed';
-                $this->warnings[] = 'sku_read_failed:' . substr($sku,0,80) . ':' . get_class($e);
+                $this->warnings[] = 'sku_read_failed:' . self::skuExcerpt($sku) . ':' . get_class($e);
                 $rows[] = $row;
                 continue;
             }
