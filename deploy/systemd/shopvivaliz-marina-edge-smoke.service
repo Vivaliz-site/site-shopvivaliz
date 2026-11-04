@@ -1,0 +1,15 @@
+[Unit]
+Description=Read-only edge smoke of the public Marina MCP route (no tool calls)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+# Exit codes: 2 credentials missing, 3 edge or Access failure, 5 tool drift. Output has no secrets.
+ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/marina_mcp_edge_smoke.py
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
