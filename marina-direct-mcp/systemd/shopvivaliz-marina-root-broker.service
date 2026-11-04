@@ -13,7 +13,6 @@ ExecStart=/usr/bin/python3 -B /opt/shopvivaliz-marina-mcp/current/root_broker.py
 StateDirectory=shopvivaliz-marina-broker
 StateDirectoryMode=0700
 UMask=0077
-NoNewPrivileges=no
 PrivateDevices=no
 PrivateTmp=no
 ProtectSystem=strict

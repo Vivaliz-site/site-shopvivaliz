@@ -34,7 +34,7 @@ class BrokerSandboxTests(unittest.TestCase):
                 key, value = line.split("=", 1)
                 properties[key] = value
         sandbox_keys = (
-            "NoNewPrivileges", "PrivateDevices", "PrivateTmp", "ProtectSystem",
+            "PrivateDevices", "PrivateTmp", "ProtectSystem",
             "ProtectHome", "ProtectKernelModules", "ProtectKernelTunables",
             "ProtectControlGroups", "LockPersonality", "RestrictAddressFamilies",
             "SystemCallArchitectures", "MemoryMax", "TasksMax",

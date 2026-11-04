@@ -19,7 +19,6 @@ ExecStart=/opt/shopvivaliz-marina-mcp/bin/tunnel-client run --config /var/lib/sh
 Restart=on-failure
 RestartSec=5s
 UMask=0077
-NoNewPrivileges=no
 CapabilityBoundingSet=
 AmbientCapabilities=
 PrivateTmp=no

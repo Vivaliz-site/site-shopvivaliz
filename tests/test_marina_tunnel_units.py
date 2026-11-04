@@ -46,8 +46,12 @@ class OperatorGatedUnitsTests(unittest.TestCase):
             self.assertEqual(yes, [], name)
         _, conf = unit("shopvivaliz-marina-mcp-tunnel.service")
         section = conf["Service"]
-        for key in ("NoNewPrivileges", "ProtectHome", "PrivateDevices", "RestrictSUIDSGID"):
+        for key in ("ProtectHome", "PrivateDevices", "RestrictSUIDSGID"):
             self.assertEqual(section[key], "no", key)
+        # NoNewPrivileges is not set at all on any Marina unit.
+        for name in ("shopvivaliz-marina-mcp.service", "shopvivaliz-marina-mcp-tunnel.service",
+                     "shopvivaliz-marina-root-broker.service"):
+            self.assertNotIn("NoNewPrivileges", (DIR / name).read_text(encoding="utf-8"), name)
 
     def test_mcp_unit_allows_sudo_for_the_admin_shell_only_under_owner_grant(self):
         # Owner grant: the HTTP process stays unprivileged, but sudo must be able to
