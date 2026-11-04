@@ -190,7 +190,11 @@ async function loadStatus(){
   const res=await fetch(API+'?action=status',{credentials:'same-origin',cache:'no-store'});
   const j=await readJson(res);
   queueDisplay(j.requests,j.latest_meta);
-  if(j.latest_meta && j.latest_meta.run_id!==lastRunId)await load({quiet:true});
+  if(j.latest_meta && j.latest_meta.run_id!==lastRunId){
+   await load({quiet:true});
+   el('feedback').textContent='Auditoria #'+j.latest_meta.run_id+
+    ' concluída. Relatório atualizado com '+j.latest_meta.offer_count+' anúncios; PDF e Excel disponíveis.';
+  }
  }catch(e){showError(e);}
  finally{pollBusy=false;}
 }
