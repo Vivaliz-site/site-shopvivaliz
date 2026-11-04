@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import re
 import runpy
 import secrets
 import socket
@@ -32,6 +33,7 @@ CAPABILITY = "deployment_manage"
 RESOURCE = "mcp:marina"
 PRINCIPAL = "marina-mcp-service"
 UNIT = "amazon-returns-olist-erp-browser.service"
+_SERVICE_UNIT = re.compile(r"^shopvivaliz-[a-z0-9][a-z0-9-]*\.service$")
 STATE_DIR = Path("/var/lib/shopvivaliz-marina-broker")
 ROOT_TOKEN = Path("/etc/shopvivaliz/marina-root-broker/github-read-token")
 VERIFIER = Path(__file__).with_name("validate_owner_pr_grant.py")
@@ -207,8 +209,27 @@ class BrokerOperator:
         except (sqlite3.Error, OSError, RuntimeError):
             return False
 
+    def unit_pattern_is_valid(self, unit: str) -> bool:
+        """Fresh host-side check of the human-approved shopvivaliz-*.service rule."""
+        token = protected_token(ROOT_TOKEN)
+        if token is None or not VERIFIER.is_file():
+            return False
+        args = [
+            "/usr/bin/python3", "-B", str(VERIFIER),
+            "--repository", REPOSITORY, "--unit", unit,
+        ]
+        env = {"PATH": "/usr/bin:/bin", "GITHUB_TOKEN": token,
+               "SHOPVIVALIZ_SECURITY_OWNER_LOGIN": OWNER_LOGIN}
+        try:
+            result = self.runner(args, env=env, capture_output=True,
+                                 text=True, timeout=35, check=False)
+            return (result.returncode == 0 and
+                    result.stdout.strip() == "UNIT_PATTERN=AUTHORIZED reason=unit_change_approved_by_human")
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+
     def restart_service(self, unit: str) -> bool:
-        if unit != UNIT:
+        if unit != UNIT and _SERVICE_UNIT.fullmatch(unit) is None:
             return False
         try:
             x = self.runner(["/usr/bin/systemctl", "restart", UNIT],
