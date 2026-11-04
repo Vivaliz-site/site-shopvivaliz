@@ -31,6 +31,16 @@ O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete
 - **Devoluções:** não agregadas automaticamente à margem de venda unitária nesta fase. Conciliação de reembolsos, frete reverso, campanhas e demais custos fora do lançamento serão adicionados em etapa de rentabilidade completa.
 - Status `partial` ou `unverified` não pode ser anunciado como margem certificada. Imposto inicial é 14%, variável `SV_AMAZON_MARGIN_TAX_BPS=1400`.
 
+## Indicador de anúncio ativo e campos sem valor
+
+- **Ativo** é definido pelo estado **BUYABLE** retornado em `summaries[].status` da Amazon Listings. `DISCOVERABLE` sem `BUYABLE` não é uma oferta comprável. O painel abre com **Somente ativos** habilitado; pode ser desmarcado para auditar visualmente todos os registros.
+- O filtro da tela limita os indicadores e as exportações PDF/XLSX (quando não há seleção, exporta apenas os registros filtrados). O botão **Auditar todos** continua solicitando auditoria do **catálogo inteiro**, inclusive não compráveis; para auditar só ativos, selecionar os registros filtrados e escolher **Auditar selecionados**.
+- A contagem da primeira auditoria completa de 04/11/2026 mostrou 460 ativos dentre 527 anúncios; essa proporção é histórica e **não é fixa no código**.
+- Uma oferta sem `price` da Pricing API pode ter `listed_price` cadastrado em Listings. Apresentar somente como **preço cadastral de referência**, nunca como preço efetivo elegível para cálculo de lucro/margem ou publicação.
+- Vendas ausentes no período: custo e preço podem estar disponíveis, mas margem permanece **não apurada**. Não inferir margem 0% nem preencher taxas com estimativas não rotuladas.
+- Um SKU sem EAN Amazon só será vinculado automaticamente ao ERP quando houver **uma correspondência exata e única de Seller SKU a produto ativo**. Com EAN presente, nunca ignorar divergência de GTIN ou selecionar produto ambíguo. O campo `erp_match_method` torna a origem do vínculo auditável.
+- Campos vazios de custo para anúncios ativos significam **vínculo não identificado, API não disponível ou custo ainda sem histórico válido**. A ligação de anúncios ERP pode ser consultada via interface do ERP; sua API pública v3 não expõe leitura de vínculo por anúncio. Não tentar adivinhar pela semelhança dos títulos.
+
 ## Arquitetura
 
 | Componente | Caminho |
