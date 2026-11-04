@@ -144,13 +144,16 @@ class DisplayTests(unittest.TestCase):
         class FakeProc:
             pid = 31337
 
+            def poll(self):
+                return None
+
         def fake_spawn(argv, **kwargs):
             calls.append(argv)
             return FakeProc()
 
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(gui, "STATE_DIR", Path(tmp)), \
-             patch.object(gui, "_running_xvfb_pid", return_value=None), \
+             patch.object(gui, "_running_xvfb_pid", side_effect=[None, 31337]), \
              patch.object(gui.Path, "exists", return_value=True):
             result = gui.gui_session({"action": "start"}, audit=lambda e: True, spawn=fake_spawn)
         self.assertTrue(result["running"])
@@ -158,6 +161,50 @@ class DisplayTests(unittest.TestCase):
         self.assertEqual(calls[0][1], ":99")
         self.assertIn("-nolisten", calls[0])
         self.assertNotIn("-listen", calls[0])
+
+    def test_start_waits_for_exec_before_reporting_running(self):
+        import tempfile
+
+        class FakeProc:
+            pid = 555
+
+            def poll(self):
+                return None
+
+        # Parent cmdline first (not yet exec'd), then the real Xvfb.
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(gui, "STATE_DIR", Path(tmp)), \
+             patch.object(gui, "_running_xvfb_pid", side_effect=[None, None, None, 555]), \
+             patch.object(gui.Path, "exists", return_value=True), \
+             patch.object(gui.time, "sleep"):
+            result = gui.gui_session({"action": "start"}, audit=lambda e: True, spawn=lambda *a, **k: FakeProc())
+        self.assertEqual(result["pid"], 555)
+
+    def test_start_reports_failure_when_xvfb_dies(self):
+        import tempfile
+
+        class DeadProc:
+            pid = 556
+
+            def poll(self):
+                return 1
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(gui, "STATE_DIR", Path(tmp)), \
+             patch.object(gui, "_running_xvfb_pid", return_value=None), \
+             patch.object(gui.Path, "exists", return_value=True), \
+             patch.object(gui.time, "sleep"):
+            result = gui.gui_session({"action": "start"}, audit=lambda e: True, spawn=lambda *a, **k: DeadProc())
+        self.assertEqual(result["reason"], "xvfb_failed")
+
+    def test_stop_signals_the_recognised_display(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(gui, "STATE_DIR", Path(tmp)), \
+             patch.object(gui, "_running_xvfb_pid", return_value=777), \
+             patch.object(gui.os, "kill") as kill:
+            gui.gui_session({"action": "stop"}, audit=lambda e: True)
+        kill.assert_called_once_with(777, gui.signal.SIGTERM)
 
     def test_stop_never_signals_foreign_process(self):
         import tempfile
