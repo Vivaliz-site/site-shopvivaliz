@@ -5,6 +5,7 @@ require_once __DIR__ . '/MarginMath.php';
 require_once __DIR__ . '/ProductMatch.php';
 require_once __DIR__ . '/RateLimitPolicy.php';
 require_once __DIR__ . '/OlistQuotaPolicy.php';
+require_once __DIR__ . '/ReadErrorPolicy.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -374,6 +375,10 @@ final class SvAmazonMarginCollector
                 }
                 $row = array_merge($row,$prod);
             } catch (Throwable $e) {
+                // A per-SKU mismatch is not a global failure. An account-level
+                // Olist/Amazon outage or throttling IS: retry the job instead
+                // of incorrectly declaring many item costs unavailable.
+                if (SvAmazonMarginReadErrorPolicy::mustAbortAudit($e)) throw $e;
                 $row['status']='erp_or_catalog_read_failed';
                 $this->warnings[] = 'sku_read_failed:' . self::skuExcerpt($sku) . ':' . get_class($e);
                 $rows[] = $row;
