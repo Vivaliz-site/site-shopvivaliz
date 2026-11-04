@@ -54,6 +54,11 @@ $checks = [
     'active selection drops items no longer active after refresh' =>
         str_contains($page, "&&(!state.activeOnly||l.status==='active')")
         && str_contains($page, "state.selected=new Set([...state.selected].filter(id=>allowed.has(id)))"),
+    'backend selection conflict is never silently interpreted as a successful run' =>
+        str_contains($page, 'AUDIT_ALREADY_RUNNING_DIFFERENT_SELECTION')
+        && str_contains($page, 'outra auditoria em execução')
+        && str_contains($page, 'Aguarde a conclusão')
+        && str_contains($page, "if(!response.ok){"),
     'dashboard linked from the existing Mercado Livre admin' =>
         str_contains($parent, '/admin/mercadolivre-margin.php'),
 ];
