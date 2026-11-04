@@ -129,7 +129,10 @@ fi
 [[ "$(systemctl show shopvivaliz-marina-mcp.service -p User --value)" == shopvivaliz-marina-mcp ]] || refuse unexpected_service_user
 [[ "$(systemctl show shopvivaliz-marina-mcp.service -p NoNewPrivileges --value)" == yes ]] || refuse unexpected_service_privileges
 [[ "$(systemctl show shopvivaliz-marina-mcp-tunnel.service -p ActiveState --value)" == inactive ]] || refuse live_tunnel_unexpected
-[[ "$(systemctl show shopvivaliz-marina-mcp.service -p DropInPaths --value)" == "" ]] || refuse service_dropin_present
+# The only accepted drop-in is the Cloudflare Access override that the release unit now carries.
+dropin_path=/etc/systemd/system/shopvivaliz-marina-mcp.service.d/40-cloudflare-access.conf
+dropin_paths="$(systemctl show shopvivaliz-marina-mcp.service -p DropInPaths --value)"
+[[ -z "$dropin_paths" || "$dropin_paths" == "$dropin_path" ]] || refuse service_dropin_unexpected
 [[ "$(systemctl show shopvivaliz-marina-mcp.service -p FragmentPath --value)" == /etc/systemd/system/shopvivaliz-marina-mcp.service ]] || refuse service_fragment_conflict
 unit=/etc/systemd/system/shopvivaliz-marina-mcp.service
 [[ -f "$unit" && ! -L "$unit" && "$(stat -c '%u:%a' "$unit")" == '0:644' ]] || refuse installed_unit_unsafe
@@ -146,6 +149,19 @@ done
 # Verify owner's exact approved grant under the isolated service UID before
 # altering either the live symlink or the systemd unit.
 sudo -n -u shopvivaliz-marina-mcp /usr/bin/python3 -B "$release/server.py" --check --enable-approved-scoped-write >/dev/null || refuse owner_grant_preflight_denied
+# The Cloudflare Access flag must be part of the immutable release unit; the legacy
+# drop-in is moved aside atomically with the unit and restored by rollback.
+access_arg="$(sed -n 's/^ExecStart=.* --access-config \([^ ]*\)\( .*\)\?$/\1/p' "$release/shopvivaliz-marina-mcp.service")"
+[[ -n "$access_arg" ]] || refuse release_access_config_missing
+dropin_present=no
+dropin_backup="$dropin_path.bak-$expected_current"
+if [[ -n "$dropin_paths" ]]; then
+    [[ -f "$dropin_path" && ! -L "$dropin_path" && "$(stat -c '%u:%a' "$dropin_path")" == '0:644' ]] || refuse dropin_unsafe
+    [[ ! -e "$dropin_backup" ]] || refuse dropin_backup_exists
+    dropin_access="$(sed -n 's/^ExecStart=.* --access-config \([^ ]*\)\( .*\)\?$/\1/p' "$dropin_path")"
+    [[ "$dropin_access" == "$access_arg" ]] || refuse dropin_access_config_mismatch
+    dropin_present=yes
+fi
 backup="$(mktemp /run/shopvivaliz-marina-unit.XXXXXXXX)"
 temp_unit="$(mktemp /etc/systemd/system/.shopvivaliz-marina-mcp.XXXXXXXX)"
 temp_link="$root/.current-upgrade-$$"
@@ -154,6 +170,9 @@ rollback() {
     trap - EXIT
     if [[ "$status" -ne 0 ]]; then
         if [[ -e "$backup" && "$switched" == yes ]]; then
+            if [[ "$dropin_present" == yes && -e "$dropin_backup" ]]; then
+                mv -f "$dropin_backup" "$dropin_path"
+            fi
             cp "$backup" "$unit"
             chmod 0644 "$unit"
             ln -s "releases/$expected_current" "$temp_link.rollback"
@@ -176,6 +195,9 @@ ln -s "releases/$sha" "$temp_link"
 # Mark rollback as required BEFORE the first mutation: a failure after the
 # unit replacement but before symlink replacement must also recover.
 switched=yes
+if [[ "$dropin_present" == yes ]]; then
+    mv -f "$dropin_path" "$dropin_backup"
+fi
 mv -Tf "$temp_unit" "$unit"
 mv -Tf "$temp_link" "$root/current"
 systemctl daemon-reload
@@ -194,6 +216,8 @@ for (( attempt=1; attempt<=45; attempt++ )); do
 done
 [[ "$ready" == yes ]] || refuse local_listener_not_ready_after_restart
 sudo -n -u shopvivaliz-marina-mcp /usr/bin/python3 -B "$release/local_auth_smoke.py"
+systemctl show shopvivaliz-marina-mcp.service -p ExecStart --value | grep -Fq -- "--access-config $access_arg" || refuse access_config_not_effective
+[[ "$(systemctl show shopvivaliz-marina-mcp.service -p DropInPaths --value)" == "" ]] || refuse dropin_still_loaded
 [[ "$(readlink "$root/current")" == "releases/$sha" ]] || refuse activation_not_persisted
 [[ "$(systemctl show shopvivaliz-marina-mcp.service -p ActiveState --value)" == active ]] || refuse activation_not_running
 printf 'MARINA_MCP_UPGRADE=ACTIVE_LOCAL_SMOKE_GREEN\nRELEASE_SHA=%s\n' "$sha"
