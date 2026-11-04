@@ -37,6 +37,9 @@ PROTECTED_FILES = {
     ".github/workflows/pr-owner-approval-merge-queue.yml",
     "scripts/ops/owner_approved_merge_queue.py",
     "scripts/ops/activate_owner_merge_queue_ruleset.py",
+    # Root broker: runs as root and executes the Marina restart operations.
+    "marina-direct-mcp/root_broker.py",
+    "marina-direct-mcp/owner_pr_gate.py",
     # Marina administrative route: its grant, attestation and activator decide
     # who may run privileged commands, so they need the exact owner approval.
     "remote-control-mcp/test_marina_admin_gate.py",
