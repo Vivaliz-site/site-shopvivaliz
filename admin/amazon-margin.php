@@ -158,14 +158,19 @@ function queueDisplay(requests,meta){
   const kind=active.scope==='all'?'todos os anúncios':'anúncios selecionados';
   const running=active.state==='running';
   const done=Number(active.progress_done||0),total=Number(active.progress_total||0);
-  const stage=stageLabels[active.stage]||active.stage||'Na fila';
+  const stage=running&&(!active.stage||active.stage==='queued')
+   ?'Processando, aguardando atualização do worker'
+   :(stageLabels[active.stage]||active.stage||'Na fila');
   el('activity-title').textContent='Auditoria #'+active.id+' — '+(running?'em execução':'aguardando na fila');
   el('activity-detail').textContent=kind+' · '+stage+(total>0?' · '+done+' de '+total:'');
-  el('activity-count').textContent=list.filter(r=>r.state==='queued').length+' na fila';
+  el('activity-count').textContent=(running?'1 em execução · ':'')+
+   list.filter(r=>r.state==='queued').length+' na fila';
   const bar=el('activity-progress');
   bar.hidden=!running||total<=0;
   if(!bar.hidden){bar.value=Math.min(100,Math.round(100*done/total));bar.setAttribute('aria-label',stage+': '+done+' de '+total);}
-  const time=active.next_attempt_at?'Próxima tentativa: '+dateUtc(active.next_attempt_at):running&&active.heartbeat_at?'Última atualização: '+dateUtc(active.heartbeat_at):'';
+  const time=active.next_attempt_at?'Próxima tentativa: '+dateUtc(active.next_attempt_at):
+   running&&active.heartbeat_at?'Última atualização: '+dateUtc(active.heartbeat_at):
+   running&&active.started_at?'Iniciada em: '+dateUtc(active.started_at):'';
   el('activity-next').textContent=time+(meta?' · Último relatório concluído: #'+meta.run_id+' ('+meta.offer_count+' anúncios)':'');
  }else{
   el('activity-title').textContent=meta?'Auditoria #'+meta.run_id+' concluída':'Nenhuma auditoria concluída';
