@@ -4,6 +4,9 @@ require_once __DIR__.'/../../includes/amazon-margin/OlistAdsIndex.php';
 function ok(bool $assert,string $message):void {
     if (!$assert)throw new RuntimeException('OlistAdsIndex: '.$message);
 }
+if (str_contains(SvAmazonMarginOlistAdsIndex::path(),'/shopvivaliz-deploy/shared/storage/')) {
+    throw new RuntimeException('Olist commercial links index must never live under public site storage symlink');
+}
 $now=new DateTimeImmutable('2026-11-04T14:00:00+00:00');
 $index=['schema'=>1,'source'=>'OLIST_ERP_ANUNCIOS_EXPORT','entries'=>[
     '03SFBA'=>[
