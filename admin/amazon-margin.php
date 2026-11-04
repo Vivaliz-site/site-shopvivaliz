@@ -122,7 +122,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
-      <select id="status"><option value="">Todos os resultados</option><option value="low">Abaixo de 10%</option><option value="healthy">≥ 10%</option><option value="pending">Margem não apurada</option><option value="unmapped">Sem vínculo ERP</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
+      <select id="status"><option value="">Todos os resultados</option><option value="low">Abaixo de 10%</option><option value="healthy">≥ 10%</option><option value="pending">Margem não apurada</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
       <label class="filter-active" for="only-active"><input type="checkbox" id="only-active" checked> Somente ativos <span id="active-count" class="small muted"></span></label>
       <button type="button" id="select-visible">Selecionar visíveis</button>
       <button type="button" id="clear-selected">Limpar seleção</button>
@@ -266,7 +266,7 @@ function filtered(){
 const reasonText={
  confirmed:'Margem apurada pelas vendas conciliadas',
  partial:'Parte dos fretes/lançamentos ainda pendente de conciliação',
- unmapped_erp:'Sem vínculo ERP identificado por EAN, SKU ou pedido Amazon',
+ unmapped_erp:'Produto ERP não identificado por EAN, SKU, pedido Amazon ou exportação atual Olist',
  ambiguous_erp:'Vínculo ERP ambíguo (EAN ou pedidos divergentes)',
  erp_or_catalog_read_failed:'Falha de consulta ao ERP ou catálogo Amazon',
  erp_identity_mismatch:'Identificação de produto divergente entre Amazon e ERP',
