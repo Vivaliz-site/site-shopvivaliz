@@ -1,3 +1,41 @@
+<!-- MARINA_MCP_ACTIVE_20261104 -->
+## Estado atual (2026-11-04) — MCP independente ATIVO
+
+Este bloco prevalece sobre os blocos anteriores deste arquivo que descrevem o MCP como inativo ou nao apto. Os historicos abaixo foram preservados. **Confirme o release ativo na Marina antes de agir** (`readlink /opt/shopvivaliz-marina-mcp/current`); este texto e um snapshot.
+
+**Release ativo na ultima validacao:** `218bdb6748bffb1cc0fbd07e48d3d40b9ae03a4e`, servico `shopvivaliz-marina-mcp.service` `active`, `--activate` terminou em `ACTIVE_LOCAL_SMOKE_GREEN` (11 ferramentas com bearer local, 401 sem credencial).
+
+### Ferramentas
+| Ferramenta | Autenticacao | Observacao |
+|---|---|---|
+| `marina_host_health`, `marina_processes_list`, `marina_system_usage`, `marina_kernel_telemetry`, `marina_kernel_telemetry_batch`, `marina_service_status` | bearer local ou JWT | somente leitura |
+| `marina_workspace_file_write` | bearer local | escrita no workspace privado, sob grant |
+| `marina_service_restart` (+ `_prepare`), `marina_olist_browser_restart` (+ `_prepare`) | bearer local | via root broker, grants proprios |
+| `marina_admin_shell` | **somente JWT do Cloudflare Access verificado** | `bash -c` como `shopvivaliz-marina-mcp`; com `as_root=true` roda como root via `sudo -n` e `timeout` do lado root |
+| `marina_gui_session` | **somente JWT** | `start`/`status`/`stop` do Xvfb `:99` do usuario de servico |
+| `marina_browser_navigate` | **somente JWT** | uma URL http(s), Chromium **headless**, retorna titulo, URL final e PNG |
+
+O bearer local **nao** habilita shell, GUI nem browser: o grant exige `requires_access_jwt`. Todo uso e auditado por hash do comando/URL (nunca o texto) em `/var/lib/shopvivaliz-marina-mcp/state/admin-shell-audit.log` e `gui-browser-audit.log`, com a marca `as_root`.
+
+### Grant e politica de privilegio
+- Grant unico `marina-direct-mcp/mcp-admin-grant.json`, igual a `security/owner-approvals/3620.json` e fixado no codigo (`admin_shell.py`, `gui_browser.py`); qualquer diferenca falha fechado.
+- O servidor HTTP **nao** roda como root (`root_http_daemon_allowed=false`). Rodar o processo inteiro como root quebraria `scoped_write`, `trusted_write_operator` e `operator_grant_readback`, que recusam root de proposito. Root so via `sudo` no shell, regra em `marina-direct-mcp/sudoers/shopvivaliz-marina-mcp`, validada com `visudo -cf` e instalada pelo `--activate` (removida no rollback se nao existia).
+- Por decisao do proprietario, a unit do MCP **nao define** `NoNewPrivileges` e usa `PrivateTmp=no`; as units-modelo do tunel e do root broker nao tem chaves `=yes` de sandbox. Os modelos nao alteram units ja instaladas: instalar no host e passo separado.
+
+### Browser e display
+- Playwright `1.63.0` + Chromium `1243` em `/var/lib/shopvivaliz-marina-mcp/browser-runtime` e `/browsers`, instalados como o usuario de servico. Sem esse runtime a ferramenta responde `browser_unavailable`.
+- **Chromium com janela nao funciona neste host:** sem GPU no Xvfb ele aborta no crashpad (`--database is required`) ou nao conclui a navegacao. Por isso o browser da ferramenta e headless e nao exige o display. O display fica disponivel para programas graficos iniciados pelo shell com `DISPLAY=:99`.
+
+### Promover uma release (operador, na Marina)
+1. `cd /opt/shopvivaliz-marina-mcp/operator-src && git fetch origin main && git checkout --detach <SHA>`; o checkout deve estar limpo e ser do root.
+2. `SHOPVIVALIZ_MARINA_APPROVED_SHA=<SHA> SHOPVIVALIZ_MARINA_EXPECTED_CURRENT_SHA=<SHA ativo> bash ./marina-direct-mcp/operator_upgrade_release.sh --stage` (nao troca nada; o script nao tem bit executavel, rode com `bash`).
+3. Mesmas variaveis com `--activate`; reinicia o servico, faz o smoke local e **volta sozinho** a release anterior se falhar.
+4. Validar como o usuario de servico, sem root: executar `bootstrap_admin_shell()` e `bootstrap_gui_browser()` dos arquivos da release com comandos somente leitura.
+
+### Nao validado
+Chamada ponta a ponta pela rota publica `mcp-marina.shopvivaliz.com.br` com um JWT real do Access. Os executores foram validados direto no host.
+<!-- /MARINA_MCP_ACTIVE_20261104 -->
+
 <!-- MARINA_CLOUDFLARE_EXISTING_TUNNEL_ROUTE_20261102 -->
 > **Instrucao atualizada do proprietario (2026-11-02, prevalece sobre instrucoes anteriores de OpenAI Secure MCP Tunnel para Marina):** o **MCP independente de `marina-a1-4c24g` usara o Cloudflare Tunnel JA EXISTENTE nesta VM**, `shopvivaliz-oci-marina-admin` / `shopvivaliz-cloudflared-admin.service`, com **published application/hostname separado** `mcp-marina.shopvivaliz.com.br` encaminhando o caminho `/mcp` a `http://127.0.0.1:5580/mcp`. Reutilizar o mesmo tunnel ID e conector; **nao criar outro Cloudflare Tunnel e nao depender de `OPENAI_ADMIN_KEY`, `runtime-key`, `tunnel-profile.yaml` nem do tunnel-client OpenAI para esta rota**. Nao alterar `admin-marina.shopvivaliz.com.br`, outros ingress, tokens, site, DB ou workers.
 > **Gate de exposicao:** a decisao de transporte nao e concessao de acesso. Antes de publicar DNS/ingress, confirmar tunnel ID/account e configuracao existente pelo painel/API oficial; criar **Access application e politica proprias** deny-by-default para MCP (isoladas do admin); usar OAuth compativel com ChatGPT e validar JWT de `Cf-Access-Jwt-Assertion` (issuer/audience/assinatura/expiracao/permissoes) em componente de origem revisado. **O bearer local ja provisionado nao pode ser enviado como token ChatGPT, nem substituido por token do cloudflared**. Se Access Managed OAuth for usado, o origin deve verificar seu JWT; sem protecao provada, NAO PUBLICAR. Ampliacao de superficie de seguranca exige grant PR humana especifica, distinta da PR #3514 de escrita local; nao solicitar nova aprovacao da #3514. Preservar RBAC, CAS, lease, `0600`, readback, negativacoes e rollback.
