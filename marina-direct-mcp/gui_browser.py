@@ -158,6 +158,17 @@ def gui_session(arguments: dict, *, audit=_audit, spawn=subprocess.Popen) -> dic
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         _pid_file().write_text(str(proc.pid), encoding="utf-8")
         pid = proc.pid
+        # Right after fork /proc/<pid>/cmdline still shows the parent, so wait for the
+        # exec; otherwise status/stop cannot recognise the display and orphan it.
+        for _ in range(50):
+            if _running_xvfb_pid() == pid:
+                break
+            if proc.poll() is not None:
+                _pid_file().unlink(missing_ok=True)
+                return {"ok": False, "reason": "xvfb_failed"}
+            time.sleep(0.1)
+        else:
+            return {"ok": False, "reason": "xvfb_not_ready", "pid": pid}
     return {"ok": True, "running": True, "display": DISPLAY, "pid": pid}
 
 
