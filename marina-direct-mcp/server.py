@@ -306,7 +306,7 @@ def create_server(
             elif self.path == "/health" and self.authorized():
                 self.send_json(200, {
                     "ok": True,
-                    "name": "shopvivaliz-marina-direct-readonly",
+                    "name": "shopvivaliz-marina-direct",
                     "host": EXPECTED_HOST,
                     "scope": "unprivileged_read_only",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -376,7 +376,7 @@ def create_server(
                     result = {
                         "protocolVersion": PROTOCOL_VERSION,
                         "capabilities": {"tools": {"listChanged": False}},
-                        "serverInfo": {"name": "shopvivaliz-marina-direct-readonly", "version": "0.1.0"},
+                        "serverInfo": {"name": "shopvivaliz-marina-direct", "version": "0.1.0"},
                     }
                 elif method == "ping":
                     result = {}
