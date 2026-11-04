@@ -100,6 +100,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   <section class="card">
     <h2>Anúncios Amazon</h2>
     <p class="note">O filtro de ativos considera anúncios com status <strong>BUYABLE</strong> na Amazon. Anúncios só DISCOVERABLE não estão com oferta comprável. A auditoria completa continua verificando todo o catálogo, independente deste filtro.</p>
+    <p class="note" id="prior-cost-indicator" hidden></p>
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
@@ -264,6 +265,12 @@ function priceMarkup(r){
 function costMarkup(r){
  if(r.last_cost!==null&&r.last_cost!==undefined)
   return price(r.last_cost)+(r.last_cost_date?'<span class="cell-note">Custo de '+escapeHtml(r.last_cost_date)+'</span>':'');
+ const prior=r.prior_cost_reference;
+ if(prior&&Number.isFinite(Number(prior.cost))&&Number(prior.cost)>0) {
+  return price(prior.cost)+'<span class="cell-note warn">Último custo verificado em auditoria #'+
+    escapeHtml(prior.verified_run_id)+' ('+escapeHtml(prior.cost_date||'')+
+    '). <strong>Referência histórica; não validado nesta execução.</strong></span>';
+ }
  return '—<span class="cell-note warn">'+(r.status==='unmapped_erp'?'Sem produto ERP vinculado':
    r.status==='ambiguous_erp'?'Vínculo ERP ambíguo':
    r.status==='erp_or_catalog_read_failed'?'Consulta ERP falhou':'Custo não identificado')+'</span>';
@@ -280,6 +287,10 @@ function refreshMetrics(){
  el('n-risk').textContent=low;
  el('n-good').textContent=healthy;
  el('n-pending').textContent=base.length-low-healthy;
+ const fallback=base.filter(r=>r.last_cost===null&&r.prior_cost_reference?.cost>0).length;
+ const indicator=el('prior-cost-indicator');
+ indicator.hidden=fallback===0;
+ indicator.textContent=fallback+' anúncios com último custo de uma auditoria anterior. Esses valores são históricos, não custos confirmados nesta execução, e não habilitam margem certificada.';
 }
 function render(){
  refreshMetrics();
