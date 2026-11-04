@@ -107,5 +107,31 @@ class OlistAdsImporterTest(unittest.TestCase):
         self.assertEqual(index["entries"]["S-1"]["integrations"],["Amazon Classic"])
 
 
+    def test_legacy_xls_export(self):
+        try:
+            import xlwt
+        except ImportError:
+            self.skipTest("xlwt is only required for generating legacy XLS fixtures")
+        wb=xlwt.Workbook()
+        sh=wb.add_sheet("Anúncios")
+        rows=[
+            ["Id","Integração","Identificador","Título","Produto (SKU)","Preço de custo"],
+            [1,"Amazon Onsite","S-FBA","Produto teste","SKU-CUSTO",19.99],
+            [2,"Mercado Livre","MLB1","Outro produto","SKU-OUTRO",22.00],
+            [3,"Amazon Classic","S-CLASSIC","Produto Classic","SKU-CLASSIC",42.90],
+        ]
+        for i, row in enumerate(rows):
+            for j, value in enumerate(row):
+                sh.write(i,j,value)
+        path=self.root/"anuncios_2026-11-04-10-59-00.xls"
+        wb.save(str(path))
+        idx=importer.build_index([path],now=NOW)
+        self.assertEqual(idx["stats"]["fresh_unique"],2)
+        self.assertEqual(idx["entries"]["S-FBA"]["erp_sku"],"SKU-CUSTO")
+        self.assertEqual(idx["entries"]["S-CLASSIC"]["integrations"],["Amazon Classic"])
+        self.assertNotIn("MLB1",idx["entries"])
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
