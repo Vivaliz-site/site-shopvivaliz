@@ -73,7 +73,7 @@ class OlistAdsImporterTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"no_amazon_erp_ads"):
             importer.build_index([path], now=NOW)
         path = self.root / "renamed.csv"
-        path.write_text("Id;Integração;Identificador;Produto (SKU)\n",encoding="utf-8")
+        path.write_text("Id;Integração;Identificador;Produto (SKU);Título;Preço de custo\n100;Amazon;SKU-X;PRODUTO-X;Teste grande;99.00\n",encoding="utf-8")
         with self.assertRaisesRegex(ValueError,"missing_olist_export_timestamp"):
             importer.build_index([path], now=NOW)
 
