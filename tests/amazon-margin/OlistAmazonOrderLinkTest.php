@@ -11,6 +11,7 @@ $mk=function(string $name,string $order,int $orderId,int $erpId):array{
   'detail'=>['id'=>$orderId,'ecommerce'=>[
     'id'=>105,'nome'=>$name,'numeroPedidoEcommerce'=>$order],
     'itens'=>[['produto'=>['id'=>$erpId,'sku'=>'ERP-REAL']]]
+  ]
  ];
 };
 $orders=['100-1111111-2222222','100-1111111-2222223','100-1111111-2222224'];
