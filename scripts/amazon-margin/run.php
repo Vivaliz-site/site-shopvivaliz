@@ -81,15 +81,16 @@ try {
         'warning_count'=>count($snapshot['warnings'])],JSON_THROW_ON_ERROR),"\n";
 } catch(Throwable $e) {
     $code = ($e instanceof SvMarketplaceException && $e->httpStatus === 429)
-        ? 'AMAZON_QUOTA_429' : get_class($e);
+        ? 'AMAZON_QUOTA_429'
+        : ($e->getMessage()==='tiny_http_429' ? 'OLIST_QUOTA_429' : get_class($e));
     if ($db instanceof PDO && $requestId>0) {
         try { SvAmazonMarginStore::fail($db,$requestId,$code); } catch(Throwable) {}
     }
-    fwrite(STDERR,json_encode(['state'=>$code==='AMAZON_QUOTA_429'?'deferred':'failed',
+    fwrite(STDERR,json_encode(['state'=>in_array($code,['AMAZON_QUOTA_429','OLIST_QUOTA_429'],true)?'deferred':'failed',
         'code'=>$code,'origin'=>basename($e->getFile()).':'.$e->getLine(),
         'reason'=>preg_replace('/[^a-zA-Z0-9_:-]/','_',substr($e->getMessage(),0,90))],
         JSON_THROW_ON_ERROR)."\n");
-    exit($code==='AMAZON_QUOTA_429'?0:2);
+    exit(in_array($code,['AMAZON_QUOTA_429','OLIST_QUOTA_429'],true)?0:2);
 } finally {
     if ($db instanceof PDO && array_key_exists('next',$options)) {
         try { $db->query("SELECT RELEASE_LOCK('shopvivaliz_amazon_margin_runner')"); } catch(Throwable) {}

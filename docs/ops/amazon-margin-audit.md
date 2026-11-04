@@ -41,6 +41,14 @@ O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete
 - Um SKU sem EAN Amazon só será vinculado automaticamente ao ERP quando houver **uma correspondência exata e única de Seller SKU a produto ativo**. Com EAN presente, nunca ignorar divergência de GTIN ou selecionar produto ambíguo. O campo `erp_match_method` torna a origem do vínculo auditável.
 - Campos vazios de custo para anúncios ativos significam **vínculo não identificado, API não disponível ou custo ainda sem histórico válido**. A ligação de anúncios ERP pode ser consultada via interface do ERP; sua API pública v3 não expõe leitura de vínculo por anúncio. Não tentar adivinhar pela semelhança dos títulos.
 
+## Resiliência às cotas e referência de custos validados anteriormente
+
+- Olist ERP v3 limita chamadas de leitura **por conta**, compartilhadas entre aplicativos, e fornece os cabeçalhos x-ratelimit-limit, x-ratelimit-remaining e x-ratelimit-reset. A auditoria reserva capacidade para integrações existentes, aguarda o reset indicado e aplica backoff em HTTP 429/503, sem tentar contornar 401/403. O limite é obtido dos cabeçalhos, não fixado no código.
+- Um erro temporário na API de histórico de custos não significa "custo zero". O collector preserva o status erp_or_catalog_read_failed quando a API não consegue confirmar o histórico. A fila adia até 20 minutos em caso de 429, sem consumir tentativas de falha lógica.
+- **Somente apresentação:** quando o relatório atual apresenta falha de leitura, o painel/PDF/Excel podem exibir em campo separado o **último custo anteriormente verificado** em snapshot dos 48h anteriores. A referência requer identidade exata de Seller SKU, ASIN e EAN, ID ERP positivo, custo positivo originado de OLIST_TINY_V3_PRODUCT_COST_HISTORY, data e número da auditoria anterior. Não atualizar custo atual, margem, estado de conciliação nem lucro com a referência.
+- **Comprovação de 04/11/2026:** no run #4, 149 anúncios BUYABLE não tiveram custo confirmado; 132 eram unmapped_erp, 14 falharam em leitura, dois eram ambíguos e um teve divergência de identidade. Treze dos 14 com erro tinham histórico válido no run #3 e foram novamente consultados com sucesso por API read-only. O 14º não tinha referência anterior. O custo histórico dos 13 deve ser rotulado **não confirmado na execução atual**; isso não equivale a margens certificadas.
+- No snapshot de recuperação de 26/10, vários EANs de anúncios BUYABLE só aparecem em produtos ERP **excluídos (situacao=E)** ou em múltiplos cadastros excluídos. A API oficial não garante o vínculo anúncio-produto apenas pelo EAN nessas situações. Não preencher custos usando produtos excluídos ou títulos similares sem prova adicional da aba "Anúncios" no ERP.
+
 ## Arquitetura
 
 | Componente | Caminho |

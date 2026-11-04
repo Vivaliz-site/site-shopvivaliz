@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/PriorCostReference.php';
+
 final class SvAmazonMarginStore
 {
     public static function ensureSchema(PDO $db): void
@@ -223,15 +225,16 @@ final class SvAmazonMarginStore
     {
         if ($requestId <= 0) return;
         $code = substr(preg_replace('/[^a-zA-Z0-9_:-]/','_', $code) ?: 'unknown', 0, 90);
-        if ($code === 'AMAZON_QUOTA_429') {
-            // SP-API quota is external/transient, not a corrupt audit. Do not
-            // burn the 3 attempts while requests remain throttled.
+        if (in_array($code,['AMAZON_QUOTA_429','OLIST_QUOTA_429'],true)) {
+            // Merchant API quotas are external/transient. Preserve the request
+            // without consuming attempts when Amazon or Olist is throttled.
+            $stage = $code==='OLIST_QUOTA_429' ? 'waiting_olist_quota' : 'waiting_amazon_quota';
             $upd = $db->prepare("UPDATE amazon_margin_audit_requests
-                SET state='queued', stage='waiting_amazon_quota',
+                SET state='queued', stage=?,
                     attempts=GREATEST(0, attempts-1),
                     next_attempt_at=UTC_TIMESTAMP()+INTERVAL 20 MINUTE,
                     heartbeat_at=UTC_TIMESTAMP(),finished_at=NULL,error_code=? WHERE id=?");
-            $upd->execute([$code,$requestId]);
+            $upd->execute([$stage,$code,$requestId]);
             return;
         }
         $upd = $db->prepare("UPDATE amazon_margin_audit_requests
@@ -244,11 +247,36 @@ final class SvAmazonMarginStore
 
     public static function latest(PDO $db): ?array
     {
-        $q = $db->query('SELECT id,scope,generated_at,payload_json FROM amazon_margin_audit_runs ORDER BY id DESC LIMIT 1');
-        $row = $q->fetch(PDO::FETCH_ASSOC);
+        $q=$db->query('SELECT id,scope,generated_at,payload_json
+            FROM amazon_margin_audit_runs ORDER BY id DESC LIMIT 1');
+        $row=$q->fetch(PDO::FETCH_ASSOC);
         if (!$row) return null;
-        $data = json_decode($row['payload_json'], true, 512, JSON_THROW_ON_ERROR);
-        return ['run_id'=>(int)$row['id'], 'scope'=>$row['scope'], 'generated_at'=>$row['generated_at'], 'snapshot'=>$data];
+        $data=json_decode($row['payload_json'],true,512,JSON_THROW_ON_ERROR);
+        $latest=['run_id'=>(int)$row['id'],'scope'=>$row['scope'],
+            'generated_at'=>$row['generated_at'],'snapshot'=>$data];
+
+        // Read-only presentation fallback: use only previously verified costs
+        // with exactly matching SKU, ASIN and GTIN after a transient ERP error.
+        // It NEVER changes the persisted cost, status, or certified margin.
+        $failures=0;
+        foreach ($data['rows']??[] as $candidate) {
+            if (($candidate['status']??'')==='erp_or_catalog_read_failed'
+                && ($candidate['last_cost']??null)===null) $failures++;
+        }
+        if ($failures===0) return $latest;
+        $stmt=$db->prepare('SELECT id,generated_at,payload_json
+            FROM amazon_margin_audit_runs WHERE id < ?
+              AND generated_at >= ? - INTERVAL 48 HOUR
+            ORDER BY id DESC LIMIT 5');
+        $stmt->execute([(int)$row['id'],$row['generated_at']]);
+        $priorRuns=[];
+        foreach($stmt->fetchAll(PDO::FETCH_ASSOC) as $prior) {
+            $priorRuns[]=[
+                'run_id'=>(int)$prior['id'],'generated_at'=>$prior['generated_at'],
+                'snapshot'=>json_decode($prior['payload_json'],true,512,JSON_THROW_ON_ERROR)
+            ];
+        }
+        return SvAmazonMarginPriorCostReference::augment($latest,$priorRuns);
     }
 
     public static function latestMeta(PDO $db): ?array

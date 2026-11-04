@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/MarginMath.php';
 require_once __DIR__ . '/ProductMatch.php';
 require_once __DIR__ . '/RateLimitPolicy.php';
+require_once __DIR__ . '/OlistQuotaPolicy.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -72,24 +73,37 @@ final class SvAmazonMarginCollector
 
     private function tiny(string $path): array
     {
-        for ($attempt = 0; $attempt < 3; $attempt++) {
-            $ch = curl_init('https://api.tiny.com.br/public-api/v3' . $path);
-            if ($ch === false) throw new RuntimeException('tiny_transport_error');
-            curl_setopt_array($ch, [
-                CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $this->tinyToken, 'Accept: application/json'],
-                CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 35,
-                CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2,
+        // Rate limit is PER OLIST ACCOUNT, shared with other integrations.
+        // Headers indicate the remaining budget and seconds to reset; preserve
+        // capacity for the ERP's regular workflows instead of burst-reading it.
+        for ($attempt=0;$attempt<6;$attempt++) {
+            $headers=[];
+            $ch=curl_init('https://api.tiny.com.br/public-api/v3'.$path);
+            if ($ch===false) throw new RuntimeException('tiny_transport_init_failed');
+            curl_setopt_array($ch,[
+                CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$this->tinyToken,'Accept: application/json'],
+                CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>35,
+                CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2,
+                CURLOPT_HEADERFUNCTION=>static function($handle,string $line)use(&$headers):int{
+                    SvAmazonMarginOlistQuotaPolicy::header($line,$headers);
+                    return strlen($line);
+                },
             ]);
-            $body = curl_exec($ch);
-            $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $body=curl_exec($ch);
+            $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
             curl_close($ch);
-            if ($status === 429 && $attempt < 2) { sleep(2 + $attempt * 3); continue; }
-            if ($status !== 200 || !is_string($body)) {
-                throw new RuntimeException('tiny_http_' . $status);
+            if ($status===200 && is_string($body)) {
+                $decoded=json_decode($body,true,512,JSON_THROW_ON_ERROR);
+                if (!is_array($decoded))throw new RuntimeException('tiny_invalid_response');
+                $cooloff=SvAmazonMarginOlistQuotaPolicy::cooloffAfterSuccess($headers);
+                if ($cooloff>0) sleep($cooloff);
+                return $decoded;
             }
-            $decoded = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
-            if (!is_array($decoded)) throw new RuntimeException('tiny_invalid_response');
-            return $decoded;
+            if (!SvAmazonMarginOlistQuotaPolicy::retryable($status) || $attempt===5) {
+                // HTTP 401/403 are authorization errors, never bypassed by retry.
+                throw new RuntimeException('tiny_http_'.$status);
+            }
+            sleep(SvAmazonMarginOlistQuotaPolicy::retryDelay($status,$headers,$attempt));
         }
         throw new RuntimeException('tiny_max_retries');
     }
