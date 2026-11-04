@@ -28,7 +28,7 @@ $checks = [
         && str_contains($page, "'X-CSRF-Token':csrf"),
     'run ID is bound to both the session and server-side account' =>
         str_contains($api, "sv_ml_margin_last_run")
-        && str_contains($api, "hash_equals($account, $run['account'])"),
+        && str_contains($api, 'hash_equals($account, $run[\'account\'])'),
     'backend enqueues one item per Mercado Livre ID' =>
         str_contains($api, "'item_ids'")
         && str_contains($page, 'state.selected'),
