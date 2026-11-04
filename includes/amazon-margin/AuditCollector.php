@@ -443,7 +443,7 @@ final class SvAmazonMarginCollector
             $feesAssessedByOrder = [];
             foreach (($fin['shipments'][$sku] ?? []) as $shipment) {
                 // Older orders are identity evidence ONLY, not financial results.
-                if (strcmp((string)($shipment['posted_at']??''),$postedAfter)<0)continue;
+                if (!SvAmazonMarginOlistOrderLink::inFinancialWindow((string)($shipment['posted_at']??''),$postedAfter))continue;
                 $order = $shipment['order'];
                 $postage = null;
                 $confirmed = false;
