@@ -26,6 +26,15 @@ O bearer local **nao** habilita shell, GUI nem browser: o grant exige `requires_
 - Playwright `1.63.0` + Chromium `1243` em `/var/lib/shopvivaliz-marina-mcp/browser-runtime` e `/browsers`, instalados como o usuario de servico. Sem esse runtime a ferramenta responde `browser_unavailable`.
 - **Chromium com janela nao funciona neste host:** sem GPU no Xvfb ele aborta no crashpad (`--database is required`) ou nao conclui a navegacao. Por isso o browser da ferramenta e headless e nao exige o display. O display fica disponivel para programas graficos iniciados pelo shell com `DISPLAY=:99`.
 
+### Acesso dos agentes pelo service token (decisao do proprietario, 2026-11-04)
+O service token `marina-mcp-automation-3521-eb504b66` fica acessivel aos agentes para chamar as ferramentas do MCP, **inclusive `marina_admin_shell` com `as_root`**, pela rota publica. **Quem le esses arquivos tem root na Marina**: eles so podem ficar no armazem do usuario dos agentes, modo `0600`, e nunca em repositorio, log, chat ou argumento de processo.
+
+- **Cliente:** `scripts/marina_mcp_agent_client.py` (`preflight`, `tools`, `call TOOL --args JSON`). Le `MARINA_MCP_ACCESS_CLIENT_ID` e `MARINA_MCP_ACCESS_CLIENT_SECRET` de variaveis de ambiente ou de arquivos com esses nomes em `~/.shopvivaliz/secrets/`; recusa arquivo que nao seja regular `0600` do proprio usuario, recusa endpoint sem HTTPS (http so em loopback), nunca imprime o valor e redige qualquer eco dele na resposta.
+- **Verificar sem rede e sem ver valores:** `python3 scripts/marina_mcp_agent_client.py preflight` (sai com 2 se faltar credencial).
+- **Provisionar uma vez (o valor nao passa por nenhum agente):** `install -d -m 700 ~/.shopvivaliz/secrets`; depois, para cada um dos dois nomes, `read -rs v; printf %s "$v" > ~/.shopvivaliz/secrets/NOME; chmod 600 ~/.shopvivaliz/secrets/NOME; unset v`.
+- **Se o segredo foi perdido:** o Cloudflare mostra o Client Secret uma unica vez; em Zero Trust > Access > Service credentials > Service Tokens use "Refresh" no token, o que invalida o segredo anterior, e provisione de novo.
+- **Rotacao e expiracao** do token continuam monitoradas pelo proprietario; a politica `Service Auth` do app MCP inclui somente este token.
+
 ### Promover uma release (operador, na Marina)
 1. `cd /opt/shopvivaliz-marina-mcp/operator-src && git fetch origin main && git checkout --detach <SHA>`; o checkout deve estar limpo e ser do root.
 2. `SHOPVIVALIZ_MARINA_APPROVED_SHA=<SHA> SHOPVIVALIZ_MARINA_EXPECTED_CURRENT_SHA=<SHA ativo> bash ./marina-direct-mcp/operator_upgrade_release.sh --stage` (nao troca nada; o script nao tem bit executavel, rode com `bash`).
