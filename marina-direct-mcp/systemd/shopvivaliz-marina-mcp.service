@@ -16,7 +16,7 @@ RestartSec=5s
 UMask=0077
 # No privilege or sandbox restrictions are set here: the admin shell runs commands
 # as root through sudo. The HTTP process itself runs as the unprivileged account.
-PrivateTmp=yes
+PrivateTmp=no
 StandardOutput=journal
 StandardError=journal
 

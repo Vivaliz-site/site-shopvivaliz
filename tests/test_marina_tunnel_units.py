@@ -33,7 +33,8 @@ class OperatorGatedUnitsTests(unittest.TestCase):
             self.assertEqual(section["User"], ACCOUNT)
             self.assertEqual(section["Group"], ACCOUNT)
             self.assertEqual(section["UMask"], "0077")
-            self.assertEqual(section["PrivateTmp"], "yes")
+            # The MCP shell must see the real host /tmp; only the tunnel keeps a private one.
+            self.assertEqual(section["PrivateTmp"], "no" if name == "shopvivaliz-marina-mcp.service" else "yes")
             self.assertEqual(section["Restart"], "on-failure")
 
     def test_tunnel_keeps_the_full_sandbox(self):
