@@ -5,7 +5,9 @@ final class SvAmazonMarginStore
 {
     public static function ensureSchema(PDO $db): void
     {
-        $db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_requests (
+        $requestsExist=(bool)$db->query("SELECT 1 FROM information_schema.tables
+            WHERE table_schema=DATABASE() AND table_name='amazon_margin_audit_requests'")->fetchColumn();
+        if(!$requestsExist)$db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_requests (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             scope VARCHAR(20) NOT NULL,
             skus_json LONGTEXT NOT NULL,
@@ -45,7 +47,9 @@ final class SvAmazonMarginStore
                 catch(PDOException $e) {if ((int)($e->errorInfo[1]??0)!==1060) throw $e;}
             }
         }
-        $db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_runs (
+        $runsExist=(bool)$db->query("SELECT 1 FROM information_schema.tables
+            WHERE table_schema=DATABASE() AND table_name='amazon_margin_audit_runs'")->fetchColumn();
+        if(!$runsExist)$db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_runs (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             request_id BIGINT UNSIGNED NULL,
             scope VARCHAR(20) NOT NULL,
