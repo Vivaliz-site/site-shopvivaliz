@@ -93,7 +93,7 @@ class StartupTests(unittest.TestCase):
             if unavailable:
                 raise RuntimeError('test-unavailable')
             return client
-        module = {'bootstrap_client':bootstrap}
+        module = {'bootstrap_client':bootstrap, 'bootstrap_service_client':lambda: None}
         server = Mock()
         with patch.object(m.sys,'argv',args), patch.object(m.socket,'gethostname',return_value=m.EXPECTED_HOST), patch.object(m,'load_token',return_value=b'x'*64), patch.object(m.runpy,'run_path',return_value=module) as loader, patch.object(m,'create_server',return_value=server) as created, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             try:
@@ -110,6 +110,7 @@ class StartupTests(unittest.TestCase):
         code,created,_,client = self.invoke(enabled=True)
         self.assertEqual(code,0)
         self.assertIs(created.call_args.kwargs.get('admin_client'),client)
+        self.assertIsNone(created.call_args.kwargs.get('service_client'))
     def test_unavailable_broker_downgrades_reads_and_strict_check_denies(self):
         code,created,_,_ = self.invoke(enabled=True,unavailable=True)
         self.assertEqual(code,0)

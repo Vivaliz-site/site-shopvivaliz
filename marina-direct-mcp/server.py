@@ -147,6 +147,41 @@ ADMIN_PREPARE_TOOL = {
 }
 
 
+# Only exposed when the separate service_restart client grant is installed.
+SERVICE_TOOL = {
+    "name": "marina_service_restart",
+    "description": "Restart one shopvivaliz-*.service unit on Marina through the protected root broker; the unit must be authorized by a human-approved deploy/systemd PR. Restart only.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "operation": {"type": "string", "enum": ["service_restart"]},
+            "pr_number": {"type": "integer", "minimum": 1},
+            "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "merge_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "idempotency_key": {"type": "string", "pattern": "^broker-[0-9a-f]{32}$"},
+            "fencing_token": {"type": "integer", "minimum": 1},
+            "unit": {"type": "string", "pattern": "^shopvivaliz-[a-z0-9][a-z0-9-]*\\.service$"},
+        },
+        "required": ["operation", "pr_number", "head_sha", "merge_sha",
+                     "idempotency_key", "fencing_token", "unit"],
+        "additionalProperties": False,
+    },
+}
+
+
+SERVICE_PREPARE_TOOL = {
+    "name": "marina_service_restart_prepare",
+    "description": "Prepare a short-lived host-issued fenced ticket for one service restart. Does not restart a service.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {key: SERVICE_TOOL["inputSchema"]["properties"][key]
+                       for key in ("operation", "pr_number", "head_sha", "merge_sha")},
+        "required": ["operation", "pr_number", "head_sha", "merge_sha"],
+        "additionalProperties": False,
+    },
+}
+
+
 def load_token(path: Path) -> bytes:
     # Open once with O_NOFOLLOW: no lstat-to-open symlink/rename race.
     # Do not reveal filesystem paths, token bytes or syscall details on errors.
@@ -194,6 +229,7 @@ def create_server(
     write_operator=None,
     admin_operator=None,
     admin_client=None,
+    service_client=None,
     access_verifier=None,
 ) -> ThreadingHTTPServer:
     if host != "127.0.0.1":
@@ -340,7 +376,8 @@ def create_server(
                     result = {"tools": TOOLS
                               + ([WRITE_TOOL] if write_operator is not None and self.local_bearer else [])
                               + ([ADMIN_TOOL] if (admin_operator is not None or admin_client is not None) and self.local_bearer else [])
-                              + ([ADMIN_PREPARE_TOOL] if admin_client is not None and self.local_bearer else [])}
+                              + ([ADMIN_PREPARE_TOOL] if admin_client is not None and self.local_bearer else [])
+                              + ([SERVICE_TOOL, SERVICE_PREPARE_TOOL] if service_client is not None and self.local_bearer else [])}
                 elif method == "tools/call":
                     params = request.get("params")
                     if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
@@ -369,6 +406,12 @@ def create_server(
                         output = (admin_client.prepare(arguments)
                                   if name == "marina_olist_browser_restart_prepare"
                                   else admin_client.execute(arguments))
+                        tool_failed = output.get("ok") is not True
+                    elif name in {"marina_service_restart_prepare", "marina_service_restart"} and service_client is not None and self.local_bearer:
+                        # Same boundary as the Olist client: the root peer decides, never this process.
+                        output = (service_client.prepare(arguments)
+                                  if name == "marina_service_restart_prepare"
+                                  else service_client.execute(arguments))
                         tool_failed = output.get("ok") is not True
                     elif name == "marina_olist_browser_restart" and admin_operator is not None and self.local_bearer:
                         admin_ok, reason = _ADMIN["execute_admin_operation"](arguments, admin_operator)
@@ -481,16 +524,29 @@ def main() -> int:
                     raise
                 print("MARINA_MCP_ADMIN_DISABLED=" + type(exc).__name__, file=sys.stderr)
                 admin_client = None
+        service_client = None
+        if args.enable_approved_admin_broker:
+            try:
+                broker_module = runpy.run_path(str(Path(__file__).with_name("broker_client.py")))
+                service_client = broker_module["bootstrap_service_client"]()
+            except (OSError, RuntimeError, ValueError) as exc:
+                if args.check:
+                    raise
+                print("MARINA_MCP_SERVICE_RESTART_DISABLED=" + type(exc).__name__, file=sys.stderr)
+                service_client = None
         if args.check and args.enable_approved_scoped_write and write_operator is None:
             raise RuntimeError("owner_approved_scoped_write_grant_unavailable")
         if args.check:
             if admin_client is not None:
                 print("MARINA_MCP_ADMIN_BROKER_PREFLIGHT=PASS")
+            if service_client is not None:
+                print("MARINA_MCP_SERVICE_RESTART_PREFLIGHT=PASS")
             print("MARINA_MCP_SCOPED_WRITE_PREFLIGHT=PASS" if write_operator is not None
                   else "MARINA_MCP_READONLY_PREFLIGHT=PASS")
             return 0
         server = create_server(token, args.port, write_operator=write_operator,
-                               admin_client=admin_client, access_verifier=access_verifier)
+                               admin_client=admin_client, service_client=service_client,
+                               access_verifier=access_verifier)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"MARINA_MCP_REFUSED={str(exc)}", file=sys.stderr)
         return 1
