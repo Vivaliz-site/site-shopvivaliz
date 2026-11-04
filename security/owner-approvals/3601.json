@@ -1,0 +1,19 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3601,
+  "resource": "mcp:marina",
+  "principal": "marina-mcp-service",
+  "target_repository": "Vivaliz-site/site-shopvivaliz",
+  "host": "marina-a1-4c24g",
+  "capabilities": [
+    "deployment_manage"
+  ],
+  "operation": "service_restart",
+  "unit_rule": "restart only shopvivaliz-*.service units whose deploy/systemd change PR was merged with final shopvivaliz-human APPROVED on the exact head; no start, stop, enable or unit edits",
+  "secret_disclosure_allowed": false,
+  "root_or_shell_allowed": false,
+  "lease_fencing_required": true,
+  "audit_required": true,
+  "expires_at_utc": "2026-12-31T23:59:00Z"
+}
