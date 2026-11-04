@@ -6,6 +6,7 @@ require_once __DIR__ . '/ProductMatch.php';
 require_once __DIR__ . '/RateLimitPolicy.php';
 require_once __DIR__ . '/OlistQuotaPolicy.php';
 require_once __DIR__ . '/ReadErrorPolicy.php';
+require_once __DIR__ . '/OlistAmazonOrderLink.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -336,7 +337,11 @@ final class SvAmazonMarginCollector
         $this->note('mapping_erp_products');
         $this->tinyIndex();
         $this->note('reading_transactions');
-        $fin = $this->finances($postedAfter);
+        // Order-to-product identity may predate the 30-day margin window.
+        // Fetch 90 days once, but calculate money ONLY for postedAfter sales.
+        $mappingAfter = gmdate('Y-m-d\\T00:00:00\\Z',strtotime('-90 days'));
+        $financeFrom = strcmp($postedAfter,$mappingAfter)<0 ? $postedAfter : $mappingAfter;
+        $fin = $this->finances($financeFrom);
         $this->note('calculating_margins',0,count($listings));
         $rows = [];
         $taxBps = (int)(getenv('SV_AMAZON_MARGIN_TAX_BPS') ?: 1400);
@@ -355,22 +360,55 @@ final class SvAmazonMarginCollector
             try {
                 $ean = $this->ean($asin);
                 $row['ean'] = $ean;
+                // The catalog GTIN alone does not identify the *ERP-linked*
+                // product of an Amazon offer. A user may publish Amazon with
+                // another GTIN and link it to a valid SKU in one of the three
+                // ERP Amazon integrations. First use strict GTIN/SKU identity;
+                // only if missing/contradictory join actual Amazon ORDER_ID
+                // to the imported Olist order and its product ID.
                 $link = SvAmazonMarginProductMatch::resolve($sku,$ean,
                     $this->productsByEan,$this->productsBySku);
-                $row['erp_match_method'] = $link['method'];
-                $row['erp_mapping_reason'] = $link['reason'];
-                if ($link['status'] !== 'mapped') {
-                    $row['status'] = $link['status'];
-                    $rows[] = $row;
-                    continue;
+                $prod = null;
+                if ($link['status']==='mapped') {
+                    $prod = $this->product((int)$link['id']);
+                    if (!$prod['active'] || ($ean!==null&&$ean!==''&&$prod['erp_gtin']!==$ean)
+                        || ($link['method']==='SELLER_SKU_EXACT'
+                            && strcasecmp($prod['erp_sku'],(string)$sku)!==0)) {
+                        $prod=null;
+                        $link=['status'=>'erp_identity_mismatch','id'=>null,'method'=>null,
+                            'reason'=>'product_detail_identity_mismatch'];
+                    }
                 }
-                $prod = $this->product((int)$link['id']);
-                if (!$prod['active'] || ($ean!==null&&$ean!==''&&$prod['erp_gtin']!==$ean)
-                    || ($link['method']==='SELLER_SKU_EXACT'
-                        && strcasecmp($prod['erp_sku'],(string)$sku)!==0)) {
-                    $row['status'] = 'erp_identity_mismatch';
-                    $row['erp_mapping_reason']='product_detail_identity_mismatch';
-                    $rows[] = $row;
+                if ($link['status']!=='mapped'
+                    && in_array('BUYABLE',$row['amazon_status']??[],true)
+                    && !empty($fin['shipments'][$sku])) {
+                    $orderLink = SvAmazonMarginOlistOrderLink::resolve(
+                        (string)$sku,$fin['shipments'][$sku],$fin['order_skus'],
+                        fn(string $path):array => $this->tiny($path));
+                    if ($orderLink['status']==='mapped') {
+                        $candidate=$this->product((int)$orderLink['id']);
+                        if ($candidate['active']) {
+                            $prod=$candidate;
+                            $link=$orderLink;
+                            $row['erp_integration']=$orderLink['integration'];
+                            $row['erp_order_evidence_count']=$orderLink['evidence_count'];
+                            $row['erp_gtin_differs_from_amazon']=($ean!==null&&$ean!==''
+                                &&(string)$candidate['erp_gtin']!==$ean);
+                        } else {
+                            // An order history can reference a product that has
+                            // since been archived. Do not treat it as mapped now.
+                            $link=['status'=>'erp_identity_mismatch','id'=>null,
+                                'method'=>null,'reason'=>'olist_order_product_inactive'];
+                        }
+                    } elseif ($orderLink['status']==='ambiguous_erp') {
+                        $link=$orderLink; // Do not use a disputed cost.
+                    }
+                }
+                $row['erp_match_method']=$link['method'];
+                $row['erp_mapping_reason']=$link['reason'];
+                if ($link['status']!=='mapped' || $prod===null) {
+                    $row['status']=$link['status'];
+                    $rows[]=$row;
                     continue;
                 }
                 $row = array_merge($row,$prod);
@@ -404,6 +442,8 @@ final class SvAmazonMarginCollector
             $totalGross = 0;
             $feesAssessedByOrder = [];
             foreach (($fin['shipments'][$sku] ?? []) as $shipment) {
+                // Older orders are identity evidence ONLY, not financial results.
+                if (!SvAmazonMarginOlistOrderLink::inFinancialWindow((string)($shipment['posted_at']??''),$postedAfter))continue;
                 $order = $shipment['order'];
                 $postage = null;
                 $confirmed = false;
@@ -461,7 +501,7 @@ final class SvAmazonMarginCollector
             'period_from'=>$postedAfter,
             'scope'=>$selectedSkus?'selected':'all',
             'sources'=>['AMAZON_SPAPI_LISTINGS','AMAZON_SPAPI_PRICING',
-                'AMAZON_SPAPI_FINANCES','AMAZON_SPAPI_ORDERS','OLIST_TINY_V3'],
+                'AMAZON_SPAPI_FINANCES','AMAZON_SPAPI_ORDERS','OLIST_TINY_V3','OLIST_V3_AMAZON_ORDER_ID_JOIN'],
             'tax_bps'=>$taxBps,
             'offer_count'=>count($rows),
             'warnings'=>$this->warnings,

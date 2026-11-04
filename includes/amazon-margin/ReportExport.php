@@ -41,6 +41,9 @@ final class SvAmazonMarginExport
             'Auditoria custo anterior'=>isset($reference['verified_run_id']) ? (int)$reference['verified_run_id'] : null,
             'SKU ERP anterior'=>(string)($reference['erp_sku']??''),
             'Fonte do vinculo'=>(string)($row['erp_match_method'] ?? ''),
+            'Integração ERP Amazon'=>(string)($row['erp_integration'] ?? ''),
+            'Pedidos de vínculo comprovados'=>(int)($row['erp_order_evidence_count'] ?? 0),
+            'GTIN Amazon difere do ERP'=>(!empty($row['erp_gtin_differs_from_amazon'])?'Sim':'Nao'),
             'Motivo do vinculo pendente'=>(string)($row['erp_mapping_reason'] ?? ''),
 
             'Unidades confirmadas'=>(int)($row['confirmed_units'] ?? 0),
