@@ -150,5 +150,66 @@ class BootstrapTests(unittest.TestCase):
                 shell.bootstrap_admin_shell()
 
 
+def _alive(marker: bytes) -> bool:
+    """True if any process other than this one has `marker` in its command line."""
+    import os
+    for entry in os.listdir("/proc"):
+        if entry.isdigit() and int(entry) != os.getpid():
+            try:
+                if marker in Path("/proc/" + entry + "/cmdline").read_bytes():
+                    return True
+            except OSError:
+                pass
+    return False
+
+
+def _kill_exact(argv_bytes: bytes) -> None:
+    """Kill only processes whose whole argv equals `argv_bytes` (never a pattern match, so
+    it cannot hit the shell that is running the tests)."""
+    import os
+    import signal
+    for entry in os.listdir("/proc"):
+        if entry.isdigit() and int(entry) != os.getpid():
+            try:
+                if Path("/proc/" + entry + "/cmdline").read_bytes() == argv_bytes:
+                    os.kill(int(entry), signal.SIGKILL)
+            except OSError:
+                pass
+
+
+class RealProcessTimeoutTests(unittest.TestCase):
+    """Real processes: a timeout must stop the whole command, not only the shell."""
+
+    def setUp(self):
+        patcher = patch.object(shell, "_service_identity_ok", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(_kill_exact, b"sleep\x004343\x00")
+
+    def test_timeout_kills_background_children_of_the_command(self):
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            result = shell.run_admin_shell({"command": "sleep 4343 & echo started; wait", "timeout_seconds": 1},
+                                           home=tmp, audit=lambda e: True)
+        time.sleep(0.3)
+        self.assertTrue(result["timed_out"])
+        self.assertIs(result["ok"], False)
+        self.assertFalse(_alive(b"sleep\x004343"), "child of the timed-out command is still running")
+
+    def test_normal_completion_keeps_exit_code_and_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = shell.run_admin_shell({"command": "echo out; echo err >&2; exit 3", "timeout_seconds": 10},
+                                           home=tmp, audit=lambda e: True)
+        self.assertEqual((result["ok"], result["exit_code"], result["timed_out"]), (False, 3, False))
+        self.assertEqual((result["stdout"], result["stderr"]), ("out\n", "err\n"))
+
+    def test_run_group_returns_a_completed_process_and_raises_on_timeout(self):
+        done = shell._run_group(["/bin/sh", "-c", "exit 0"], timeout=5, check=False)
+        self.assertEqual(done.returncode, 0)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            shell._run_group(["/bin/sh", "-c", "sleep 4343"], timeout=1, check=False)
+        self.assertFalse(_alive(b"sleep\x004343"))
+
+
 if __name__ == "__main__":
     unittest.main()

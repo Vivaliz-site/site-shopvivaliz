@@ -8,6 +8,8 @@ service starts with --enable-gui-browser and with --access-config.
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -133,6 +135,18 @@ def _running_xvfb_pid() -> int | None:
     return pid if cmdline and cmdline[0].endswith(b"Xvfb") and DISPLAY.encode() in cmdline else None
 
 
+@contextlib.contextmanager
+def _state_lock():
+    """Serialise start/stop/status: without it two callers could both see no display,
+    both spawn an Xvfb, and the loser would report xvfb_failed or drop the pidfile."""
+    fd = os.open(STATE_DIR / "gui.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
 def gui_session(arguments: dict, *, audit=_audit, spawn=subprocess.Popen) -> dict:
     action = arguments.get("action")
     if set(arguments) != {"action"} or action not in {"start", "status", "stop"}:
@@ -142,6 +156,11 @@ def gui_session(arguments: dict, *, audit=_audit, spawn=subprocess.Popen) -> dic
     if not audit({"event": "gui_session", "action": action, "at": int(time.time())}):
         return {"ok": False, "reason": "audit_unavailable"}
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with _state_lock():
+        return _gui_session_locked(action, spawn)
+
+
+def _gui_session_locked(action: str, spawn) -> dict:
     pid = _running_xvfb_pid()
     if action == "status":
         return {"ok": True, "running": pid is not None, "display": DISPLAY}

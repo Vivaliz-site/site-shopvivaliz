@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -251,6 +252,49 @@ class ToolSchemaTests(unittest.TestCase):
         self.assertEqual(names, {"marina_gui_session", "marina_browser_navigate"})
         for tool in gui.GUI_BROWSER_TOOLS:
             self.assertIs(tool["inputSchema"]["additionalProperties"], False)
+
+
+class ConcurrentStartTests(unittest.TestCase):
+    def test_two_simultaneous_starts_spawn_one_display_and_both_succeed(self):
+        import tempfile, threading, types, time as real_time
+        spawned, results = [], []
+        barrier = threading.Barrier(2)
+
+        class Proc:
+            def __init__(self, pid):
+                self.pid = pid
+
+            def poll(self):
+                return None
+
+        def spawn(argv, **kwargs):
+            spawned.append(argv)
+            try:
+                barrier.wait(timeout=0.4)   # both callers meet here only if nothing serialises them
+            except threading.BrokenBarrierError:
+                pass
+            return Proc(4000 + len(spawned))
+
+        def running():
+            pidfile = gui._pid_file()
+            # os.path.exists: Path.exists is patched to True below (for the Xvfb binary check)
+            return int(pidfile.read_text()) if os.path.exists(pidfile) else None
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(gui, "STATE_DIR", Path(tmp)), \
+             patch.object(gui, "_service_identity_ok", return_value=True), \
+             patch.object(gui.Path, "exists", return_value=True), \
+             patch.object(gui, "_running_xvfb_pid", side_effect=lambda: running()), \
+             patch.object(gui, "time", types.SimpleNamespace(sleep=lambda s: None, time=real_time.time)):
+            threads = [threading.Thread(target=lambda: results.append(
+                gui.gui_session({"action": "start"}, audit=lambda e: True, spawn=spawn))) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(len(spawned), 1, "a second Xvfb was spawned")
+        self.assertEqual([r.get("ok") for r in results], [True, True], results)
+        self.assertEqual({r["pid"] for r in results}, {4001})
 
 
 if __name__ == "__main__":
