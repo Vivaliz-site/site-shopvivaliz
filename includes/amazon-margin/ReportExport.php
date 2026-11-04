@@ -11,13 +11,33 @@ final class SvAmazonMarginExport
     private static function values(array $row): array
     {
         $margin = $row['margin_weighted_bps'] ?? null;
+        $status = $row['amazon_status'] ?? [];
+        $buyable = is_array($status) && in_array('BUYABLE',$status,true);
+        $reason = match((string)($row['status'] ?? '')) {
+            'unmapped_erp' => 'Produto vinculado no ERP nao identificado',
+            'ambiguous_erp' => 'Produto ERP ambiguo',
+            'erp_or_catalog_read_failed' => 'Falha consulta ERP/catalogo',
+            'erp_identity_mismatch' => 'EAN/SKU divergentes',
+            'price_or_cost_missing' => 'Preco efetivo ou custo ausente',
+            'no_confirmed_sales' => 'Sem vendas conciliadas no periodo',
+            'partial' => 'Conciliacao financeira parcial',
+            'confirmed' => 'Conciliado',
+            default => 'Aguardando verificacao',
+        };
         return [
             'SKU Amazon'=>(string)($row['seller_sku'] ?? ''),
             'Produto ERP'=>(string)($row['erp_sku'] ?? ''),
             'ASIN'=>(string)($row['asin'] ?? ''),
+            'EAN'=>(string)($row['ean'] ?? ''),
+            'Ativo Amazon'=>$buyable?'Sim':'Nao',
+            'Status Amazon'=>is_array($status)?implode(',',$status):'',
             'Canal'=>(string)($row['program'] ?? $row['fulfillment_channel'] ?? ''),
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
+            'Preco cadastro Amazon (R$)'=>self::num($row['listed_price'] ?? null),
             'Custo ERP (R$)'=>self::num($row['last_cost'] ?? null),
+            'Fonte do vinculo'=>(string)($row['erp_match_method'] ?? ''),
+            'Motivo do vinculo pendente'=>(string)($row['erp_mapping_reason'] ?? ''),
+
             'Unidades confirmadas'=>(int)($row['confirmed_units'] ?? 0),
             'Vendas pendentes'=>(int)($row['pending_sales'] ?? 0),
             'Margem ponderada (%)'=>$margin===null ? null : round($margin/100, 2),
@@ -25,6 +45,7 @@ final class SvAmazonMarginExport
             'Lucro confirmado (R$)'=>isset($row['profit_cents']) ? round(((int)$row['profit_cents'])/100,2) : null,
             'Data ultimo custo'=>(string)($row['last_cost_date'] ?? ''),
             'Situacao'=>(string)($row['status'] ?? 'unverified'),
+            'Diagnostico'=>$reason,
         ];
     }
 
@@ -150,7 +171,8 @@ final class SvAmazonMarginExport
 
         foreach($groups as $index=>$group){
             $content = self::pdfText(27,553,17,'SHOPVIVALIZ  |  AUDITORIA DE MARGENS AMAZON');
-            $content .= self::pdfText(27,532,10,'Data da auditoria: '.$date.'    Anuncios exportados: '.count($data));
+            $activeCount=count(array_filter($data,static fn($r):bool => ($r['Ativo Amazon']??'')==='Sim'));
+            $content .= self::pdfText(27,532,10,'Data da auditoria: '.$date.'    Anuncios: '.count($data).'    Ativos: '.$activeCount);
             $content .= self::pdfText(27,510,9,'SKU Amazon');
             $content .= self::pdfText(191,510,9,'ERP');
             $content .= self::pdfText(275,510,9,'Canal');
@@ -166,14 +188,19 @@ final class SvAmazonMarginExport
                 $content .= self::pdfText(27,$y,8,mb_strimwidth($get('SKU Amazon'),0,28,'...'));
                 $content .= self::pdfText(191,$y,8,mb_strimwidth($get('Produto ERP'),0,15,'...'));
                 $content .= self::pdfText(275,$y,8,mb_strimwidth($get('Canal'),0,17,'...'));
-                $content .= self::pdfText(389,$y,8,$get('Preco Amazon (R$)'));
+                $showPrice=$get('Preco Amazon (R$)');
+                if ($showPrice==='-' && $row['Preco cadastro Amazon (R$)']!==null) {
+                    $showPrice=$get('Preco cadastro Amazon (R$)').'*';
+                }
+                $content .= self::pdfText(389,$y,8,$showPrice);
                 $content .= self::pdfText(448,$y,8,$get('Custo ERP (R$)'));
                 $content .= self::pdfText(509,$y,8,$get('Margem ponderada (%)'));
                 $content .= self::pdfText(568,$y,8,$get('Unidades confirmadas'));
-                $content .= self::pdfText(627,$y,8,mb_strimwidth($get('Situacao'),0,28,'...'));
+                $state=(($row['Ativo Amazon']??'')==='Sim'?'Ativo: ':'Inativo: ').$get('Situacao');
+                $content .= self::pdfText(627,$y,8,mb_strimwidth($state,0,35,'...'));
                 if($i%2===1)$content.="0.86 w 27 ".($y-7)." m 813 ".($y-7)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'FBA Onsite e DBA: tarifas separadas. Margens ausentes nao sao confirmadas.');
+            $content .= self::pdfText(27,24,8,'* Preco referencia cadastral sem oferta ativa. Margens vazias = nao apuradas.');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
             $objects[$pg]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 '.$fontId.' 0 R >> >> /Contents '.$ct.' 0 R >>';
