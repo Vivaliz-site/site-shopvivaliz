@@ -394,6 +394,11 @@ final class SvAmazonMarginCollector
                             $row['erp_order_evidence_count']=$orderLink['evidence_count'];
                             $row['erp_gtin_differs_from_amazon']=($ean!==null&&$ean!==''
                                 &&(string)$candidate['erp_gtin']!==$ean);
+                        } else {
+                            // An order history can reference a product that has
+                            // since been archived. Do not treat it as mapped now.
+                            $link=['status'=>'erp_identity_mismatch','id'=>null,
+                                'method'=>null,'reason'=>'olist_order_product_inactive'];
                         }
                     } elseif ($orderLink['status']==='ambiguous_erp') {
                         $link=$orderLink; // Do not use a disputed cost.
