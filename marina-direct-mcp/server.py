@@ -502,7 +502,7 @@ def main() -> int:
     parser.add_argument("--enable-approved-scoped-write", action="store_true",
                         help="Enable owner-approved private-workspace writes only after protected local preflight")
     parser.add_argument("--enable-admin-shell", action="store_true",
-                        help="Expose owner-approved admin shell (grant PR 3616) as unprivileged service user; requires --access-config")
+                        help="Expose owner-approved admin shell (grant PR 3620) as unprivileged service user; requires --access-config")
     parser.add_argument("--enable-gui-browser", action="store_true",
                         help="Expose owner-approved virtual display and browser (grant PR GUI_BROWSER) as unprivileged service user; requires --access-config")
     parser.add_argument("--enable-approved-admin-broker", action="store_true",
