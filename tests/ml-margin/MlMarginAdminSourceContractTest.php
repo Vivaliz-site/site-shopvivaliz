@@ -42,6 +42,18 @@ $checks = [
         !str_contains($api, '/items/MLB')
         && !str_contains($api, '/produtos/')
         && !str_contains($api, 'CURLOPT_CUSTOMREQUEST => "PUT"'),
+    'official active-only filter requires status from backend source' =>
+        str_contains($page, 'only-active')
+        && str_contains($page, "l.status==='active'")
+        && str_contains($page, "activeCount===0")
+        && str_contains($page, "mlStatusText(listing.status)"),
+    'active-only audit explicitly submits only vetted IDs never backend ALL' =>
+        str_contains($page, "scope='SELECTED';")
+        && str_contains($page, "ids=scope==='ALL'?[...activeIds]:ids.filter(id=>activeIds.has(id))")
+        && str_contains($page, "if(!ids.length){feedback("),
+    'active selection drops items no longer active after refresh' =>
+        str_contains($page, "&&(!state.activeOnly||l.status==='active')")
+        && str_contains($page, "state.selected=new Set([...state.selected].filter(id=>allowed.has(id)))"),
     'dashboard linked from the existing Mercado Livre admin' =>
         str_contains($parent, '/admin/mercadolivre-margin.php'),
 ];

@@ -92,18 +92,20 @@ progress{width:100%;height:15px;margin-top:12px;accent-color:var(--sea)}
     <option value="incomplete">Incompletos / falhas</option>
     <option value="pending">Ainda não auditados</option>
    </select>
+   <label class="flex small" for="only-active"><input id="only-active" type="checkbox"> Somente ativos</label>
+   <span id="status-breakdown" class="muted small">Status ML aguardando sincronização</span>
    <span id="shown" class="muted small"></span>
   </div>
   <div class="table-wrap">
    <table>
     <thead><tr>
      <th><input type="checkbox" id="select-visible" aria-label="Selecionar anúncios visíveis"></th>
-     <th>MLB</th><th>SKU vendedor</th><th>Variações</th><th>Tipo</th><th>Logística</th><th>Situação</th>
+     <th>MLB</th><th>SKU vendedor</th><th>Variações</th><th>Tipo</th><th>Logística</th><th>Status ML</th><th>Situação da auditoria</th>
      <th class="num">Receita (R$)</th><th class="num">Custo ERP (R$)</th><th class="num">Imposto (R$)</th>
      <th class="num">Taxas (R$)</th><th class="num">Frete vendedor (R$)</th>
      <th class="num">Contribuição (R$)</th><th class="num">Margem (%)</th>
     </tr></thead>
-    <tbody id="rows"><tr><td colspan="14" class="muted">Carregando anúncios...</td></tr></tbody>
+    <tbody id="rows"><tr><td colspan="15" class="muted">Carregando anúncios...</td></tr></tbody>
    </table>
   </div>
   <button id="show-more" type="button" hidden>Mostrar mais anúncios</button>
@@ -114,10 +116,10 @@ progress{width:100%;height:15px;margin-top:12px;accent-color:var(--sea)}
 const csrf = <?php echo json_encode($csrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR); ?>;
 const endpoint = '/admin/mercadolivre-margin-api.php';
 const $ = id => document.getElementById(id);
-const state = {listings:[], results:new Map(), selected:new Set(), status:null, filter:'all', visibleLimit:100, updating:false, configured:false};
+const state = {listings:[], results:new Map(), selected:new Set(), status:null, filter:'all', activeOnly:false, visibleLimit:100, updating:false, configured:false};
 const completeStatuses = new Set(['COMPLETED','COMPLETED_WITH_ERRORS']);
 const processingStatuses = new Set(['QUEUED','RUNNING','WAITING_PROVIDER']);
-const columns = 14;
+const columns = 15;
 function feedback(message, bad=false){
  $('feedback').textContent=message;
  $('feedback').className=bad?'danger':'';
@@ -162,11 +164,18 @@ function resultCategory(listing){
  if(!Number.isFinite(margin))return 'incomplete';
  return margin<10?'risk':'healthy';
 }
+function mlStatusText(status){
+ if(status==='active')return 'Ativo';
+ if(status==='paused')return 'Pausado';
+ if(status==='under_review')return 'Em análise';
+ if(status==='closed')return 'Encerrado';
+ return status||'Não sincronizado';
+}
 function filtered(){
  const q=$('search').value.trim().toLowerCase();
  return state.listings.filter(l=>{
   const hay=[l.item_id,l.seller_sku,l.listing_type_id,l.logistic_type,...(l.variants||[]).map(v=>v.seller_sku||'')].join(' ').toLowerCase();
-  return (!q||hay.includes(q))&&(state.filter==='all'||resultCategory(l)===state.filter);
+  return (!state.activeOnly||l.status==='active')&&(!q||hay.includes(q))&&(state.filter==='all'||resultCategory(l)===state.filter);
  });
 }
 function createCell(tr,text,classes=''){
@@ -184,7 +193,15 @@ function render(){
  const view=filtered(), subset=view.slice(0,state.visibleLimit);
  $('shown').textContent=view.length+' anúncios encontrados';
  $('selected-count').textContent=state.selected.size+' selecionados';
- $('audit-all').disabled=!state.configured||!state.listings.length||state.updating;
+ const activeCount=state.listings.filter(l=>l.status==='active').length;
+ const pausedCount=state.listings.filter(l=>l.status==='paused').length;
+ const reviewCount=state.listings.filter(l=>l.status==='under_review').length;
+ const unknownCount=state.listings.filter(l=>!l.status).length;
+ $('status-breakdown').textContent=state.configured
+  ? activeCount+' ativos · '+pausedCount+' pausados · '+reviewCount+' em análise'+(unknownCount?' · '+unknownCount+' sem status':'')
+  : 'Status ML aguardando sincronização';
+ $('audit-all').textContent=state.activeOnly?'Auditar todos os ativos':'Auditar todos';
+ $('audit-all').disabled=!state.configured||(state.activeOnly?activeCount===0:!state.listings.length)||state.updating;
  $('audit-selected').disabled=!state.configured||state.selected.size===0||state.updating;
  const table=$('rows');table.replaceChildren();
  if(!subset.length){const tr=document.createElement('tr');const td=createCell(tr,state.configured?'Nenhum anúncio corresponde ao filtro.':'Aguardando a integração da API.');td.colSpan=columns;table.appendChild(tr);}
@@ -200,7 +217,8 @@ function render(){
   createCell(tr,(listing.variants||[]).length);
   createCell(tr,listing.listing_type_id||'—');
   createCell(tr,[listing.shipping_mode,listing.logistic_type].filter(Boolean).join(' / ')||'—');
-  createCell(tr,diagnostic(r));
+  createCell(tr,mlStatusText(listing.status));
+   createCell(tr,diagnostic(r));
   createCell(tr,money(r?.effective_revenue),'num');
   createCell(tr,money(r?.product_cost),'num');
   createCell(tr,money(r?.tax_amount),'num');
@@ -254,7 +272,7 @@ async function refresh(){
   const data=await request('listings');
   state.listings=Array.isArray(data.listings)?data.listings:[];
   state.configured=true;
-  state.selected=new Set([...state.selected].filter(id=>state.listings.some(l=>l.item_id===id)));
+  state.selected=new Set([...state.selected].filter(id=>state.listings.some(l=>l.item_id===id&&(!state.activeOnly||l.status==='active'))));
   await loadStatus();
   if(!state.listings.length)feedback('A API está conectada, mas o catálogo ainda não foi sincronizado.',true);
   else feedback('Catálogo consultado: '+state.listings.length+' anúncios.');
@@ -266,10 +284,18 @@ async function refresh(){
 }
 async function start(scope){
  if(state.updating)return;
- if(scope==='SELECTED'&&!state.selected.size)return;
+ let ids=scope==='SELECTED'?[...state.selected]:[];
+ if(state.activeOnly){
+  const activeIds=new Set(state.listings.filter(l=>l.status==='active').map(l=>l.item_id));
+  ids=scope==='ALL'?[...activeIds]:ids.filter(id=>activeIds.has(id));
+  if(!ids.length){feedback('Nenhum anúncio ativo com status oficial confirmado foi encontrado.',true);return;}
+  // The backend ALL scope includes paused listings; send vetted ACTIVE IDs.
+  scope='SELECTED';
+ }
+ if(scope==='SELECTED'&&!ids.length)return;
  state.updating=true;render();feedback('Enviando auditoria à fila...');
  try{
-  const response=await request('start',{method:'POST',body:{scope,item_ids:scope==='SELECTED'?[...state.selected]:[]}});
+  const response=await request('start',{method:'POST',body:{scope,item_ids:scope==='SELECTED'?ids:[]}});
   feedback(response.already_active?'Auditoria já em execução: acompanhando o mesmo run.':'Auditoria enfileirada; o progresso aparecerá nesta página.');
   await loadStatus();
  }catch(e){feedback('Não foi possível iniciar a auditoria: '+e.message,true);}
@@ -280,6 +306,14 @@ $('audit-selected').addEventListener('click',()=>start('SELECTED'));
 $('refresh').addEventListener('click',refresh);
 $('search').addEventListener('input',()=>{state.visibleLimit=100;render();});
 $('filter').addEventListener('change',e=>{state.filter=e.target.value;state.visibleLimit=100;render();});
+$('only-active').addEventListener('change',e=>{
+ state.activeOnly=e.target.checked;
+ if(state.activeOnly){
+  const allowed=new Set(state.listings.filter(l=>l.status==='active').map(l=>l.item_id));
+  state.selected=new Set([...state.selected].filter(id=>allowed.has(id)));
+ }
+ state.visibleLimit=100;render();
+});
 $('show-more').addEventListener('click',()=>{state.visibleLimit+=100;render();});
 $('select-visible').addEventListener('change',e=>{for(const l of filtered().slice(0,state.visibleLimit)){if(e.target.checked)state.selected.add(l.item_id);else state.selected.delete(l.item_id);}render();});
 $('resume').addEventListener('click',async()=>{try{await request('resume',{method:'POST'});feedback('Retomada solicitada com sucesso.');await loadStatus();}catch(e){feedback(e.message,true);}});
