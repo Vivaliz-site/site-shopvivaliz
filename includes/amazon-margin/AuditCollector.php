@@ -282,10 +282,8 @@ final class SvAmazonMarginCollector
                     $ids[$key] = (string)($identifier['relatedIdentifierValue'] ?? '');
                 }
                 $order = $ids['ORDER_ID'] ?? '';
-                if ($type === 'ServiceFee' && ($t['description'] ?? '') === 'MfnPostageFee'
-                    && $order !== ''
-                    && SvAmazonMarginOlistOrderLink::inFinancialWindow(
-                        (string)($t['postedDate'] ?? ''),$feesAfter)) {
+                if ($order !== ''
+                    && SvAmazonMarginOlistOrderLink::postageInFinancialWindow($t,$feesAfter)) {
                     $result['fees'][$order][] = (float)($t['totalAmount']['currencyAmount'] ?? 0);
                 }
                 if ($type !== 'Shipment') continue;
