@@ -182,6 +182,9 @@ SERVICE_PREPARE_TOOL = {
 }
 
 
+ADMIN_SHELL_TOOL = runpy.run_path(str(Path(__file__).with_name("admin_shell.py")))["ADMIN_SHELL_TOOL"]
+
+
 def load_token(path: Path) -> bytes:
     # Open once with O_NOFOLLOW: no lstat-to-open symlink/rename race.
     # Do not reveal filesystem paths, token bytes or syscall details on errors.
@@ -231,6 +234,7 @@ def create_server(
     admin_client=None,
     service_client=None,
     access_verifier=None,
+    admin_shell=None,
 ) -> ThreadingHTTPServer:
     if host != "127.0.0.1":
         raise ValueError("loopback_only")
@@ -377,7 +381,8 @@ def create_server(
                               + ([WRITE_TOOL] if write_operator is not None and self.local_bearer else [])
                               + ([ADMIN_TOOL] if (admin_operator is not None or admin_client is not None) and self.local_bearer else [])
                               + ([ADMIN_PREPARE_TOOL] if admin_client is not None and self.local_bearer else [])
-                              + ([SERVICE_TOOL, SERVICE_PREPARE_TOOL] if service_client is not None and self.local_bearer else [])}
+                              + ([SERVICE_TOOL, SERVICE_PREPARE_TOOL] if service_client is not None and self.local_bearer else [])
+                              + ([ADMIN_SHELL_TOOL] if admin_shell is not None and access_verifier is not None and self.local_bearer else [])}
                 elif method == "tools/call":
                     params = request.get("params")
                     if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
@@ -417,6 +422,9 @@ def create_server(
                         admin_ok, reason = _ADMIN["execute_admin_operation"](arguments, admin_operator)
                         tool_failed = not admin_ok
                         output = {"status": reason} if admin_ok else {"reason": reason}
+                    elif name == "marina_admin_shell" and admin_shell is not None and access_verifier is not None and self.local_bearer:
+                        output = admin_shell(arguments)
+                        tool_failed = output.get("ok") is not True
                     elif name == "marina_workspace_file_write" and write_operator is not None and self.local_bearer:
                         write_ok, output = _WRITE["execute"](arguments, write_operator)
                         tool_failed = not write_ok
@@ -484,6 +492,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Check identity and secret metadata without binding")
     parser.add_argument("--enable-approved-scoped-write", action="store_true",
                         help="Enable owner-approved private-workspace writes only after protected local preflight")
+    parser.add_argument("--enable-admin-shell", action="store_true",
+                        help="Expose owner-approved admin shell (grant PR 3616) as unprivileged service user; requires --access-config")
     parser.add_argument("--enable-approved-admin-broker", action="store_true",
                         help="Use the fixed local root broker only after protected metadata and fresh owner-grant preflight")
     args = parser.parse_args()
@@ -544,9 +554,15 @@ def main() -> int:
             print("MARINA_MCP_SCOPED_WRITE_PREFLIGHT=PASS" if write_operator is not None
                   else "MARINA_MCP_READONLY_PREFLIGHT=PASS")
             return 0
+        admin_shell = None
+        if args.enable_admin_shell:
+            if access_verifier is None:
+                raise RuntimeError("admin_shell_requires_access_jwt")
+            admin_shell_module = runpy.run_path(str(Path(__file__).with_name("admin_shell.py")))
+            admin_shell = admin_shell_module["bootstrap_admin_shell"]()
         server = create_server(token, args.port, write_operator=write_operator,
                                admin_client=admin_client, service_client=service_client,
-                               access_verifier=access_verifier)
+                               access_verifier=access_verifier, admin_shell=admin_shell)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"MARINA_MCP_REFUSED={str(exc)}", file=sys.stderr)
         return 1
