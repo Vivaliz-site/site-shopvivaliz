@@ -36,7 +36,12 @@ class Stub(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         Stub.seen.append({"id": self.headers.get("CF-Access-Client-Id"), "secret": self.headers.get("CF-Access-Client-Secret"),
-                          "method": body["method"], "params": body.get("params")})
+                          "method": body["method"], "params": body.get("params"), "ua": self.headers.get("User-Agent")})
+        if (self.headers.get("User-Agent") or "").startswith("Python-urllib"):
+            # Mirrors the edge block seen on the public hostname: 403 before the credential check.
+            self.send_response(403)
+            self.end_headers()
+            return
         if self.headers.get("CF-Access-Client-Secret") != FAKE_SECRET:
             self.send_response(401)
             self.end_headers()
@@ -146,6 +151,13 @@ class AgentClientTests(unittest.TestCase):
         self.assertEqual([s["method"] for s in Stub.seen], ["initialize", "tools/list"])
         self.assertTrue(all(s["id"] == FAKE_ID and s["secret"] == FAKE_SECRET for s in Stub.seen))
         self.assertNotIn(FAKE_SECRET, out + err)
+
+    def test_user_agent_is_identified_and_not_the_urllib_default(self):
+        self.provision()
+        code, out, err = self.run_cli("tools")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(all(s["ua"] == client.USER_AGENT for s in Stub.seen))
+        self.assertFalse(client.USER_AGENT.startswith("Python-urllib"))
 
     def test_call_passes_tool_and_arguments(self):
         self.provision()

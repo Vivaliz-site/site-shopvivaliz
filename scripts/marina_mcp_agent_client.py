@@ -36,6 +36,9 @@ DEFAULT_ENDPOINT = "https://mcp-marina.shopvivaliz.com.br/mcp"
 ID_NAME = "MARINA_MCP_ACCESS_CLIENT_ID"
 SECRET_NAME = "MARINA_MCP_ACCESS_CLIENT_SECRET"
 PROTOCOL_VERSION = "2025-06-18"
+# The edge of the public hostname blocks urllib's default User-Agent with 403 before any
+# credential check, so the client identifies itself explicitly.
+USER_AGENT = "marina-mcp-agent-client/1.0"
 TIMEOUT_SECONDS = 330  # the admin shell allows up to 300 s per command
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
@@ -131,6 +134,7 @@ class Client:
             "CF-Access-Client-Id": self._id,
             "CF-Access-Client-Secret": self._secret,
             "MCP-Protocol-Version": PROTOCOL_VERSION,
+            "User-Agent": USER_AGENT,
         }
         if self.session:
             headers["Mcp-Session-Id"] = self.session
