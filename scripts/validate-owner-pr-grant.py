@@ -230,7 +230,8 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
         return False, "invalid_capability_list"
     if capability not in caps:
         return False, "capability_not_approved"
-    if resource == "mcp:marina" and capability == "deployment_manage" and operation != "olist_browser_restart":
+    if (resource == "mcp:marina" and capability == "deployment_manage"
+            and operation not in ("olist_browser_restart", "service_restart")):
         return False, "privileged_operation_required"
     # A capability alone must not authorize a different privileged operation.
     bound_operation = grant.get("operation")
