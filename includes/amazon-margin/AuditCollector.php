@@ -16,7 +16,13 @@ final class SvAmazonMarginCollector
     private array $eanByAsin = [];
     private array $programByOrder = [];
     private array $warnings = [];
+    private $onProgress = null;
     private string $marketplace;
+
+    private function note(string $stage,int $done=0,?int $total=null): void
+    {
+        if ($this->onProgress !== null) ($this->onProgress)($stage,$done,$total);
+    }
     private string $sellerId;
 
     public function __construct(private SvAmazonClient $amazon, private string $tinyToken)
@@ -105,6 +111,7 @@ final class SvAmazonMarginCollector
             }
             $next = $data['pagination']['nextToken'] ?? null;
             $pages++;
+            $this->note('loading_listings',count($seen),null);
             if ($pages >= 250 && $next !== null) throw new RuntimeException('listing_pagination_incomplete');
             usleep(260000);
         } while (is_string($next) && $next !== '');
@@ -116,7 +123,8 @@ final class SvAmazonMarginCollector
 
     private function pricing(array &$listings): void
     {
-        foreach (array_chunk(array_keys($listings), 20) as $chunk) {
+        $chunks=array_chunk(array_keys($listings),20);
+        foreach ($chunks as $batch=>$chunk) {
             $res = $this->a('GET','/products/pricing/v0/price',[
                 'MarketplaceId'=>$this->marketplace,'ItemType'=>'Sku','Skus'=>implode(',',$chunk),
             ]);
@@ -143,8 +151,8 @@ final class SvAmazonMarginCollector
                     $listings[$sku]['fulfillment_channel'] = 'UNKNOWN';
                 }
             }
+            $this->note('loading_prices',min(($batch+1)*20,count($listings)),count($listings));
             // Pricing calls are much more restricted than Listings search.
-            // Pace batches instead of relying on burst capacity.
             usleep(2100000);
         }
     }
@@ -175,6 +183,8 @@ final class SvAmazonMarginCollector
                     'name'=>(string)($row['descricao'] ?? ''),
                 ];
             }
+            $this->note('mapping_erp_products',count($unique),
+                (int)($res['paginacao']['total'] ?? 0) ?: null);
             if (!$new || ($page + 1) * 100 >= (int)($res['paginacao']['total'] ?? 0)) break;
             if ($page === 499) throw new RuntimeException('tiny_pagination_incomplete');
             usleep(240000);
@@ -264,6 +274,7 @@ final class SvAmazonMarginCollector
                 }
             }
             $next = $res['payload']['nextToken'] ?? null;
+            $this->note('reading_transactions',$page+1,null);
             if (!is_string($next) || $next === '') return $result;
             usleep(520000);
         }
@@ -284,20 +295,31 @@ final class SvAmazonMarginCollector
     }
 
     /** @param list<string> $selectedSkus */
-    public function collect(array $selectedSkus = [], ?string $postedAfter = null): array
+    public function collect(array $selectedSkus = [], ?string $postedAfter = null, ?callable $onProgress=null): array
     {
         $postedAfter ??= gmdate('Y-m-d\T00:00:00\Z', strtotime('-30 days'));
         if (!preg_match('/^\d{4}-\d{2}-\d{2}T00:00:00Z$/', $postedAfter)) {
             throw new InvalidArgumentException('posted_after_invalid');
         }
+        $this->onProgress=$onProgress;
         $selectedSkus = array_values(array_unique($selectedSkus));
+        $this->note('loading_listings');
         $listings = $this->listings($selectedSkus);
+        $this->note('loading_prices',0,count($listings));
         $this->pricing($listings);
+        $this->note('mapping_erp_products');
         $this->tinyIndex();
+        $this->note('reading_transactions');
         $fin = $this->finances($postedAfter);
+        $this->note('calculating_margins',0,count($listings));
         $rows = [];
         $taxBps = (int)(getenv('SV_AMAZON_MARGIN_TAX_BPS') ?: 1400);
+        $processed=0;
         foreach ($listings as $sku=>$listing) {
+            $processed++;
+            if ($processed===1 || $processed%10===0) {
+                $this->note('calculating_margins',$processed,count($listings));
+            }
             $row = $listing;
             $row += ['ean'=>null, 'erp_id'=>null, 'erp_sku'=>null,'last_cost'=>null,
                 'last_cost_date'=>null,'margin_min_bps'=>null,'margin_max_bps'=>null,
@@ -393,6 +415,7 @@ final class SvAmazonMarginCollector
             $rows[]=$row;
         }
 
+        $this->note('saving_report',count($rows),count($listings));
         usort($rows, static function($a,$b): int {
             $ap=$a['margin_min_bps']??PHP_INT_MAX;$bp=$b['margin_min_bps']??PHP_INT_MAX;
             return $ap<=>$bp ?: strcmp((string)$a['seller_sku'],(string)$b['seller_sku']);

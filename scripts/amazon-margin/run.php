@@ -55,7 +55,10 @@ try {
     $token = (string)(getenv('TINY_ACCESS_TOKEN') ?: getenv('OLIST_ACCESS_TOKEN') ?: '');
     if ($token==='') throw new RuntimeException('tiny_access_token_missing');
     $collector = new SvAmazonMarginCollector(new SvAmazonClient(),$token);
-    $snapshot = $collector->collect($selected, (string)($options['from']??'')?:null);
+    $progress = $requestId>0 ? static function(string $stage,int $done,?int $total) use($db,$requestId):void {
+        SvAmazonMarginStore::progress($db,$requestId,$stage,$done,$total);
+    } : null;
+    $snapshot = $collector->collect($selected, (string)($options['from']??'')?:null,$progress);
     if ($dryRun) {
         $examples = array_slice(array_map(static fn($r):array => [
             'seller_sku'=>$r['seller_sku'],'status'=>$r['status'],

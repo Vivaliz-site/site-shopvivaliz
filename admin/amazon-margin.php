@@ -65,6 +65,15 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <div class="card metric"><span>Margem confirmada ≥10%</span><strong class="positive" id="n-good">—</strong></div>
     <div class="card metric"><span>Pendentes / sem confirmação</span><strong class="warning" id="n-pending">—</strong></div>
   </div>
+  <section class="card" id="audit-live" role="status" aria-live="polite">
+    <div class="controls" style="justify-content:space-between">
+      <div><h2 id="activity-title">Verificando a fila de auditorias…</h2>
+        <p class="note" id="activity-detail">Consultando o estado do processamento.</p></div>
+      <strong id="activity-count" class="muted small"></strong>
+    </div>
+    <progress id="activity-progress" max="100" value="0" style="width:100%;height:14px;margin-top:12px" hidden></progress>
+    <div id="activity-next" class="note small" style="margin-top:8px"></div>
+  </section>
   <section class="card">
     <div class="controls" style="justify-content:space-between">
       <div><h2>Seleção e atualização</h2><span class="muted small" id="last-run">Carregando auditoria…</span></div>
@@ -73,7 +82,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
         <button type="button" class="teal" id="run-all">Auditar todos</button>
       </div>
     </div>
-    <p class="note">Os pedidos entram na fila. O coletor autorizado da VM executa a consulta real às APIs e registra as evidências. Clique em Atualizar para acompanhar.</p>
+    <p class="note">A auditoria utiliza a fila da VM Marina e consulta as APIs Amazon/Olist. O estado é atualizado automaticamente nesta tela. Repetir o clique não inicia outra auditoria idêntica enquanto a primeira estiver pendente.</p>
     <div class="controls">
       <button type="button" id="reload">Atualizar dados</button>
       <button type="button" id="pdf" disabled>Exportar PDF</button>
@@ -107,7 +116,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   </section>
   <section class="card">
     <h2>Histórico das solicitações</h2>
-    <div class="table-scroller"><table style="min-width:520px"><thead><tr><th>ID</th><th>Escopo</th><th>Situação</th><th>Solicitada em</th><th>Concluída em</th></tr></thead><tbody id="requests"><tr><td colspan="5">—</td></tr></tbody></table></div>
+    <div class="table-scroller"><table style="min-width:800px"><thead><tr><th>ID</th><th>Escopo</th><th>Situação</th><th>Etapa</th><th>Progresso</th><th>Solicitada em</th><th>Próxima tentativa / concluída</th></tr></thead><tbody id="requests"><tr><td colspan="7">—</td></tr></tbody></table></div>
   </section>
 </main>
 <script>
@@ -117,6 +126,74 @@ const API='/api/admin/amazon-margin.php';
 const el=id=>document.getElementById(id);
 const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let data=[], selected=new Set(), displayed=[], shown=75, taxBps=1400, currentSim=null;
+let lastRunId=null, submitBusy=false, pollBusy=false, activeAll=false;
+const stageLabels={
+ queued:'Na fila',starting:'Iniciando',loading_listings:'Localizando anúncios Amazon',
+ loading_prices:'Consultando preços Amazon',mapping_erp_products:'Vinculando produtos Olist/Tiny',
+ reading_transactions:'Conciliando tarifas e fretes',calculating_margins:'Calculando margens',
+ saving_report:'Salvando relatório',waiting_amazon_quota:'Aguardando liberação da cota Amazon',
+ retry_pending:'Aguardando nova tentativa',completed:'Concluída',coalesced:'Solicitação repetida',
+ failed:'Falha registrada'
+};
+function dateUtc(value){
+ if(!value)return '—';
+ const d=new Date(String(value).replace(' ','T')+(String(value).includes('Z')?'':'Z'));
+ return Number.isNaN(+d)?String(value):d.toLocaleString('pt-BR');
+}
+async function readJson(res){
+ const type=res.headers.get('content-type')||'';
+ if(res.redirected||!type.includes('application/json'))
+   throw new Error('Sessão administrativa expirada. Atualize a página e faça login novamente.');
+ const j=await res.json();
+ if(!res.ok||!j.ok)throw new Error(j.error||'Falha da API de auditoria');
+ return j;
+}
+function queueDisplay(requests,meta){
+ const list=Array.isArray(requests)?requests:[];
+ const active=list.find(r=>r.state==='running')||list.find(r=>r.state==='queued');
+ activeAll=list.some(r=>r.scope==='all'&&(r.state==='running'||r.state==='queued'));
+ el('run-all').disabled=submitBusy||activeAll;
+ el('run-all').textContent=activeAll?'Auditoria completa em processamento':'Auditar todos';
+ if(active){
+  const kind=active.scope==='all'?'todos os anúncios':'anúncios selecionados';
+  const running=active.state==='running';
+  const done=Number(active.progress_done||0),total=Number(active.progress_total||0);
+  const stage=stageLabels[active.stage]||active.stage||'Na fila';
+  el('activity-title').textContent='Auditoria #'+active.id+' — '+(running?'em execução':'aguardando na fila');
+  el('activity-detail').textContent=kind+' · '+stage+(total>0?' · '+done+' de '+total:'');
+  el('activity-count').textContent=list.filter(r=>r.state==='queued').length+' na fila';
+  const bar=el('activity-progress');
+  bar.hidden=!running||total<=0;
+  if(!bar.hidden){bar.value=Math.min(100,Math.round(100*done/total));bar.setAttribute('aria-label',stage+': '+done+' de '+total);}
+  const time=active.next_attempt_at?'Próxima tentativa: '+dateUtc(active.next_attempt_at):running&&active.heartbeat_at?'Última atualização: '+dateUtc(active.heartbeat_at):'';
+  el('activity-next').textContent=time+(meta?' · Último relatório concluído: #'+meta.run_id+' ('+meta.offer_count+' anúncios)':'');
+ }else{
+  el('activity-title').textContent=meta?'Auditoria #'+meta.run_id+' concluída':'Nenhuma auditoria concluída';
+  el('activity-detail').textContent=meta?meta.offer_count+' anúncios no último relatório · '+dateUtc(meta.generated_at):'Clique em Auditar todos para iniciar.';
+  el('activity-count').textContent='Fila sem execução ativa';
+  el('activity-progress').hidden=true;
+  el('activity-next').textContent='';
+ }
+ el('requests').innerHTML=list.map(r=>{
+  const progress=r.progress_total>0?r.progress_done+' / '+r.progress_total:
+   r.progress_done>0?String(r.progress_done):'—';
+  return '<tr><td>#'+Number(r.id)+'</td><td>'+escapeHtml(r.scope==='all'?'Todos':'Selecionados')+'</td>'
+    +'<td>'+escapeHtml(r.state)+'</td><td>'+escapeHtml(stageLabels[r.stage]||r.stage||'—')+'</td>'
+    +'<td>'+escapeHtml(progress)+'</td><td>'+escapeHtml(dateUtc(r.created_at))+'</td>'
+    +'<td>'+escapeHtml(dateUtc(r.next_attempt_at||r.finished_at))+'</td></tr>';
+ }).join('')||'<tr><td colspan="7">Nenhuma solicitação.</td></tr>';
+}
+async function loadStatus(){
+ if(pollBusy)return;
+ pollBusy=true;
+ try{
+  const res=await fetch(API+'?action=status',{credentials:'same-origin',cache:'no-store'});
+  const j=await readJson(res);
+  queueDisplay(j.requests,j.latest_meta);
+  if(j.latest_meta && j.latest_meta.run_id!==lastRunId)await load({quiet:true});
+ }catch(e){showError(e);}
+ finally{pollBusy=false;}
+}
 const price=v=>v===null||v===undefined?'—':'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
 function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'DBA':'UNKNOWN');}
@@ -143,32 +220,44 @@ function render(){
  refreshSelection();
 }
 function showError(e){el('feedback').textContent=String(e.message||e).slice(0,200);}
-async function load(){
- el('feedback').textContent='Consultando última auditoria…';
+async function load({quiet=false}={}){
+ if(!quiet)el('feedback').textContent='Consultando último relatório…';
  try{
- const res=await fetch(API+'?action=latest',{credentials:'same-origin',cache:'no-store'});
- const json=await res.json();
- if(!res.ok||!json.ok)throw Error(json.error||'Falha na consulta');
- data=json.latest?.snapshot?.rows||[];taxBps=Number(json.latest?.snapshot?.tax_bps||1400);
- const good=data.filter(r=>state(r)==='healthy').length,low=data.filter(r=>state(r)==='low').length;
- el('n-total').textContent=data.length;el('n-risk').textContent=low;
- el('n-good').textContent=good;el('n-pending').textContent=data.length-good-low;
- el('last-run').textContent=json.latest?'Execução #'+json.latest.run_id+' · '+json.latest.generated_at+' · '+json.latest.scope:'Nenhuma auditoria persistida';
- el('pdf').disabled=el('xlsx').disabled=data.length===0;
- el('requests').innerHTML=(json.requests||[]).map(j=>'<tr><td>'+Number(j.id)+'</td><td>'+escapeHtml(j.scope)+'</td><td>'+escapeHtml(j.state)+'</td><td>'+escapeHtml(j.created_at)+'</td><td>'+escapeHtml(j.finished_at||'—')+'</td></tr>').join('')||'<tr><td colspan="5">Nenhuma solicitação.</td></tr>';
- selected=new Set([...selected].filter(s=>data.some(r=>r.seller_sku===s)));
- render();el('feedback').textContent='Dados atualizados.';
- }catch(e){showError(e);el('rows').innerHTML='<tr><td colspan="10">Auditoria inicial ainda não disponível. A fila depende do serviço coletor.</td></tr>';}
+  const res=await fetch(API+'?action=latest',{credentials:'same-origin',cache:'no-store'});
+  const json=await readJson(res);
+  data=json.latest?.snapshot?.rows||[];
+  taxBps=Number(json.latest?.snapshot?.tax_bps||1400);
+  lastRunId=json.latest?.run_id??null;
+  const good=data.filter(r=>state(r)==='healthy').length,low=data.filter(r=>state(r)==='low').length;
+  el('n-total').textContent=data.length;el('n-risk').textContent=low;
+  el('n-good').textContent=good;el('n-pending').textContent=data.length-good-low;
+  el('last-run').textContent=json.latest?'Último relatório concluído: #'+json.latest.run_id+' · '+dateUtc(json.latest.generated_at)+' · '+data.length+' anúncios':'Nenhum relatório persistido';
+  el('pdf').disabled=el('xlsx').disabled=data.length===0;
+  queueDisplay(json.requests,json.latest?{run_id:json.latest.run_id,scope:json.latest.scope,generated_at:json.latest.generated_at,offer_count:data.length}:null);
+  selected=new Set([...selected].filter(s=>data.some(r=>r.seller_sku===s)));
+  render();
+  if(!quiet)el('feedback').textContent='Relatório consultado. O andamento das novas auditorias aparece acima.';
+ }catch(e){
+  showError(e);
+  if(!data.length)el('rows').innerHTML='<tr><td colspan="10">Não foi possível consultar o relatório. Verifique o erro acima.</td></tr>';
+ }
 }
 async function requestRun(scope){
+ if(submitBusy)return;
  if(scope==='selected'&&(!selected.size||selected.size>1000))return;
- el('feedback').textContent='Registrando solicitação…';
+ submitBusy=true;
+ el('run-all').disabled=true;el('run-selected').disabled=true;
+ el('feedback').textContent='Enviando solicitação ao servidor…';
  try{
- const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},credentials:'same-origin',body:JSON.stringify({action:'request',scope,skus:scope==='selected'?[...selected]:[]})});
- const json=await res.json();if(!res.ok||!json.ok)throw Error(json.error||'Falha');
- el('feedback').textContent='Solicitação #'+json.request_id+' registrada. Execute o worker autorizado ou aguarde sua rotina de processamento.';
- await load();
+  const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
+   credentials:'same-origin',body:JSON.stringify({action:'request',scope,skus:scope==='selected'?[...selected]:[]})});
+  const json=await readJson(res);
+  el('feedback').textContent=json.reused
+    ?'Auditoria #'+json.request_id+' já solicitada. Nenhuma execução duplicada foi criada.'
+    :'Auditoria #'+json.request_id+' recebida e registrada. Veja o andamento acima.';
+  await loadStatus();
  }catch(e){showError(e);}
+ finally{submitBusy=false;refreshSelection();el('run-all').disabled=activeAll;}
 }
 async function download(format){
  el('feedback').textContent='Gerando '+format.toUpperCase()+'…';
@@ -188,7 +277,7 @@ async function download(format){
 }
 el('run-selected').onclick=()=>requestRun('selected');el('run-all').onclick=()=>requestRun('all');
 el('pdf').onclick=()=>download('pdf');el('xlsx').onclick=()=>download('xlsx');
-el('reload').onclick=load;
+el('reload').onclick=()=>load();
 el('search').oninput=()=>{shown=75;render();};
 el('program').onchange=el('status').onchange=()=>{shown=75;render();};
 el('select-visible').onclick=()=>{displayed.forEach(r=>selected.add(r.seller_sku));render();};
@@ -204,6 +293,8 @@ el('sim-calc').onclick=()=>{if(!currentSim)return;const next=Number(el('sim-pric
  el('sim-result').textContent='Margem hipotética: '+estimate.toFixed(2).replace('.',',')+'% · Lucro hipotético: '+price(approximateProfit)+' por unidade. NÃO publicar a partir desta simulação; comissão e tarifas precisam ser recalculadas.';
 };
 load();
+setInterval(()=>{if(!document.hidden)loadStatus();},7000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadStatus();});
 </script>
 </body>
 </html>

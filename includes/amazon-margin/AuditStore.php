@@ -5,13 +5,19 @@ final class SvAmazonMarginStore
 {
     public static function ensureSchema(PDO $db): void
     {
-        $db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_requests (
+        $requestsExist=(bool)$db->query("SELECT 1 FROM information_schema.tables
+            WHERE table_schema=DATABASE() AND table_name='amazon_margin_audit_requests'")->fetchColumn();
+        if(!$requestsExist)$db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_requests (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             scope VARCHAR(20) NOT NULL,
             skus_json LONGTEXT NOT NULL,
             state VARCHAR(20) NOT NULL DEFAULT 'queued',
             attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
             next_attempt_at DATETIME NULL,
+            stage VARCHAR(48) NOT NULL DEFAULT 'queued',
+            progress_done INT NOT NULL DEFAULT 0,
+            progress_total INT NULL,
+            heartbeat_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME NULL,
             finished_at DATETIME NULL,
@@ -28,7 +34,22 @@ final class SvAmazonMarginStore
                 if ((int)($e->errorInfo[1] ?? 0) !== 1060) throw $e;
             }
         }
-        $db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_runs (
+        foreach ([
+            'stage'=>"VARCHAR(48) NOT NULL DEFAULT 'queued'",
+            'progress_done'=>"INT NOT NULL DEFAULT 0",
+            'progress_total'=>"INT NULL",
+            'heartbeat_at'=>"DATETIME NULL"
+        ] as $column=>$definition) {
+            $column = preg_replace('/[^a-z_]/','',$column);
+            $probe=$db->query("SHOW COLUMNS FROM amazon_margin_audit_requests LIKE '".$column."'");
+            if (!$probe || !$probe->fetch(PDO::FETCH_ASSOC)) {
+                try {$db->exec("ALTER TABLE amazon_margin_audit_requests ADD COLUMN ".$column." ".$definition);}
+                catch(PDOException $e) {if ((int)($e->errorInfo[1]??0)!==1060) throw $e;}
+            }
+        }
+        $runsExist=(bool)$db->query("SELECT 1 FROM information_schema.tables
+            WHERE table_schema=DATABASE() AND table_name='amazon_margin_audit_runs'")->fetchColumn();
+        if(!$runsExist)$db->exec("CREATE TABLE IF NOT EXISTS amazon_margin_audit_runs (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             request_id BIGINT UNSIGNED NULL,
             scope VARCHAR(20) NOT NULL,
@@ -41,27 +62,110 @@ final class SvAmazonMarginStore
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 
-    /** @param list<string> $skus */
-    public static function request(PDO $db, string $scope, array $skus): int
+    /** Canonical idempotency key for all or a set of Seller SKUs. */
+    public static function requestKey(string $scope, array $skus): string
     {
-        if (!in_array($scope, ['selected','all'], true)) throw new InvalidArgumentException('invalid_scope');
-        $skus = array_values(array_unique(array_map('trim', $skus)));
-        if ($scope === 'selected' && (count($skus) < 1 || count($skus) > 1000)) {
-            throw new InvalidArgumentException('selected_sku_count_invalid');
+        if (!in_array($scope,['all','selected'],true)) throw new InvalidArgumentException('invalid_scope');
+        $skus=array_values(array_unique(array_map('trim',$skus)));
+        sort($skus,SORT_STRING);
+        return hash('sha256',$scope.'|'.json_encode($scope==='all'?[]:$skus,JSON_THROW_ON_ERROR));
+    }
+
+    /** Caller owns the short-lived MySQL queue mutex. */
+    private static function coalesceUnlocked(PDO $db): int
+    {
+        $active=$db->query("SELECT id,scope,skus_json,state,created_at FROM amazon_margin_audit_requests
+            WHERE state IN ('running','queued') ORDER BY (state='running') DESC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        // A finished run that completed after a click already satisfies it;
+        // repeated clicks must not trigger the same 527-SKU audit again.
+        $completed=$db->query("SELECT id,scope,skus_json,finished_at FROM amazon_margin_audit_requests
+            WHERE state='done' AND finished_at>=UTC_TIMESTAMP()-INTERVAL 24 HOUR
+            ORDER BY finished_at DESC LIMIT 40")->fetchAll(PDO::FETCH_ASSOC);
+        $finished=[];
+        foreach($completed as $entry) {
+            $skus=json_decode((string)$entry['skus_json'],true);
+            if(!is_array($skus))continue;
+            $key=self::requestKey((string)$entry['scope'],$skus);
+            $finished[$key]??=$entry;
         }
-        if ($scope === 'all') $skus = [];
-        foreach ($skus as $sku) {
-            if ($sku === '' || strlen($sku) > 80) throw new InvalidArgumentException('invalid_seller_sku');
+        $seen=[];$removed=0;
+        $mark=$db->prepare("UPDATE amazon_margin_audit_requests
+            SET state='coalesced',stage='coalesced',finished_at=UTC_TIMESTAMP(),
+                error_code=?,next_attempt_at=NULL
+            WHERE id=? AND state='queued'");
+        foreach($active as $entry) {
+            $skus=json_decode((string)$entry['skus_json'],true);
+            if(!is_array($skus))continue;
+            $key=self::requestKey((string)$entry['scope'],$skus);
+            if($entry['state']==='queued' && isset($finished[$key])
+                && strcmp((string)$finished[$key]['finished_at'],(string)$entry['created_at'])>=0) {
+                $mark->execute(['fulfilled_by_'.$finished[$key]['id'],(int)$entry['id']]);
+                $removed+=$mark->rowCount();
+                continue;
+            }
+            if(!isset($seen[$key])) { $seen[$key]=(int)$entry['id'];continue; }
+            if($entry['state']!=='queued')continue;
+            $mark->execute(['duplicate_of_'.$seen[$key],(int)$entry['id']]);
+            $removed+=$mark->rowCount();
         }
+        return $removed;
+    }
+
+    private static function queueLock(PDO $db): void
+    {
+        if ((int)$db->query("SELECT GET_LOCK('sv_amazon_margin_enqueue',5)")->fetchColumn()!==1)
+            throw new RuntimeException('audit_request_queue_busy');
+    }
+
+    public static function coalesceQueued(PDO $db): int
+    {
         self::ensureSchema($db);
-        $s = $db->prepare('INSERT INTO amazon_margin_audit_requests(scope,skus_json) VALUES (?,?)');
-        $s->execute([$scope, json_encode($skus, JSON_THROW_ON_ERROR)]);
-        return (int)$db->lastInsertId();
+        self::queueLock($db);
+        try { return self::coalesceUnlocked($db); }
+        finally { $db->query("SELECT RELEASE_LOCK('sv_amazon_margin_enqueue')"); }
+    }
+
+    /**
+     * @param list<string> $skus
+     * @return array{request_id:int,reused:bool,state:string,next_attempt_at:?string}
+     */
+    public static function request(PDO $db,string $scope,array $skus): array
+    {
+        if (!in_array($scope,['selected','all'],true))throw new InvalidArgumentException('invalid_scope');
+        $skus=array_values(array_unique(array_map('trim',$skus)));
+        sort($skus,SORT_STRING);
+        if($scope==='selected' && (count($skus)<1||count($skus)>1000))
+            throw new InvalidArgumentException('selected_sku_count_invalid');
+        if($scope==='all')$skus=[];
+        foreach($skus as $sku) {
+            if($sku===''||strlen($sku)>80)throw new InvalidArgumentException('invalid_seller_sku');
+        }
+
+        self::ensureSchema($db);
+        self::queueLock($db);
+        try {
+            self::coalesceUnlocked($db);
+            $key=self::requestKey($scope,$skus);
+            $query=$db->query("SELECT id,scope,skus_json,state,next_attempt_at
+                FROM amazon_margin_audit_requests WHERE state IN ('running','queued')
+                ORDER BY (state='running') DESC,id ASC");
+            foreach($query->fetchAll(PDO::FETCH_ASSOC) as $entry) {
+                $past=json_decode((string)$entry['skus_json'],true);
+                if(!is_array($past)||self::requestKey((string)$entry['scope'],$past)!==$key)continue;
+                return ['request_id'=>(int)$entry['id'],'reused'=>true,
+                    'state'=>(string)$entry['state'],'next_attempt_at'=>$entry['next_attempt_at']];
+            }
+            $insert=$db->prepare('INSERT INTO amazon_margin_audit_requests(scope,skus_json,stage)
+                VALUES(?,?,?)');
+            $insert->execute([$scope,json_encode($skus,JSON_THROW_ON_ERROR),'queued']);
+            return ['request_id'=>(int)$db->lastInsertId(),'reused'=>false,
+                'state'=>'queued','next_attempt_at'=>null];
+        } finally { $db->query("SELECT RELEASE_LOCK('sv_amazon_margin_enqueue')"); }
     }
 
     public static function next(PDO $db): ?array
     {
-        self::ensureSchema($db);
+        self::coalesceQueued($db);
         // Exclusive runner lock is held by the caller. Reclaim only crashed jobs.
         $db->exec("UPDATE amazon_margin_audit_requests SET state='queued', started_at=NULL
             WHERE state='running' AND attempts<3 AND started_at<UTC_TIMESTAMP()-INTERVAL 90 MINUTE");
@@ -75,7 +179,8 @@ final class SvAmazonMarginStore
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) { $db->commit(); return null; }
             $upd = $db->prepare("UPDATE amazon_margin_audit_requests
-                SET state='running', attempts=attempts+1, next_attempt_at=NULL,
+                SET state='running',stage='starting',progress_done=0,progress_total=NULL,
+                    heartbeat_at=UTC_TIMESTAMP(), attempts=attempts+1, next_attempt_at=NULL,
                     started_at=UTC_TIMESTAMP(), finished_at=NULL WHERE id=? AND state='queued'");
             $upd->execute([$row['id']]);
             $db->commit();
@@ -87,6 +192,16 @@ final class SvAmazonMarginStore
         }
     }
 
+    public static function progress(PDO $db,int $requestId,string $stage,int $done=0,?int $total=null): void
+    {
+        if($requestId<=0)return;
+        if(!preg_match('/^[a-z_]{2,48}$/',$stage))throw new InvalidArgumentException('invalid_stage');
+        $q=$db->prepare("UPDATE amazon_margin_audit_requests
+            SET stage=?,progress_done=?,progress_total=?,heartbeat_at=UTC_TIMESTAMP()
+            WHERE id=? AND state='running'");
+        $q->execute([$stage,max(0,$done),$total===null?null:max(0,$total),$requestId]);
+    }
+
     public static function complete(PDO $db, int $requestId, string $scope, array $snapshot): int
     {
         $payload = json_encode($snapshot, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
@@ -95,8 +210,11 @@ final class SvAmazonMarginStore
         $stmt->execute([$requestId ?: null, $scope, count($snapshot['rows'] ?? []), $payload]);
         $runId = (int)$db->lastInsertId();
         if ($requestId > 0) {
-            $upd = $db->prepare("UPDATE amazon_margin_audit_requests SET state='done', error_code=NULL, finished_at=UTC_TIMESTAMP() WHERE id=?");
-            $upd->execute([$requestId]);
+            $upd = $db->prepare("UPDATE amazon_margin_audit_requests SET state='done', stage='completed',
+                progress_done=?,progress_total=?,heartbeat_at=UTC_TIMESTAMP(),
+                error_code=NULL, finished_at=UTC_TIMESTAMP() WHERE id=?");
+            $count=count($snapshot['rows']??[]);
+            $upd->execute([$count,$count,$requestId]);
         }
         return $runId;
     }
@@ -109,16 +227,18 @@ final class SvAmazonMarginStore
             // SP-API quota is external/transient, not a corrupt audit. Do not
             // burn the 3 attempts while requests remain throttled.
             $upd = $db->prepare("UPDATE amazon_margin_audit_requests
-                SET state='queued', attempts=GREATEST(0, attempts-1),
+                SET state='queued', stage='waiting_amazon_quota',
+                    attempts=GREATEST(0, attempts-1),
                     next_attempt_at=UTC_TIMESTAMP()+INTERVAL 20 MINUTE,
-                    finished_at=NULL, error_code=? WHERE id=?");
+                    heartbeat_at=UTC_TIMESTAMP(),finished_at=NULL,error_code=? WHERE id=?");
             $upd->execute([$code,$requestId]);
             return;
         }
         $upd = $db->prepare("UPDATE amazon_margin_audit_requests
             SET state=IF(attempts<3,'queued','failed'),
+                stage=IF(attempts<3,'retry_pending','failed'),
                 next_attempt_at=IF(attempts<3,UTC_TIMESTAMP()+INTERVAL 5 MINUTE,NULL),
-                finished_at=UTC_TIMESTAMP(), error_code=? WHERE id=?");
+                heartbeat_at=UTC_TIMESTAMP(),finished_at=UTC_TIMESTAMP(), error_code=? WHERE id=?");
         $upd->execute([$code,$requestId]);
     }
 
@@ -131,9 +251,18 @@ final class SvAmazonMarginStore
         return ['run_id'=>(int)$row['id'], 'scope'=>$row['scope'], 'generated_at'=>$row['generated_at'], 'snapshot'=>$data];
     }
 
+    public static function latestMeta(PDO $db): ?array
+    {
+        $row=$db->query('SELECT id,scope,generated_at,offer_count
+            FROM amazon_margin_audit_runs ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+        return $row ? ['run_id'=>(int)$row['id'],'scope'=>$row['scope'],
+            'generated_at'=>$row['generated_at'],'offer_count'=>(int)$row['offer_count']] : null;
+    }
+
     public static function requests(PDO $db): array
     {
-        return $db->query('SELECT id,scope,state,attempts,next_attempt_at,created_at,started_at,finished_at,error_code
-            FROM amazon_margin_audit_requests ORDER BY id DESC LIMIT 12')->fetchAll(PDO::FETCH_ASSOC);
+        return $db->query('SELECT id,scope,state,stage,progress_done,progress_total,
+            heartbeat_at,attempts,next_attempt_at,created_at,started_at,finished_at,error_code
+            FROM amazon_margin_audit_requests ORDER BY id DESC LIMIT 20')->fetchAll(PDO::FETCH_ASSOC);
     }
 }
