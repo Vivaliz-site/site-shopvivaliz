@@ -48,14 +48,15 @@ class ExecutionTests(unittest.TestCase):
         def runner(argv, **kwargs):
             self.assertEqual(argv[:4], ["/bin/bash", "--noprofile", "--norc", "-c"])
             self.assertEqual(kwargs["env"]["PATH"], "/usr/local/bin:/usr/bin:/bin")
-            return subprocess.CompletedProcess(argv, 0, stdout=b"hi\n", stderr=b"")
+            kwargs["stdout"].write(b"hi\n")
+            return subprocess.CompletedProcess(argv, 0)
         result = shell.run_admin_shell({"command": "echo hi"}, home="/tmp", audit=self.audit, runner=runner)
         self.assertEqual(result, {"ok": True, "exit_code": 0, "timed_out": False,
                                   "stdout": "hi\n", "stderr": "", "truncated": False})
 
     def test_audit_records_hash_not_command_text(self):
         def runner(argv, **kwargs):
-            return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+            return subprocess.CompletedProcess(argv, 0)
         shell.run_admin_shell({"command": "echo secret-token-123"}, home="/tmp", audit=self.audit, runner=runner)
         self.assertEqual([e["event"] for e in self.audit_entries], ["start", "end"])
         self.assertNotIn("secret-token-123", json.dumps(self.audit_entries))
@@ -64,7 +65,7 @@ class ExecutionTests(unittest.TestCase):
         called = []
         def runner(argv, **kwargs):
             called.append(argv)
-            return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+            return subprocess.CompletedProcess(argv, 0)
         result = shell.run_admin_shell({"command": "id"}, home="/tmp", audit=lambda e: False, runner=runner)
         self.assertEqual(result, {"ok": False, "reason": "audit_unavailable"})
         self.assertEqual(called, [])
@@ -80,7 +81,8 @@ class ExecutionTests(unittest.TestCase):
     def test_output_is_truncated(self):
         big = b"x" * (shell.MAX_OUTPUT_BYTES + 10)
         def runner(argv, **kwargs):
-            return subprocess.CompletedProcess(argv, 0, stdout=big, stderr=b"")
+            kwargs["stdout"].write(big)
+            return subprocess.CompletedProcess(argv, 0)
         result = shell.run_admin_shell({"command": "yes"}, home="/tmp", audit=self.audit, runner=runner)
         self.assertEqual(len(result["stdout"]), shell.MAX_OUTPUT_BYTES)
         self.assertTrue(result["truncated"])
