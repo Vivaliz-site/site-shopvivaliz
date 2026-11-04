@@ -108,6 +108,8 @@ jobs:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     environment: production
+    outputs:
+      activated: ${{ steps.activate.outputs.activated }}
     env:
       ML_CLIENT_ID_VALUE: ${{ secrets.ML_CLIENT_ID }}
       ML_CLIENT_SECRET_VALUE: ${{ secrets.ML_CLIENT_SECRET }}
@@ -218,6 +220,7 @@ jobs:
             echo 'SAFE_SYNC_PATH_CLASS=ABSENT'
           fi
       - name: Activate release atomically
+        id: activate
         shell: bash
         run: |
           set -euo pipefail
@@ -242,6 +245,27 @@ jobs:
             echo "Timeout aguardando lock exclusivo de sincronizacao: $shared/locks/repo-sync.lock" >&2
             exit 3
           fi
+
+          # The queued Master Pipeline can be older than an already deployed
+          # main. Refuse stale activation while holding the shared sync lock.
+          assert_deploy_sha_is_current_main() {
+            local remote_main_sha=''
+            if ! remote_main_sha="$(git -C "$root/sync-repo" ls-remote origin refs/heads/main | awk '$2 == "refs/heads/main" { print $1 }')"; then
+              echo 'DEPLOY_FENCE_ERROR=cannot_read_authoritative_main' >&2
+              exit 2
+            fi
+            if ! [[ "$remote_main_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo 'DEPLOY_FENCE_ERROR=invalid_authoritative_main_sha' >&2
+              exit 2
+            fi
+            if [ "$remote_main_sha" != "$sha" ]; then
+              echo "DEPLOY_SUPERSEDED=SKIP outdated=$sha current_main=$remote_main_sha"
+              # Job success, but skip monitor and deployment evidence for this SHA.
+              printf 'activated=false\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          }
+          assert_deploy_sha_is_current_main
 
           shared_ml_token_owner() {
             local owner=''
@@ -387,6 +411,9 @@ jobs:
             fi
           fi
 
+          # Recheck immediately before promotion: main may have advanced
+          # while this release was staged and runtime was prepared.
+          assert_deploy_sha_is_current_main
           ln -sfn "releases/$(basename "$release")" "$root/current.next"
           mv -Tf "$root/current.next" "$current"
           fail=0
@@ -537,10 +564,12 @@ jobs:
           find "$releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | tail -n +6 | cut -d' ' -f2- | while IFS= read -r old; do
             [ "$(readlink -f "$current")" = "$old" ] || sudo rm -rf -- "$old"
           done
+          printf 'activated=true\n' >> "$GITHUB_OUTPUT"
           REMOTE
 
   monitor:
     needs: deploy
+    if: ${{ needs.deploy.outputs.activated == 'true' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
     steps:
