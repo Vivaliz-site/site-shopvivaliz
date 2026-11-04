@@ -78,10 +78,11 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(gui.browser_navigate({"url": "https://e.example", "timeout_seconds": 0})["reason"],
                          "invalid_arguments")
 
-    def test_navigate_requires_running_display(self):
-        with patch.object(gui, "_running_xvfb_pid", return_value=None):
+    def test_navigate_does_not_need_the_display(self):
+        with patch.object(gui, "_running_xvfb_pid", return_value=None), \
+             patch.object(gui, "_runtime_ready", return_value=False):
             result = gui.browser_navigate({"url": "https://e.example"}, audit=lambda e: True)
-        self.assertEqual(result["reason"], "gui_session_not_running")
+        self.assertEqual(result["reason"], "browser_unavailable")
 
     def test_navigate_reports_missing_browser_without_running_one(self):
         with patch.object(gui, "_running_xvfb_pid", return_value=4242), \
