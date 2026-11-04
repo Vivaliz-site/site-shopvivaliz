@@ -11,6 +11,7 @@ final class SvAmazonMarginExport
     private static function values(array $row): array
     {
         $margin = $row['margin_weighted_bps'] ?? null;
+        $reference=is_array($row['prior_cost_reference']??null) ? $row['prior_cost_reference'] : [];
         $status = $row['amazon_status'] ?? [];
         $buyable = is_array($status) && in_array('BUYABLE',$status,true);
         $reason = match((string)($row['status'] ?? '')) {
@@ -35,6 +36,10 @@ final class SvAmazonMarginExport
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
             'Preco cadastro Amazon (R$)'=>self::num($row['listed_price'] ?? null),
             'Custo ERP (R$)'=>self::num($row['last_cost'] ?? null),
+            'Custo anterior verificado (R$)'=>self::num($reference['cost']??null),
+            'Data custo anterior'=>(string)($reference['cost_date']??''),
+            'Auditoria custo anterior'=>isset($reference['verified_run_id']) ? (int)$reference['verified_run_id'] : null,
+            'SKU ERP anterior'=>(string)($reference['erp_sku']??''),
             'Fonte do vinculo'=>(string)($row['erp_match_method'] ?? ''),
             'Motivo do vinculo pendente'=>(string)($row['erp_mapping_reason'] ?? ''),
 
@@ -193,14 +198,18 @@ final class SvAmazonMarginExport
                     $showPrice=$get('Preco cadastro Amazon (R$)').'*';
                 }
                 $content .= self::pdfText(389,$y,8,$showPrice);
-                $content .= self::pdfText(448,$y,8,$get('Custo ERP (R$)'));
+                $showCost=$get('Custo ERP (R$)');
+                if ($showCost==='-' && $row['Custo anterior verificado (R$)']!==null) {
+                    $showCost=$get('Custo anterior verificado (R$)').'^';
+                }
+                $content .= self::pdfText(448,$y,8,$showCost);
                 $content .= self::pdfText(509,$y,8,$get('Margem ponderada (%)'));
                 $content .= self::pdfText(568,$y,8,$get('Unidades confirmadas'));
                 $state=(($row['Ativo Amazon']??'')==='Sim'?'Ativo: ':'Inativo: ').$get('Situacao');
                 $content .= self::pdfText(627,$y,8,mb_strimwidth($state,0,35,'...'));
                 if($i%2===1)$content.="0.86 w 27 ".($y-7)." m 813 ".($y-7)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'* Preco referencia cadastral sem oferta ativa. Margens vazias = nao apuradas.');
+            $content .= self::pdfText(27,24,8,'* Preco cadastral. ^ Custo historico validado antes (nao certificado neste run).');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
             $objects[$pg]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 '.$fontId.' 0 R >> >> /Contents '.$ct.' 0 R >>';
