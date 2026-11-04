@@ -129,7 +129,11 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('    broker_client.py', upgrade)
         self.assertIn('for name in server.py broker_client.py ', upgrade)
         for unit in (ROOT / 'marina-direct-mcp/systemd').glob('*'):
-            self.assertNotIn('--enable-approved-admin-broker', unit.read_text())
+            # Only the MCP daemon unit enables the client; the broker's own socket and service never do.
+            if unit.name == 'shopvivaliz-marina-mcp.service':
+                self.assertIn('--enable-approved-admin-broker', unit.read_text())
+            else:
+                self.assertNotIn('--enable-approved-admin-broker', unit.read_text())
 
 
     def test_root_broker_templates_are_bundled_for_separate_granted_install(self):
