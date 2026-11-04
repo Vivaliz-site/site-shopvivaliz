@@ -16,6 +16,14 @@ final class SvAmazonMarginOlistOrderLink
 {
     public const INTEGRATIONS=['Amazon','Amazon Onsite','Amazon Classic'];
 
+    /** Imported order history may be 90 days; only report-period sales can set margin. */
+    public static function inFinancialWindow(string $postedAt,string $periodStart): bool
+    {
+        $at=strtotime($postedAt);
+        $start=strtotime($periodStart);
+        return $at!==false && $start!==false && $at >= $start;
+    }
+
     /**
      * @param array<array{order:string,quantity:int,posted_at:string,net_amount:float}> $shipments
      * @param array<string,array<string,bool>> $orderSkus
