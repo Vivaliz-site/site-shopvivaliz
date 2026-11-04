@@ -183,6 +183,7 @@ SERVICE_PREPARE_TOOL = {
 
 
 ADMIN_SHELL_TOOL = runpy.run_path(str(Path(__file__).with_name("admin_shell.py")))["ADMIN_SHELL_TOOL"]
+GUI_BROWSER_TOOLS = runpy.run_path(str(Path(__file__).with_name("gui_browser.py")))["GUI_BROWSER_TOOLS"]
 
 
 def load_token(path: Path) -> bytes:
@@ -235,6 +236,7 @@ def create_server(
     service_client=None,
     access_verifier=None,
     admin_shell=None,
+    gui_browser=None,
 ) -> ThreadingHTTPServer:
     if host != "127.0.0.1":
         raise ValueError("loopback_only")
@@ -382,7 +384,8 @@ def create_server(
                               + ([ADMIN_TOOL] if (admin_operator is not None or admin_client is not None) and self.local_bearer else [])
                               + ([ADMIN_PREPARE_TOOL] if admin_client is not None and self.local_bearer else [])
                               + ([SERVICE_TOOL, SERVICE_PREPARE_TOOL] if service_client is not None and self.local_bearer else [])
-                              + ([ADMIN_SHELL_TOOL] if admin_shell is not None and access_verifier is not None and self.local_bearer else [])}
+                              + ([ADMIN_SHELL_TOOL] if admin_shell is not None and access_verifier is not None and self.local_bearer else [])
+                              + (GUI_BROWSER_TOOLS if gui_browser is not None and access_verifier is not None and self.local_bearer else [])}
                 elif method == "tools/call":
                     params = request.get("params")
                     if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
@@ -424,6 +427,10 @@ def create_server(
                         output = {"status": reason} if admin_ok else {"reason": reason}
                     elif name == "marina_admin_shell" and admin_shell is not None and access_verifier is not None and self.local_bearer:
                         output = admin_shell(arguments)
+                        tool_failed = output.get("ok") is not True
+                    elif name in {"marina_gui_session", "marina_browser_navigate"} and gui_browser is not None and access_verifier is not None and self.local_bearer:
+                        handler = gui_browser["gui_session" if name == "marina_gui_session" else "browser_navigate"]
+                        output = handler(arguments)
                         tool_failed = output.get("ok") is not True
                     elif name == "marina_workspace_file_write" and write_operator is not None and self.local_bearer:
                         write_ok, output = _WRITE["execute"](arguments, write_operator)
@@ -494,6 +501,8 @@ def main() -> int:
                         help="Enable owner-approved private-workspace writes only after protected local preflight")
     parser.add_argument("--enable-admin-shell", action="store_true",
                         help="Expose owner-approved admin shell (grant PR 3616) as unprivileged service user; requires --access-config")
+    parser.add_argument("--enable-gui-browser", action="store_true",
+                        help="Expose owner-approved virtual display and browser (grant PR GUI_BROWSER) as unprivileged service user; requires --access-config")
     parser.add_argument("--enable-approved-admin-broker", action="store_true",
                         help="Use the fixed local root broker only after protected metadata and fresh owner-grant preflight")
     args = parser.parse_args()
@@ -560,9 +569,16 @@ def main() -> int:
                 raise RuntimeError("admin_shell_requires_access_jwt")
             admin_shell_module = runpy.run_path(str(Path(__file__).with_name("admin_shell.py")))
             admin_shell = admin_shell_module["bootstrap_admin_shell"]()
+        gui_browser = None
+        if args.enable_gui_browser:
+            if access_verifier is None:
+                raise RuntimeError("gui_browser_requires_access_jwt")
+            gui_browser_module = runpy.run_path(str(Path(__file__).with_name("gui_browser.py")))
+            gui_browser = gui_browser_module["bootstrap_gui_browser"]()
         server = create_server(token, args.port, write_operator=write_operator,
                                admin_client=admin_client, service_client=service_client,
-                               access_verifier=access_verifier, admin_shell=admin_shell)
+                               access_verifier=access_verifier, admin_shell=admin_shell,
+                               gui_browser=gui_browser)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"MARINA_MCP_REFUSED={str(exc)}", file=sys.stderr)
         return 1
