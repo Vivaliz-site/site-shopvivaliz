@@ -48,7 +48,7 @@ O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete
 - Consultar até três pedidos por Seller SKU (90 dias para identidade), rejeitar IDs ERP conflitantes, pedidos com múltiplos Seller SKUs ou linhas ERP, integração diferente ou ID externo divergente. Não persistir números de pedidos/clientes no relatório: somente ERP ID, integração, método de vínculo e quantidade de evidências.
 - Os pedidos mais antigos utilizados para identificar produto não entram no cálculo: a margem considera somente remessas financeiras a partir do período de auditoria (30 dias por padrão), com data UTC validada. A taxa DBA `MfnPostageFee` também deve ser limitada à janela financeira ao consolidar despesas, evitando misturar frete de 90 dias com lucro de 30 dias.
 - Quando o GTIN do catálogo Amazon divergir do produto relacionado no Olist, explicitar a divergência e usar o vínculo por pedidos verificáveis, sem sobrescrever GTIN nem anúncios.
-- Para ofertas sem pedidos ou vínculos conclusivos, apresentar custo não confirmado; isso não implica inexistência de custo no ERP. A aba **Anúncios** dos produtos Olist permite confirmar os demais casos pela interface.
+- Para ofertas sem pedidos ou vínculos conclusivos, apresentar custo não confirmado; isso não implica inexistência de custo no ERP. A interface deve dizer que o **produto relacionado não foi identificado pela auditoria**, nunca que o cadastro do ERP não possui vínculo ou custo. A aba **Anúncios** dos produtos Olist permite confirmar os demais casos pela interface.
 
 ## Resiliência às cotas e referência de custos validados anteriormente
 
