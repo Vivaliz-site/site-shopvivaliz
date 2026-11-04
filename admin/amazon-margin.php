@@ -103,7 +103,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
-      <select id="status"><option value="">Todos os resultados</option><option value="low">Abaixo de 10%</option><option value="healthy">≥ 10%</option><option value="pending">Pendente</option></select>
+      <select id="status"><option value="">Todos os resultados</option><option value="low">Abaixo de 10%</option><option value="healthy">≥ 10%</option><option value="pending">Margem não apurada</option><option value="unmapped">Sem vínculo ERP</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
       <label class="filter-active" for="only-active"><input type="checkbox" id="only-active" checked> Somente ativos <span id="active-count" class="small muted"></span></label>
       <button type="button" id="select-visible">Selecionar visíveis</button>
       <button type="button" id="clear-selected">Limpar seleção</button>
@@ -204,27 +204,103 @@ async function loadStatus(){
 }
 const price=v=>v===null||v===undefined?'—':'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
-function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'DBA':'UNKNOWN');}
+function isActive(r){return Array.isArray(r.amazon_status)&&r.amazon_status.includes('BUYABLE');}
+function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'MERCHANT':'UNKNOWN');}
+function programLabel(r){const p=program(r);return p==='FBA_ONSITE'?'FBA Onsite':p==='DBA'?'DBA':p==='DBA_CANDIDATE'||p==='MERCHANT'?'Envio vendedor':p==='UNKNOWN'?'Não identificado':p;}
 function state(r){if(r.margin_min_bps===null||r.margin_min_bps===undefined)return 'pending';return r.margin_min_bps<1000?'low':'healthy';}
-function refreshSelection(){el('selected-count').textContent=selected.size+' anúncio(s) selecionado(s)'+(selected.size===0?' (exportação incluirá todos)':'');el('run-selected').disabled=selected.size===0||selected.size>1000;}
-function filtered(){const q=el('search').value.trim().toLowerCase(),p=el('program').value,s=el('status').value;
- return data.filter(r=>(!q||[r.seller_sku,r.erp_sku,r.asin,r.title].some(x=>String(x??'').toLowerCase().includes(q)))&&(!p||program(r)===p)&&(!s||state(r)===s));}
+function selectionVisible(){const current=new Set(displayed.map(r=>String(r.seller_sku)));return [...selected].filter(s=>current.has(s));}
+function refreshSelection(){
+ const visible=selectionVisible(),hidden=selected.size-visible.length;
+ el('selected-count').textContent=visible.length+' selecionado(s) neste filtro'+
+  (hidden?' · '+hidden+' oculto(s) por outros filtros':'')+
+  (!selected.size?' · PDF/Excel incluirão os '+displayed.length+' anúncios filtrados':'');
+ el('run-selected').disabled=submitBusy||visible.length===0||visible.length>1000;
+}
+function filterMatch(r,s){
+ if(s==='')return true;
+ if(s==='low'||s==='healthy'||s==='pending')return state(r)===s;
+ if(s==='unmapped')return r.status==='unmapped_erp';
+ if(s==='no_sales')return r.status==='no_confirmed_sales';
+ if(s==='no_price')return r.price===null||r.price===undefined;
+ if(s==='erp_error')return ['erp_or_catalog_read_failed','ambiguous_erp','erp_identity_mismatch'].includes(r.status);
+ return true;
+}
+function filtered(){
+ const q=el('search').value.trim().toLowerCase();
+ const p=el('program').value,s=el('status').value;
+ const only=el('only-active').checked;
+ return data.filter(r=>(!only||isActive(r))
+  &&(!q||[r.seller_sku,r.erp_sku,r.asin,r.title,r.ean].some(x=>String(x??'').toLowerCase().includes(q)))
+  &&(!p||program(r)===p||(p==='DBA'&&program(r)==='DBA_CANDIDATE'))
+  &&filterMatch(r,s));
+}
+const reasonText={
+ confirmed:'Margem apurada pelas vendas conciliadas',
+ partial:'Parte dos fretes/lançamentos ainda pendente de conciliação',
+ unmapped_erp:'Produto relacionado no ERP não identificado',
+ ambiguous_erp:'Mais de um produto ERP corresponde ao mesmo EAN',
+ erp_or_catalog_read_failed:'Falha de consulta ao ERP ou catálogo Amazon',
+ erp_identity_mismatch:'Identificação de produto divergente entre Amazon e ERP',
+ price_or_cost_missing:'Preço efetivo ou custo de aquisição indisponível',
+ price_divergence:'Preço da oferta divergente do cadastro',
+ fulfillment_unverified:'Modalidade logística não identificada',
+ no_confirmed_sales:'Sem vendas financeiras conciliadas no período',
+};
+function priceMarkup(r){
+ if(r.price!==null&&r.price!==undefined)return price(r.price);
+ if(r.listed_price!==null&&r.listed_price!==undefined)
+  return price(r.listed_price)+'<span class="cell-note warn">Preço do cadastro Amazon; oferta não confirmada</span>';
+ return '—<span class="cell-note warn">Preço não disponível</span>';
+}
+function costMarkup(r){
+ if(r.last_cost!==null&&r.last_cost!==undefined)
+  return price(r.last_cost)+(r.last_cost_date?'<span class="cell-note">Custo de '+escapeHtml(r.last_cost_date)+'</span>':'');
+ return '—<span class="cell-note warn">'+(r.status==='unmapped_erp'?'Sem produto ERP vinculado':
+   r.status==='ambiguous_erp'?'Vínculo ERP ambíguo':
+   r.status==='erp_or_catalog_read_failed'?'Consulta ERP falhou':'Custo não identificado')+'</span>';
+}
+function refreshMetrics(){
+ const active=data.filter(isActive).length;
+ const base=el('only-active').checked?data.filter(isActive):data;
+ const healthy=base.filter(r=>state(r)==='healthy').length;
+ const low=base.filter(r=>state(r)==='low').length;
+ el('n-total-label').textContent=el('only-active').checked?'Anúncios ativos':'Anúncios cadastrados';
+ el('n-total').textContent=base.length;
+ el('n-total-context').textContent=active+' ativos de '+data.length+' no catálogo';
+ el('active-count').textContent='('+active+')';
+ el('n-risk').textContent=low;
+ el('n-good').textContent=healthy;
+ el('n-pending').textContent=base.length-low-healthy;
+}
 function render(){
- displayed=filtered();const subset=displayed.slice(0,shown);
+ refreshMetrics();
+ displayed=filtered();
+ const subset=displayed.slice(0,shown);
  el('rows').innerHTML=subset.map(r=>{
-   const sku=String(r.seller_sku||'');const chosen=selected.has(sku);const st=state(r);
-   return '<tr><td><input type="checkbox" class="row-check" data-sku="'+escapeHtml(sku)+'" '+(chosen?'checked':'')+' aria-label="Selecionar '+escapeHtml(sku)+'"></td>'
-    +'<td><strong><code>'+escapeHtml(sku)+'</code></strong><span class="small muted">'+escapeHtml((r.title||'').slice(0,48))+'</span></td>'
-    +'<td>'+escapeHtml(r.erp_sku||'—')+'<br><span class="small muted">'+escapeHtml(r.asin||'—')+'</span></td>'
-    +'<td>'+escapeHtml(program(r)==='FBA_ONSITE'?'FBA Onsite':program(r))+'</td>'
-    +'<td class="right">'+price(r.price)+'</td><td class="right">'+price(r.last_cost)+'</td>'
-    +'<td class="right">'+Number(r.confirmed_sales||0)+'</td><td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+margin(r.margin_weighted_bps)+'</td>'
-    +'<td><span class="pill">'+escapeHtml(r.status)+'</span></td>'
-    +'<td><button type="button" data-sim="'+escapeHtml(sku)+'">Simular</button></td></tr>';
- }).join('')||'<tr><td colspan="10">Nenhum anúncio neste filtro.</td></tr>';
- el('count').textContent=displayed.length+' anúncio(s) encontrados, '+subset.length+' exibidos';
+  const sku=String(r.seller_sku??'');
+  const chosen=selected.has(sku);
+  const st=state(r),active=isActive(r);
+  const diag=reasonText[r.status]||String(r.status??'Não verificado');
+  const marginText=r.margin_weighted_bps===null||r.margin_weighted_bps===undefined
+   ?'—<span class="cell-note warn">Margem não apurada</span>'
+   :margin(r.margin_weighted_bps)+(r.status==='partial'?'<span class="cell-note warn">Conciliação parcial</span>':'');
+  const simOk=r.price!==null&&r.price!==undefined&&r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined;
+  return '<tr><td><input type="checkbox" class="row-check" data-sku="'+escapeHtml(sku)+'" '+(chosen?'checked':'')+' aria-label="Selecionar '+escapeHtml(sku)+'"></td>'
+   +'<td><strong><code>'+escapeHtml(sku)+'</code></strong><span class="cell-note">'+escapeHtml((r.title||'').slice(0,95))+'</span></td>'
+   +'<td>'+escapeHtml(r.erp_sku||'—')+'<span class="cell-note">ASIN '+escapeHtml(r.asin||'—')+'</span>'+
+     (r.ean?'<span class="cell-note">EAN '+escapeHtml(r.ean)+'</span>':'')+'</td>'
+   +'<td>'+escapeHtml(programLabel(r))+'</td>'
+   +'<td><span class="pill">'+(active?'Ativo · BUYABLE':'Sem oferta ativa')+'</span></td>'
+   +'<td class="right">'+priceMarkup(r)+'</td>'
+   +'<td class="right">'+costMarkup(r)+'</td>'
+   +'<td class="right">'+Number(r.confirmed_sales||0)+(r.confirmed_sales?'':'<span class="cell-note">0 conciliadas</span>')+'</td>'
+   +'<td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+marginText+'</td>'
+   +'<td><span class="pill">'+escapeHtml(diag)+'</span></td>'
+   +'<td><button type="button" data-sim="'+escapeHtml(sku)+'" '+(simOk?'':'disabled title="Precisa de preço e margem calculada"')+'>Simular</button></td></tr>';
+ }).join('')||'<tr><td colspan="11">Nenhum anúncio corresponde aos filtros. Desmarque Somente ativos para consultar os demais.</td></tr>';
+ el('count').textContent=displayed.length+' anúncio(s) encontrados neste filtro; '+subset.length+' exibidos.';
  el('more').hidden=shown>=displayed.length;
- el('select-page').checked=subset.length>0&&subset.every(r=>selected.has(r.seller_sku));
+ el('select-page').checked=subset.length>0&&subset.every(r=>selected.has(String(r.seller_sku??'')));
  refreshSelection();
 }
 function showError(e){el('feedback').textContent=String(e.message||e).slice(0,200);}
@@ -236,9 +312,7 @@ async function load({quiet=false}={}){
   data=json.latest?.snapshot?.rows||[];
   taxBps=Number(json.latest?.snapshot?.tax_bps||1400);
   lastRunId=json.latest?.run_id??null;
-  const good=data.filter(r=>state(r)==='healthy').length,low=data.filter(r=>state(r)==='low').length;
-  el('n-total').textContent=data.length;el('n-risk').textContent=low;
-  el('n-good').textContent=good;el('n-pending').textContent=data.length-good-low;
+  // Counters are recalculated by render() according to Somente ativos.
   el('last-run').textContent=json.latest?'Último relatório concluído: #'+json.latest.run_id+' · '+dateUtc(json.latest.generated_at)+' · '+data.length+' anúncios':'Nenhum relatório persistido';
   el('pdf').disabled=el('xlsx').disabled=data.length===0;
   queueDisplay(json.requests,json.latest?{run_id:json.latest.run_id,scope:json.latest.scope,generated_at:json.latest.generated_at,offer_count:data.length}:null);
@@ -247,18 +321,18 @@ async function load({quiet=false}={}){
   if(!quiet)el('feedback').textContent='Relatório consultado. O andamento das novas auditorias aparece acima.';
  }catch(e){
   showError(e);
-  if(!data.length)el('rows').innerHTML='<tr><td colspan="10">Não foi possível consultar o relatório. Verifique o erro acima.</td></tr>';
+  if(!data.length)el('rows').innerHTML='<tr><td colspan="11">Não foi possível consultar o relatório. Verifique o erro acima.</td></tr>';
  }
 }
 async function requestRun(scope){
  if(submitBusy)return;
- if(scope==='selected'&&(!selected.size||selected.size>1000))return;
+ if(scope==='selected'&&(!selectionVisible().length||selectionVisible().length>1000))return;
  submitBusy=true;
  el('run-all').disabled=true;el('run-selected').disabled=true;
  el('feedback').textContent='Enviando solicitação ao servidor…';
  try{
   const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
-   credentials:'same-origin',body:JSON.stringify({action:'request',scope,skus:scope==='selected'?[...selected]:[]})});
+   credentials:'same-origin',body:JSON.stringify({action:'request',scope,skus:scope==='selected'?selectionVisible():[]})});
   const json=await readJson(res);
   el('feedback').textContent=json.reused
     ?'Auditoria #'+json.request_id+' já solicitada. Nenhuma execução duplicada foi criada.'
@@ -270,9 +344,12 @@ async function requestRun(scope){
 async function download(format){
  el('feedback').textContent='Gerando '+format.toUpperCase()+'…';
  try{
+  const visibleSet=new Set(displayed.map(r=>String(r.seller_sku)));
+  const chosen=selected.size?[...selected].filter(s=>visibleSet.has(s)):[...visibleSet];
+  if(!chosen.length)throw Error('Nenhum anúncio no filtro para exportação. Ajuste os filtros ou a seleção.');
   const res=await fetch(API,{method:'POST',credentials:'same-origin',
    headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
-   body:JSON.stringify({action:'export',format,skus:[...selected]})});
+   body:JSON.stringify({action:'export',format,skus:chosen})});
   if(!res.ok){const j=await res.json().catch(()=>({error:'Falha na exportação'}));throw Error(j.error||'Falha');}
   const blob=await res.blob();
   const href=URL.createObjectURL(blob);
@@ -287,10 +364,10 @@ el('run-selected').onclick=()=>requestRun('selected');el('run-all').onclick=()=>
 el('pdf').onclick=()=>download('pdf');el('xlsx').onclick=()=>download('xlsx');
 el('reload').onclick=()=>load();
 el('search').oninput=()=>{shown=75;render();};
-el('program').onchange=el('status').onchange=()=>{shown=75;render();};
-el('select-visible').onclick=()=>{displayed.forEach(r=>selected.add(r.seller_sku));render();};
+el('program').onchange=el('status').onchange=el('only-active').onchange=()=>{shown=75;render();};
+el('select-visible').onclick=()=>{displayed.forEach(r=>selected.add(String(r.seller_sku)));render();};
 el('clear-selected').onclick=()=>{selected.clear();render();};
-el('select-page').onchange=e=>{displayed.slice(0,shown).forEach(r=>e.target.checked?selected.add(r.seller_sku):selected.delete(r.seller_sku));render();};
+el('select-page').onchange=e=>{displayed.slice(0,shown).forEach(r=>e.target.checked?selected.add(String(r.seller_sku)):selected.delete(String(r.seller_sku)));render();};
 el('more').onclick=()=>{shown+=75;render();};
 el('rows').addEventListener('change',e=>{const s=e.target.getAttribute('data-sku');if(!s)return;e.target.checked?selected.add(s):selected.delete(s);refreshSelection();});
 el('rows').addEventListener('click',e=>{const button=e.target.closest('[data-sim]');if(!button)return;currentSim=data.find(r=>r.seller_sku===button.dataset.sim);if(!currentSim)return;el('sim-name').textContent=currentSim.seller_sku;el('sim-price').value=currentSim.price||'';el('sim-result').textContent='';el('simulator').hidden=false;el('simulator').scrollIntoView({behavior:'smooth'});});
