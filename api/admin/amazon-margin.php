@@ -61,13 +61,22 @@ try {
         if (($body['action']??'')!=='request')sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_action']);
         $scope=(string)($body['scope']??'');
         $skus=sv_margin_api_selected($body['skus']??[]);
-        $id=SvAmazonMarginStore::request($db,$scope,$skus);
-        sv_margin_api_json(202,['ok'=>true,'request_id'=>$id,'state'=>'queued',
-            'detail'=>'The read-only runner must process this request.']);
+        $job=SvAmazonMarginStore::request($db,$scope,$skus);
+        sv_margin_api_json(202,['ok'=>true,'request_id'=>$job['request_id'],
+            'state'=>$job['state'],'reused'=>$job['reused'],
+            'next_attempt_at'=>$job['next_attempt_at'],
+            'detail'=>$job['reused']?'existing_audit_request':'audit_request_queued']);
     }
     if ($method!=='GET') sv_margin_api_json(405,['ok'=>false,'error'=>'method_not_allowed']);
 
     $action=(string)($_GET['action']??'latest');
+    if($action==='status') {
+        SvAmazonMarginStore::ensureSchema($db);
+        sv_margin_api_json(200,['ok'=>true,
+            'latest_meta'=>SvAmazonMarginStore::latestMeta($db),
+            'requests'=>SvAmazonMarginStore::requests($db),
+            'price_updates_enabled'=>false]);
+    }
     $latest=SvAmazonMarginStore::latest($db);
     if ($action==='export') {
         if (!$latest) sv_margin_api_json(404,['ok'=>false,'error'=>'no_audit_snapshot']);
@@ -90,6 +99,7 @@ try {
         echo $bytes;exit;
     }
     if ($action!=='latest') sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_action']);
+    SvAmazonMarginStore::ensureSchema($db);
     $requests=SvAmazonMarginStore::requests($db);
     sv_margin_api_json(200,['ok'=>true,'latest'=>$latest,'requests'=>$requests,
         'price_updates_enabled'=>false]);
