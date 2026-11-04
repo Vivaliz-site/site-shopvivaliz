@@ -27,6 +27,7 @@ final class SvAmazonMarginOlistAdsImport
             throw new RuntimeException('olist_ads_staging_unavailable');
         }
         $stored=[];
+        $stageDirectories=[];
         try {
             $total=0;
             foreach ($names as $i=>$original) {
@@ -60,7 +61,13 @@ final class SvAmazonMarginOlistAdsImport
                         || str_starts_with($magic,"\xd0\xcf")))) {
                     throw new InvalidArgumentException('olist_export_magic_mismatch');
                 }
-                $staged=$incoming.'/'.bin2hex(random_bytes(12)).'-'.$name;
+                // The parser must see the unmodified Olist filename to validate
+                // the original export timestamp. Isolate it inside a private
+                // random directory rather than prepending a random prefix.
+                $stageDir=$incoming.'/'.bin2hex(random_bytes(12));
+                if (!mkdir($stageDir,0700)) throw new RuntimeException('olist_export_staging_failed');
+                $stageDirectories[]=$stageDir;
+                $staged=$stageDir.'/'.$name;
                 if (!move_uploaded_file($tmp,$staged)) {
                     throw new RuntimeException('olist_export_storage_failed');
                 }
@@ -95,6 +102,9 @@ final class SvAmazonMarginOlistAdsImport
         } finally {
             foreach ($stored as $file) {
                 if (is_file($file))@unlink($file);
+            }
+            foreach ($stageDirectories as $stageDir) {
+                if (is_dir($stageDir))@rmdir($stageDir);
             }
         }
     }
