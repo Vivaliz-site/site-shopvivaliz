@@ -141,6 +141,7 @@ const stageLabels={
  loading_prices:'Consultando preços Amazon',mapping_erp_products:'Vinculando produtos Olist/Tiny',
  reading_transactions:'Conciliando tarifas e fretes',calculating_margins:'Calculando margens',
  saving_report:'Salvando relatório',waiting_amazon_quota:'Aguardando liberação da cota Amazon',
+ waiting_olist_quota:'Aguardando liberação da cota Olist/Tiny',
  retry_pending:'Aguardando nova tentativa',completed:'Concluída',coalesced:'Solicitação repetida',
  failed:'Falha registrada'
 };
