@@ -275,6 +275,8 @@ def create_server(
             if self.headers.get("Origin"):
                 self.send_json(403, {"error": "origin_not_allowed"})
                 return False
+            self.local_bearer = False
+            self.jwt_verified = False
             value = self.headers.get("Authorization", "")
             candidate = value[7:].encode("utf-8") if value.startswith("Bearer ") else b""
             if hmac.compare_digest(candidate, token):
@@ -287,7 +289,7 @@ def create_server(
             if access_verifier is not None:
                 identity = access_verifier.verify(self.headers.get("Cf-Access-Jwt-Assertion", ""))
                 if identity is not None:
-                    self.local_bearer = False
+                    self.jwt_verified = True
                     return True
             self.send_json(401, {"error": "unauthorized"})
             return False
@@ -384,8 +386,8 @@ def create_server(
                               + ([ADMIN_TOOL] if (admin_operator is not None or admin_client is not None) and self.local_bearer else [])
                               + ([ADMIN_PREPARE_TOOL] if admin_client is not None and self.local_bearer else [])
                               + ([SERVICE_TOOL, SERVICE_PREPARE_TOOL] if service_client is not None and self.local_bearer else [])
-                              + ([ADMIN_SHELL_TOOL] if admin_shell is not None and access_verifier is not None and self.local_bearer else [])
-                              + (GUI_BROWSER_TOOLS if gui_browser is not None and access_verifier is not None and self.local_bearer else [])}
+                              + ([ADMIN_SHELL_TOOL] if admin_shell is not None and self.jwt_verified else [])
+                              + (GUI_BROWSER_TOOLS if gui_browser is not None and self.jwt_verified else [])}
                 elif method == "tools/call":
                     params = request.get("params")
                     if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
@@ -425,10 +427,10 @@ def create_server(
                         admin_ok, reason = _ADMIN["execute_admin_operation"](arguments, admin_operator)
                         tool_failed = not admin_ok
                         output = {"status": reason} if admin_ok else {"reason": reason}
-                    elif name == "marina_admin_shell" and admin_shell is not None and access_verifier is not None and self.local_bearer:
+                    elif name == "marina_admin_shell" and admin_shell is not None and self.jwt_verified:
                         output = admin_shell(arguments)
                         tool_failed = output.get("ok") is not True
-                    elif name in {"marina_gui_session", "marina_browser_navigate"} and gui_browser is not None and access_verifier is not None and self.local_bearer:
+                    elif name in {"marina_gui_session", "marina_browser_navigate"} and gui_browser is not None and self.jwt_verified:
                         handler = gui_browser["gui_session" if name == "marina_gui_session" else "browser_navigate"]
                         output = handler(arguments)
                         tool_failed = output.get("ok") is not True

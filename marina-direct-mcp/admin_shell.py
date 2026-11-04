@@ -11,7 +11,9 @@ import hashlib
 import json
 import os
 import pwd
+import resource
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -96,23 +98,41 @@ def run_admin_shell(arguments: dict, *, home: str | None = None, audit=_audit, r
     if not audit({"event": "start", "command_sha256": digest, "at": int(started)}):
         return {"ok": False, "reason": "audit_unavailable"}
     workdir = home or str(Path.home())
-    try:
-        proc = runner(["/bin/bash", "--noprofile", "--norc", "-c", command], cwd=workdir,
-                      env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": workdir, "LANG": "C.UTF-8"},
-                      capture_output=True, timeout=timeout, check=False)
-        exit_code, out, err, timed_out = proc.returncode, proc.stdout, proc.stderr, False
-    except subprocess.TimeoutExpired as exc:
-        exit_code, out, err, timed_out = None, exc.stdout or b"", exc.stderr or b"", True
+    # Output goes to bounded temporary files, never to memory: RLIMIT_FSIZE makes
+    # the kernel stop a flooding child while the timeout is still running.
+    with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
+        try:
+            proc = runner(["/bin/bash", "--noprofile", "--norc", "-c", command], cwd=workdir,
+                          env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": workdir, "LANG": "C.UTF-8"},
+                          stdout=out_file, stderr=err_file, timeout=timeout, check=False,
+                          preexec_fn=_limit_output_size)
+            exit_code, timed_out = proc.returncode, False
+        except subprocess.TimeoutExpired:
+            exit_code, timed_out = None, True
+        out, out_over = _read_bounded(out_file)
+        err, err_over = _read_bounded(err_file)
     audit({"event": "end", "command_sha256": digest, "exit_code": exit_code,
            "timed_out": timed_out, "duration_seconds": round(time.time() - started, 3)})
     return {
         "ok": (not timed_out) and exit_code == 0,
         "exit_code": exit_code,
         "timed_out": timed_out,
-        "stdout": out[:MAX_OUTPUT_BYTES].decode("utf-8", "replace"),
-        "stderr": err[:MAX_OUTPUT_BYTES].decode("utf-8", "replace"),
-        "truncated": len(out) > MAX_OUTPUT_BYTES or len(err) > MAX_OUTPUT_BYTES,
+        "stdout": out.decode("utf-8", "replace"),
+        "stderr": err.decode("utf-8", "replace"),
+        "truncated": out_over or err_over,
     }
+
+
+def _limit_output_size() -> None:
+    # One byte over the cap is enough to prove truncation; the child is then killed by SIGXFSZ.
+    limit = MAX_OUTPUT_BYTES + 1
+    resource.setrlimit(resource.RLIMIT_FSIZE, (limit, limit))
+
+
+def _read_bounded(stream) -> tuple[bytes, bool]:
+    stream.seek(0)
+    data = stream.read(MAX_OUTPUT_BYTES + 1)
+    return data[:MAX_OUTPUT_BYTES], len(data) > MAX_OUTPUT_BYTES
 
 
 def bootstrap_admin_shell(grant_file: Path = GRANT_FILE):
