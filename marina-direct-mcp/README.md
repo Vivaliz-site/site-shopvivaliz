@@ -41,8 +41,12 @@ O service token `marina-mcp-automation-3521-eb504b66` fica acessivel aos agentes
 3. Mesmas variaveis com `--activate`; reinicia o servico, faz o smoke local e **volta sozinho** a release anterior se falhar.
 4. Validar como o usuario de servico, sem root: executar `bootstrap_admin_shell()` e `bootstrap_gui_browser()` dos arquivos da release com comandos somente leitura.
 
-### Nao validado
-Chamada ponta a ponta pela rota publica `mcp-marina.shopvivaliz.com.br` com um JWT real do Access. Os executores foram validados direto no host.
+### Validacao pela rota publica (2026-11-04)
+As cinco chamadas administrativas (identidade, `as_root` via sudo, hostname, browser e GUI) foram executadas ponta a ponta pela rota publica `mcp-marina.shopvivaliz.com.br` com o service token do Access, e cada uma tem registro de auditoria no host. Evidencias e itens em aberto: `docs/ops/marina-mcp-admin-validation-20261104.md`. Esse documento nao declara APTO; o veredito e do certifier.
+
+### Pendente
+- Nome do servidor servido (`initialize`) ainda diz `shopvivaliz-marina-direct-readonly`.
+- Rotacao do service token antes de 2026-12-02.
 <!-- /MARINA_MCP_ACTIVE_20261104 -->
 
 <!-- MARINA_CLOUDFLARE_EXISTING_TUNNEL_ROUTE_20261102 -->
