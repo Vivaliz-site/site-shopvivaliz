@@ -10,7 +10,7 @@ final class SvAmazonMarginOlistAdsIndex
     public static function path(): string
     {
         return (string)(getenv('SV_AMAZON_OLIST_ADS_INDEX_PATH')
-            ?: '/home/ubuntu/shopvivaliz-deploy/shared/storage/amazon-margin/olist-ads-index.json');
+            ?: '/home/ubuntu/.shopvivaliz/runtime/amazon-margin/olist-ads-index.json');
     }
 
     public static function load(?string $path = null): array
