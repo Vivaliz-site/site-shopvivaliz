@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the read-only Marina MCP edge smoke every hour
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+AccuracySec=5min
+Persistent=true
+Unit=shopvivaliz-marina-edge-smoke.service
+
+[Install]
+WantedBy=timers.target
