@@ -137,7 +137,9 @@ async function request(action, opts={}){
  try{result=await response.json();}catch{throw new Error('Resposta inesperada do servidor.');}
  if(!response.ok){
   const code=result?.error?.code||'BACKEND_UNAVAILABLE';
-  throw new Error(code==='ML_MARGIN_NOT_CONFIGURED'?'Integração ainda não provisionada: conta e credencial da API de margens pendentes.':code);
+  if(code==='ML_MARGIN_NOT_CONFIGURED')throw new Error('Integração ainda não provisionada: conta e credencial da API de margens pendentes.');
+  if(code==='AUDIT_ALREADY_RUNNING_DIFFERENT_SELECTION')throw new Error('Há outra auditoria em execução para esta conta, com uma seleção diferente. Aguarde a conclusão antes de auditar outro conjunto de anúncios.');
+  throw new Error(code);
  }
  return result;
 }
