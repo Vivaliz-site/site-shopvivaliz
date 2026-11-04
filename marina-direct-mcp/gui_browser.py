@@ -18,7 +18,7 @@ import subprocess
 import time
 from pathlib import Path
 
-GRANT_PR = 0  # set to the PR number that carries the owner grant
+GRANT_PR = 3619  # PR that carries the owner grant
 SERVICE_USER = "shopvivaliz-marina-mcp"
 SERVICE_HOME = Path("/var/lib/shopvivaliz-marina-mcp")
 STATE_DIR = SERVICE_HOME / "state" / "gui"
