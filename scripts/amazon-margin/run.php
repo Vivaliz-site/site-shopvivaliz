@@ -86,7 +86,8 @@ try {
         try { SvAmazonMarginStore::fail($db,$requestId,$code); } catch(Throwable) {}
     }
     fwrite(STDERR,json_encode(['state'=>$code==='AMAZON_QUOTA_429'?'deferred':'failed',
-        'code'=>$code,'reason'=>preg_replace('/[^a-zA-Z0-9_:-]/','_',substr($e->getMessage(),0,90))],
+        'code'=>$code,'origin'=>basename($e->getFile()).':'.$e->getLine(),
+        'reason'=>preg_replace('/[^a-zA-Z0-9_:-]/','_',substr($e->getMessage(),0,90))],
         JSON_THROW_ON_ERROR)."\n");
     exit($code==='AMAZON_QUOTA_429'?0:2);
 } finally {
