@@ -70,8 +70,20 @@ final class SvAmazonMarginStore
     /** Caller owns the short-lived MySQL queue mutex. */
     private static function coalesceUnlocked(PDO $db): int
     {
-        $active=$db->query("SELECT id,scope,skus_json,state FROM amazon_margin_audit_requests
+        $active=$db->query("SELECT id,scope,skus_json,state,created_at FROM amazon_margin_audit_requests
             WHERE state IN ('running','queued') ORDER BY (state='running') DESC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        // A finished run that completed after a click already satisfies it;
+        // repeated clicks must not trigger the same 527-SKU audit again.
+        $completed=$db->query("SELECT id,scope,skus_json,finished_at FROM amazon_margin_audit_requests
+            WHERE state='done' AND finished_at>=UTC_TIMESTAMP()-INTERVAL 24 HOUR
+            ORDER BY finished_at DESC LIMIT 40")->fetchAll(PDO::FETCH_ASSOC);
+        $finished=[];
+        foreach($completed as $entry) {
+            $skus=json_decode((string)$entry['skus_json'],true);
+            if(!is_array($skus))continue;
+            $key=self::requestKey((string)$entry['scope'],$skus);
+            $finished[$key]??=$entry;
+        }
         $seen=[];$removed=0;
         $mark=$db->prepare("UPDATE amazon_margin_audit_requests
             SET state='coalesced',stage='coalesced',finished_at=UTC_TIMESTAMP(),
@@ -81,6 +93,12 @@ final class SvAmazonMarginStore
             $skus=json_decode((string)$entry['skus_json'],true);
             if(!is_array($skus))continue;
             $key=self::requestKey((string)$entry['scope'],$skus);
+            if($entry['state']==='queued' && isset($finished[$key])
+                && strcmp((string)$finished[$key]['finished_at'],(string)$entry['created_at'])>=0) {
+                $mark->execute(['fulfilled_by_'.$finished[$key]['id'],(int)$entry['id']]);
+                $removed+=$mark->rowCount();
+                continue;
+            }
             if(!isset($seen[$key])) { $seen[$key]=(int)$entry['id'];continue; }
             if($entry['state']!=='queued')continue;
             $mark->execute(['duplicate_of_'.$seen[$key],(int)$entry['id']]);
