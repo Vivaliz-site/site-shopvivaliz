@@ -248,8 +248,8 @@ function filtered(){
 const reasonText={
  confirmed:'Margem apurada pelas vendas conciliadas',
  partial:'Parte dos fretes/lançamentos ainda pendente de conciliação',
- unmapped_erp:'Produto relacionado no ERP não identificado',
- ambiguous_erp:'Mais de um produto ERP corresponde ao mesmo EAN',
+ unmapped_erp:'Sem vínculo ERP identificado por EAN, SKU ou pedido Amazon',
+ ambiguous_erp:'Vínculo ERP ambíguo (EAN ou pedidos divergentes)',
  erp_or_catalog_read_failed:'Falha de consulta ao ERP ou catálogo Amazon',
  erp_identity_mismatch:'Identificação de produto divergente entre Amazon e ERP',
  price_or_cost_missing:'Preço efetivo ou custo de aquisição indisponível',
@@ -309,7 +309,10 @@ function render(){
   return '<tr><td><input type="checkbox" class="row-check" data-sku="'+escapeHtml(sku)+'" '+(chosen?'checked':'')+' aria-label="Selecionar '+escapeHtml(sku)+'"></td>'
    +'<td><strong><code>'+escapeHtml(sku)+'</code></strong><span class="cell-note">'+escapeHtml((r.title||'').slice(0,95))+'</span></td>'
    +'<td>'+escapeHtml(r.erp_sku||'—')+'<span class="cell-note">ASIN '+escapeHtml(r.asin||'—')+'</span>'+
-     (r.ean?'<span class="cell-note">EAN '+escapeHtml(r.ean)+'</span>':'')+'</td>'
+     (r.ean?'<span class="cell-note">EAN '+escapeHtml(r.ean)+'</span>':'')+
+     (r.erp_integration?'<span class="cell-note">ERP: '+escapeHtml(r.erp_integration)+'</span>':'')+
+     (r.erp_match_method==='OLIST_AMAZON_ORDER'?'<span class="cell-note">Vínculo por '+Number(r.erp_order_evidence_count||0)+' pedido(s) Amazon/Olist</span>':'')+
+     (r.erp_gtin_differs_from_amazon?'<span class="cell-note warn">GTIN do anúncio difere do ERP; vínculo conferido via pedido</span>':'')+'</td>'
    +'<td>'+escapeHtml(programLabel(r))+'</td>'
    +'<td><span class="pill">'+(active?'Ativo · BUYABLE':'Sem oferta ativa')+'</span></td>'
    +'<td class="right">'+priceMarkup(r)+'</td>'
