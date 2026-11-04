@@ -4,6 +4,8 @@ declare(strict_types=1);
 require_once __DIR__.'/../../includes/admin-guard.php';
 require_once __DIR__.'/../../includes/amazon-margin/AuditStore.php';
 require_once __DIR__.'/../../includes/amazon-margin/ReportExport.php';
+require_once __DIR__.'/../../includes/amazon-margin/OlistAdsIndex.php';
+require_once __DIR__.'/../../includes/amazon-margin/OlistAdsImport.php';
 
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -38,6 +40,33 @@ try {
         $sessionToken=(string)($_SESSION['sv_margin_csrf_token']??'');
         if ($token===''||$sessionToken===''||!hash_equals($sessionToken,$token)) {
             sv_margin_api_json(403,['ok'=>false,'error'=>'csrf_denied']);
+        }
+        if (str_starts_with(strtolower((string)($_SERVER['CONTENT_TYPE']??'')),'multipart/form-data')) {
+            if (($_POST['action']??'')!=='import_olist_ads') {
+                sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_upload_action']);
+            }
+            if ((int)($_SERVER['CONTENT_LENGTH']??0)>11*1024*1024) {
+                sv_margin_api_json(413,['ok'=>false,'error'=>'upload_too_large']);
+            }
+            try {
+                $import=SvAmazonMarginOlistAdsImport::process($_FILES['ads_exports']??[]);
+            } catch (InvalidArgumentException $e) {
+                sv_margin_api_json(422,['ok'=>false,'error'=>$e->getMessage()]);
+            }
+            $fresh=(int)($import['stats']['fresh_unique']??0);
+            $job=null;
+            if ($fresh>0) {
+                // Run once after a fresh export, with the ordinary protected
+                // persistent queue; no direct Amazon or ERP write is performed.
+                $job=SvAmazonMarginStore::request($db,'all',[]);
+            }
+            sv_margin_api_json($fresh>0?202:200,[
+                'ok'=>true,
+                'import'=>$import,
+                'historical_only'=>$fresh===0,
+                'audit_request'=>$job,
+                'price_updates_enabled'=>false,
+            ]);
         }
         $raw=file_get_contents('php://input');
         if (!is_string($raw)||strlen($raw)>100000) sv_margin_api_json(413,['ok'=>false,'error'=>'payload_too_large']);
@@ -76,6 +105,15 @@ try {
             'latest_meta'=>SvAmazonMarginStore::latestMeta($db),
             'requests'=>SvAmazonMarginStore::requests($db),
             'price_updates_enabled'=>false]);
+    }
+    if ($action==='olist_ads_status') {
+        $index=SvAmazonMarginOlistAdsIndex::load();
+        sv_margin_api_json(200,['ok'=>true,
+            'has_index'=>$index!==[],
+            'imported_at'=>$index['created_at']??null,
+            'files'=>$index['files']??[],
+            'stats'=>$index['stats']??null,
+            'source'=>$index['source']??null]);
     }
     $latest=SvAmazonMarginStore::latest($db);
     if ($action==='export') {
