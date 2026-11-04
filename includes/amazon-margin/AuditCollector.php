@@ -7,6 +7,7 @@ require_once __DIR__ . '/RateLimitPolicy.php';
 require_once __DIR__ . '/OlistQuotaPolicy.php';
 require_once __DIR__ . '/ReadErrorPolicy.php';
 require_once __DIR__ . '/OlistAmazonOrderLink.php';
+require_once __DIR__ . '/OlistAdsIndex.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -340,6 +341,15 @@ final class SvAmazonMarginCollector
         $this->pricing($listings);
         $this->note('mapping_erp_products');
         $this->tinyIndex();
+        // An Olist Anuncios export is trusted only if recent and maps an exact
+        // Seller SKU to a unique ACTIVE product in this live Olist API index.
+        // Old XLS references are informational; never certify a historical link.
+        try {
+            $adsIndex=SvAmazonMarginOlistAdsIndex::load();
+        } catch (Throwable $e) {
+            $adsIndex=[];
+            $this->warnings[]='olist_ads_index_unreadable:'.get_class($e);
+        }
         $this->note('reading_transactions');
         // Order-to-product identity may predate the 30-day margin window.
         // Fetch 90 days once, but calculate money ONLY for postedAfter sales.
@@ -406,6 +416,35 @@ final class SvAmazonMarginCollector
                         }
                     } elseif ($orderLink['status']==='ambiguous_erp') {
                         $link=$orderLink; // Do not use a disputed cost.
+                    }
+                }
+                // Recent Olist Anuncios exports are the independent direct
+                // Seller-SKU -> ERP SKU link. Revalidate the referenced SKU
+                // against the CURRENT API index and product detail.
+                // Never override conflicting verified Amazon ORDER evidence.
+                $adLink=SvAmazonMarginOlistAdsIndex::lookup(
+                    $adsIndex,(string)$sku,$this->productsBySku);
+                if ($adLink['status']==='historical') {
+                    $row['erp_historical_candidate']=[
+                        'erp_sku'=>$adLink['candidate_erp_sku'],
+                        'integration'=>$adLink['integration'],
+                        'observed_at'=>$adLink['observed_at'],
+                        'source'=>'OLIST_ERP_ANUNCIOS_EXPORT',
+                    ];
+                }
+                if ($link['status']!=='mapped' && $prod===null
+                    && $adLink['status']==='mapped'
+                    && ($link['reason']??'')!=='historical_amazon_orders_disagree_on_product') {
+                    $candidate=$this->product((int)$adLink['id']);
+                    if ($candidate['active']
+                        && (string)$candidate['erp_sku']
+                            ===(string)($adsIndex['entries'][(string)$sku]['erp_sku']??'')) {
+                        $prod=$candidate;
+                        $link=$adLink;
+                        $row['erp_integration']=$adLink['integration'];
+                        $row['erp_export_observed_at']=$adLink['observed_at'];
+                        $row['erp_gtin_differs_from_amazon']=($ean!==null&&$ean!==''
+                            && (string)$candidate['erp_gtin']!==$ean);
                     }
                 }
                 $row['erp_match_method']=$link['method'];
@@ -505,7 +544,7 @@ final class SvAmazonMarginCollector
             'period_from'=>$postedAfter,
             'scope'=>$selectedSkus?'selected':'all',
             'sources'=>['AMAZON_SPAPI_LISTINGS','AMAZON_SPAPI_PRICING',
-                'AMAZON_SPAPI_FINANCES','AMAZON_SPAPI_ORDERS','OLIST_TINY_V3','OLIST_V3_AMAZON_ORDER_ID_JOIN'],
+                'AMAZON_SPAPI_FINANCES','AMAZON_SPAPI_ORDERS','OLIST_TINY_V3','OLIST_V3_AMAZON_ORDER_ID_JOIN','OLIST_ERP_ANUNCIOS_EXPORT'],
             'tax_bps'=>$taxBps,
             'offer_count'=>count($rows),
             'warnings'=>$this->warnings,
