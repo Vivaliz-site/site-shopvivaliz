@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MarginMath.php';
+require_once __DIR__ . '/ProductMatch.php';
 require_once __DIR__ . '/RateLimitPolicy.php';
 
 /**
@@ -12,6 +13,7 @@ require_once __DIR__ . '/RateLimitPolicy.php';
 final class SvAmazonMarginCollector
 {
     private array $productsByEan = [];
+    private array $productsBySku = [];
     private array $productDetails = [];
     private array $eanByAsin = [];
     private array $programByOrder = [];
@@ -176,12 +178,15 @@ final class SvAmazonMarginCollector
                 if (!$id || isset($unique[$id])) continue;
                 $unique[$id] = true;
                 $new++;
+                if ((string)($row['situacao'] ?? '') !== 'A') continue;
                 $ean = trim((string)($row['gtin'] ?? ''));
-                if ($ean === '' || (string)($row['situacao'] ?? '') !== 'A') continue;
-                $this->productsByEan[$ean][] = [
-                    'id'=>$id, 'sku'=>(string)($row['sku'] ?? ''),
+                $sku = trim((string)($row['sku'] ?? ''));
+                $candidate = [
+                    'id'=>$id, 'sku'=>$sku, 'gtin'=>$ean,
                     'name'=>(string)($row['descricao'] ?? ''),
                 ];
+                if ($ean !== '') $this->productsByEan[$ean][] = $candidate;
+                if ($sku !== '') $this->productsBySku[strtolower($sku)][] = $candidate;
             }
             $this->note('mapping_erp_products',count($unique),
                 (int)($res['paginacao']['total'] ?? 0) ?: null);
@@ -329,15 +334,21 @@ final class SvAmazonMarginCollector
             try {
                 $ean = $this->ean($asin);
                 $row['ean'] = $ean;
-                $matches = $ean!==null ? ($this->productsByEan[$ean] ?? []) : [];
-                if (count($matches) !== 1) {
-                    $row['status'] = !$matches ? 'unmapped_erp' : 'ambiguous_erp';
+                $link = SvAmazonMarginProductMatch::resolve($sku,$ean,
+                    $this->productsByEan,$this->productsBySku);
+                $row['erp_match_method'] = $link['method'];
+                $row['erp_mapping_reason'] = $link['reason'];
+                if ($link['status'] !== 'mapped') {
+                    $row['status'] = $link['status'];
                     $rows[] = $row;
                     continue;
                 }
-                $prod = $this->product($matches[0]['id']);
-                if (!$prod['active'] || $prod['erp_gtin'] !== $ean) {
+                $prod = $this->product((int)$link['id']);
+                if (!$prod['active'] || ($ean!==null&&$ean!==''&&$prod['erp_gtin']!==$ean)
+                    || ($link['method']==='SELLER_SKU_EXACT'
+                        && strcasecmp($prod['erp_sku'],(string)$sku)!==0)) {
                     $row['status'] = 'erp_identity_mismatch';
+                    $row['erp_mapping_reason']='product_detail_identity_mismatch';
                     $rows[] = $row;
                     continue;
                 }
