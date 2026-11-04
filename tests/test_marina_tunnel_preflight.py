@@ -112,7 +112,7 @@ class PreflightSafetyTests(unittest.TestCase):
                                         stdout="LISTEN 0 128 127.0.0.1:5580 0.0.0.0:*")
         service = {
             "LoadState": "loaded", "ActiveState": "active", "UnitFileState": "enabled",
-            "NoNewPrivileges": "yes", "User": m.SERVICE_USER,
+            "NoNewPrivileges": "no", "User": m.SERVICE_USER,
         }
         with patch.object(m.socket, "gethostname", return_value=m.EXPECTED_HOST), \
              patch.object(m.pwd, "getpwuid", return_value=fake_account), \
@@ -129,7 +129,7 @@ class PreflightSafetyTests(unittest.TestCase):
         with patch.object(m.socket, "gethostname", return_value=m.EXPECTED_HOST), \
              patch.object(m, "unit_snapshot", return_value={
                  "LoadState": "loaded", "ActiveState": "active",
-                 "UnitFileState": "disabled", "NoNewPrivileges": "yes",
+                 "UnitFileState": "disabled", "NoNewPrivileges": "no",
                  "User": m.SERVICE_USER,
              }):
             result = m.collect(home=self.root)

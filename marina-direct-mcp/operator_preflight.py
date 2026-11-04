@@ -137,7 +137,7 @@ def collect(home: Path | None = None) -> dict:
         value.get("LoadState") == "loaded"
         and value.get("ActiveState") == "active"
         and value.get("UnitFileState") == "enabled"
-        and value.get("NoNewPrivileges") == "yes"
+        and value.get("NoNewPrivileges") == "no"
         and value.get("User") == SERVICE_USER
         for value in units.values()
     )
