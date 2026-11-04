@@ -15,12 +15,16 @@ from typing import Protocol
 MARINA_HOST = "marina-a1-4c24g"
 OLIST_BROWSER_UNIT = "amazon-returns-olist-erp-browser.service"
 OPERATION = "olist_browser_restart"
+SERVICE_OPERATION = "service_restart"
 CAPABILITY = "deployment_manage"
 TARGET_REPOSITORY = "Vivaliz-site/amazon-returns-safet"
+SERVICE_TARGET_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
+_UNIT_PATTERN = re.compile(r"^shopvivaliz-[a-z0-9][a-z0-9-]*\.service$")
 _REQUEST_KEYS = frozenset({
     "operation", "pr_number", "head_sha", "merge_sha",
     "idempotency_key", "fencing_token",
 })
+_SERVICE_REQUEST_KEYS = _REQUEST_KEYS | {"unit"}
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9-]{7,127}$")
 _MAX_FENCE = 2**63 - 1
@@ -36,6 +40,7 @@ class ProtectedOperator(Protocol):
     def audit_ready(self, operation: str, request_id: str) -> bool: ...
     def lease_reserve_once(self, operation: str, request_id: str, fencing: int) -> bool: ...
     def restart_service(self, unit: str) -> bool: ...
+    def unit_pattern_is_valid(self, unit: str) -> bool: ...
 
 
 def execute_admin_operation(request: object, operator: ProtectedOperator | None) -> tuple[bool, str]:
@@ -86,6 +91,59 @@ def execute_admin_operation(request: object, operator: ProtectedOperator | None)
             return False, "service_restart_unverified"
     except Exception:
         # No exception details: secrets and provider responses never enter logs.
+        return False, "trusted_host_capability_failed"
+    return True, "restart_requested"
+
+
+def execute_service_restart(request: object, operator: ProtectedOperator | None) -> tuple[bool, str]:
+    """Restart one shopvivaliz-*.service unit named by the request.
+
+    The unit must match the name pattern AND be authorized by the host-side
+    human-approved PR rule (unit_pattern_is_valid). The name alone never
+    authorizes a restart. Restart only: no start, stop, enable or unit edits.
+    """
+    if not isinstance(request, Mapping) or set(request) != _SERVICE_REQUEST_KEYS:
+        return False, "unsupported_request_shape"
+    if request.get("operation") != SERVICE_OPERATION:
+        return False, "unsupported_operation"
+
+    pr = request.get("pr_number")
+    head = request.get("head_sha")
+    merge = request.get("merge_sha")
+    rid = request.get("idempotency_key")
+    fencing = request.get("fencing_token")
+    unit = request.get("unit")
+
+    if (type(pr) is not int or pr <= 0 or
+            not isinstance(head, str) or _SHA.fullmatch(head) is None or
+            not isinstance(merge, str) or _SHA.fullmatch(merge) is None or
+            not isinstance(rid, str) or _KEY.fullmatch(rid) is None or
+            type(fencing) is not int or not 0 < fencing <= _MAX_FENCE):
+        return False, "invalid_pr_or_lease_binding"
+    if not isinstance(unit, str) or _UNIT_PATTERN.fullmatch(unit) is None:
+        return False, "unit_name_not_in_pattern"
+
+    if operator is None:
+        return False, "host_operator_unavailable"
+    try:
+        if operator.hostname() != MARINA_HOST:
+            return False, "wrong_host"
+        if operator.effective_uid() != 0:
+            return False, "privileged_host_operator_unavailable"
+        if operator.owner_pr_grant_is_valid(pr, head, merge, CAPABILITY, SERVICE_OPERATION,
+                                            SERVICE_TARGET_REPOSITORY) is not True:
+            return False, "human_only_owner_pr_grant_not_verified"
+        if operator.unit_pattern_is_valid(unit) is not True:
+            return False, "unit_not_authorized_by_human_approved_pr"
+        if operator.runtime_permission_is_valid() is not True:
+            return False, "effective_runtime_permission_denied"
+        if operator.audit_ready(SERVICE_OPERATION, rid) is not True:
+            return False, "protected_audit_unavailable"
+        if operator.lease_reserve_once(SERVICE_OPERATION, rid, fencing) is not True:
+            return False, "maintenance_lease_or_replay_denied"
+        if operator.restart_service(unit) is not True:
+            return False, "service_restart_unverified"
+    except Exception:
         return False, "trusted_host_capability_failed"
     return True, "restart_requested"
 
