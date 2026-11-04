@@ -50,6 +50,73 @@ O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete
 - Quando o GTIN do catálogo Amazon divergir do produto relacionado no Olist, explicitar a divergência e usar o vínculo por pedidos verificáveis, sem sobrescrever GTIN nem anúncios.
 - Para ofertas sem pedidos ou vínculos conclusivos, apresentar custo não confirmado; isso não implica inexistência de custo no ERP. A interface deve dizer que o **produto relacionado não foi identificado pela auditoria**, nunca que o cadastro do ERP não possui vínculo ou custo. A aba **Anúncios** dos produtos Olist permite confirmar os demais casos pela interface.
 
+## Importação segura de vínculos atuais — Cadastros / Anúncios Olist
+
+A API pública Olist/Tiny v3 fornece produtos, custos e pedidos, porém não fornece uma
+operação de leitura equivalente à lista de anúncios vinculados na interface
+Cadastros → Anúncios. Por isso, o painel **Auditoria de Margens Amazon** oferece
+o controle **Importar vínculos e auditar** para aceitar a exportação oficial atual dos
+canais **Amazon**, **Amazon Onsite** e **Amazon Classic**. Esses nomes são contas
+do ERP e não identificam as modalidades logísticas FBA Onsite/DBA da Amazon.
+
+Fluxo autorizado, somente leitura comercial:
+
+1. No ERP, exportar os anúncios de cada integração e importar os arquivos
+   **originais, sem renomear**, XLS, XLSX ou CSV (máximo cinco arquivos por importação).
+   O nome original de exportação deve conter data/hora, interpretadas no fuso de
+   São Paulo; um nome renomeado não equivale a prova de exportação recente.
+2. O endpoint administrativo POST exige sessão admin, CSRF válido, até 10 MB por
+   solicitação, extensão e assinatura do arquivo compatíveis. O processamento
+   usa diretório temporário **não público**, exclui arquivos brutos no término e
+   produz índice JSON atomicamente com permissões 0640, integridade SHA-256 de
+   origem e método de vínculo auditável.
+3. O importador aceita somente linhas Olist com Integração, Identificador
+   (Seller SKU Amazon) e Produto (SKU). Faz associação **exata**, sem fuzzy title,
+   sem substituir EAN e sem usar o preço/custo existente na planilha.
+   Divergências de dois produtos para o mesmo Seller SKU são bloqueadas.
+4. Apenas exportações com até **48h** (pela data/hora do nome original)
+   podem ser associadas automaticamente a produto; ainda assim, o collector
+   exige **um único produto ERP ativo** com SKU *exatamente igual*, lido da API
+   V3 corrente, e seu histórico real de custo positivo. A janela de 48h limita a
+   evidência mas não garante assinatura/autenticidade criptográfica do XLS: importar
+   apenas os originais fornecidos pela conta ERP autorizada.
+5. Uma importação recente enfileira uma auditoria geral usando a fila existente.
+   Importações **históricas** mostram candidatos e fontes, mas **NÃO** disparam
+   auditoria nem certificam o custo/margem. O índice é consultado novamente em
+   cada execução, com nova verificação de prazo; dados antigos nunca substituem
+   vínculos por pedidos reais ou margens já confirmadas.
+6. A exportação Excel registra fonte de vínculo, integração ERP e horário da
+   exportação. Vínculos históricos permanecem segregados como candidatos não
+   certificados; PDF e Excel preservam preços, tributos, comissão, frete DBA,
+   custo real da API e eventuais margens pendentes.
+
+**Local privado na Marina:** `/home/ubuntu/.shopvivaliz/runtime/amazon-margin/olist-ads-index.json`.
+É **fora** de `/home/ubuntu/shopvivaliz-deploy/current` e do link público
+`current/storage`. Não publicar arquivo original nem índice no Git, em URLs
+públicas ou em relatórios com dados pessoais. Arquivos importados contêm
+somente produtos/anúncios, não pedidos de compradores.
+
+**Dependências do runtime (já provisionadas nesta implantação):**
+`/home/ubuntu/.shopvivaliz/venvs/amazon-margin-ads/bin/python` com
+`xlrd==2.0.2` e `openpyxl==3.1.5`; pasta privada do índice/incoming com
+acesso apenas aos operadores e ao grupo do serviço web. Em reimplantação da
+VM, provisionar essas dependências e permissões antes de liberar o importador.
+
+**Prova de não confiabilidade do histórico:** exportações do laptop de
+julho/2026 cobrem 537 Seller SKUs históricos, com 76 vínculos únicos para
+os 81 anúncios então sem custo, três discrepâncias de codificação e duas
+ausências. Dentre 54 vínculos atuais comprovados por pedidos, **17** divergiram
+do SKU ERP mostrado nas exportações antigas. Portanto, exportação antiga
+**jamais** é fonte suficiente para certificar custo atual ou alterar preços.
+
+Testes direcionados: `OlistAdsImportTest.py` (CSV, XLS legado, XLSX, datas,
+conflitos, segurança e escrita atômica), `OlistAdsIndexTest.php` (frescura,
+identidade exata e fail-closed), `MarginMathTest.php` (DBA/FBA Onsite), e
+Chromium/E2E HTTP real: login administrativo simulado apenas no servidor local
+de teste, CSRF exigido, upload histórico sem auditoria duplicada, rejeição de
+extensão inválida, índice 0640 fora do site e 459 BUYABLE no painel. Não
+autoriza escrever preços no Olist nem na Amazon.
+
 ## Resiliência às cotas e referência de custos validados anteriormente
 
 - Olist ERP v3 limita chamadas de leitura **por conta**, compartilhadas entre aplicativos, e fornece os cabeçalhos x-ratelimit-limit, x-ratelimit-remaining e x-ratelimit-reset. A auditoria reserva capacidade para integrações existentes, aguarda o reset indicado e aplica backoff em HTTP 429/503, sem tentar contornar 401/403. O limite é obtido dos cabeçalhos, não fixado no código.

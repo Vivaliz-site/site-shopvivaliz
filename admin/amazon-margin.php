@@ -97,6 +97,24 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     </div>
     <div id="feedback" role="status" aria-live="polite"></div>
   </section>
+  <section class="card" id="olist-import-section">
+    <h2>Vínculos dos anúncios no ERP Olist</h2>
+    <p class="note">Exporte os anúncios em <strong>Cadastros → Anúncios</strong> das integrações
+      <strong>Amazon</strong>, <strong>Amazon Onsite</strong> e <strong>Amazon Classic</strong>,
+      e selecione os arquivos originais Excel (.xls/.xlsx) ou CSV. O sistema cruza o código
+      exato do anúncio com o SKU do produto ativo na API Olist. Exportações com mais de
+      <strong>48 horas</strong> são referências históricas e <strong>não certificam custo ou margem</strong>.
+      Nenhuma alteração é realizada na Amazon ou no ERP.</p>
+    <div class="controls">
+      <label for="olist-files"><strong>Exportações Olist</strong></label>
+      <input id="olist-files" type="file" multiple accept=".xls,.xlsx,.csv"
+        aria-label="Selecionar até cinco exportações de anúncios Olist">
+      <button type="button" id="olist-import" disabled>Importar vínculos e auditar</button>
+    </div>
+    <p class="note small" id="olist-import-status" role="status" aria-live="polite">
+      Consultando a última importação…
+    </p>
+  </section>
   <section class="card">
     <h2>Anúncios Amazon</h2>
     <p class="note">O filtro de ativos considera anúncios com status <strong>BUYABLE</strong> na Amazon. Anúncios só DISCOVERABLE não estão com oferta comprável. A auditoria completa continua verificando todo o catálogo, independente deste filtro.</p>
@@ -312,6 +330,8 @@ function render(){
      (r.ean?'<span class="cell-note">EAN '+escapeHtml(r.ean)+'</span>':'')+
      (r.erp_integration?'<span class="cell-note">ERP: '+escapeHtml(r.erp_integration)+'</span>':'')+
      (r.erp_match_method==='OLIST_AMAZON_ORDER'?'<span class="cell-note">Vínculo por '+Number(r.erp_order_evidence_count||0)+' pedido(s) Amazon/Olist</span>':'')+
+     (r.erp_match_method==='OLIST_ADS_EXPORT'?'<span class="cell-note">Vínculo por exportação Olist recente, validado contra o produto ERP ativo em '+escapeHtml(r.erp_export_observed_at||'')+'</span>':'')+
+     (r.erp_historical_candidate?'<span class="cell-note warn">Exportação histórica: SKU candidato '+escapeHtml(r.erp_historical_candidate.erp_sku||'')+' ('+escapeHtml(r.erp_historical_candidate.observed_at||'')+'). Sem custo confirmado neste vínculo.</span>':'')+
      (r.erp_gtin_differs_from_amazon?'<span class="cell-note warn">GTIN do anúncio difere do ERP; vínculo conferido via pedido</span>':'')+'</td>'
    +'<td>'+escapeHtml(programLabel(r))+'</td>'
    +'<td><span class="pill">'+(active?'Ativo · BUYABLE':'Sem oferta ativa')+'</span></td>'
@@ -384,6 +404,50 @@ async function download(format){
   el('feedback').textContent='Relatório gerado.';
  }catch(e){showError(e);}
 }
+async function loadImportStatus(){
+ try{
+  const res=await fetch(API+'?action=olist_ads_status',{credentials:'same-origin',cache:'no-store'});
+  const j=await readJson(res);
+  const info=el('olist-import-status');
+  if(!j.has_index){
+   info.textContent='Nenhuma exportação importada. A auditoria usa vínculos por SKU, EAN e pedidos do Olist.';
+   return;
+  }
+  const st=j.stats||{}, names=(j.files||[]).map(x=>x.name).join(' · ');
+  info.textContent='Importação de '+dateUtc(j.imported_at)+' · '+(st.unique_seller_skus||0)+
+   ' anúncios: '+(st.fresh_unique||0)+' vínculos recentes, '+(st.historical_unique||0)+
+   ' históricos, '+(st.conflicting||0)+' divergentes. Arquivos: '+names+
+   '. Vínculos antigos não certificam margem; a idade é revalidada em cada auditoria.';
+ }catch(e){el('olist-import-status').textContent='Erro ao consultar importações: '+String(e.message||e).slice(0,140);}
+}
+async function importOlistExports(){
+ const files=[...el('olist-files').files];
+ if(!files.length||files.length>5){
+  el('olist-import-status').textContent='Selecione de um a cinco arquivos de exportação originais do Olist.';return;
+ }
+ const button=el('olist-import');
+ button.disabled=true;
+ el('olist-import-status').textContent='Validando cabeçalhos, vinculações e data das exportações…';
+ try{
+  const form=new FormData();
+  form.append('action','import_olist_ads');
+  files.forEach(f=>form.append('ads_exports[]',f,f.name));
+  const res=await fetch(API,{method:'POST',credentials:'same-origin',
+   headers:{'X-CSRF-Token':CSRF},body:form});
+  const j=await readJson(res);
+  const st=j.import?.stats||{};
+  el('olist-import-status').textContent='Importação concluída: '+(st.unique_seller_skus||0)+
+   ' anúncios, '+(st.fresh_unique||0)+' vínculos recentes e '+(st.historical_unique||0)+
+   ' referências históricas. '+(j.historical_only
+      ?'Exportações antigas não habilitam margem; importe arquivos atuais do Olist.'
+      :'Auditoria #'+j.audit_request?.request_id+' registrada na fila com os vínculos atuais.');
+  if(!j.historical_only)await loadStatus();
+ }catch(e){el('olist-import-status').textContent='Erro na importação: '+String(e.message||e).slice(0,180);}
+ finally{button.disabled=el('olist-files').files.length===0;}
+}
+el('olist-files').onchange=()=>{el('olist-import').disabled=el('olist-files').files.length===0;};
+el('olist-import').onclick=importOlistExports;
+
 el('run-selected').onclick=()=>requestRun('selected');el('run-all').onclick=()=>requestRun('all');
 el('pdf').onclick=()=>download('pdf');el('xlsx').onclick=()=>download('xlsx');
 el('reload').onclick=()=>load();
@@ -402,6 +466,7 @@ el('sim-calc').onclick=()=>{if(!currentSim)return;const next=Number(el('sim-pric
  el('sim-result').textContent='Margem hipotética: '+estimate.toFixed(2).replace('.',',')+'% · Lucro hipotético: '+price(approximateProfit)+' por unidade. NÃO publicar a partir desta simulação; comissão e tarifas precisam ser recalculadas.';
 };
 load();
+loadImportStatus();
 setInterval(()=>{if(!document.hidden)loadStatus();},7000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadStatus();});
 </script>
