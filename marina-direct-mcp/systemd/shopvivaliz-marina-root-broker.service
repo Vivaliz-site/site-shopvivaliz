@@ -13,15 +13,15 @@ ExecStart=/usr/bin/python3 -B /opt/shopvivaliz-marina-mcp/current/root_broker.py
 StateDirectory=shopvivaliz-marina-broker
 StateDirectoryMode=0700
 UMask=0077
-NoNewPrivileges=yes
-PrivateDevices=yes
-PrivateTmp=yes
+NoNewPrivileges=no
+PrivateDevices=no
+PrivateTmp=no
 ProtectSystem=strict
-ProtectHome=yes
-ProtectKernelModules=yes
-ProtectKernelTunables=yes
-ProtectControlGroups=yes
-LockPersonality=yes
+ProtectHome=no
+ProtectKernelModules=no
+ProtectKernelTunables=no
+ProtectControlGroups=no
+LockPersonality=no
 # Outbound HTTPS is required for fresh GitHub grant verification.
 # The only inbound listener is the inherited, validated AF_UNIX socket.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

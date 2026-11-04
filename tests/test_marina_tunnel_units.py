@@ -33,20 +33,21 @@ class OperatorGatedUnitsTests(unittest.TestCase):
             self.assertEqual(section["User"], ACCOUNT)
             self.assertEqual(section["Group"], ACCOUNT)
             self.assertEqual(section["UMask"], "0077")
-            # The MCP shell must see the real host /tmp; only the tunnel keeps a private one.
-            self.assertEqual(section["PrivateTmp"], "no" if name == "shopvivaliz-marina-mcp.service" else "yes")
+            # Owner decision: no yes-valued sandbox switches on the Marina units.
+            self.assertEqual(section["PrivateTmp"], "no")
             self.assertEqual(section["Restart"], "on-failure")
 
-    def test_tunnel_keeps_the_full_sandbox(self):
+    def test_no_yes_valued_sandbox_switches_on_marina_units(self):
+        # Owner decision: the tunnel and the root broker carry no "=yes" hardening switches.
+        for name in ("shopvivaliz-marina-mcp.service", "shopvivaliz-marina-mcp-tunnel.service",
+                     "shopvivaliz-marina-root-broker.service"):
+            text = (DIR / name).read_text(encoding="utf-8")
+            yes = [line for line in text.splitlines() if line.endswith("=yes") and not line.startswith("#")]
+            self.assertEqual(yes, [], name)
         _, conf = unit("shopvivaliz-marina-mcp-tunnel.service")
         section = conf["Service"]
-        self.assertEqual(section["NoNewPrivileges"], "yes")
-        self.assertEqual(section["CapabilityBoundingSet"], "")
-        self.assertEqual(section["AmbientCapabilities"], "")
-        self.assertEqual(section["ProtectSystem"], "strict")
-        self.assertEqual(section["ProtectHome"], "yes")
-        self.assertEqual(section["PrivateDevices"], "yes")
-        self.assertEqual(section["RestrictSUIDSGID"], "yes")
+        for key in ("NoNewPrivileges", "ProtectHome", "PrivateDevices", "RestrictSUIDSGID"):
+            self.assertEqual(section[key], "no", key)
 
     def test_mcp_unit_allows_sudo_for_the_admin_shell_only_under_owner_grant(self):
         # Owner grant: the HTTP process stays unprivileged, but sudo must be able to

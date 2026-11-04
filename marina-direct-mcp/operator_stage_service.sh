@@ -130,7 +130,7 @@ assert_unit_not_autostart() {
 }
 for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service; do
   grep -Fqx 'User=shopvivaliz-marina-mcp' "$source_dir/systemd/$unit" || refuse unit_identity_invalid
-  grep -Fqx 'NoNewPrivileges=yes' "$source_dir/systemd/$unit" || refuse unit_privilege_invalid
+  grep -Fqx 'NoNewPrivileges=no' "$source_dir/systemd/$unit" || refuse unit_privilege_invalid
   assert_unit_not_autostart "$unit"
 done
 
