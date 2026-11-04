@@ -97,6 +97,24 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     </div>
     <div id="feedback" role="status" aria-live="polite"></div>
   </section>
+  <section class="card" id="olist-import-section">
+    <h2>Vínculos dos anúncios no ERP Olist</h2>
+    <p class="note">Exporte os anúncios em <strong>Cadastros → Anúncios</strong> das integrações
+      <strong>Amazon</strong>, <strong>Amazon Onsite</strong> e <strong>Amazon Classic</strong>,
+      e selecione os arquivos originais Excel (.xls/.xlsx) ou CSV. O sistema cruza o código
+      exato do anúncio com o SKU do produto ativo na API Olist. Exportações com mais de
+      <strong>48 horas</strong> são referências históricas e <strong>não certificam custo ou margem</strong>.
+      Nenhuma alteração é realizada na Amazon ou no ERP.</p>
+    <div class="controls">
+      <label for="olist-files"><strong>Exportações Olist</strong></label>
+      <input id="olist-files" type="file" multiple accept=".xls,.xlsx,.csv"
+        aria-label="Selecionar até cinco exportações de anúncios Olist">
+      <button type="button" id="olist-import" disabled>Importar vínculos e auditar</button>
+    </div>
+    <p class="note small" id="olist-import-status" role="status" aria-live="polite">
+      Consultando a última importação…
+    </p>
+  </section>
   <section class="card">
     <h2>Anúncios Amazon</h2>
     <p class="note">O filtro de ativos considera anúncios com status <strong>BUYABLE</strong> na Amazon. Anúncios só DISCOVERABLE não estão com oferta comprável. A auditoria completa continua verificando todo o catálogo, independente deste filtro.</p>
