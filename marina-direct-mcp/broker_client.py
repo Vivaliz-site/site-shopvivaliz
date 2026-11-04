@@ -20,11 +20,16 @@ EXPECTED_HOST = 'marina-a1-4c24g'
 SERVICE_USER = 'shopvivaliz-marina-mcp'
 SOCKET_PATH = '/run/shopvivaliz-marina-broker/mcp-root.sock'
 GRANT_CONFIG = Path('/etc/shopvivaliz/marina-root-broker/client-grant.json')
+# Separate operator-installed grant: one client process, one fixed operation.
+SERVICE_GRANT_CONFIG = Path('/etc/shopvivaliz/marina-root-broker/client-grant-service.json')
 OPERATION = 'olist_browser_restart'
+SERVICE_OPERATION = 'service_restart'
+SERVICE_UNIT_PATTERN = re.compile(r'^shopvivaliz-[a-z0-9][a-z0-9-]*\.service$')
 MAX_RESPONSE_BYTES = 8192
 CALL_TIMEOUT_SECONDS = 80.0
 GRANT_FIELDS = frozenset({'operation', 'pr_number', 'head_sha', 'merge_sha'})
 EXECUTE_FIELDS = GRANT_FIELDS | {'idempotency_key', 'fencing_token'}
+SERVICE_EXECUTE_FIELDS = EXECUTE_FIELDS | {'unit'}
 
 
 def _no_duplicates(pairs):
@@ -36,23 +41,24 @@ def _no_duplicates(pairs):
     return result
 
 
-def _valid_grant(data: object) -> bool:
+def _valid_grant(data: object, operation: str = OPERATION) -> bool:
     return (isinstance(data, dict) and set(data) == GRANT_FIELDS
-            and data.get('operation') == OPERATION
+            and data.get('operation') == operation
             and type(data.get('pr_number')) is int and data['pr_number'] > 0
             and all(type(data.get(k)) is str and re.fullmatch(r'[0-9a-f]{40}', data[k])
                     for k in ('head_sha', 'merge_sha')))
 
 
-def load_grant_config() -> dict:
+def load_grant_config(path: Path | None = None, operation: str = OPERATION) -> dict:
     """Read non-secret operator-installed metadata; never write/provision a grant."""
+    path = GRANT_CONFIG if path is None else path
     try:
-        for parent in GRANT_CONFIG.parents:
+        for parent in path.parents:
             meta = parent.lstat()
             if (not stat.S_ISDIR(meta.st_mode) or meta.st_uid != 0
                     or stat.S_IMODE(meta.st_mode) & 0o022):
                 raise RuntimeError('broker_grant_metadata_invalid')
-        fd = os.open(GRANT_CONFIG, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
         with os.fdopen(fd, 'rb') as stream:
             meta = os.fstat(stream.fileno())
             if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
@@ -63,7 +69,7 @@ def load_grant_config() -> dict:
         if len(raw) > 4096:
             raise ValueError('oversized_grant')
         result = json.loads(raw, object_pairs_hook=_no_duplicates)
-        if not _valid_grant(result):
+        if not _valid_grant(result, operation):
             raise ValueError('invalid_grant')
         return result
     except (OSError, ValueError, UnicodeError):
@@ -72,10 +78,11 @@ def load_grant_config() -> dict:
 
 class BrokerClient:
     """Authenticates the root socket; never masquerades as a root operator."""
-    def __init__(self, grant: dict):
-        if not _valid_grant(grant):
+    def __init__(self, grant: dict, operation: str = OPERATION):
+        if not _valid_grant(grant, operation):
             raise ValueError('invalid_broker_grant')
         self._grant = dict(grant)
+        self._operation = operation
 
     def preflight(self, request: object) -> dict:
         return self._call('preflight', request)
@@ -86,18 +93,30 @@ class BrokerClient:
     def execute(self, request: object) -> dict:
         return self._call('execute', request)
 
+    def _valid_ticket(self, request: object) -> bool:
+        if not isinstance(request, dict) or set(request) != EXECUTE_FIELDS:
+            return False
+        if any(request.get(k) != v or type(request.get(k)) is not type(v)
+               for k, v in self._grant.items()):
+            return False
+        return (type(request['fencing_token']) is int and 0 < request['fencing_token'] <= 2**63-1
+                and type(request['idempotency_key']) is str
+                and re.fullmatch(r'broker-[0-9a-f]{32}', request['idempotency_key']) is not None)
+
     def _valid_request(self, action: str, request: object) -> bool:
-        if not isinstance(request, dict):
+        if action != 'execute':
+            return (action in {'preflight', 'prepare'} and isinstance(request, dict)
+                    and set(request) == GRANT_FIELDS
+                    and not any(request.get(k) != v or type(request.get(k)) is not type(v)
+                                for k, v in self._grant.items()))
+        if self._operation != SERVICE_OPERATION:
+            return self._valid_ticket(request)
+        # Service restart carries the one unit to restart, checked against the pattern.
+        if not isinstance(request, dict) or set(request) != SERVICE_EXECUTE_FIELDS:
             return False
-        fields = EXECUTE_FIELDS if action == 'execute' else GRANT_FIELDS
-        if set(request) != fields or any(request.get(k) != v or type(request.get(k)) is not type(v)
-                                         for k, v in self._grant.items()):
-            return False
-        if action == 'execute':
-            return (type(request['fencing_token']) is int and 0 < request['fencing_token'] <= 2**63-1
-                    and type(request['idempotency_key']) is str
-                    and re.fullmatch(r'broker-[0-9a-f]{32}', request['idempotency_key']) is not None)
-        return action in {'preflight', 'prepare'}
+        unit = request.get('unit')
+        return (type(unit) is str and SERVICE_UNIT_PATTERN.fullmatch(unit) is not None
+                and self._valid_ticket({k: request[k] for k in EXECUTE_FIELDS}))
 
     def _validated_response(self, action: str, value: object) -> dict:
         if not isinstance(value, dict) or type(value.get('ok')) is not bool:
@@ -111,12 +130,12 @@ class BrokerClient:
             if value != {'ok': True, 'reason': 'restart_requested'}:
                 raise ValueError('invalid_broker_result')
         elif action == 'preflight':
-            if value != {'ok': True, 'operation': OPERATION}:
+            if value != {'ok': True, 'operation': self._operation}:
                 raise ValueError('invalid_broker_preflight')
         else:
             now = time.time()
             if (set(value) != EXECUTE_FIELDS | {'ok', 'expires_at'}
-                    or not self._valid_request('execute', {k: value[k] for k in EXECUTE_FIELDS})
+                    or not self._valid_ticket({k: value[k] for k in EXECUTE_FIELDS})
                     or type(value['expires_at']) is not int
                     or not now < value['expires_at'] <= now + 90):
                 raise ValueError('invalid_broker_ticket')
@@ -162,15 +181,24 @@ class BrokerClient:
             return {'ok': False, 'reason': reason}
 
 
-def bootstrap_client() -> BrokerClient:
+def _bootstrap(path: Path, operation: str) -> BrokerClient:
     try:
         uid = os.geteuid()
         expected_uid = pwd.getpwnam(SERVICE_USER).pw_uid
         if uid == 0 or uid != expected_uid or socket.gethostname().split('.')[0] != EXPECTED_HOST:
             raise RuntimeError('broker_client_identity_denied')
-        client = BrokerClient(load_grant_config())
+        client = BrokerClient(load_grant_config(path, operation), operation)
         if client.preflight(client._grant).get('ok') is not True:
             raise RuntimeError('broker_preflight_denied')
         return client
     except (KeyError, OSError, ValueError):
         raise RuntimeError('broker_client_unavailable') from None
+
+
+def bootstrap_client() -> BrokerClient:
+    return _bootstrap(GRANT_CONFIG, OPERATION)
+
+
+def bootstrap_service_client() -> BrokerClient:
+    """Client for service_restart only; its own operator-installed grant file."""
+    return _bootstrap(SERVICE_GRANT_CONFIG, SERVICE_OPERATION)

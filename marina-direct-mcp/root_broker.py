@@ -288,7 +288,8 @@ class BrokerOperator:
     def execute(self, data: object) -> dict:
         if not isinstance(data, dict):
             return {"ok": False, "reason": "invalid_request"}
-        ok, reason = _admin["execute_admin_operation"](data, self)
+        route = "execute_service_restart" if data.get("operation") == SERVICE_OPERATION else "execute_admin_operation"
+        ok, reason = _admin[route](data, self)
         rid = data.get("idempotency_key", "") if isinstance(data.get("idempotency_key"), str) else ""
         operation = data.get("operation") if data.get("operation") in OPERATION_TARGETS else OPERATION
         if rid.startswith("broker-"):
