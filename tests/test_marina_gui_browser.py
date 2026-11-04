@@ -102,7 +102,7 @@ class AuditTests(unittest.TestCase):
         with patch.object(gui, "_running_xvfb_pid", return_value=4242), \
              patch.object(gui, "_browser_executable", return_value=Path("/x/chrome")), \
              patch.dict("sys.modules", {"playwright": None, "playwright.sync_api": None}):
-            result = gui.browser_navigate({"url": "https://secret.example/token=abc"}, audit=entries.append)
+            result = gui.browser_navigate({"url": "https://secret.example/token=abc"}, audit=lambda e: entries.append(e) or True)
         self.assertEqual(result["reason"], "playwright_unavailable")
         self.assertEqual([e["event"] for e in entries], ["browser_start", "browser_end"])
         self.assertNotIn("secret.example", json.dumps(entries))
