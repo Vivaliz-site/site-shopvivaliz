@@ -411,6 +411,21 @@ class OwnerAuthorizationTests(unittest.TestCase):
                     owner_login="fredmourao-ai")
         self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
+    def test_owner_grant_without_expiry_is_accepted_and_still_human_gated(self):
+        pr, grant, opts = fixture()
+        grant.pop("expires_at_utc", None)
+        opts["now"] = datetime(2099, 1, 1, tzinfo=timezone.utc)
+        self.assertEqual((True, "owner_authorization_verified"),
+                         grant_module.decide(pr, grant, **opts))
+        opts["reviews"] = []
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
+    def test_present_but_null_expiry_is_still_rejected(self):
+        pr, grant, opts = fixture()
+        grant["expires_at_utc"] = None
+        self.assertEqual((False, "invalid_expiry"),
+                         grant_module.decide(pr, grant, **opts))
+
 
 class GrantOriginBindingTests(unittest.TestCase):
     """Regression: approving an unrelated PR must never activate old grants."""

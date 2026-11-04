@@ -1397,11 +1397,12 @@ def marina_central_grant_active(capability: str, enable_env: str,
             grant = json.load(source)
     except (OSError, ValueError, TypeError, UnicodeError):
         return False
-    if not isinstance(grant, dict) or set(grant) != {
+    required_fields = {
         "schema", "repository", "pr_number", "resource", "principal",
         "host", "controller_host", "capabilities", "head_sha", "merge_sha",
-        "reviewer", "merged_by", "expires_at_utc"
-    }:
+        "reviewer", "merged_by",
+    }
+    if not isinstance(grant, dict) or not required_fields <= set(grant) or not set(grant) <= required_fields | {"expires_at_utc"}:
         return False
     if (grant.get("schema") != "SHOPVIVALIZ_CENTRAL_MARINA_RUNTIME_GRANT_V1"
             or grant.get("repository") != "Vivaliz-site/site-shopvivaliz"
@@ -1418,6 +1419,8 @@ def marina_central_grant_active(capability: str, enable_env: str,
             or not isinstance(grant.get("merge_sha"), str)
             or not FULL_SHA_RE.fullmatch(grant["merge_sha"])):
         return False
+    if "expires_at_utc" not in grant:
+        return True
     expiry = grant.get("expires_at_utc")
     if not isinstance(expiry, str) or not expiry.endswith("Z"):
         return False

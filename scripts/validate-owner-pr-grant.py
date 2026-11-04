@@ -290,6 +290,10 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
             return False, "target_repository_not_approved"
     elif grant.get("target_repository") is not None:
         return False, "target_repository_binding_required"
+    if "expires_at_utc" not in grant:
+        # Owner-approved non-expiring grant. Revocation remains by later edit on main
+        # (immutable_grant_still_active) and by the human-only merge gate.
+        return True, "owner_authorization_verified"
     expiry = grant.get("expires_at_utc")
     try:
         if not isinstance(expiry, str) or not expiry.endswith("Z"):
