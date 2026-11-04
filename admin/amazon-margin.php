@@ -26,6 +26,12 @@ small,.muted{color:var(--muted)}.small{font-size:.85rem}
 .card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:18px;margin-bottom:18px}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .metric strong{display:block;font-size:1.75rem;margin-top:6px}.metric span{font-size:.82rem;color:var(--muted)}
+.metric small{display:block;font-size:.75rem;color:var(--muted)}
+.filter-active{display:flex;align-items:center;gap:8px;font-weight:700;border:1px solid #99d6c6;background:#f0fdf9;border-radius:8px;padding:9px 12px;cursor:pointer}
+.filter-active input{width:18px;height:18px;accent-color:#0f766e;cursor:pointer}
+.cell-note{display:block;font-size:.73rem;color:#64748b;margin-top:2px;max-width:170px;white-space:normal}
+.cell-note.warn{color:#aa5f13}
+
 .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 input[type=search],input[type=number],select{font:inherit;border:1px solid #cbd5e1;border-radius:7px;padding:10px;background:white;color:#152b43}
 input[type=search]{min-width:240px;flex:2}
@@ -60,7 +66,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
 <main>
   <div class="alert">Primeira fase: <strong>auditoria e relatórios somente leitura</strong>. Alterações de preço serão liberadas apenas após validação da sincronização individual Amazon/ERP e do impacto no site.</div>
   <div class="cards">
-    <div class="card metric"><span>Anúncios auditados</span><strong id="n-total">—</strong></div>
+    <div class="card metric"><span id="n-total-label">Anúncios ativos</span><strong id="n-total">—</strong><small id="n-total-context">—</small></div>
     <div class="card metric"><span>Abaixo de 10%</span><strong class="danger" id="n-risk">—</strong></div>
     <div class="card metric"><span>Margem confirmada ≥10%</span><strong class="positive" id="n-good">—</strong></div>
     <div class="card metric"><span>Pendentes / sem confirmação</span><strong class="warning" id="n-pending">—</strong></div>
@@ -87,23 +93,25 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
       <button type="button" id="reload">Atualizar dados</button>
       <button type="button" id="pdf" disabled>Exportar PDF</button>
       <button type="button" id="xlsx" disabled>Exportar Excel</button>
-      <span id="selected-count" class="muted small">Nenhum selecionado (exportação incluirá todos)</span>
+      <span id="selected-count" class="muted small">Nenhum selecionado (exportação seguirá o filtro de ativos)</span>
     </div>
     <div id="feedback" role="status" aria-live="polite"></div>
   </section>
   <section class="card">
     <h2>Anúncios Amazon</h2>
+    <p class="note">O filtro de ativos considera anúncios com status <strong>BUYABLE</strong> na Amazon. Anúncios só DISCOVERABLE não estão com oferta comprável. A auditoria completa continua verificando todo o catálogo, independente deste filtro.</p>
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
       <select id="status"><option value="">Todos os resultados</option><option value="low">Abaixo de 10%</option><option value="healthy">≥ 10%</option><option value="pending">Pendente</option></select>
+      <label class="filter-active" for="only-active"><input type="checkbox" id="only-active" checked> Somente ativos <span id="active-count" class="small muted"></span></label>
       <button type="button" id="select-visible">Selecionar visíveis</button>
       <button type="button" id="clear-selected">Limpar seleção</button>
     </div>
     <div class="table-scroller">
       <table>
-        <thead><tr><th><input id="select-page" type="checkbox" aria-label="Selecionar página"></th><th>SKU Amazon</th><th>Produto ERP</th><th>Modalidade</th><th class="right">Preço</th><th class="right">Custo</th><th class="right">Vendas</th><th class="right">Margem</th><th>Situação</th><th>Ações</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="10">Carregando…</td></tr></tbody>
+        <thead><tr><th><input id="select-page" type="checkbox" aria-label="Selecionar página"></th><th>SKU Amazon</th><th>Produto ERP</th><th>Modalidade</th><th>Status Amazon</th><th class="right">Preço</th><th class="right">Custo</th><th class="right">Vendas</th><th class="right">Margem</th><th>Diagnóstico</th><th>Ações</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="11">Carregando…</td></tr></tbody>
       </table>
     </div>
     <div class="controls" style="margin-top:12px"><span id="count" class="muted small"></span><button id="more" type="button" hidden>Mostrar mais</button></div>
