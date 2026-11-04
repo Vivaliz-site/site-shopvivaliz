@@ -272,7 +272,7 @@ function costMarkup(r){
     escapeHtml(prior.verified_run_id)+' ('+escapeHtml(prior.cost_date||'')+
     '). <strong>Referência histórica; não validado nesta execução.</strong></span>';
  }
- return '—<span class="cell-note warn">'+(r.status==='unmapped_erp'?'Sem produto ERP vinculado':
+ return '—<span class="cell-note warn">'+(r.status==='unmapped_erp'?'Produto relacionado ainda não identificado pela auditoria':
    r.status==='ambiguous_erp'?'Vínculo ERP ambíguo':
    r.status==='erp_or_catalog_read_failed'?'Consulta ERP falhou':'Custo não identificado')+'</span>';
 }
