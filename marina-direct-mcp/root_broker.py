@@ -29,6 +29,10 @@ REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 TARGET_REPOSITORY = "Vivaliz-site/amazon-returns-safet"
 OWNER_LOGIN = "shopvivaliz-human"
 OPERATION = "olist_browser_restart"
+SERVICE_OPERATION = "service_restart"
+SERVICE_TARGET_REPOSITORY = REPOSITORY
+# Each owner-approved operation is bound to exactly one target repository.
+OPERATION_TARGETS = {OPERATION: TARGET_REPOSITORY, SERVICE_OPERATION: SERVICE_TARGET_REPOSITORY}
 CAPABILITY = "deployment_manage"
 RESOURCE = "mcp:marina"
 PRINCIPAL = "marina-mcp-service"
@@ -68,8 +72,8 @@ def protected_token(path: Path) -> str | None:
 
 def real_grant_valid(pr: int, head: str, merge: str, capability: str,
                      operation: str, target: str) -> bool:
-    if (operation != OPERATION or capability != CAPABILITY
-            or target != TARGET_REPOSITORY or not VERIFIER.is_file()):
+    if (OPERATION_TARGETS.get(operation) != target or capability != CAPABILITY
+            or not VERIFIER.is_file()):
         return False
     token = protected_token(ROOT_TOKEN)
     if token is None:
@@ -79,8 +83,8 @@ def real_grant_valid(pr: int, head: str, merge: str, capability: str,
         "--repository", REPOSITORY, "--pr-number", str(pr),
         "--head-sha", head, "--merge-sha", merge,
         "--resource", RESOURCE, "--principal", PRINCIPAL,
-        "--capability", CAPABILITY, "--operation", OPERATION,
-        "--target-repository", TARGET_REPOSITORY,
+        "--capability", CAPABILITY, "--operation", operation,
+        "--target-repository", target,
     ]
     env = {"PATH": "/usr/bin:/bin", "GITHUB_TOKEN": token,
            "SHOPVIVALIZ_SECURITY_OWNER_LOGIN": OWNER_LOGIN}
@@ -123,7 +127,7 @@ def _db(path: Path) -> sqlite3.Connection:
     return con
 
 
-def _audit(path: Path, event: str, request_id: str, result: str) -> bool:
+def _audit(path: Path, event: str, request_id: str, result: str, operation: str = OPERATION) -> bool:
     if not safe_state_root(path):
         return False
     target = path / "broker-audit.jsonl"
@@ -134,7 +138,7 @@ def _audit(path: Path, event: str, request_id: str, result: str) -> bool:
             if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0
                     or stat.S_IMODE(meta.st_mode) != 0o600):
                 return False
-            data = json.dumps({"event": event, "operation": OPERATION,
+            data = json.dumps({"event": event, "operation": operation,
                                "request_id": request_id, "result": result,
                                "at_epoch": int(time.time())},
                               separators=(",", ":")).encode() + b"\n"
@@ -148,16 +152,16 @@ def _audit(path: Path, event: str, request_id: str, result: str) -> bool:
         return False
 
 
-def _grant_fields(data: object) -> tuple[int, str, str] | None:
+def _grant_fields(data: object) -> tuple[int, str, str, str] | None:
     if not isinstance(data, dict) or set(data) != {"operation", "pr_number", "head_sha", "merge_sha"}:
         return None
     import re
-    if (data["operation"] != OPERATION or type(data["pr_number"]) is not int
+    if (data["operation"] not in OPERATION_TARGETS or type(data["pr_number"]) is not int
             or data["pr_number"] <= 0
             or type(data["head_sha"]) is not str or not re.fullmatch(r"[0-9a-f]{40}", data["head_sha"])
             or type(data["merge_sha"]) is not str or not re.fullmatch(r"[0-9a-f]{40}", data["merge_sha"])):
         return None
-    return data["pr_number"], data["head_sha"], data["merge_sha"]
+    return data["pr_number"], data["head_sha"], data["merge_sha"], data["operation"]
 
 
 class BrokerOperator:
@@ -190,10 +194,10 @@ class BrokerOperator:
         return safe_state_root(self.state) and self.effective_uid() == 0
 
     def audit_ready(self, operation, request_id) -> bool:
-        return operation == OPERATION and _audit(self.state, "attempt", request_id, "prepared")
+        return operation in OPERATION_TARGETS and _audit(self.state, "attempt", request_id, "prepared", operation)
 
     def lease_reserve_once(self, operation, request_id, fencing) -> bool:
-        if operation != OPERATION or self._bound_pr is None:
+        if operation not in OPERATION_TARGETS or self._bound_pr is None:
             return False
         try:
             with closing(_db(self.state)) as db, db:
@@ -232,11 +236,11 @@ class BrokerOperator:
         if unit != UNIT and _SERVICE_UNIT.fullmatch(unit) is None:
             return False
         try:
-            x = self.runner(["/usr/bin/systemctl", "restart", UNIT],
+            x = self.runner(["/usr/bin/systemctl", "restart", unit],
                             capture_output=True, text=True, timeout=30, check=False)
             if x.returncode != 0:
                 return False
-            y = self.runner(["/usr/bin/systemctl", "is-active", UNIT],
+            y = self.runner(["/usr/bin/systemctl", "is-active", unit],
                             capture_output=True, text=True, timeout=4, check=False)
             return y.returncode == 0 and y.stdout.strip() == "active"
         except (OSError, subprocess.TimeoutExpired):
@@ -249,11 +253,12 @@ class BrokerOperator:
             return {"ok": False, "reason": "invalid_grant_request"}
         if self.effective_uid() != 0 or self.hostname() != HOST or not self.runtime_permission_is_valid():
             return {"ok": False, "reason": "protected_root_operator_unavailable"}
-        if not self.olist_config_is_ready():
+        operation = fields[3]
+        if operation == OPERATION and not self.olist_config_is_ready():
             return {"ok": False, "reason": "protected_olist_runtime_not_ready"}
-        if not self.grant_checker(*fields, CAPABILITY, OPERATION, TARGET_REPOSITORY):
+        if not self.grant_checker(*fields[:3], CAPABILITY, operation, OPERATION_TARGETS[operation]):
             return {"ok": False, "reason": "owner_pr_grant_denied"}
-        return {"ok": True, "operation": OPERATION}
+        return {"ok": True, "operation": operation}
 
     def prepare(self, data: object) -> dict:
         allowed = self.preflight(data)
@@ -269,12 +274,12 @@ class BrokerOperator:
                 db.execute("BEGIN IMMEDIATE")
                 record = db.execute(
                     "INSERT INTO leases (request_id,pr,head,merge,expires_at) VALUES (?,?,?,?,?)",
-                    (rid, *fields, expires))
+                    (rid, *fields[:3], expires))
                 fence = record.lastrowid
                 db.execute("COMMIT")
-            if not _audit(self.state, "lease_issued", rid, "pending"):
+            if not _audit(self.state, "lease_issued", rid, "pending", fields[3]):
                 return {"ok": False, "reason": "audit_unavailable"}
-            return {"ok": True, "operation": OPERATION, "pr_number": fields[0],
+            return {"ok": True, "operation": fields[3], "pr_number": fields[0],
                     "head_sha": fields[1], "merge_sha": fields[2],
                     "idempotency_key": rid, "fencing_token": fence, "expires_at": expires}
         except (OSError, sqlite3.Error, RuntimeError):
@@ -285,8 +290,9 @@ class BrokerOperator:
             return {"ok": False, "reason": "invalid_request"}
         ok, reason = _admin["execute_admin_operation"](data, self)
         rid = data.get("idempotency_key", "") if isinstance(data.get("idempotency_key"), str) else ""
+        operation = data.get("operation") if data.get("operation") in OPERATION_TARGETS else OPERATION
         if rid.startswith("broker-"):
-            _audit(self.state, "operation_result", rid, reason)
+            _audit(self.state, "operation_result", rid, reason, operation)
         return {"ok": ok, "reason": reason}
 
 
