@@ -41,6 +41,15 @@ O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete
 - Um SKU sem EAN Amazon só será vinculado automaticamente ao ERP quando houver **uma correspondência exata e única de Seller SKU a produto ativo**. Com EAN presente, nunca ignorar divergência de GTIN ou selecionar produto ambíguo. O campo `erp_match_method` torna a origem do vínculo auditável.
 - Campos vazios de custo para anúncios ativos significam **vínculo não identificado, API não disponível ou custo ainda sem histórico válido**. A ligação de anúncios ERP pode ser consultada via interface do ERP; sua API pública v3 não expõe leitura de vínculo por anúncio. Não tentar adivinhar pela semelhança dos títulos.
 
+## Vínculos de três integrações Amazon no Olist
+
+- A conta ERP pode conter **três integrações distintas**, chamadas **Amazon**, **Amazon Onsite** e **Amazon Classic**. Estes nomes são canais internos do ERP, não são as modalidades financeiras FBA Onsite/DBA da Amazon. Não assumir FBA Classic por existir a integração chamada Amazon Classic.
+- O Seller SKU da Amazon pode ser diferente do SKU e EAN do produto relacionado no ERP. Se EAN ou SKU não confirmar a identidade, buscar prova pelo pedido: Amazon Finances ORDER_ID com apenas um Seller SKU; GET /pedidos?numeroPedidoEcommerce=...; um pedido importado em Amazon/Amazon Onsite/Amazon Classic; GET /pedidos/{id}; exatamente um item e produto ERP ativo; custo confirmado no endpoint oficial.
+- Consultar até três pedidos por Seller SKU (90 dias para identidade), rejeitar IDs ERP conflitantes, pedidos com múltiplos Seller SKUs ou linhas ERP, integração diferente ou ID externo divergente. Não persistir números de pedidos/clientes no relatório: somente ERP ID, integração, método de vínculo e quantidade de evidências.
+- Os pedidos mais antigos utilizados para identificar produto não entram no cálculo: a margem considera somente remessas financeiras a partir do período de auditoria (30 dias por padrão), com data UTC validada.
+- Quando o GTIN do catálogo Amazon divergir do produto relacionado no Olist, explicitar a divergência e usar o vínculo por pedidos verificáveis, sem sobrescrever GTIN nem anúncios.
+- Para ofertas sem pedidos ou vínculos conclusivos, apresentar custo não confirmado; isso não implica inexistência de custo no ERP. A aba **Anúncios** dos produtos Olist permite confirmar os demais casos pela interface.
+
 ## Resiliência às cotas e referência de custos validados anteriormente
 
 - Olist ERP v3 limita chamadas de leitura **por conta**, compartilhadas entre aplicativos, e fornece os cabeçalhos x-ratelimit-limit, x-ratelimit-remaining e x-ratelimit-reset. A auditoria reserva capacidade para integrações existentes, aguarda o reset indicado e aplica backoff em HTTP 429/503, sem tentar contornar 401/403. O limite é obtido dos cabeçalhos, não fixado no código.
