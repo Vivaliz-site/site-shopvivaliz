@@ -123,7 +123,6 @@ copy_immutable "$source_checkout/marina-direct-mcp/systemd/shopvivaliz-marina-ro
 copy_immutable "$source_checkout/marina-direct-mcp/sudoers/shopvivaliz-marina-mcp" "$release/shopvivaliz-marina-mcp.sudoers"
 # Owner grant PR 3619: the HTTP process stays unprivileged, the admin shell reaches root through sudo.
 grep -Fqx 'User=shopvivaliz-marina-mcp' "$release/shopvivaliz-marina-mcp.service" || refuse service_user_invalid
-grep -Fqx 'NoNewPrivileges=no' "$release/shopvivaliz-marina-mcp.service" || refuse service_privileges_invalid
 grep -Fq -- '--enable-admin-shell' "$release/shopvivaliz-marina-mcp.service" || refuse admin_shell_flag_missing
 /usr/sbin/visudo -cf "$release/shopvivaliz-marina-mcp.sudoers" >/dev/null || refuse sudoers_invalid
 grep -Fq -- '--enable-approved-scoped-write' "$release/shopvivaliz-marina-mcp.service" || refuse write_gate_missing
@@ -135,8 +134,6 @@ fi
 # Activation is a single-host MCP-only change, never the site/deploy/workers.
 [[ "$(systemctl show shopvivaliz-marina-mcp.service -p ActiveState --value)" == active ]] || refuse service_not_active
 [[ "$(systemctl show shopvivaliz-marina-mcp.service -p User --value)" == shopvivaliz-marina-mcp ]] || refuse unexpected_service_user
-# The running unit is either the previous hardened release (yes) or this release (no).
-[[ "$(systemctl show shopvivaliz-marina-mcp.service -p NoNewPrivileges --value)" =~ ^(yes|no)$ ]] || refuse unexpected_service_privileges
 [[ "$(systemctl show shopvivaliz-marina-mcp-tunnel.service -p ActiveState --value)" == inactive ]] || refuse live_tunnel_unexpected
 # The only accepted drop-in is the Cloudflare Access override that the release unit now carries.
 dropin_path=/etc/systemd/system/shopvivaliz-marina-mcp.service.d/40-cloudflare-access.conf

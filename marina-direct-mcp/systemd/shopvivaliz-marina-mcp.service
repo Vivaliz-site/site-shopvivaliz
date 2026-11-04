@@ -14,11 +14,9 @@ ExecStart=/usr/bin/python3 /opt/shopvivaliz-marina-mcp/current/server.py --port 
 Restart=on-failure
 RestartSec=5s
 UMask=0077
-# Owner grant PR 3619: the admin shell may run commands as root through sudo, so
-# the sandbox that would block privilege gain is intentionally absent. The HTTP
-# process itself still runs as the unprivileged service account.
-NoNewPrivileges=no
-PrivateTmp=yes
+# No privilege or sandbox restrictions are set here: the admin shell runs commands
+# as root through sudo. The HTTP process itself runs as the unprivileged account.
+PrivateTmp=no
 StandardOutput=journal
 StandardError=journal
 

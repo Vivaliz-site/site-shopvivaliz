@@ -33,7 +33,8 @@ class OperatorGatedUnitsTests(unittest.TestCase):
             self.assertEqual(section["User"], ACCOUNT)
             self.assertEqual(section["Group"], ACCOUNT)
             self.assertEqual(section["UMask"], "0077")
-            self.assertEqual(section["PrivateTmp"], "yes")
+            # The MCP shell must see the real host /tmp; only the tunnel keeps a private one.
+            self.assertEqual(section["PrivateTmp"], "no" if name == "shopvivaliz-marina-mcp.service" else "yes")
             self.assertEqual(section["Restart"], "on-failure")
 
     def test_tunnel_keeps_the_full_sandbox(self):
@@ -51,7 +52,7 @@ class OperatorGatedUnitsTests(unittest.TestCase):
         # Owner grant: the HTTP process stays unprivileged, but sudo must be able to
         # gain privileges for marina_admin_shell(as_root=true).
         _, conf = unit("shopvivaliz-marina-mcp.service")
-        self.assertEqual(conf["Service"]["NoNewPrivileges"], "no")
+        self.assertNotIn("NoNewPrivileges", conf["Service"])
         self.assertNotEqual(conf["Service"].get("User"), "root")
         sudoers = (ROOT / "marina-direct-mcp" / "sudoers" / "shopvivaliz-marina-mcp").read_text(encoding="utf-8")
         rules = [line for line in sudoers.splitlines() if line.strip() and not line.startswith("#")]

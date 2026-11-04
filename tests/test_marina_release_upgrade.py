@@ -40,9 +40,8 @@ class UpgradeOperatorSafety(unittest.TestCase):
     def test_unprivileged_http_unit_with_sudo_admin_shell(self):
         service = UNIT.read_text()
         self.assertIn("User=shopvivaliz-marina-mcp", service)
-        # Grant 3619: sudo must work for the admin shell, so privilege gain is not blocked.
-        self.assertIn("NoNewPrivileges=no", service)
-        self.assertNotIn("NoNewPrivileges=yes", service)
+        # sudo must work for the admin shell, so the unit sets no NoNewPrivileges at all.
+        self.assertNotIn("NoNewPrivileges", service)
         self.assertIn("--enable-admin-shell", service)
         self.assertIn("--enable-gui-browser", service)
         self.assertIn("--enable-approved-scoped-write", service)
@@ -72,7 +71,7 @@ class UpgradeOperatorSafety(unittest.TestCase):
                          "operator_admin_route.py", "server.py", "read_only_telemetry.py",
                          "validate_owner_pr_grant.py", "operator_grant_readback.py", "local_auth_smoke.py"):
             self.assertIn(basename, s)
-        self.assertIn("grep -Fqx 'NoNewPrivileges=no'", s)
+        self.assertNotIn("NoNewPrivileges", s)
         self.assertIn("visudo -cf", s)
         self.assertIn("mcp-admin-grant.json", s)
 
