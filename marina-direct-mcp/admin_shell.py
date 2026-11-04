@@ -14,6 +14,7 @@ import json
 import os
 import pwd
 import resource
+import signal
 import subprocess
 import tempfile
 import time
@@ -114,7 +115,27 @@ def _argv(command: str, timeout: int, as_root: bool) -> list[str]:
     return [SUDO, "-n", "-H", "--", TIMEOUT_BIN, "-k", "5", str(timeout)] + shell
 
 
-def run_admin_shell(arguments: dict, *, home: str | None = None, audit=_audit, runner=subprocess.run) -> dict:
+def _run_group(argv, *, timeout, check=False, **kwargs):
+    """subprocess.run, but the command gets its own process group and a timeout kills
+    the whole group. subprocess.run only kills the direct child, so background or
+    nested children of the command (for example `sleep 300 &`) outlived the timeout.
+    Root commands are cleaned up by the root-side `timeout`; the unprivileged
+    killpg cannot signal them and ignores the permission error.
+    """
+    proc = subprocess.Popen(argv, start_new_session=True, **kwargs)
+    try:
+        proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        proc.wait()
+        raise
+    return subprocess.CompletedProcess(argv, proc.returncode)
+
+
+def run_admin_shell(arguments: dict, *, home: str | None = None, audit=_audit, runner=_run_group) -> dict:
     if set(arguments) - {"command", "timeout_seconds", "as_root"} or "command" not in arguments:
         return {"ok": False, "reason": "invalid_arguments"}
     command = arguments["command"]
