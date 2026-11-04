@@ -24,6 +24,14 @@ final class SvAmazonMarginOlistOrderLink
         return $at!==false && $start!==false && $at >= $start;
     }
 
+    /** Never charge a pre-period DBA postage entry to a current-period sale. */
+    public static function postageInFinancialWindow(array $t,string $periodStart): bool
+    {
+        return ($t['transactionType']??'')==='ServiceFee'
+            && ($t['description']??'')==='MfnPostageFee'
+            && self::inFinancialWindow((string)($t['postedDate']??''),$periodStart);
+    }
+
     /**
      * @param array<array{order:string,quantity:int,posted_at:string,net_amount:float}> $shipments
      * @param array<string,array<string,bool>> $orderSkus

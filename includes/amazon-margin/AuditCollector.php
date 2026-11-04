@@ -261,8 +261,11 @@ final class SvAmazonMarginCollector
     }
 
     /** @return array{shipments:array,fees:array,order_skus:array} */
-    private function finances(string $postedAfter): array
+    private function finances(string $postedAfter, ?string $feesAfter = null): array
     {
+        // Finance history may go back 90 days to establish ERP identity, but
+        // DBA freight is attributable only within the report's sale window.
+        $feesAfter ??= $postedAfter;
         $result = ['shipments'=>[], 'fees'=>[], 'order_skus'=>[]];
         $next = null;
         for ($page=0;$page<150;$page++) {
@@ -279,7 +282,8 @@ final class SvAmazonMarginCollector
                     $ids[$key] = (string)($identifier['relatedIdentifierValue'] ?? '');
                 }
                 $order = $ids['ORDER_ID'] ?? '';
-                if ($type === 'ServiceFee' && ($t['description'] ?? '') === 'MfnPostageFee' && $order !== '') {
+                if ($order !== ''
+                    && SvAmazonMarginOlistOrderLink::postageInFinancialWindow($t,$feesAfter)) {
                     $result['fees'][$order][] = (float)($t['totalAmount']['currencyAmount'] ?? 0);
                 }
                 if ($type !== 'Shipment') continue;
@@ -341,7 +345,7 @@ final class SvAmazonMarginCollector
         // Fetch 90 days once, but calculate money ONLY for postedAfter sales.
         $mappingAfter = gmdate('Y-m-d\\T00:00:00\\Z',strtotime('-90 days'));
         $financeFrom = strcmp($postedAfter,$mappingAfter)<0 ? $postedAfter : $mappingAfter;
-        $fin = $this->finances($financeFrom);
+        $fin = $this->finances($financeFrom,$postedAfter);
         $this->note('calculating_margins',0,count($listings));
         $rows = [];
         $taxBps = (int)(getenv('SV_AMAZON_MARGIN_TAX_BPS') ?: 1400);
