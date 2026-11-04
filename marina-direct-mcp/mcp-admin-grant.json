@@ -1,7 +1,7 @@
 {
   "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
   "repository": "Vivaliz-site/site-shopvivaliz",
-  "pr_number": 3619,
+  "pr_number": 3620,
   "resource": "mcp:marina",
   "principal": "marina-mcp-service",
   "target_repository": "Vivaliz-site/site-shopvivaliz",

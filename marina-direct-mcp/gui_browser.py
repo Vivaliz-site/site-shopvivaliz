@@ -17,7 +17,7 @@ import subprocess
 import time
 from pathlib import Path
 
-GRANT_PR = 3619  # PR that carries the owner grant
+GRANT_PR = 3620  # PR that carries the owner grant
 SERVICE_USER = "shopvivaliz-marina-mcp"
 SERVICE_HOME = Path("/var/lib/shopvivaliz-marina-mcp")
 STATE_DIR = SERVICE_HOME / "state" / "gui"
@@ -36,11 +36,11 @@ DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 120
 
 GRANT_FILE = Path(__file__).with_name("mcp-admin-grant.json")
-# Keep identical to admin_shell.py and security/owner-approvals/3619.json.
+# Keep identical to admin_shell.py and security/owner-approvals/3620.json.
 EXPECTED_GRANT = {
     "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
     "repository": "Vivaliz-site/site-shopvivaliz",
-    "pr_number": 3619,
+    "pr_number": 3620,
     "resource": "mcp:marina",
     "principal": "marina-mcp-service",
     "target_repository": "Vivaliz-site/site-shopvivaliz",

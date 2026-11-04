@@ -1,4 +1,4 @@
-"""Owner-approved admin shell for the Marina MCP, bound to grant PR 3619.
+"""Owner-approved admin shell for the Marina MCP, bound to grant PR 3620.
 
 The HTTP process runs as the unprivileged service account. A command runs as
 that account by default; with as_root=true it runs as root through sudo (the
@@ -19,7 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-GRANT_PR = 3619
+GRANT_PR = 3620
 SERVICE_USER = "shopvivaliz-marina-mcp"
 GRANT_FILE = Path(__file__).with_name("mcp-admin-grant.json")
 AUDIT_FILE = Path("/var/lib/shopvivaliz-marina-mcp/state/admin-shell-audit.log")
@@ -29,7 +29,7 @@ MAX_OUTPUT_BYTES = 65536
 DEFAULT_TIMEOUT = 60
 MAX_TIMEOUT = 300
 
-# Keep identical to gui_browser.py and security/owner-approvals/3619.json.
+# Keep identical to gui_browser.py and security/owner-approvals/3620.json.
 EXPECTED_GRANT = {
     "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
     "repository": "Vivaliz-site/site-shopvivaliz",
@@ -55,7 +55,7 @@ EXPECTED_GRANT = {
 
 ADMIN_SHELL_TOOL = {
     "name": "marina_admin_shell",
-    "description": "Run one bash command on Marina. By default it runs as the shopvivaliz-marina-mcp service account; with as_root=true it runs as root through sudo. Owner grant PR 3619. Output is truncated and every call is audited by command hash.",
+    "description": "Run one bash command on Marina. By default it runs as the shopvivaliz-marina-mcp service account; with as_root=true it runs as root through sudo. Owner grant PR 3620. Output is truncated and every call is audited by command hash.",
     "inputSchema": {
         "type": "object",
         "properties": {
