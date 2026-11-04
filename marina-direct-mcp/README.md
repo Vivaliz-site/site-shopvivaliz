@@ -260,6 +260,10 @@ fixture loopback dentro de um serviço systemd temporário com as mesmas
 restrições. O teste não usa credenciais, não altera serviços da aplicação
 e não certifica a ativação em Marina.
 
+A unidade `shopvivaliz-marina-mcp.service` da release habilita a opção desde 2026-11-04, após o
+preflight fresco do grant `service_restart` (PR #3601) na Marina; cada operação tem seu próprio
+grant e seu próprio bootstrap, de modo que a falha de uma não desliga a outra.
+
 Falha no bootstrap administrativo mantém o MCP disponível para leitura;
 `server.py --check --enable-approved-admin-broker` retorna erro. A ativação
 operacional ainda depende do grant, instalação protegida, token de leitura
