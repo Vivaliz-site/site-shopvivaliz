@@ -135,6 +135,7 @@ $tokenOk   = $connected && ($expiresMs === 0 || $expiresMs > $nowMs);
 <div class="topbar">
     <span class="topbar-title">ShopVivaliz Admin</span>
     <a href="/admin/">← Painel principal</a>
+    <a href="/admin/mercadolivre-margin.php">Auditoria de margens</a>
     <a href="/api/ml/me" target="_blank">Testar API</a>
     <a href="/api/ml/products" target="_blank">Ver produtos JSON</a>
 </div>
