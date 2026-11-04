@@ -69,4 +69,9 @@ $r=SvAmazonMarginOlistOrderLink::resolve($sku,[[
  'order'=>'<bad>','quantity'=>1,'posted_at'=>'2026-10-18T00:00:00Z'
 ]],[], $fetch);
 check($r['status']==='unmapped_erp','invalid external order identifier ignored');
+
+check(SvAmazonMarginOlistOrderLink::inFinancialWindow('2026-10-15T00:00:00Z','2026-10-15T00:00:00Z'),'inclusive financial cutoff');
+check(SvAmazonMarginOlistOrderLink::inFinancialWindow('2026-10-16T01:00:00.349Z','2026-10-15T00:00:00Z'),'fractional ISO time');
+check(!SvAmazonMarginOlistOrderLink::inFinancialWindow('2026-09-14T23:59:59Z','2026-10-15T00:00:00Z'),'historical order cannot inflate monthly margin');
+check(!SvAmazonMarginOlistOrderLink::inFinancialWindow('','2026-10-15T00:00:00Z'),'absent postedAt cannot be treated as sale');
 echo "PASS Olist Amazon three integrations order-join: exact id, product, conflicts, non-Amazon/multi-SKU negatives\n";
