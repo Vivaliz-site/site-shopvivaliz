@@ -1,11 +1,11 @@
-// Opens one http(s) URL in the service account's browser on the dedicated display
-// and prints a single JSON line. Never prints page content other than title/URL/PNG.
+// Opens one http(s) URL in the service account's headless Chromium (headful Chromium
+// does not complete navigation on this host's GPU-less Xvfb) and prints a single JSON line. Never prints page content other than title/URL/PNG.
 const { chromium } = require('playwright');
 
 (async () => {
   const [url, timeoutMs, profileDir] = process.argv.slice(2);
   const context = await chromium.launchPersistentContext(profileDir, {
-    headless: false,
+    headless: true,
     acceptDownloads: false,
     args: ['--no-sandbox'],
   });

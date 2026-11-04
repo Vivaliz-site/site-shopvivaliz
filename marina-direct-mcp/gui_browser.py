@@ -78,7 +78,7 @@ GUI_BROWSER_TOOLS = [
     },
     {
         "name": "marina_browser_navigate",
-        "description": "Open one http(s) URL in the service account's browser on the dedicated display and return the title, final URL and a PNG screenshot. Stored credentials are not used. Owner grant PR " + str(GRANT_PR) + ".",
+        "description": "Open one http(s) URL in the service account's headless browser and return the title, final URL and a PNG screenshot. Stored credentials are not used. Owner grant PR " + str(GRANT_PR) + ".",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -196,8 +196,6 @@ def browser_navigate(arguments: dict, *, audit=_audit, runner=subprocess.run) ->
         return {"ok": False, "reason": "invalid_arguments"}
     if not _service_identity_ok():
         return {"ok": False, "reason": "service_identity_required"}
-    if _running_xvfb_pid() is None:
-        return {"ok": False, "reason": "gui_session_not_running"}
     if not _runtime_ready():
         return {"ok": False, "reason": "browser_unavailable"}
     digest = _digest(url)
