@@ -239,6 +239,14 @@ def atomic_save(index: dict, path: Path) -> None:
 
 
 def main() -> int:
+    # Each uploaded export is untrusted input. Limit decompression/XML parser
+    # resource consumption in addition to strict file/row bounds. Linux only.
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
+        resource.setrlimit(resource.RLIMIT_CPU, (45, 45))
+    except (ImportError, OSError, ValueError):
+        pass
     parser = argparse.ArgumentParser(description="Import Olist ERP Amazon ad links; no commerce writes")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("files", nargs="+", type=Path)
