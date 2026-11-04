@@ -91,6 +91,20 @@ class OwnerAuthorizationTests(unittest.TestCase):
         del grant["operation"]
         self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
 
+    def test_service_restart_grant_is_bound_to_site_repository(self):
+        pr, grant, opts = fixture()
+        grant["capabilities"] = ["deployment_manage"]
+        grant["operation"] = "service_restart"
+        opts.update(capability="deployment_manage", operation="service_restart",
+                    target_repository="Vivaliz-site/site-shopvivaliz")
+        self.assertEqual((True, "owner_authorization_verified"),
+                         grant_module.decide(pr, grant, **opts))
+        opts["operation"] = "olist_browser_restart"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+        opts["operation"] = "service_restart"
+        opts["target_repository"] = "Vivaliz-site/amazon-returns-safet"
+        self.assertFalse(grant_module.decide(pr, grant, **opts)[0])
+
     def test_unscoped_legacy_marina_deployment_grant_never_authorizes_restart(self):
         pr, grant, opts = fixture()
         opts["capability"] = "deployment_manage"
