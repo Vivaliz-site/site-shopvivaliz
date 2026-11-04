@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -79,7 +80,7 @@ class ValidationTests(unittest.TestCase):
 
     def test_navigate_reports_missing_browser_without_running_one(self):
         with patch.object(gui, "_running_xvfb_pid", return_value=4242), \
-             patch.object(gui, "_browser_executable", return_value=None):
+             patch.object(gui, "_runtime_ready", return_value=False):
             result = gui.browser_navigate({"url": "https://e.example"}, audit=lambda e: True)
         self.assertEqual(result["reason"], "browser_unavailable")
 
@@ -92,18 +93,27 @@ class AuditTests(unittest.TestCase):
 
     def test_navigate_fails_when_audit_unavailable(self):
         with patch.object(gui, "_running_xvfb_pid", return_value=4242), \
-             patch.object(gui, "_browser_executable", return_value=Path("/x/chrome")):
+             patch.object(gui, "_runtime_ready", return_value=True):
             result = gui.browser_navigate({"url": "https://e.example"}, audit=lambda e: False)
         self.assertEqual(result["reason"], "audit_unavailable")
 
     def test_audit_records_url_hash_not_url(self):
         entries = []
-        # Force the audited path up to the Playwright import, which is stubbed as missing.
+        page = json.dumps({"title": "T", "final_url": "https://secret.example/final",
+                           "screenshot_png_base64": "AAAA"}).encode()
+        def runner(argv, **kwargs):
+            self.assertEqual(argv[1], str(gui.RUNNER_SCRIPT))
+            self.assertEqual(kwargs["env"]["DISPLAY"], ":99")
+            self.assertNotIn("PLAYWRIGHT_BROWSERS_PATH", {k for k in kwargs["env"] if "ubuntu" in kwargs["env"][k]})
+            return subprocess.CompletedProcess(argv, 0, stdout=page, stderr=b"")
         with patch.object(gui, "_running_xvfb_pid", return_value=4242), \
-             patch.object(gui, "_browser_executable", return_value=Path("/x/chrome")), \
-             patch.dict("sys.modules", {"playwright": None, "playwright.sync_api": None}):
-            result = gui.browser_navigate({"url": "https://secret.example/token=abc"}, audit=lambda e: entries.append(e) or True)
-        self.assertEqual(result["reason"], "playwright_unavailable")
+             patch.object(gui, "_runtime_ready", return_value=True), \
+             patch.object(gui, "_node_binary", return_value=Path("/opt/node/bin/node")), \
+             patch.object(gui.Path, "mkdir"):
+            result = gui.browser_navigate({"url": "https://secret.example/token=abc"},
+                                          audit=lambda e: entries.append(e) or True, runner=runner)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["title"], "T")
         self.assertEqual([e["event"] for e in entries], ["browser_start", "browser_end"])
         self.assertNotIn("secret.example", json.dumps(entries))
         self.assertIn("url_sha256", entries[0])
@@ -152,6 +162,34 @@ class DisplayTests(unittest.TestCase):
              patch.object(gui.os, "kill") as kill:
             gui.gui_session({"action": "stop"}, audit=lambda e: True)
         kill.assert_not_called()
+
+
+class BrowserFailureTests(unittest.TestCase):
+    def setUp(self):
+        for target, value in (("_service_identity_ok", True), ("_running_xvfb_pid", 4242), ("_runtime_ready", True)):
+            patcher = patch.object(gui, target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        for patcher in (patch.object(gui, "_node_binary", return_value=Path("/opt/node/bin/node")),
+                        patch.object(gui.Path, "mkdir")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_nonzero_exit_is_reported_without_page_content(self):
+        runner = lambda argv, **kw: subprocess.CompletedProcess(argv, 1, stdout=b"secret", stderr=b"boom")
+        result = gui.browser_navigate({"url": "https://e.example"}, audit=lambda e: True, runner=runner)
+        self.assertEqual(result, {"ok": False, "reason": "browser_failed", "exit_code": 1})
+
+    def test_malformed_output_is_rejected(self):
+        runner = lambda argv, **kw: subprocess.CompletedProcess(argv, 0, stdout=b"not json", stderr=b"")
+        result = gui.browser_navigate({"url": "https://e.example"}, audit=lambda e: True, runner=runner)
+        self.assertEqual(result["reason"], "browser_failed")
+
+    def test_timeout_is_reported(self):
+        def runner(argv, **kw):
+            raise subprocess.TimeoutExpired(argv, 1)
+        result = gui.browser_navigate({"url": "https://e.example"}, audit=lambda e: True, runner=runner)
+        self.assertEqual(result["reason"], "browser_timeout")
 
 
 class ToolSchemaTests(unittest.TestCase):

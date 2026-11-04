@@ -79,6 +79,7 @@ required=(
     admin_shell.py
     admin-shell-grant-3616.json
     gui_browser.py
+    browser_navigate.js
     gui-browser-grant.json
     systemd/shopvivaliz-marina-mcp.service
     systemd/shopvivaliz-marina-root-broker.service
@@ -110,7 +111,7 @@ copy_immutable() {
         install -o root -g root -m 0444 "$source" "$target"
     fi
 }
-for name in server.py broker_client.py root_broker.py cloudflare_access_auth.py read_only_telemetry.py scoped_write.py trusted_write_operator.py operator_grant_readback.py operator_admin_route.py operator_preflight.py local_auth_smoke.py admin_shell.py admin-shell-grant-3616.json gui_browser.py gui-browser-grant.json; do
+for name in server.py broker_client.py root_broker.py cloudflare_access_auth.py read_only_telemetry.py scoped_write.py trusted_write_operator.py operator_grant_readback.py operator_admin_route.py operator_preflight.py local_auth_smoke.py admin_shell.py admin-shell-grant-3616.json gui_browser.py browser_navigate.js gui-browser-grant.json; do
     copy_immutable "$source_checkout/marina-direct-mcp/$name" "$release/$name"
 done
 copy_immutable "$verifier" "$release/validate_owner_pr_grant.py"

@@ -8,7 +8,6 @@ service starts with --enable-gui-browser and with --access-config.
 """
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
@@ -23,6 +22,9 @@ SERVICE_USER = "shopvivaliz-marina-mcp"
 SERVICE_HOME = Path("/var/lib/shopvivaliz-marina-mcp")
 STATE_DIR = SERVICE_HOME / "state" / "gui"
 PROFILE_DIR = SERVICE_HOME / "browser-profile"
+RUNTIME_DIR = SERVICE_HOME / "browser-runtime"
+BROWSERS_DIR = SERVICE_HOME / "browsers"
+RUNNER_SCRIPT = Path(__file__).with_name("browser_navigate.js")
 AUDIT_FILE = SERVICE_HOME / "state" / "gui-browser-audit.log"
 DISPLAY = ":99"
 XVFB = "/usr/bin/Xvfb"
@@ -149,15 +151,22 @@ def gui_session(arguments: dict, *, audit=_audit, spawn=subprocess.Popen) -> dic
     return {"ok": True, "running": True, "display": DISPLAY, "pid": pid}
 
 
-def _browser_executable() -> Path | None:
-    # Playwright's bundled chromium lives in another account's home and is not
-    # readable by the service user; a browser must be installed under SERVICE_HOME.
-    for candidate in sorted((SERVICE_HOME / "browsers").glob("chromium-*/chrome-linux/chrome")):
-        return candidate if os.access(candidate, os.X_OK) else None
+def _node_binary() -> Path | None:
+    for candidate in sorted(Path("/opt").glob("node-v*/bin/node"), reverse=True):
+        if os.access(candidate, os.X_OK):
+            return candidate
     return None
 
 
-def browser_navigate(arguments: dict, *, audit=_audit) -> dict:
+def _runtime_ready() -> bool:
+    # The browser runtime lives under the service home: playwright from npm plus a
+    # chromium build in BROWSERS_DIR. Nothing from another account's home is used.
+    return (_node_binary() is not None
+            and (RUNTIME_DIR / "node_modules" / "playwright").is_dir()
+            and any(BROWSERS_DIR.glob("chromium-*")))
+
+
+def browser_navigate(arguments: dict, *, audit=_audit, runner=subprocess.run) -> dict:
     url = arguments.get("url")
     timeout = arguments.get("timeout_seconds", DEFAULT_TIMEOUT)
     if (set(arguments) - {"url", "timeout_seconds"} or not isinstance(url, str)
@@ -168,39 +177,38 @@ def browser_navigate(arguments: dict, *, audit=_audit) -> dict:
         return {"ok": False, "reason": "service_identity_required"}
     if _running_xvfb_pid() is None:
         return {"ok": False, "reason": "gui_session_not_running"}
-    executable = _browser_executable()
-    if executable is None:
+    if not _runtime_ready():
         return {"ok": False, "reason": "browser_unavailable"}
     digest = _digest(url)
     started = time.time()
     if not audit({"event": "browser_start", "url_sha256": digest, "at": int(started)}):
         return {"ok": False, "reason": "audit_unavailable"}
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        audit({"event": "browser_end", "url_sha256": digest, "outcome": "playwright_missing"})
-        return {"ok": False, "reason": "playwright_unavailable"}
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    os.environ["DISPLAY"] = DISPLAY
+    env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(SERVICE_HOME), "DISPLAY": DISPLAY,
+           "NODE_PATH": str(RUNTIME_DIR / "node_modules"), "PLAYWRIGHT_BROWSERS_PATH": str(BROWSERS_DIR)}
     try:
-        with sync_playwright() as pw:
-            context = pw.chromium.launch_persistent_context(
-                str(PROFILE_DIR), executable_path=str(executable), headless=False,
-                accept_downloads=False, args=["--no-sandbox"])
-            page = context.new_page()
-            page.goto(url, timeout=timeout * 1000)
-            png = page.screenshot(type="png")
-            result = {"ok": True, "title": page.title(), "final_url": page.url}
-            context.close()
-    except Exception as exc:  # noqa: BLE001 - report failure class, never page content
-        audit({"event": "browser_end", "url_sha256": digest, "outcome": type(exc).__name__})
-        return {"ok": False, "reason": "browser_failed", "error": type(exc).__name__}
+        proc = runner([str(_node_binary()), str(RUNNER_SCRIPT), url, str(timeout * 1000), str(PROFILE_DIR)],
+                      cwd=str(RUNTIME_DIR), env=env, capture_output=True, timeout=timeout + 15, check=False)
+    except subprocess.TimeoutExpired:
+        audit({"event": "browser_end", "url_sha256": digest, "outcome": "timeout"})
+        return {"ok": False, "reason": "browser_timeout"}
+    if proc.returncode != 0 or len(proc.stdout) > MAX_SCREENSHOT_BYTES * 2:
+        audit({"event": "browser_end", "url_sha256": digest, "outcome": "failed",
+               "exit_code": proc.returncode})
+        return {"ok": False, "reason": "browser_failed", "exit_code": proc.returncode}
+    try:
+        page = json.loads(proc.stdout.decode("utf-8"))
+        result = {"ok": True, "title": str(page["title"]), "final_url": str(page["final_url"])}
+        png_b64 = str(page["screenshot_png_base64"])
+    except (ValueError, KeyError, UnicodeDecodeError):
+        audit({"event": "browser_end", "url_sha256": digest, "outcome": "bad_output"})
+        return {"ok": False, "reason": "browser_failed"}
     audit({"event": "browser_end", "url_sha256": digest, "outcome": "ok",
            "duration_seconds": round(time.time() - started, 3)})
-    if len(png) > MAX_SCREENSHOT_BYTES:
+    if len(png_b64) > MAX_SCREENSHOT_BYTES:
         result["screenshot_omitted"] = True
     else:
-        result["screenshot_png_base64"] = base64.b64encode(png).decode("ascii")
+        result["screenshot_png_base64"] = png_b64
     return result
 
 
