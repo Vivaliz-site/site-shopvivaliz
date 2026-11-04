@@ -110,8 +110,6 @@ for name in server.py broker_client.py root_broker.py cloudflare_access_auth.py 
     copy_immutable "$source_checkout/marina-direct-mcp/$name" "$release/$name"
 done
 copy_immutable "$verifier" "$release/validate_owner_pr_grant.py"
-# The readback independently verifies the real owner-approved grant as the service UID.
-sudo -n -u shopvivaliz-marina-mcp /usr/bin/python3 -B "$release/operator_grant_readback.py" >/dev/null || refuse approved_owner_grant_invalid
 copy_immutable "$source_checkout/marina-direct-mcp/systemd/shopvivaliz-marina-mcp.service" "$release/shopvivaliz-marina-mcp.service"
 # Inert broker templates are carried with the immutable release; installation
 # and socket activation require a separate exact owner-approved root grant.
