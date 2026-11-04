@@ -25,7 +25,8 @@ class MarinaDirectAccessDocumented(unittest.TestCase):
             self.assertIn("<!-- MARINA_MCP_ACTIVE_20261104 -->", text, name)
             self.assertIn("<!-- /MARINA_MCP_ACTIVE_20261104 -->", text, name)
         block = readme.split("<!-- MARINA_MCP_ACTIVE_20261104 -->", 1)[1].split("<!-- /MARINA_MCP_ACTIVE_20261104 -->", 1)[0]
-        for required in ("marina_admin_shell", "as_root", "marina_gui_session", "marina_browser_navigate",
+        for required in ("marina_mcp_agent_client.py", "MARINA_MCP_ACCESS_CLIENT_SECRET", "Quem le esses arquivos tem root",
+                         "marina_admin_shell", "as_root", "marina_gui_session", "marina_browser_navigate",
                          "somente JWT", "root_http_daemon_allowed=false", "headless",
                          "ACTIVE_LOCAL_SMOKE_GREEN", "Nao validado"):
             with self.subTest(expected=required):
