@@ -18,5 +18,21 @@ class MarinaDirectAccessDocumented(unittest.TestCase):
         self.assertIn("nao contornar", section.lower())
         self.assertIn("credenciais separadas", section.lower())
 
+    def test_current_marina_mcp_state_is_documented(self):
+        readme = (ROOT / "marina-direct-mcp" / "README.md").read_text(encoding="utf-8")
+        host = HOST_ACCESS.read_text(encoding="utf-8")
+        for name, text in (("README", readme), ("host-access", host)):
+            self.assertIn("<!-- MARINA_MCP_ACTIVE_20261104 -->", text, name)
+            self.assertIn("<!-- /MARINA_MCP_ACTIVE_20261104 -->", text, name)
+        block = readme.split("<!-- MARINA_MCP_ACTIVE_20261104 -->", 1)[1].split("<!-- /MARINA_MCP_ACTIVE_20261104 -->", 1)[0]
+        for required in ("marina_admin_shell", "as_root", "marina_gui_session", "marina_browser_navigate",
+                         "somente JWT", "root_http_daemon_allowed=false", "headless",
+                         "ACTIVE_LOCAL_SMOKE_GREEN", "Nao validado"):
+            with self.subTest(expected=required):
+                self.assertIn(required, block)
+        # The documented grant file must be the one shipped in the repository.
+        self.assertTrue((ROOT / "security" / "owner-approvals" / "3620.json").is_file())
+        self.assertTrue((ROOT / "marina-direct-mcp" / "mcp-admin-grant.json").is_file())
+
 if __name__ == "__main__":
     unittest.main()
