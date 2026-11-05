@@ -62,7 +62,7 @@ PY
 
 grep -q 'claude_code' "$docs"
 grep -q 'vertex_oauth' "$docs"
-grep -Fq 'OpenAI: `gpt-5.6-terra`, effort `medium`;' "$docs"
+grep -Fq 'OpenAI: `gpt-6-luna`, effort `medium`;' "$docs"
 grep -Fq 'Anthropic: `claude-sonnet-5`, effort `medium`;' "$docs"
 grep -Fq 'Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;' "$docs"
 grep -Fq '`thinkingLevel: medium`' "$docs"

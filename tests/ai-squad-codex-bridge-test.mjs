@@ -38,7 +38,7 @@ assert.equal(valid.effort, 'xhigh');
 assert.equal(valid.web_search, true);
 
 const devScoped = validateRequest({
-  model: 'gpt-5.6-terra',
+  model: 'gpt-6-luna',
   effort: 'medium',
   prompt: 'okx',
   web_search: false,
@@ -50,7 +50,7 @@ assert.deepEqual(
   ['/home/ubuntu/.codex-business/dev'],
 );
 assert.throws(() => validateRequest({
-  model: 'gpt-5.6-terra',
+  model: 'gpt-6-luna',
   effort: 'medium',
   prompt: 'okx',
   web_search: false,
@@ -97,6 +97,23 @@ assert.equal(await readRateLimitState(async () => ({
 
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-sol'), true);
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-terra'), false);
+assert.equal(exactModelMatches('gpt-6-luna', 'gpt-6-luna'), true);
+assert.equal(exactModelMatches('gpt-6-luna', 'gpt-5.6-luna'), false);
+
+// gpt-6-luna is the default on every host; the older models stay allowed during a rollout and
+// anything outside the allowlist is still rejected.
+for (const model of ['gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
+  assert.equal(
+    validateRequest({ model, effort: 'medium', prompt: 'x', web_search: false }).model,
+    model,
+  );
+}
+assert.throws(() => validateRequest({
+  model: 'gpt-6-unknown',
+  effort: 'medium',
+  prompt: 'x',
+  web_search: false,
+}), /invalid_model/);
 
 assert.equal(remainingRequestMs(5000, 1000, 10000), 4000);
 assert.equal(remainingRequestMs(5000, 1000, 2500), 2500);
