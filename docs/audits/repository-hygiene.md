@@ -4,18 +4,18 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 3853
-- Diretorios versionados: 784
-- Grupos de conteudo identico: 192
-- Grupos identicos que incluem codigo: 12
-- Nomes de funcao encontrados em mais de um arquivo: 432
+- Arquivos versionados: 5711
+- Diretorios versionados: 684
+- Grupos de conteudo identico: 203
+- Grupos identicos que incluem codigo: 13
+- Nomes de funcao encontrados em mais de um arquivo: 737
 - Arquivos em diretorios explicitamente legados: 1
-- Violacoes de dados operacionais versionados: 5
+- Violacoes de dados operacionais versionados: 4
 
 ## Violacoes de politica
 
 - `storage/codex-bridge/state.json` - violacao de politica - dado operacional nao deve ser versionado
-- `storage/orders/<REDACTED_ORDER_ID>.json` (4 arquivos) - violacao de politica - dado operacional nao deve ser versionado
+- `storage/orders/<REDACTED_ORDER_ID>.json` (3 arquivos) - violacao de politica - dado operacional nao deve ser versionado
 
 ## Arquivos identicos
 
@@ -62,6 +62,22 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `storage/raw/100cm/1.jpg`
 - `storage/raw/80cm/1.jpg`
 - `storage/raw/90cm/1.jpg`
+
+### Git blob ID `e416385079ddb233e3e81efc6a5d32df60b5a94d`
+- `storage/processed/KIT4R-SOPRANO/1.jpg`
+- `storage/processed/KIT4R-SOPRANO/2.jpg`
+- `storage/processed/KIT4R-SOPRANO/3.jpg`
+- `storage/processed/KIT4R-SOPRANO/4.jpg`
+- `storage/processed/KIT4R-SOPRANO_1/1.jpg`
+- `storage/processed/KIT4R-SOPRANO_1/2.jpg`
+- `storage/processed/KIT4R-SOPRANO_1/3.jpg`
+- `storage/processed/KIT4R-SOPRANO_1/4.jpg`
+- `storage/raw/KIT4R-SOPRANO/1.jpg`
+- `storage/raw/KIT4R-SOPRANO_1/1.jpg`
+- `uploads/catalog-fixed/KIT4R-SOPRANO/1.jpg`
+- `uploads/catalog-fixed/KIT4R-SOPRANO/2.jpg`
+- `uploads/catalog-fixed/KIT4R-SOPRANO/3.jpg`
+- `uploads/catalog-fixed/KIT4R-SOPRANO/4.jpg`
 
 ### Git blob ID `1aa6356422db90384c4d546127068769069bc285`
 - `storage/processed/REF 05VM/1.jpg`
@@ -231,17 +247,17 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `storage/raw/00/1.jpg`
 - `storage/raw/13/1.jpg`
 
-### Git blob ID `e416385079ddb233e3e81efc6a5d32df60b5a94d`
-- `storage/processed/KIT4R-SOPRANO/1.jpg`
-- `storage/processed/KIT4R-SOPRANO/2.jpg`
-- `storage/processed/KIT4R-SOPRANO/3.jpg`
-- `storage/processed/KIT4R-SOPRANO/4.jpg`
-- `storage/processed/KIT4R-SOPRANO_1/1.jpg`
-- `storage/processed/KIT4R-SOPRANO_1/2.jpg`
-- `storage/processed/KIT4R-SOPRANO_1/3.jpg`
-- `storage/processed/KIT4R-SOPRANO_1/4.jpg`
-- `storage/raw/KIT4R-SOPRANO/1.jpg`
-- `storage/raw/KIT4R-SOPRANO_1/1.jpg`
+### Git blob ID `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`
+- `admin/ai-image-studio/storage/base-image-tmp/.gitkeep`
+- `admin/ai-image-studio/storage/staging/.gitkeep`
+- `ai-system/memory/.gitkeep`
+- `assets/brand/.gitkeep`
+- `scripts/ia/abtest/__init__.py`
+- `scripts/ia/analytics/__init__.py`
+- `scripts/ia/images/__init__.py`
+- `scripts/ia/priority/__init__.py`
+- `scripts/ia/seo/__init__.py`
+- `utils/__init__.py`
 
 ### Git blob ID `e876fa7d5b21b9a65f1ead4ff38033d3b88a035e`
 - `storage/processed/20097983286/1.jpg`
@@ -254,16 +270,6 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `storage/processed/JVCDCQ33/4.jpg`
 - `storage/raw/20097983286/1.jpg`
 - `storage/raw/JVCDCQ33/1.jpg`
-
-### Git blob ID `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`
-- `ai-system/memory/.gitkeep`
-- `assets/brand/.gitkeep`
-- `scripts/ia/abtest/__init__.py`
-- `scripts/ia/analytics/__init__.py`
-- `scripts/ia/images/__init__.py`
-- `scripts/ia/priority/__init__.py`
-- `scripts/ia/seo/__init__.py`
-- `utils/__init__.py`
 
 ### Git blob ID `e31dc346df1d8d4bf97bc1a32009bc7cf82c5854`
 - `storage/original/Jatobadba.jpg`
@@ -1207,6 +1213,11 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `storage/processed/PET_CMF3_RSP/4.jpg`
 - `storage/raw/PET_CMF3_RSP/1.jpg`
 
+### Git blob ID `4908a3aa246a64d4866c77878d34484f99483d0d`
+- `scripts/fix-broken-descriptions.php`
+- `scripts/fix-encoding-descriptions.php`
+- `scripts/fix-product-images.php`
+
 ### Git blob ID `777525e48144d82d4d60dc68cef31819600f02a7`
 - `storage/original/RODOVED100.jpg`
 - `storage/original/ved-70.jpg`
@@ -1217,17 +1228,37 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `claude/api/shopee-integration/scripts/test_final.py`
 - `claude/api/shopee-integration/scripts/test_shopee_api.py`
 
-### Git blob ID `05a2f88517e90a36fbe3b6244efb507f70b1a9dc`
-- `.tmp_shopvivaliz/planilhas/produtos_sem_astra_pet.csv`
-- `.tmp_shopvivaliz/planilhas/produtos_sem_astra_pet_final.csv`
+### Git blob ID `0497bf6391a60a45f1912464f3f1a147a058d6da`
+- `css/catalog-conversion-v4.css`
+- `public/dist/css/catalog-conversion-v4.5f8587a906.min.css`
+
+### Git blob ID `061f960cf1d4e5f3ed312f24a732b7f191adb976`
+- `js/offline-status-v22.js`
+- `public/dist/js/offline-status-v22.5d3ec9ad1b.min.js`
 
 ### Git blob ID `0bcca1b23700da8d9f4d9f5e8378c3f9df09f574`
 - `.vinext/fonts/geist-8ac0455e797f/geist-52306abf.woff2`
 - `dist/client/assets/_vinext_fonts/geist-8ac0455e797f/geist-52306abf.woff2`
 
+### Git blob ID `0e5d36a3a4200d2cae7df919325d277f00a943f2`
+- `css/cart-integrity-v94.css`
+- `public/dist/css/cart-integrity-v94.daea79b102.min.css`
+
+### Git blob ID `137773495f1a74ddcf2ad23d3bf61a1f0039bbe3`
+- `storage/original/KIT2VEDANTEPORTA90CM.jpg`
+- `uploads/catalog-fixed/kit-vedant-90/1.jpg`
+
+### Git blob ID `1bbe2d22c33a9f68989439a3668a2a47cf7c1e8b`
+- `css/product-image-integrity-v63.css`
+- `public/dist/css/product-image-integrity-v63.bf38b5c5f1.min.css`
+
 ### Git blob ID `1ece24b5158a256193ae89109bbb5e8b933ffe7c`
 - `scripts/shopvivaliz_auth.py`
 - `scripts/shopvivaliz_auth_fixed.py`
+
+### Git blob ID `20395651a92bcce84bc319c4fcc082a428772d30`
+- `css/loading-states-v21.css`
+- `public/dist/css/loading-states-v21.7e3f6d7b4d.min.css`
 
 ### Git blob ID `2837f468cae1d3b8a334df8e283bec867bb86bd9`
 - `imports/shopee-media-space/images/343571949_1C7Q-LKW4-FI2Y_shopee.jpg`
@@ -1237,21 +1268,29 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `.vinext/fonts/geist-mono-00e989178794/geist-mono-0638449e.woff2`
 - `dist/client/assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-0638449e.woff2`
 
+### Git blob ID `38f0d9cb18d85d2e5b1a91fa95cc4a2a2c9478b6`
+- `js/cart-persistence-v23.js`
+- `public/dist/js/cart-persistence-v23.abeb4c252b.min.js`
+
 ### Git blob ID `4377507400414768c5915808bf080a1403cf6cb3`
 - `dist/.openai/drizzle/meta/_journal.json`
 - `drizzle/meta/_journal.json`
-
-### Git blob ID `4b3a2e197387b4cca2cd100504397a39d0b63fb1`
-- `reports/hourly/2026-07-26-13-summary.md`
-- `reports/hourly/latest.md`
 
 ### Git blob ID `4fc15d1f2063f9d57fa838a4b574b5bce2c5c543`
 - `.vinext/fonts/geist-mono-00e989178794/geist-mono-44e03052.woff2`
 - `dist/client/assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-44e03052.woff2`
 
+### Git blob ID `4fc89e844057e46ef38c77e1f9af7b99bd7d663d`
+- `css/stock-integrity-v83.css`
+- `public/dist/css/stock-integrity-v83.17c3f0a137.min.css`
+
 ### Git blob ID `565390b9c027115d228e35841bf5acb36987810f`
 - `storage/original/4.jpg`
 - `storage/original/5.jpg`
+
+### Git blob ID `5ed021676c1db63eed0b0b2babac7c10d439e2f6`
+- `js/storefront-events-v26.js`
+- `public/dist/js/storefront-events-v26.cceb766d7c.min.js`
 
 ### Git blob ID `614607fa2d88e614b18ab804ea3a5e19cec18e2d`
 - `storage/original/CONJ-10-RODIZIOS-35MM-GEL.jpg`
@@ -1261,13 +1300,13 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `.vinext/fonts/geist-mono-00e989178794/geist-mono-44745446.woff2`
 - `dist/client/assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-44745446.woff2`
 
-### Git blob ID `769109542c022a4a1b0a2f7865df548ccc795659`
-- `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/account/@dashboard/loading.tsx`
-- `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/account/loading.tsx`
-
 ### Git blob ID `7ab581f7b347b642702d806e03391499013b6462`
 - `.vinext/fonts/geist-8ac0455e797f/geist-ff2310f5.woff2`
 - `dist/client/assets/_vinext_fonts/geist-8ac0455e797f/geist-ff2310f5.woff2`
+
+### Git blob ID `7b087db2a8e641a6528641d2be0bab4a51da1b13`
+- `css/checkout-conversion-v6.css`
+- `public/dist/css/checkout-conversion-v6.339aab4c10.min.css`
 
 ### Git blob ID `801eb73a4d389b41117827fdf697b493a85f42d9`
 - `storage/original/00.jpg`
@@ -1297,10 +1336,6 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `dist/client/assets/index-DjI7nGRM.css`
 - `dist/server/assets/index-DjI7nGRM.css`
 
-### Git blob ID `99452966b2a689a7d2d3e694cb6a7184e4e16940`
-- `claude/medusa/apps/storefront/src/app/opengraph-image.jpg`
-- `claude/medusa/apps/storefront/src/app/twitter-image.jpg`
-
 ### Git blob ID `99915804bf711db12704d9cf454bde8f933e1ca9`
 - `storage/original/JFQFE77.jpg`
 - `storage/original/JFQFPA67.jpg`
@@ -1309,9 +1344,9 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `favicon.ico`
 - `public/assets/liz-assistant/liz-avatar.png`
 
-### Git blob ID `9e2e618c33945562dace4ecee61c3b83cc378e02`
-- `claude/medusa/apps/backend/src/api/admin/custom/route.ts`
-- `claude/medusa/apps/backend/src/api/store/custom/route.ts`
+### Git blob ID `a40cef8205f0d6b49ca20ae3cecc121c62a606ba`
+- `css/category-real-images-v52.css`
+- `public/dist/css/category-real-images-v52.f1a699a925.min.css`
 
 ### Git blob ID `b25ed45a166459afbedca2291122bd9b9513a4ce`
 - `api/maintenance/opcache-reset.php`
@@ -1337,6 +1372,10 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `dist/server/__vite_rsc_assets_manifest.js`
 - `dist/server/ssr/__vite_rsc_assets_manifest.js`
 
+### Git blob ID `ca8ad4bb11f12091f7405dc032e4f469cdfa8e15`
+- `css/shipping-v7.css`
+- `public/dist/css/shipping-v7.7a53d38c01.min.css`
+
 ### Git blob ID `cf24126b086f12217076c4902c7c6d58e4f52c75`
 - `.vinext/fonts/geist-mono-00e989178794/geist-mono-013b2f2f.woff2`
 - `dist/client/assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-013b2f2f.woff2`
@@ -1345,13 +1384,17 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `favicon.png`
 - `images/favicon.png`
 
-### Git blob ID `db1d751fb402393114d60dcb7e1a1ac40324dd3a`
-- `claude/medusa/apps/backend/eslint.config.ts`
-- `claude/medusa/eslint.config.ts`
-
 ### Git blob ID `e1595fa508b8061763578f4b0ac4af4d6877b208`
 - `storage/original/14.jpg`
 - `storage/original/15.jpg`
+
+### Git blob ID `e3143a4a3b0acdb48d6e40ccf44e3eb6fc3028c1`
+- `marina-direct-mcp/mcp-admin-grant.json`
+- `security/owner-approvals/3620.json`
+
+### Git blob ID `e455ddef129bdf3d4438ecf3f940d13737ee9594`
+- `css/price-integrity-v73.css`
+- `public/dist/css/price-integrity-v73.9cfaf8cbe4.min.css`
 
 ### Git blob ID `eb2fc515b46fdb5b2b1a203ad3ef5a00fc1e29b7`
 - `api/maintenance/force-git-sync.php`
@@ -1365,13 +1408,21 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `.vinext/fonts/geist-8ac0455e797f/geist-875ccdd4.woff2`
 - `dist/client/assets/_vinext_fonts/geist-8ac0455e797f/geist-875ccdd4.woff2`
 
+### Git blob ID `f6192839abd72c8e25a8f4ded3ec069e4d05938c`
+- `css/accessibility-v11.css`
+- `public/dist/css/accessibility-v11.929097b251.min.css`
+
+### Git blob ID `f91d11adc420b1904f1fd9924cc7206492a2e6e3`
+- `css/network-status-v22.css`
+- `public/dist/css/network-status-v22.860b495039.min.css`
+
 ## Funcoes declaradas em mais de um arquivo
 
 Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaScript/TypeScript. Nomes repetidos nao provam duplicacao semantica; metodos e escopos podem ser independentes.
 
 - `$i`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `$t`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `__construct`: `agents/project-director-agent.php`, `api/liz-web-search.php`, `checkout-legacy/checkout-page-optimizer.php`, `claude/api/ProductOptimizer.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`, `config/database.php`, `core/ai/market/collector.php`, `core/ai/strategy/engine.php`, `core/config/ShopeeSecretsLoader.php`, `includes/OrderNotificationService.class.php`, `includes/PHPMailer/PHPMailer.php`, `includes/analytics-tracking.php`, `includes/blog-article-repository.php`, `includes/blog-comment-repository.php`, `includes/infinitepay-gateway.php`, `includes/inventory-reservations.php`, `includes/logger.php`, `includes/mercadopago-gateway.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`, `includes/testimonials-repository.php`, `scripts/agent-heartbeat-monitor.php`, `scripts/agent-lock-manager.php`, `scripts/database-sandbox.php`, `scripts/disaster-recovery.php`, `scripts/incident-response.php`, `scripts/llm-knowledge-base.php`, `scripts/llm-log-analyzer.php`, `scripts/performance-optimizer.php`, `scripts/revenue-driven-queue.php`, `scripts/send-notifications.php`, `scripts/seo-generator.php`, `scripts/task-distribution-engine.php`, `scripts/test-shopee-connection.php`, `scripts/watchdog-health-check.php`, `scripts/whatsapp-integration.php`
+- `__construct`: `admin/ai-image-studio/src/AiServices.php`, `admin/ai-image-studio/src/ImagePublisher.php`, `admin/ai-image-studio/src/OmnichannelImagePublisher.php`, `admin/ai-image-studio/src/OpenRouterImageClient.php`, `admin/catalog-optimization/src/CatalogPublisher.php`, `admin/catalog-optimization/src/TextAiServices.php`, `agents/project-director-agent.php`, `agents/v9.2.84/app/CatalogMetadataAgent.php`, `agents/v9.2.84/app/ConversionFunnelAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `api/liz-web-search.php`, `checkout-legacy/checkout-page-optimizer.php`, `claude/api/ProductOptimizer.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`, `config/database.php`, `core/ai/market/collector.php`, `core/ai/strategy/engine.php`, `core/config/ShopeeSecretsLoader.php`, `includes/OrderNotificationService.class.php`, `includes/PHPMailer/PHPMailer.php`, `includes/ai-squad-core.php`, `includes/amazon-margin/AuditCollector.php`, `includes/amazon-returns/Config.php`, `includes/amazon-returns/GmailApi.php`, `includes/amazon-returns/SafeTDecisionEngine.php`, `includes/amazon-returns/SpApi.php`, `includes/analytics-tracking.php`, `includes/blog-article-repository.php`, `includes/blog-comment-repository.php`, `includes/chatgpt-continuity/PendingNudgeStore.php`, `includes/infinitepay-gateway.php`, `includes/inventory-reservations.php`, `includes/liz-testimonial-moderator.php`, `includes/logger.php`, `includes/marina-maintenance/authorization-service.php`, `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`, `includes/marketplace/AmazonPublisher.php`, `includes/marketplace/MarketplaceRuntime.php`, `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `includes/marketplace/TinyPublisher.php`, `includes/mercadopago-gateway.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`, `includes/testimonials-repository.php`, `scripts/agent-heartbeat-monitor.php`, `scripts/agent-lock-manager.php`, `scripts/database-sandbox.php`, `scripts/disaster-recovery.php`, `scripts/incident-response.php`, `scripts/llm-knowledge-base.php`, `scripts/llm-log-analyzer.php`, `scripts/performance-optimizer.php`, `scripts/revenue-driven-queue.php`, `scripts/send-notifications.php`, `scripts/seo-generator.php`, `scripts/task-distribution-engine.php`, `scripts/test-shopee-connection.php`, `scripts/watchdog-health-check.php`, `src/Google/GoogleApiClient.php`, `src/Google/OAuthTokenProvider.php`, `tests/amazon-margin/ReadErrorPolicyTest.php`, `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-policy-test.php`, `tests/amazon-returns-program-regression-test.php`, `tests/amazon-returns-reliability-test.php`, `tests/amazon-returns-spapi-test.php`, `tests/catalog-generated-data-normalizer-test.php`, `workers/amazon-returns/daemon.php`, `workers/amazon-returns/gmail-ingest.php`, `workers/amazon-returns/reconcile.php`, `workers/amazon-returns/scheduler.php`
 - `__destruct`: `checkout-legacy/checkout-page-optimizer.php`, `includes/PHPMailer/PHPMailer.php`
 - `_getClientHydrationContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `_getGlobalAccessors`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1380,46 +1431,108 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `_n`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `_registerStateAccessors`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `_setClientHydrationContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `a`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `a`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`, `includes/amazon-margin/AuditCollector.php`
 - `aa`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `abort`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `abortTask`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `addToCart`: `claude/medusa/apps/storefront/src/lib/data/cart.ts`, `claude/produto.php`, `js/catalog.js`, `produto.php`
+- `addBoletoOption`: `js/checkout-payment-v2.js`, `public/dist/js/checkout-payment-v2.044ed391b0.min.js`
+- `addError`: `js/checkout-conversion-v6.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`
+- `addHandoff`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `addMessage`: `admin/buscador.php`, `js/shopvivaliz-visual-v3.js`, `public/dist/js/shopvivaliz-visual-v3.98ab7f88b4.min.js`
+- `addToCart`: `js/catalog.js`, `produto.php`, `public/dist/js/catalog.4868fc16bf.min.js`
 - `ae`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Ae`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `afterPageHandlers`: `js/shipping-postcode-session-v1.js`, `public/dist/js/shipping-postcode-session-v1.de322b4818.min.js`
+- `analyticsConsentGranted`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `analyze`: `admin/assets/catalog-change-intelligence.js`, `core/ai/strategy/engine.php`, `includes/amazon-returns/DenialAnalyzer.php`
 - `appendInterceptionContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `applyCorrections`: `public/assets/liz-assistant/liz-assistant-corrections-v1.js`, `public/dist/assets/liz-assistant/liz-assistant-corrections-v1.df8f09c0c8.min.js`
+- `applyPatch`: `includes/amazon-returns/GmailEventSink.php`, `includes/amazon-returns/ReturnsReport.php`
 - `Ar`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `assert_true`: `tests/blog-editorial-smoke.php`, `tests/public-trust-guard-test.php`
+- `ask`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `assert`: `tests/policy-engine-health-transport-test.js`, `tests/policy-engine-visual-proof-workflow-test.js`
+- `assert_same`: `tests/catalog-draft-editor-test.php`, `tests/storefront-image-source-test.php`
+- `assert_true`: `tests/blog-editorial-smoke.php`, `tests/buy-now-direct-checkout-test.php`, `tests/catalog-draft-editor-test.php`, `tests/google-ads-order-conversion-test.php`, `tests/public-trust-guard-test.php`
 - `assertSafeNavigationUrl`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `audit`: `includes/blog-comment-repository.php`, `tests/home-category-image-audit.mjs`
+- `authorize`: `apps/shopvivaliz-web-agent/src/server.mjs`, `includes/marina-maintenance/authorization-service.php`, `includes/marina-maintenance/broker-client.php`
+- `authorized`: `includes/amazon-returns/RemoteBridge.php`, `includes/remote-bridge-auth.php`, `remote-control-browser-mcp/universal/mcp-server.mjs`
 - `b`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `B`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `banner`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
 - `be`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `beat`: `agents/v9.2.84/app/MediaMemoryAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `agents/v9.2.85/app/UpdateStatusAgent.php`
+- `beginHeartbeat`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
+- `beginShippingRequest`: `js/checkout-resilience-v1.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`
+- `bestRowImage`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `Bi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `bind`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `bindBuyButtons`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `bindClicks`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `bindForms`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `bindPaymentAnalytics`: `js/checkout-payment-v2.js`, `public/dist/js/checkout-payment-v2.044ed391b0.min.js`
+- `bool`: `includes/amazon-returns/Config.php`, `scripts/amazon-returns/seller-central-adapter.mjs`, `scripts/chatgpt-business-model-settings-probe.mjs`
+- `boot`: `admin/assets/admin-mobile-completion.js`, `admin/assets/catalog-optimization-workflow.js`
+- `bootstrapCheckoutShippingDedupe`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
+- `bootstrapDirectProductSalesLayer`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
 - `br`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `bridge`: `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`, `scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs`
+- `browser`: `tests/analytics-session-consent-regression-test.cjs`, `tests/chatgpt-canonical-read-backoff-test.mjs`
+- `browserFixture`: `tests/chatgpt-canonical-read-budget-test.mjs`, `tests/chatgpt-unavailable-surface-test.mjs`
+- `buildCatalogUrl`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
 - `buildDangerousSchemeRegex`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `buildOutgoingAppPayload`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `byteLengthOfChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `C`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `c`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `ca`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `calculateShipping`: `checkout.php`, `js/checkout-shipping-v7.js`
+- `calculateShipping`: `checkout.php`, `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
+- `call`: `admin/marina-maintenance.php`, `remote-control-browser-mcp/universal/tests/mcp-server.test.mjs`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`, `services/okx-trading-pilot/copy-mcp/tests/bridge.test.mjs`
 - `callGeminiAPI`: `api/agent/squad-chat.php`, `scripts/llm-log-analyzer.php`
-- `cart`: `js/cart-shipping-v7.js`, `js/cart.js`, `js/checkout-shipping-v7.js`
-- `cartItems`: `js/checkout-payment-v2.js`, `js/shopvivaliz-google-events.js`
+- `captureGclsAndUtmParams`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `card`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `cart`: `js/cart-erp-price-reconciliation-v1.js`, `js/cart-shipping-v7.js`, `js/checkout-shipping-v7.js`, `js/mixed-cart-promo-v1.js`, `public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
+- `cartItems`: `js/checkout-payment-v2.js`, `js/shopvivaliz-google-events.js`, `public/dist/js/checkout-payment-v2.044ed391b0.min.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `cartPage`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
+- `cartPayload`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `cartProduct`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
+- `cartSignature`: `js/cart-erp-price-reconciliation-v1.js`, `public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js`
+- `casePatch`: `includes/amazon-returns/GmailEventSink.php`, `includes/amazon-returns/ReturnsReport.php`
+- `catalog_ai_normalize_generated_data`: `admin/catalog-optimization/src/TextAiServices.php`, `tests/catalog-admin-workflow-v3-test.php`
+- `catalog_generated_normalize`: `admin/catalog-optimization/src/CatalogGeneratedDataNormalizer.php`, `tests/catalog-admin-workflow-v3-test.php`
+- `categoryCandidateScore`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `cdpReady`: `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`, `scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs`
 - `ce`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Ce`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `challengeRequired`: `scripts/cloudflare-access-ui-probe.mjs`, `scripts/openai-secure-mcp-platform-auth.mjs`
+- `channelKey`: `admin/assets/catalog-change-intelligence.js`, `admin/assets/image-generation-workflow.js`
+- `check`: `includes/idempotency.php`, `tests/amazon-margin/AuditQueueTest.php`, `tests/amazon-margin/OlistAmazonOrderLinkTest.php`, `tests/analytics-session-consent-regression-test.cjs`, `tests/checkout-payment-retry-regression.cjs`, `tests/webhook-post-processor-google-ads-test.php`
+- `checkHealthOnce`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `checkout`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
+- `checkoutHasItems`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `choose`: `admin/amazon-returns/intake.php`, `js/category-real-images-v52.js`, `js/privacy-consent-v1.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
 - `Ci`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `classify`: `api/autonomous/operational-controls.php`, `automation/eha/classifier.php`
+- `cleanAssistantText`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `cleanText`: `claude/api/ProductOptimizer.php`, `scripts/amazon-returns/seller-central-adapter.mjs`
 - `cleanupOldBackups`: `api/autonomous/backup-manager.php`, `scripts/disaster-recovery.php`
+- `clear`: `includes/logger.php`, `js/shipping-postcode-session-v1.js`, `js/shipping-request-dedupe-v1.js`, `public/dist/js/shipping-postcode-session-v1.de322b4818.min.js`, `public/dist/js/shipping-request-dedupe-v1.27fa88e116.min.js`
+- `clearBannerSpace`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
+- `clearErrors`: `js/checkout-conversion-v6.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`
 - `clearShippingQuote`: `carrinho.php`, `checkout.php`
 - `cloneAndReplaceKey`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `close`: `config/database.php`, `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/PHPMailer/SMTP.php`
+- `closeModal`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
 - `closeWithError`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `collect`: `core/ai/market/collector.php`, `includes/amazon-margin/AuditCollector.php`
+- `commitAll`: `tests/policy-engine-parser-edge-regression-test.js`, `tests/policy-engine-regression-test.js`
 - `commitClientNavigationState`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `complete`: `admin/catalog-optimization/src/TextAiServices.php`, `includes/amazon-margin/AuditStore.php`
+- `completeWithKey`: `admin/catalog-optimization/src/TextAiServices.php`, `tests/catalog-generated-data-normalizer-test.php`
 - `computeRscCacheBustingSearchParam`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `count`: `agents/v9.2.84/app/MediaQualityAgent.php`, `includes/query-builder.php`
+- `configurationGate`: `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`
+- `cookieValue`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
+- `count`: `agents/v9.2.84/app/ConversionFunnelAgent.php`, `includes/query-builder.php`
+- `coupon`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
 - `cr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `createAppElementsWireMetadataEntries`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createAppPayloadCacheKey`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1428,26 +1541,39 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `createAppPayloadRouteId`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createAppPayloadSlotId`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createAppPayloadTemplateId`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `createArrow`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
 - `createArtifactCompatibilityEnvelope`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createCacheBustingInput`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `createCarousel`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
+- `createKey`: `js/checkout-idempotency-v122.js`, `public/dist/js/checkout-idempotency-v122.ae3479605a.min.js`
 - `createMap`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createModel`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createRequestContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createResolvedIteratorResultChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `createRscRequestUrl`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `createServer`: `apps/shopvivaliz-web-agent/src/server.mjs`, `ops/ai-squad/codex-bridge.mjs`
 - `createSet`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `ct`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `curl_post`: `claude/api/olist/auto-sync.php`, `olist/direct-sync.php`
-- `currentCep`: `js/checkout-resilience-v1.js`, `js/checkout-shipping-v7.js`
+- `currentCep`: `js/checkout-resilience-v1.js`, `js/checkout-shipping-v7.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
+- `currentCheckoutCep`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `customerStatus`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
 - `d`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `D`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `de`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `decision`: `includes/amazon-returns/PolicyEngine.php`, `includes/amazon-returns/SafeTDecisionEngine.php`, `includes/liz-testimonial-moderator.php`
+- `decodeJson`: `admin/ai-image-studio/src/AiServices.php`, `includes/blog-article-repository.php`
+- `decodePayload`: `includes/amazon-returns/Outbox.php`, `index.php`
+- `decodeProductPayload`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
 - `defaultErrorHandler`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `defaultTransport`: `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`
 - `deferUntilStreamConsumed`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `definitions`: `admin/assets/image-generation-workflow.js`, `includes/amazon-returns/PolicySeeder.php`
 - `delete`: `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`
 - `detect`: `api/autonomous/incident-manager.php`, `scripts/incident-response.php`
 - `detectAttributeType`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
-- `digits`: `js/cart.js`, `js/checkout-conversion-v6.js`, `js/checkout-shipping-v7.js`, `js/product-conversion-v5.js`
+- `deterministicKey`: `includes/amazon-returns/EventStore.php`, `includes/amazon-returns/Outbox.php`
+- `digits`: `js/checkout-conversion-v6.js`, `js/checkout-shipping-v7.js`, `js/product-conversion-v5.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
 - `Dn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `dr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Dr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1455,48 +1581,81 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `e`: `admin/testimonials.php`, `dist/client/assets/framework-RikywCkn.js`
 - `E`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `edebug`: `includes/PHPMailer/PHPMailer.php`, `includes/PHPMailer/SMTP.php`
+- `editImageToFile`: `admin/ai-image-studio/src/AiServices.php`, `admin/ai-image-studio/src/OpenRouterImageClient.php`
 - `Ee`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `emit`: `js/storefront-events-v26.js`, `public/dist/js/storefront-events-v26.cceb766d7c.min.js`
 - `en`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `encodeBase64Url`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `enqueue`: `admin/assets/image-generation-workflow.js`, `dist/server/index.js`, `includes/amazon-returns/Outbox.php`, `includes/chatgpt-continuity/PendingNudgeStore.php`
 - `enqueueFlush`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `ensureDir`: `agents/v9.2.84/app/GitHubPullUpdateAgent.php`, `scripts/tri-environment-sync.js`
+- `ensure`: `includes/amazon-returns/PolicySeeder.php`, `includes/amazon-returns/Schema.php`
+- `ensureBrowser`: `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`
+- `ensureDir`: `scripts/build-assets.mjs`, `scripts/tri-environment-sync.js`
+- `ensureHeroVideo`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `ensureHidden`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
+- `ensureNewsletterStyle`: `js/newsletter-v1.js`, `public/dist/js/newsletter-v1.e76065816c.min.js`
+- `ensureToolbar`: `admin/assets/catalog-effective-results.js`, `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `env`: `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
 - `Er`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `error`: `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/logger.php`
-- `esc`: `admin/monitor/index.php`, `claude/produto.php`, `js/cart.js`, `js/catalog.js`, `js/public-experience-v1.js`
+- `esc`: `admin/buscador.php`, `admin/monitor/index.php`, `avaliacoes.php`, `js/catalog.js`, `js/public-experience-v1.js`, `public/dist/js/catalog.4868fc16bf.min.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `escape`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `escHtml`: `admin/mercadolivre.php`, `gamificacao.php`, `js/cart-shipping-v7.js`
+- `escHtml`: `admin/mercadolivre.php`, `gamificacao.php`, `js/cart-shipping-v7.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`
 - `Et`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `exit_error`: `claude/api/olist/auto-sync.php`, `olist/complete-oauth-flow.php`, `olist/direct-sync.php`, `olist/download-images.php`, `olist/import-images-from-mapping.php`, `olist/sync-agora.php`, `olist/sync-images-to-site.php`
+- `evidence`: `scripts/amazon-returns/seller-central-adapter.mjs`, `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`
+- `execute`: `agents/v9.2.84/app/RealWorkOrchestratorAgent.php`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`, `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-policy-test.php`, `tests/amazon-returns-program-regression-test.php`, `tests/amazon-returns-reliability-test.php`, `tests/amazon-returns-spapi-test.php`, `workers/amazon-returns/seller-central-worker.php`
+- `existing`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
+- `exit_error`: `claude/api/olist/auto-sync.php`, `olist/direct-sync.php`, `olist/download-images.php`, `olist/sync-agora.php`, `olist/sync-images-to-site.php`
+- `expectedRequestFailureReason`: `scripts/ai-squad-ui-audit.mjs`, `scripts/production-runtime-parity.mjs`
+- `extractCatalogRows`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `extractIterator`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `extractKeywords`: `agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php`, `claude/api/sync-shopee-products.php`
+- `extractUrls`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
+- `fail`: `includes/amazon-margin/AuditStore.php`, `recuperar-carrinho.php`, `scripts/ai-squad-ui-audit.mjs`, `scripts/github-device-auth-delete-repo.mjs`, `scripts/production-runtime-parity.mjs`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`
 - `fatalError`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `fetch`: `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-policy-test.php`, `tests/amazon-returns-spapi-test.php`
+- `fetchAll`: `js/category-real-images-v52.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`, `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-policy-test.php`
+- `fetchAllCatalogRows`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `fetchAllProducts`: `agents/v9.2.85/app/ShopeeListingsExtractorAgent.php`, `agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php`
+- `fetchCatalogPage`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `fetchColumn`: `tests/amazon-returns-program-regression-test.php`, `tests/amazon-returns-reliability-test.php`, `tests/amazon-returns-spapi-test.php`
+- `fetchJson`: `admin/assets/catalog-effective-results.js`, `admin/assets/catalog-optimization-workflow.js`, `js/admin-dashboard.js`, `public/dist/js/admin-dashboard.dae825130d.min.js`
+- `fetchPage`: `js/category-real-images-v52.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`
 - `fi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `filtered`: `admin/amazon-margin.php`, `admin/mercadolivre-margin.php`
+- `finish`: `js/category-real-images-v52.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`
+- `finishShippingRequest`: `js/checkout-resilience-v1.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`
+- `first`: `includes/amazon-returns/Config.php`, `includes/query-builder.php`
 - `fmtMoney`: `carrinho.php`, `checkout.php`, `gamificacao.php`
 - `fn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `formatCep`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
+- `formatDelivery`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
+- `formatMoney`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
 - `formatProdErrorMessage`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `fr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Fr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `fromApplicationDatabase`: `includes/blog-article-repository.php`, `includes/blog-comment-repository.php`
 - `ft`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `fulfillReference`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `funnelClientId`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `g`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `ga4ClientIdFromCookie`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `ga4SessionIdFromCookies`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `gemini`: `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
 - `generateKeywords`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
-- `generateMetadata`: `claude/api/ProductOptimizer.php`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/account/@dashboard/orders/details/[id]/page.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/categories/[...category]/page.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/collections/[handle]/page.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/products/[handle]/page.tsx`
 - `generateReport`: `scripts/agent-heartbeat-monitor.php`, `scripts/performance-optimizer.php`, `scripts/security-scanner.php`
 - `generateSchemaMarkup`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
 - `generateSEO`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
-- `generateStaticParams`: `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/categories/[...category]/page.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/collections/[handle]/page.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/products/[handle]/page.tsx`
-- `GET`: `claude/medusa/apps/backend/src/api/admin/custom/route.ts`, `claude/medusa/apps/backend/src/api/store/custom/route.ts`
-- `get`: `core/config/ShopeeConfig.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`
+- `get`: `core/config/ShopeeConfig.php`, `includes/amazon-returns/Config.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`
 - `getAgentMetrics`: `api/autonomous/health-monitor.php`, `scripts/metrics-proactive-monitor.php`
-- `getCart`: `carrinho.php`, `checkout.php`, `js/checkout-conversion-v6.js`
+- `getCart`: `carrinho.php`, `checkout.php`, `js/checkout-conversion-v6.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`
 - `getChildFormatContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getClientNavigationState`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getCrossOriginStringAs`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getElementKey`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getError`: `includes/PHPMailer/SMTP.php`, `includes/input-validator.php`
+- `getField`: `js/checkout-conversion-v6.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`
 - `getInstance`: `config/database.php`, `core/config/ShopeeSecretsLoader.php`, `includes/OrderNotificationService.class.php`, `includes/logger.php`
 - `getIteratorFn`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getLogs`: `claude/api/monitor/api.php`, `includes/audit-middleware.php`
@@ -1505,24 +1664,25 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `getRequestContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getSearchPairsWithoutRscCacheBusting`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getServerInsertedHTMLContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `getStats`: `includes/redis-cache.php`, `scripts/whatsapp-integration.php`
 - `getStatus`: `claude/api/monitor/api.php`, `core/config/ShopeeConfig.php`, `core/config/ShopeeSecretsLoader.php`, `scripts/agent-heartbeat-monitor.php`
 - `getSuspendedThenable`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `getThenableStateAfterSuspending`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `Gr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `gridPagerEl`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
 - `Gt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `gtag`: `claude/medusa/apps/storefront/src/components/Analytics.tsx`, `includes/analytics-tracking.php`, `includes/head-integrations-complete.php`
-- `h`: `admin/ai-system-monitor.php`, `admin/orchestrator.php`, `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `guardNativeShippingResponse`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `h`: `admin/ai-system-monitor.php`, `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `handleErrorInNextTick`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `handleRequest`: `dist/server/index.js`, `update-mcp-server.js`
+- `harness`: `services/okx-trading-pilot/copy-mcp/tests/copy.test.mjs`, `tests/catalog-search-order.test.cjs`, `tests/catalog-search-stock-race.test.cjs`, `tests/shipping-postcode-session.test.cjs`
 - `hasBasePath`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `hasCurrentSchemaVersions`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `he`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `heartbeat`: `agents/v9.2.84/app/AutonomousWatchdogAgent.php`, `agents/v9.2.84/app/GitHubPullUpdateAgent.php`, `agents/v9.2.84/app/LoopStarterAgent.php`, `agents/v9.2.84/app/OlistImageRepairAgent.php`, `agents/v9.2.84/app/SafeMigrationRepairAgent.php`, `agents/v9.2.84/app/SelfTestAgent.php`
+- `health`: `includes/amazon-returns/Runtime.php`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`
 - `hi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Hi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `hn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `Home`: `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/page.tsx`, `dist/server/index.js`
+- `home`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
 - `home_product_tags`: `home.php`, `index-loja.php`
 - `hr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Ht`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1532,28 +1692,62 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `ia`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `ie`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `ignoreReject`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `init`: `includes/idempotency.php`, `js/checkout-payment-v2.js`, `js/checkout-resilience-v1.js`, `js/newsletter-v1.js`, `js/public-experience-v1.js`
-- `initAll`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`
-- `initialize`: `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/audit-middleware.php`
+- `imageQualityScore`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `init`: `includes/idempotency.php`, `js/checkout-payment-v2.js`, `js/checkout-resilience-v1.js`, `js/newsletter-v1.js`, `js/public-experience-v1.js`, `js/shipping-postcode-session-v1.js`, `public/dist/js/checkout-payment-v2.044ed391b0.min.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`, `public/dist/js/newsletter-v1.e76065816c.min.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`, `public/dist/js/shipping-postcode-session-v1.de322b4818.min.js`
+- `initAll`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
+- `initFreeShippingProgress`: `js/cro-interactions.js`, `public/dist/js/cro-interactions.1a86d9efcf.min.js`
+- `initialize`: `admin/assets/image-generation-usability-v2.js`, `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/audit-middleware.php`
 - `initializeModelChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `initializeModuleChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `initProductCardCarousels`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`
-- `initProductGallery`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`
-- `invalid`: `js/catalog-image-integrity-v62.js`, `js/product-image-integrity-v63.js`
+- `initials`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `initImageHoverZoom`: `js/cro-interactions.js`, `public/dist/js/cro-interactions.1a86d9efcf.min.js`
+- `initLizAssistant`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `initNewsletter`: `js/newsletter-v1.js`, `public/dist/js/newsletter-v1.e76065816c.min.js`
+- `initPageTransitions`: `js/cro-interactions.js`, `public/dist/js/cro-interactions.1a86d9efcf.min.js`
+- `initProductCardCarousels`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
+- `initProductGallery`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
+- `initRotator`: `js/home-image-rotator-v1.js`, `public/dist/js/home-image-rotator-v1.c394ca106e.min.js`
+- `initSkeletonLoaders`: `js/cro-interactions.js`, `public/dist/js/cro-interactions.1a86d9efcf.min.js`
+- `initStickyAddToCart`: `js/cro-interactions.js`, `public/dist/js/cro-interactions.1a86d9efcf.min.js`
+- `injectGalleryStyles`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
+- `install`: `admin/assets/image-professional-ops.js`, `admin/assets/image-provider-health.js`
+- `installCartOffer`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `installCheckoutClarity`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `installHomeCategoryImages`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `installMobileNav`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `installProductOffer`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `installRetry`: `js/checkout-resilience-v1.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`
+- `installShippingOptions`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `installSupport`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `installTestimonials`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `invalid`: `js/catalog-image-integrity-v62.js`, `js/product-image-integrity-v63.js`, `public/dist/js/catalog-image-integrity-v62.0de571ed7f.min.js`, `public/dist/js/product-image-integrity-v63.fe440934bb.min.js`
+- `invalidateCheckoutChoices`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
 - `Ir`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `is`: `dist/client/assets/framework-RikywCkn.js`, `dist/server/ssr/index.js`
 - `isAppElementsRecord`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `isAppElementsWireSlotId`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `isCartPage`: `js/visual-polish-v4.js`, `public/dist/js/visual-polish-v4.50d71007db.min.js`
+- `isCheckoutPage`: `js/visual-polish-v4.js`, `public/dist/js/visual-polish-v4.50d71007db.min.js`
 - `isDangerousScheme`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `isDirectInvocation`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
 - `isEnabled`: `dist/server/index.js`, `includes/redis-cache.php`
 - `isExternalUrl`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `isHomePage`: `js/visual-polish-v4.js`, `public/dist/js/visual-polish-v4.50d71007db.min.js`
+- `isHomePath`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `isInsideUnifiedScope`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `isLayoutFlagsRecord`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `isOpenRedirectShaped`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `isPublicPath`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `isRealProductImage`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
 - `isRecord`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `isRscCacheBustingSearchPair`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `isStringOrNull`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `issue`: `admin/assets/image-professional-ops.js`, `includes/marina-maintenance/signer-client.php`
+- `isTokenFailure`: `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`
+- `isValidCatalogImage`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `isValidElement`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `itemFromProduct`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `itemsValue`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `j`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Ji`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Jn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1568,19 +1762,29 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `l`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `L`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `la`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `lastInsertId`: `config/database.php`, `includes/query-builder.php`
+- `lastInsertId`: `config/database.php`, `includes/query-builder.php`, `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-reliability-test.php`, `tests/amazon-returns-spapi-test.php`
 - `lazyInitializer`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `le`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `leadChannel`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `limit`: `admin/ai-image-studio/src/OmnichannelImagePublisher.php`, `admin/catalog-optimization/src/CatalogPublisher.php`, `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `includes/marketplace/TinyPublisher.php`, `includes/query-builder.php`
 - `ln`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `load`: `admin/connections.php`, `admin/monitor_agentes.php`, `core/config/ShopeeConfig.php`
-- `loadEnv`: `.ai/llm-provider.js`, `.ai/server.js`
-- `Loading`: `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/account/@dashboard/loading.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/account/loading.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/cart/loading.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/order/[id]/confirmed/loading.tsx`
+- `load`: `admin/amazon-margin.php`, `admin/amazon-returns/index.php`, `admin/assets/image-generation-workflow.js`, `admin/connections.php`, `admin/monitor_agentes.php`, `core/config/ShopeeConfig.php`, `includes/amazon-margin/OlistAdsIndex.php`, `js/category-real-images-v52.js`, `js/privacy-consent-v1.js`, `js/public-experience-v1.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `loadCandidates`: `admin/assets/catalog-optimization-workflow.js`, `admin/catalog-optimization/admin_catalog.php`
+- `loadCatalog`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `loadCursor`: `includes/amazon-returns/ReturnsReport.php`, `workers/amazon-returns/gmail-ingest.php`
+- `loadEnv`: `.ai/llm-provider.js`, `.ai/server.js`, `includes/liz-testimonial-moderator.php`
+- `loadHealth`: `admin/assets/image-provider-health.js`, `admin/buscador.php`, `js/admin-dashboard.js`, `public/dist/js/admin-dashboard.dae825130d.min.js`
+- `loadLizConfig`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `loadQuote`: `js/cart-shipping-v7.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`
 - `loadServerReference`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `log`: `.ai/worker.js`, `agents/project-director-agent.php`, `api/autonomous/incident-manager.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `includes/logger.php`, `real-browser-validation.js`, `scripts/send-notifications.php`, `scripts/watchdog-health-check.php`
+- `loadStatus`: `admin/amazon-margin.php`, `admin/mercadolivre-margin.php`
+- `loadTokenCache`: `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`
+- `localCategoryFallback`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `localGreeting`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `log`: `.ai/worker.js`, `agents/project-director-agent.php`, `api/autonomous/incident-manager.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `includes/logger.php`, `real-browser-validation.js`, `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`, `scripts/send-notifications.php`, `scripts/watchdog-health-check.php`
 - `log_error`: `claude/constants.php`, `config/constants.php`, `scripts/fix-zero-price-products.php`, `scripts/migrate-is-admin-column.php`
-- `log_event`: `api/olist/webhook-processor.php`, `api/olist/webhook-receiver.php`, `api/webhooks/tiny-product-price-sync.php`
 - `log_info`: `scripts/fix-zero-price-products.php`, `scripts/migrate-is-admin-column.php`
-- `log_msg`: `olist/complete-oauth-flow.php`, `olist/direct-sync.php`, `olist/download-images.php`, `olist/import-images-from-mapping.php`, `olist/sync-agora.php`, `olist/sync-images-to-site.php`
+- `log_msg`: `olist/direct-sync.php`, `olist/download-images.php`, `olist/sync-agora.php`, `olist/sync-images-to-site.php`
 - `log_success`: `scripts/fix-zero-price-products.php`, `scripts/migrate-is-admin-column.php`
 - `log_sync`: `claude/api/olist/auto-sync.php`, `claude/api/sync-olist-products.php`
 - `logError`: `.ai/worker.js`, `api/autonomous/send-email.php`
@@ -1589,16 +1793,24 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `Lr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `lt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Lt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `lzr_authorize_search`: `api/liz-router.php`, `tests/liz-router-product-search-test.php`
 - `m`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `main`: `.ai/main.js`, `scripts/check-erp.js`, `scripts/tri-environment-sync.js`
-- `makeRequest`: `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`, `scripts/whatsapp-integration.php`
+- `main`: `.ai/main.js`, `ops/ai-squad/claude-bridge.mjs`, `scripts/amazon-returns/seller-central-adapter.mjs`, `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`, `scripts/check-erp.js`, `scripts/tri-environment-sync.js`
+- `makeQuote`: `js/cart-shipping-v7.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`
+- `makeRequest`: `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`
 - `mapChildren`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `mapIntoArray`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `markCategoryFallback`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `marketplaceId`: `includes/marketplace/AmazonPublisher.php`, `tests/amazon-returns-spapi-test.php`
 - `memoize`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `missingKeyMessage`: `admin/catalog-optimization/src/TextAiServices.php`, `tests/catalog-generated-data-normalizer-test.php`
+- `mixedDiscount`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
 - `ml_env`: `api/ml/_bootstrap.php`, `api/ml/client.php`
 - `ml_save_tokens`: `api/ml/_bootstrap.php`, `api/ml/client.php`
 - `ml_token_path`: `api/ml/_bootstrap.php`, `api/ml/client.php`
-- `money`: `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `claude/produto.php`, `js/cart-shipping-v7.js`, `js/cart.js`, `js/catalog.js`
+- `modelFor`: `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
+- `moderate`: `includes/liz-testimonial-moderator.php`, `includes/testimonials-repository.php`
+- `money`: `admin/mercadolivre-margin.php`, `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `includes/amazon-returns/ReturnsReport.php`, `js/cart-shipping-v7.js`, `js/catalog.js`, `js/mixed-cart-promo-v1.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`, `public/dist/js/catalog.4868fc16bf.min.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
 - `monitor_read_json`: `admin/monitor-completo.php`, `api/monitor/api.php`
 - `mp_get_secret`: `includes/mercadopago-checkout-js.php`, `tests/mp-auth-check.php`
 - `mr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1606,182 +1818,325 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `Mt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `n`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `noop`: `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/PHPMailer/SMTP.php`
+- `normalize`: `admin/ai-image-studio/src/AiServices.php`, `admin/catalog-optimization/src/TextAiServices.php`, `includes/amazon-returns/DenialAnalyzer.php`, `includes/amazon-returns/SafeTStatus.php`, `js/category-real-images-v52.js`, `js/shipping-postcode-session-v1.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`, `public/dist/js/shipping-postcode-session-v1.de322b4818.min.js`, `workers/amazon-returns/policy-monitor.php`
 - `normalizeAppElements`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `normalizeCatalogQuestion`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
 - `normalizeHeaderValue`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `normalizeRenderModeHeaderValue`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `NotFound`: `claude/medusa/apps/storefront/src/app/[countryCode]/(checkout)/not-found.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/cart/not-found.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/not-found.tsx`, `claude/medusa/apps/storefront/src/app/not-found.tsx`
+- `normalizeResponse`: `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`
+- `normalizeText`: `agents/v9.2.84/app/CatalogMetadataAgent.php`, `includes/marketplace/TinyPublisher.php`, `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `notFoundResponse`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `notifyNavigationListeners`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `Nr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `nt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Nt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `nullable`: `includes/amazon-returns/ReturnsReport.php`, `includes/amazon-returns/SpApiEventSink.php`
+- `nullableString`: `includes/amazon-returns/RemoteBridge.php`, `includes/amazon-returns/SpApi.php`
+- `number`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `O`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `o`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `oa`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Oe`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Oi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `onReady`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `openModal`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
+- `openrouter`: `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
+- `optimize`: `admin/assets/catalog-optimization-workflow.js`, `admin/catalog-optimization/admin_catalog.php`, `claude/api/ProductOptimizer.php`
 - `optimizeDescription`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
 - `optimizeImages`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`, `scripts/performance-optimizer.php`
 - `optimizeTitle`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
 - `Or`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `p`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `paidBridgeEnabled`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
+- `parse`: `includes/amazon-returns/GmailParser.php`, `includes/amazon-returns/ReturnsReport.php`, `includes/amazon-returns/ReturnsReportParser.php`
 - `parseAppElementsWireElementKey`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `parseAppRscRenderMode`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `parseArtifactCompatibilityEnvelope`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `parseImages`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`
+- `parseImages`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`, `js/home-image-rotator-v1.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`, `public/dist/js/home-image-rotator-v1.c394ca106e.min.js`
 - `parseLayoutFlags`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `parseLayoutIds`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `parseModelString`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `parsePathWithInterception`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `parseProductPayload`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `parseTreePath`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `patch`: `admin/assets/catalog-candidate-availability.js`, `includes/marketplace/AmazonPublisher.php`
 - `patchedPushState`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `patchedReplaceState`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `pdo`: `agents/v9.2.84/app/AutonomousReportAgent.php`, `agents/v9.2.84/app/AutonomousWatchdogAgent.php`, `agents/v9.2.84/app/GitHubPullUpdateAgent.php`, `agents/v9.2.84/app/LoopStarterAgent.php`, `agents/v9.2.84/app/MediaMemoryAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `agents/v9.2.84/app/Olist198SyncAgent.php`, `agents/v9.2.84/app/OlistImageRepairAgent.php`, `agents/v9.2.84/app/SafeMigrationRepairAgent.php`, `agents/v9.2.84/app/SelfTestAgent.php`, `agents/v9.2.85/app/UpdateStatusAgent.php`
+- `pauseOnInteraction`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
+- `pendingKey`: `checkout.php`, `tests/checkout-payment-retry-regression.cjs`
 - `performWork`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `persist`: `agents/v9.2.84/app/ConversionFunnelAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `includes/amazon-returns/GmailEventSink.php`, `includes/amazon-returns/SpApiEventSink.php`, `js/cart-erp-price-reconciliation-v1.js`, `public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js`
+- `persistCheckoutForm`: `checkout.php`, `tests/checkout-payment-retry-regression.cjs`
 - `pi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `pingTask`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `POST`: `claude/medusa/apps/backend/src/api/webhooks/olist/route.ts`, `dist/server/index.js`
-- `postJson`: `checkout.php`, `includes/liz-blog-comment-responder.php`
+- `policy`: `tests/policy-engine-parser-edge-regression-test.js`, `tests/policy-engine-regression-test.js`
+- `postJson`: `admin/catalog-optimization/src/TextAiServices.php`, `checkout.php`, `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
 - `Pr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `preconnect`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `prefetchDNS`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `preinitModuleScript`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `preinitScript`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `preinitStyle`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `preload`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `preload`: `dist/server/index.js`, `dist/server/ssr/index.js`, `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
 - `preloadModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `progress`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `prepare`: `config/database.php`, `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-policy-test.php`, `tests/amazon-returns-program-regression-test.php`, `tests/amazon-returns-reliability-test.php`, `tests/amazon-returns-spapi-test.php`
+- `preventPrematurePurchaseEvents`: `js/checkout-payment-v2.js`, `public/dist/js/checkout-payment-v2.044ed391b0.min.js`
+- `preview`: `includes/marina-maintenance/authorization-service.php`, `includes/marina-maintenance/broker-client.php`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`
+- `product`: `includes/amazon-margin/AuditCollector.php`, `tests/catalog-search-order.test.cjs`, `tests/catalog-search-stock-race.test.cjs`
+- `progress`: `admin/assets/image-generation-workflow.js`, `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/amazon-margin/AuditStore.php`
+- `prompt`: `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
+- `providerName`: `admin/catalog-optimization/src/TextAiServices.php`, `tests/catalog-generated-data-normalizer-test.php`
+- `providerViability`: `admin/assets/image-professional-ops.js`, `admin/assets/image-provider-health.js`
 - `pt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `push`: `js/checkout-payment-v2.js`, `js/shopvivaliz-google-events.js`
+- `publish`: `admin/ai-image-studio/src/OmnichannelImagePublisher.php`, `admin/catalog-optimization/src/CatalogPublisher.php`
+- `publishImages`: `includes/marketplace/AmazonPublisher.php`, `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `includes/marketplace/TinyPublisher.php`
+- `publishSite`: `admin/ai-image-studio/src/OmnichannelImagePublisher.php`, `admin/catalog-optimization/src/CatalogPublisher.php`
+- `publishText`: `includes/marketplace/AmazonPublisher.php`, `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `includes/marketplace/TinyPublisher.php`
+- `push`: `js/checkout-payment-v2.js`, `js/shopvivaliz-google-events.js`, `public/dist/js/checkout-payment-v2.044ed391b0.min.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `pushOnce`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `qe`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `qi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Qi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `qn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Qt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `qty`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
+- `quantity`: `includes/amazon-returns/PolicyEngine.php`, `includes/amazon-returns/ReturnsReport.php`
 - `query`: `config/database.php`, `includes/query-builder.php`
+- `quote`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
 - `r`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `R`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `ra`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `randomId`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `re`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `ReactElement`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `ReactPromise`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `read`: `js/cart-persistence-v23.js`, `public/dist/js/cart-persistence-v23.abeb4c252b.min.js`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`
 - `readAppElementsMetadata`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `readArtifactCompatibilityMetadata`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `readCart`: `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `index.php`, `js/catalog.js`, `js/shopvivaliz-google-events.js`, `js/visual-polish-v4.js`
-- `readJson`: `admin/monitor/index.php`, `admin/monitor_agentes.php`, `scripts/tri-environment-sync.js`
+- `readCart`: `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `index.php`, `js/catalog.js`, `js/shopvivaliz-google-events.js`, `js/visual-polish-v4.js`, `public/dist/js/catalog.4868fc16bf.min.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`, `public/dist/js/visual-polish-v4.50d71007db.min.js`
+- `readCookie`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `readiness`: `includes/amazon-returns/Config.php`, `includes/marina-maintenance/authorization-service.php`
+- `readJson`: `admin/amazon-margin.php`, `admin/assets/catalog-resilient-run-hotfix.js`, `admin/monitor/index.php`, `admin/monitor_agentes.php`, `apps/shopvivaliz-web-agent/src/server.mjs`, `js/mixed-cart-promo-v1.js`, `ops/ai-squad/codex-bridge.mjs`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`, `scripts/tri-environment-sync.js`, `services/okx-trading-pilot/copy-mcp/tests/package.test.mjs`
 - `readQueue`: `scripts/revenue-driven-queue.php`, `scripts/task-distribution-engine.php`
-- `reject`: `agents/v9.2.84/app/MediaMemoryAgent.php`, `api/autonomous/approval-queue-manager.php`, `api/autonomous/task-validator.php`, `dist/server/index.js`
+- `readShippingQuote`: `checkout-v2/index.php`, `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `recall`: `js/shipping-postcode-session-v1.js`, `public/dist/js/shipping-postcode-session-v1.de322b4818.min.js`
+- `refresh`: `admin/assets/catalog-candidate-availability.js`, `admin/marina-maintenance.php`, `admin/mercadolivre-margin.php`, `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
+- `refreshAccessToken`: `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`
+- `refreshExpiredQuote`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
+- `refreshIfExpired`: `js/cart-shipping-v7.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`
+- `refreshSelection`: `admin/amazon-margin.php`, `admin/assets/catalog-optimization-workflow.js`
+- `reject`: `api/autonomous/approval-queue-manager.php`, `api/autonomous/task-validator.php`, `dist/server/index.js`
 - `rejectChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `rejectReference`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `remember`: `js/shipping-postcode-session-v1.js`, `public/dist/js/shipping-postcode-session-v1.de322b4818.min.js`
+- `removeBanner`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
 - `removeReferenceCacheTag`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `render`: `admin/clientes.php`, `admin/connections.php`, `admin/produtos.php`, `carrinho.php`, `claude/carrinho/index.php`, `js/cart.js`, `js/category-real-images-v52.js`, `js/privacy-consent-v1.js`, `js/testimonials.js`
+- `render`: `admin/amazon-margin.php`, `admin/assets/image-generation-workflow.js`, `admin/assets/image-professional-ops.js`, `admin/assets/image-provider-health.js`, `admin/clientes.php`, `admin/connections.php`, `admin/marina-maintenance.php`, `admin/mercadolivre-margin.php`, `admin/produtos.php`, `carrinho.php`, `claude/carrinho/index.php`, `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
 - `renderAgents`: `admin/monitor/index.php`, `admin/monitor_agentes.php`
+- `renderCandidates`: `admin/assets/catalog-optimization-workflow.js`, `admin/catalog-optimization/admin_catalog.php`
+- `renderCart`: `checkout.php`, `scripts/quality/validate-order-erp-authority.php`, `tests/admin-payment-notification-idempotency-test.php`
+- `renderCheckoutShipping`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
 - `renderElement`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `renderGridPage`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `renderOptions`: `js/cart-shipping-v7.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`
+- `renderPending`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `renderProductShipping`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `renderSummary`: `admin/assets/catalog-optimization-workflow.js`, `admin/assets/image-generation-workflow.js`, `admin/catalog-optimization/admin_catalog.php`
+- `repair`: `js/category-real-images-v52.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`
 - `reportGlobalError`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `request`: `admin/ai-image-studio/src/AiServices.php`, `admin/mercadolivre-margin.php`, `includes/amazon-margin/AuditStore.php`, `includes/amazon-returns/GmailApi.php`, `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`, `includes/marketplace/AmazonPublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `services/okx-trading-pilot/copy-mcp/okx-rest.mjs`, `src/Google/GoogleApiClient.php`, `tests/amazon-returns-spapi-test.php`
 - `RequestInstance`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `requestKey`: `includes/amazon-margin/AuditStore.php`, `js/shipping-request-dedupe-v1.js`, `public/dist/js/shipping-request-dedupe-v1.27fa88e116.min.js`
+- `requestOnce`: `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `src/Google/GoogleApiClient.php`
+- `requestUrl`: `js/checkout-resilience-v1.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`
 - `requireAsyncModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `requireModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `reset`: `includes/PHPMailer/SMTP.php`, `includes/logger.php`, `includes/query-builder.php`, `includes/rate-limiter.php`
+- `resolve`: `includes/amazon-margin/OlistAmazonOrderLink.php`, `includes/amazon-margin/ProductMatch.php`, `tests/catalog-search-order.test.cjs`, `tests/catalog-search-stock-race.test.cjs`
+- `resolveAuthorizationHeader`: `includes/amazon-returns/RemoteBridge.php`, `includes/remote-bridge-auth.php`
 - `resolveBlockedCycle`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `resolveItemId`: `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`
 - `resolveIteratorResultChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `resolveModelChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `resolveRequest`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `resolveServerReference`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `resolveSource`: `admin/ai-image-studio/src/ImagePublisher.php`, `admin/ai-image-studio/src/OmnichannelImagePublisher.php`
 - `resolveStream`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `resolveThenable`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `restore`: `api/autonomous/backup-manager.php`, `checkout.php`
+- `restoreMascotHero`: `public/assets/liz-assistant/liz-assistant-corrections-v1.js`, `public/dist/assets/liz-assistant/liz-assistant-corrections-v1.df8f09c0c8.min.js`
 - `restoreScrollPosition`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `result`: `agents/v9.2.84/app/OlistImageRepairAgent.php`, `agents/v9.2.84/app/SafeMigrationRepairAgent.php`
+- `result`: `agents/v9.2.84/app/CatalogMetadataAgent.php`, `agents/v9.2.84/app/ConversionFunnelAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `scripts/amazon-returns/seller-central-adapter.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`
+- `retryable`: `includes/amazon-margin/OlistQuotaPolicy.php`, `includes/amazon-margin/RateLimitPolicy.php`
+- `revalidate`: `js/cart-erp-price-reconciliation-v1.js`, `public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js`
 - `Ri`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `rn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `rollback`: `api/autonomous/incident-manager.php`, `autodev/actions/safe_layout_applier.php`, `config/database.php`
-- `RootLayout`: `claude/medusa/apps/storefront/src/app/layout.tsx`, `dist/server/index.js`
+- `rowImages`: `js/category-real-images-v52.js`, `js/public-experience-v1.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `Rr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `rt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Rt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `run`: `agents/v9.2.84/app/AutonomousReportAgent.php`, `agents/v9.2.84/app/AutonomousWatchdogAgent.php`, `agents/v9.2.84/app/GitHubPullUpdateAgent.php`, `agents/v9.2.84/app/LoopStarterAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `agents/v9.2.84/app/Olist198SyncAgent.php`, `agents/v9.2.84/app/OlistImageRepairAgent.php`, `agents/v9.2.84/app/SafeMigrationRepairAgent.php`, `agents/v9.2.84/app/SelfTestAgent.php`, `agents/v9.2.85/app/ShopeeListingsExtractorAgent.php`, `agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php`, `agents/v9.2.85/app/UpdateStatusAgent.php`, `api/autonomous/operational-controls.php`, `scripts/disaster-recovery.php`, `scripts/llm-log-analyzer.php`, `scripts/metrics-proactive-monitor.php`, `scripts/revenue-driven-queue.php`, `scripts/security-scanner.php`, `scripts/watchdog-health-check.php`
+- `run`: `admin/assets/catalog-effective-results.js`, `admin/buscador.php`, `agents/v9.2.84/app/CatalogMetadataAgent.php`, `agents/v9.2.84/app/ConversionFunnelAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `agents/v9.2.84/app/RealWorkOrchestratorAgent.php`, `agents/v9.2.85/app/ShopeeListingsExtractorAgent.php`, `agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php`, `api/autonomous/operational-controls.php`, `scripts/disaster-recovery.php`, `scripts/llm-log-analyzer.php`, `scripts/metrics-proactive-monitor.php`, `scripts/refresh-backend-delete-repo-scope.mjs`, `scripts/revenue-driven-queue.php`, `scripts/security-scanner.php`, `scripts/watchdog-health-check.php`, `tests/chatgpt-continuity-bridge-worker-test.mjs`, `tests/policy-engine-parser-edge-regression-test.js`, `tests/policy-engine-regression-test.js`
+- `runNodeAdapter`: `tests/amazon-returns-browser-contract-test.php`, `workers/amazon-returns/seller-central-worker.php`
+- `runOnce`: `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`, `workers/amazon-returns/daemon.php`
+- `runResponsivePass`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `runTest`: `test-homepage-visual.mjs`, `tests/test-emails-idempotency.php`
+- `runVisibilityPass`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `runWithUnifiedStateMutation`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `s`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `sa`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `safeError`: `remote-control-browser-mcp/universal/live-worker.mjs`, `workers/amazon-returns/daemon.php`
 - `safeFunctionCast`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `save`: `checkout.php`, `js/cart-shipping-v7.js`, `js/cart.js`, `js/privacy-consent-v1.js`
+- `safeTag`: `scripts/chatgpt-business-model-settings-probe.mjs`, `scripts/cloudflare-access-ui-probe.mjs`, `scripts/openai-secure-mcp-platform-auth.mjs`, `scripts/openai-secure-mcp-platform-probe.mjs`
+- `sanitizeBridgeError`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
+- `save`: `checkout.php`, `js/cart-shipping-v7.js`, `js/privacy-consent-v1.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
 - `saveCart`: `carrinho.php`, `checkout.php`
+- `saveCursor`: `includes/amazon-returns/ReturnsReport.php`, `workers/amazon-returns/gmail-ingest.php`
+- `saveTokenCache`: `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`
+- `schedule`: `admin/assets/catalog-candidate-availability.js`, `workers/amazon-returns/scheduler.php`
+- `scheduleResponsivePass`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `scheduleSync`: `js/visual-polish-v4.js`, `public/dist/js/visual-polish-v4.50d71007db.min.js`
+- `scheduleVisibilityPass`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `se`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Se`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `select`: `includes/query-builder.php`, `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
 - `send`: `api/autonomous/send-email.php`, `includes/PHPMailer/PHPMailer.php`, `scripts/send-notifications.php`
 - `sendAlert`: `scripts/agent-heartbeat-monitor.php`, `scripts/metrics-proactive-monitor.php`, `scripts/security-scanner.php`, `scripts/watchdog-health-check.php`
 - `sendCommand`: `claude/api/monitor/api.php`, `includes/PHPMailer/SMTP.php`
 - `sendCriticalAlert`: `includes/audit-middleware.php`, `scripts/smart-notifications.php`
 - `sendEmail`: `includes/OrderNotificationService.class.php`, `scripts/smart-notifications.php`
+- `sendFirstParty`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `sendJson`: `apps/shopvivaliz-web-agent/src/server.mjs`, `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`, `services/okx-trading-pilot/copy-mcp/mcp-bridge.mjs`
 - `serializeAsyncIterable`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `serializeReadableStream`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `serializeTypedArray`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `set`: `includes/PHPMailer/PHPMailer.php`, `includes/performance-optimization.php`, `includes/redis-cache.php`
+- `setActiveFilter`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `setBusy`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
+- `setCheckoutSubmitting`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `setCookie`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
+- `setCount`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
 - `setError`: `includes/PHPMailer/PHPMailer.php`, `includes/PHPMailer/SMTP.php`
 - `setInternalRequire`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `setList`: `js/admin-dashboard.js`, `public/dist/js/admin-dashboard.dae825130d.min.js`
+- `setMessage`: `admin/assets/ai-routines-hotfix-ui.js`, `admin/marina-maintenance.php`
 - `setNavigationContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `setOpen`: `js/shopvivaliz-visual-v3.js`, `public/assets/liz-assistant/liz-assistant.js`
+- `setOpen`: `js/shopvivaliz-visual-v3.js`, `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`, `public/dist/js/shopvivaliz-visual-v3.98ab7f88b4.min.js`
+- `setPill`: `js/admin-dashboard.js`, `public/dist/js/admin-dashboard.dae825130d.min.js`
 - `setRequireModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `setRscCacheBustingSearchParam`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `setStatus`: `checkout-v2/index.php`, `js/cart.js`, `js/checkout-conversion-v6.js`
+- `setStatus`: `checkout-v2/index.php`, `js/admin-automation.js`, `js/checkout-conversion-v6.js`, `public/dist/js/admin-automation.ba2700ea3a.min.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`
+- `setupRepo`: `tests/policy-engine-parser-edge-regression-test.js`, `tests/policy-engine-regression-test.js`
 - `sha256CacheBustingHash`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `shippingErrorMessage`: `js/cart-shipping-v7.js`, `js/checkout-shipping-v7.js`, `js/product-conversion-v5.js`
-- `showToast`: `claude/carrinho/index.php`, `claude/produto.php`
+- `shipping`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
+- `shippingCepFromRequest`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingClearPendingPayment`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingErrorMessage`: `js/cart-shipping-v7.js`, `js/checkout-shipping-v7.js`, `js/product-conversion-v5.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
+- `shippingMoney`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingOptionExpired`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingParseMoney`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingQuote`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingReadQuote`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingRecalculateCheckout`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingSaveCheckoutChoice`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `shippingTierFromQuote`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `shouldRotate`: `admin/ai-image-studio/src/AiServices.php`, `admin/catalog-optimization/src/TextAiServices.php`
+- `show`: `index.php`, `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
 - `Si`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `sign`: `api/autonomous/operational-controls.php`, `includes/PHPMailer/PHPMailer.php`
-- `start`: `.ai/worker.js`, `includes/logger.php`
-- `startAutoCarousel`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`
+- `sign`: `api/autonomous/operational-controls.php`, `includes/PHPMailer/PHPMailer.php`, `includes/marketplace/TikTokPublisher.php`
+- `sleep`: `scripts/check-erp.js`, `scripts/refresh-backend-delete-repo-scope.mjs`
+- `slugify`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `stagingId`: `admin/assets/admin-mobile-completion.js`, `admin/assets/catalog-effective-results.js`, `admin/assets/image-reference-audit.js`, `admin/assets/image-workflow-safety.js`
+- `staleShippingError`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
+- `stars`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `start`: `.ai/worker.js`, `admin/assets/catalog-candidate-availability.js`, `admin/mercadolivre-margin.php`, `includes/logger.php`
 - `startFlowing`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `startRotation`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`
 - `startWork`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `stats`: `agents/v9.2.84/app/MediaMemoryAgent.php`, `agents/v9.2.84/app/OlistImageRepairAgent.php`
+- `state`: `admin/amazon-margin.php`, `tests/chatgpt-browser-guardian-identity-test.mjs`
+- `status`: `includes/chatgpt-continuity/PendingNudgeStore.php`, `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`, `js/cart-erp-price-reconciliation-v1.js`, `public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js`
 - `stringToChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `stripBasePath`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `subtotal`: `js/cart-shipping-v7.js`, `js/mixed-cart-promo-v1.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
+- `sv_home_catalog_source_rows`: `includes/catalog-runtime.php`, `index.php`
+- `sv_log`: `core/logger/logger.php`, `includes/logger.php`
 - `sv_me_env`: `api/melhorenvio/diagnostic.php`, `claude/api/melhorenvio/diagnostic.php`
 - `sv_me_mask`: `api/melhorenvio/diagnostic.php`, `claude/api/melhorenvio/diagnostic.php`
 - `sv_me_request`: `api/melhorenvio/diagnostic.php`, `claude/api/melhorenvio/diagnostic.php`
-- `sv_pdo`: `api/agent/autonomous-watchdog.php`, `includes/pdo-database.php`
-- `svcat_json`: `api/catalog/products.php`, `claude/api/catalog/products.php`
-- `svcat_root`: `api/catalog/products.php`, `claude/api/catalog/products.php`
+- `sv_test_assert`: `tests/catalog-metadata-agent-test.php`, `tests/catalog-paid-search-landing-test.php`, `tests/ecommerce-excellence-regression-test.php`, `tests/google-ads-attribution-and-cro-test.php`
+- `sv_webhook_job_dispatch_infinitepay`: `includes/webhook-job-dispatcher.php`, `tests/infinitepay-approved-order-flow-test.php`
+- `svais_cycle_complete_for_consensus`: `claude/api/agent/squad-chat.php`, `includes/ai-squad-core.php`
+- `svcat_is_active`: `api/catalog/products.php`, `api/product-search.php`
+- `svcat_json`: `api/catalog/products.php`, `api/product-search.php`
+- `svcat_ml_key_normalize`: `api/catalog/products.php`, `api/product-search.php`
+- `svcat_ml_scores`: `api/catalog/products.php`, `api/product-search.php`
+- `svcat_root`: `api/catalog/products.php`, `api/product-search.php`, `tests/liz-router-product-search-test.php`
+- `svcat_search_normalize`: `api/catalog/products.php`, `api/product-search.php`
+- `svcp_ensure_schema`: `includes/catalog-publication-schema.php`, `includes/coupons.php`
 - `svEscHtml`: `carrinho.php`, `checkout.php`
+- `svih_ml`: `includes/integration-health.php`, `tests/olist-integration-health-readonly-test.php`
+- `svih_olist`: `includes/integration-health.php`, `tests/olist-integration-health-readonly-test.php`
+- `svih_olist_token_store_path`: `includes/integration-health.php`, `tests/olist-integration-health-readonly-test.php`
 - `svor_env`: `api/maintenance/opcache-reset.php`, `api/orders/opcache-reset.php`
 - `svor_json`: `api/maintenance/opcache-reset.php`, `api/orders/opcache-reset.php`
 - `svor_load_runtime_secrets`: `api/maintenance/opcache-reset.php`, `api/orders/opcache-reset.php`
 - `svor_root`: `api/maintenance/opcache-reset.php`, `api/orders/opcache-reset.php`
+- `svPcv5Escape`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
 - `svSafeImageUrl`: `carrinho.php`, `checkout.php`
 - `sync`: `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`
+- `syncBannerSpace`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
+- `syncBottomUiOffset`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `syncCommittedUrlStateFromLocation`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `syncPageState`: `js/catalog.js`, `js/visual-polish-v4.js`
+- `syncPageState`: `js/catalog.js`, `js/visual-polish-v4.js`, `public/dist/js/catalog.4868fc16bf.min.js`, `public/dist/js/visual-polish-v4.50d71007db.min.js`
 - `syncProduct`: `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`
+- `syncQuote`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
+- `syncQuoteObject`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
+- `syncShippingBusy`: `js/checkout-resilience-v1.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`
+- `syncStickyVisibility`: `js/cro-interactions.js`, `public/dist/js/cro-interactions.1a86d9efcf.min.js`
 - `te`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `terminal`: `admin/assets/image-professional-ops.js`, `includes/amazon-returns/Enums.php`
+- `testHealth`: `js/admin-automation.js`, `public/dist/js/admin-automation.ba2700ea3a.min.js`
 - `Tn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `token`: `includes/amazon-returns/GmailApi.php`, `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`, `scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs`
+- `tokenCachePath`: `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`
 - `toRscRequestPath`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `total`: `js/checkout-payment-v2.js`, `public/dist/js/checkout-payment-v2.044ed391b0.min.js`
 - `Tr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `trackAddToCart`: `includes/analytics-tracking.php`, `includes/head-integrations-complete.php`
-- `trackPurchase`: `includes/analytics-tracking.php`, `includes/head-integrations-complete.php`
+- `trackCartEvent`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `trackCheckoutDetails`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
+- `trackPageContext`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `trackUsedThenable`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `trackViewItem`: `includes/analytics-tracking.php`, `includes/head-integrations-complete.php`
-- `TransferPage`: `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/order/[id]/transfer/[token]/accept/page.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/order/[id]/transfer/[token]/decline/page.tsx`, `claude/medusa/apps/storefront/src/app/[countryCode]/(main)/order/[id]/transfer/[token]/page.tsx`
 - `triggerErrorOnChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `tt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Tt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `u`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`, `dist/server/ssr/index.js`
 - `ue`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `ui`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `ui`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`
+- `unavailable`: `js/product-image-integrity-v63.js`, `public/dist/js/product-image-integrity-v63.fe440934bb.min.js`
+- `unique`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
 - `unsupportedRefresh`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `update`: `includes/query-builder.php`, `js/offline-status-v22.js`
+- `update`: `admin/assets/catalog-change-intelligence.js`, `includes/query-builder.php`, `js/offline-status-v22.js`, `public/dist/js/offline-status-v22.5d3ec9ad1b.min.js`
+- `updateCartBadge`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
+- `updateConsent`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
+- `updateControls`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
+- `updateFooterVisibility`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `updatePageState`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `Ut`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `v`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `validate`: `.ai/validate.js`, `api/autonomous/canary-and-validation.php`, `api/autonomous/database-safety.php`, `api/autonomous/task-validator.php`, `core/config/ShopeeConfig.php`, `core/config/ShopeeSecretsLoader.php`, `js/checkout-conversion-v6.js`
+- `validate`: `.ai/validate.js`, `api/autonomous/canary-and-validation.php`, `api/autonomous/database-safety.php`, `api/autonomous/task-validator.php`, `core/config/ShopeeConfig.php`, `core/config/ShopeeSecretsLoader.php`, `js/checkout-conversion-v6.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`
 - `validate_final_release`: `automation/eha/validator.php`, `automation/validate.php`
+- `validateRequest`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
+- `validImage`: `js/category-real-images-v52.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`
 - `verify`: `api/autonomous/operational-controls.php`, `includes/PHPMailer/SMTP.php`
+- `verifyCard`: `js/catalog-image-integrity-v62.js`, `public/dist/js/catalog-image-integrity-v62.0de571ed7f.min.js`
 - `Vi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `vr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Vt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `waitForPrimary`: `js/category-real-images-v52.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`
 - `wakeChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `withLayoutFlags`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `Wr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `wrappedFetch`: `js/sales-conversion-v1.js`, `js/shipping-request-dedupe-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`, `public/dist/js/shipping-request-dedupe-v1.27fa88e116.min.js`
+- `write`: `js/cart-persistence-v23.js`, `public/dist/js/cart-persistence-v23.abeb4c252b.min.js`, `tests/policy-engine-parser-edge-regression-test.js`, `tests/policy-engine-regression-test.js`
 - `writeCart`: `claude/carrinho/index.php`, `index.php`
 - `writeChunkAndReturn`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `Wt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1791,6 +2146,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `Xi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Xt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `y`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
+- `yesNo`: `js/admin-dashboard.js`, `public/dist/js/admin-dashboard.dae825130d.min.js`
 - `Yi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `yr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Yr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1804,25 +2160,6 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 
 ## Candidatos a revisao manual
 
-- `.tmp_shopvivaliz/.env.example` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_otimizados.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_otimizados_ia.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_otimizados_preview.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_otimizados_preview_v2.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_otimizados_preview_v3.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_otimizados_preview_v4.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_sem_astra_pet.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/planilhas/produtos_sem_astra_pet_final.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/requirements.txt` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/sample.csv` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/ia/fix_image.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/ia/generate.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/ia/image_quality.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/integrations/ftp_upload.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/main.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/seo/generate.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/utils/image_downloader.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `.tmp_shopvivaliz/scripts/utils/read_csv.py` - artefato/candidato a higiene - validar uso e politica de retencao
 - `checkout-legacy/checkout-page-optimizer.php` - legado declarado - revisar rota e telemetria antes de remover
 - `dist/.openai/drizzle/meta/_journal.json` - artefato/candidato a higiene - validar uso e politica de retencao
 - `dist/.openai/hosting.json` - artefato/candidato a higiene - validar uso e politica de retencao
@@ -1861,6 +2198,108 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `dist/server/vinext-externals.json` - artefato/candidato a higiene - validar uso e politica de retencao
 - `dist/server/wrangler.json` - artefato/candidato a higiene - validar uso e politica de retencao
 - `logs/auto-sync-2026-07-10.log` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/asset-manifest.json` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/assets/liz-assistant/liz-assistant-corrections-v1.5ca9fe3f67.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/assets/liz-assistant/liz-assistant-corrections-v1.df8f09c0c8.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/assets/liz-assistant/liz-assistant.53814eba66.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/assets/liz-assistant/liz-config.9495d4ac97.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/accessibility-hardening-v1.b5e5d4d32c.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/accessibility-v11.929097b251.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/admin-automation.0d1b975b38.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/admin-zoom-responsive.a4a1f9124c.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/cart-integrity-v94.daea79b102.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/catalog-category-select-v1.860c5c60c2.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/catalog-conversion-v4.5f8587a906.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/category-real-images-v52.f1a699a925.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/checkout-conversion-v6.339aab4c10.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/checkout.4f28b03a48.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/cls-stability-v1.45e332855f.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/dazzle-v1.591c98589d.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/first-purchase-popup-v1.398da33e88.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/footer-pages.68716e5e43.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/home-design-refinement-v1.970d7cc1b8.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/home-merchandising-v1.fadef70d8d.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/home-mobile-compact.858ba5966d.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/home-mobile-corrections-v1.67cee5d92b.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/home-mobile-final.c6eee734c5.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/layout-polish-v1.11d0d2f47b.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/loading-states-v21.7e3f6d7b4d.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/mixed-cart-promo-v1.4f017cc094.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/network-status-v22.860b495039.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/paid-mobile-funnel-v1.237649b599.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/premium-theme.2a8a8ba3ab.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/premium-ui-framework.305c2fa440.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/price-integrity-v73.9cfaf8cbe4.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/privacy-consent-v1.9baba6608b.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/product-conversion-v5.b8eece7cfd.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/product-image-integrity-v63.bf38b5c5f1.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/public-experience-v1.0ca39d150d.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/responsive.701d8b0b69.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/sales-conversion-v1.270eb763cd.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/shipping-v7.7a53d38c01.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/shopvivaliz-core-consolidated.42e789cdb4.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/shopvivaliz-inline-to-classes.d7928645a4.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/shopvivaliz-premium-consolidated.ea8b14378a.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/shopvivaliz-visual-v3.f77a4e40fd.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/shopvivaliz-webp-optimization.bc5a1dcb8a.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/stock-integrity-v83.17c3f0a137.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/style.cac406fba8.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/visual-audit-v1.0dd2c35c7c.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/visual-polish-v4.6c7fa3255d.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/visual-polish-v5.81bad2c8b7.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/visual-polish-v6-hotfix.d1a872fce4.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/visual-polish-v6.4b0d002d32.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/css/zoom-responsive.ef7d113c03.min.css` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/admin-automation.ba2700ea3a.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/admin-dashboard.dae825130d.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/auto-image-carousel.abb84f1a5f.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/cart-erp-price-reconciliation-v1.c1e3ccfbaa.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/cart-persistence-v23.abeb4c252b.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/cart-server-validation-v92.2c79aa224d.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/cart-shipping-v7.306a5e85a9.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/catalog-conversion-v4.3b94978065.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/catalog-image-integrity-v62.0de571ed7f.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/catalog-price-integrity-v72.0c3f7e6715.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/catalog-stock-integrity-v82.7b3d95e5f1.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/catalog.4868fc16bf.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/category-real-images-v52.2a917c4e2d.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/checkout-cart-freshness-v93.c9058c0fa0.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/checkout-idempotency-v122.ae3479605a.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/checkout-payment-v2.044ed391b0.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/checkout-resilience-v1.ac74627798.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/checkout-shipping-v7.1724bbc566.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/cro-interactions.1a86d9efcf.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/first-purchase-popup-v1.c22f2d6eb3.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/home-image-rotator-v1.c394ca106e.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/ml-events.073da5cf81.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/newsletter-v1.e76065816c.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/offline-status-v22.5d3ec9ad1b.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/performance-v12.55b5dd5735.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/privacy-consent-v1.6cf074c721.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/product-conversion-v5.60a56e542a.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/product-image-integrity-v63.fe440934bb.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/product-price-integrity-v73.9ac64675b1.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/product-stock-integrity-v83.e23ffa4258.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/public-experience-v1.36049d7cf9.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/sales-conversion-v1.513b731b42.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/shipping-postcode-session-v1.de322b4818.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/shipping-request-dedupe-v1.27fa88e116.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/shopvivaliz-ab-testing.1b5dc84fc3.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/shopvivaliz-visual-v3.98ab7f88b4.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/storefront-events-v26.cceb766d7c.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `public/dist/js/visual-polish-v4.50d71007db.min.js` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/current_product_view.png` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/full_product_page_before.png` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/new_product_desktop_above_fold.png` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/new_product_desktop_clean.png` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/new_product_desktop_clean_full.png` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/new_product_desktop_full.png` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/new_product_mobile_clean_full.png` - artefato/candidato a higiene - validar uso e politica de retencao
+- `scratch/new_product_mobile_full.png` - artefato/candidato a higiene - validar uso e politica de retencao
 - `scratch/playwright-log-reconciled.txt` - artefato/candidato a higiene - validar uso e politica de retencao
 - `scratch/playwright-log.txt` - artefato/candidato a higiene - validar uso e politica de retencao
 - `scratch/restore_sync.sh` - artefato/candidato a higiene - validar uso e politica de retencao
@@ -1869,6 +2308,11 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `storage/logs/app.log` - artefato/candidato a higiene - validar uso e politica de retencao
 - `storage/orders/<REDACTED_ORDER_ID>.json` - violacao de politica - dado operacional nao deve ser versionado
 - `tmp-gh-email-artifact/email-activity-report.txt` - artefato/candidato a higiene - validar uso e politica de retencao
+- `uploads/catalog-fixed/KIT4R-SOPRANO/1.jpg` - artefato/candidato a higiene - validar uso e politica de retencao
+- `uploads/catalog-fixed/KIT4R-SOPRANO/2.jpg` - artefato/candidato a higiene - validar uso e politica de retencao
+- `uploads/catalog-fixed/KIT4R-SOPRANO/3.jpg` - artefato/candidato a higiene - validar uso e politica de retencao
+- `uploads/catalog-fixed/KIT4R-SOPRANO/4.jpg` - artefato/candidato a higiene - validar uso e politica de retencao
+- `uploads/catalog-fixed/kit-vedant-90/1.jpg` - artefato/candidato a higiene - validar uso e politica de retencao
 - `uploads/olist_imagens_site_mapeamento.csv` - artefato/candidato a higiene - validar uso e politica de retencao
 
 ## Pastas paralelas
