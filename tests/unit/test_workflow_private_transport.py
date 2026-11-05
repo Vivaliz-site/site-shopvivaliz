@@ -8,6 +8,8 @@ WORKFLOWS = Path('.github/workflows')
 LEGACY_PUBLIC_IPS = ('163.176.103.253', '144.22.157.209')
 PRIVATE_TARGETS = ('127.0.0.1', '10.0.1.38', '100.66.174.74')
 SITE_RUNNER = 'shopvivaliz-a1-deploy'
+# Read-only audit runner on the same Marina host (owner-authorized, 2026-11-05).
+AUDIT_RUNNER = 'shopvivaliz-audit'
 
 
 def workflow_texts():
@@ -213,7 +215,7 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
             for job, block in job_blocks(text):
                 if not any(f'ubuntu@{target}' in block for target in PRIVATE_TARGETS):
                     continue
-                if (SITE_RUNNER not in block and not uses_verified_private_bastion(block)
+                if (SITE_RUNNER not in block and AUDIT_RUNNER not in block and not uses_verified_private_bastion(block)
                         and not reviewed_backend_local_ssh(path, job, block)):
                     offenders.append(f'{path}:{job}')
         self.assertEqual(offenders, [], 'private VM SSH jobs not pinned to site runner: ' + ', '.join(offenders))
