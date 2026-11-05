@@ -150,7 +150,7 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(r['status'], 'NOT_INSTALLED_OR_INACTIVE')
 
     def test_wrong_host_fails_closed(self):
-        r = mod.evaluate('marina-a1-4c24g', 'shopvivaliz-free-a1', 0, False, True, True,
+        r = mod.evaluate('marina-a1-4c24g', 'unexpected-host', 0, False, True, True,
                          GOOD_BINARY, 'active',
                          {'present': True, 'regular_file': True, 'mode_private': True, 'root_owned': True, 'safe_parent_dirs': True})
         self.assertFalse(r['local_stage_prerequisites'])

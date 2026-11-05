@@ -7,7 +7,7 @@ export PATH
 umask 077
 readonly TARGET="${1:-}"
 case "$TARGET" in
-  always-free-arm-1787907847-26|shopvivaliz-free-a1|marina-a1-4c24g) ;;
+  always-free-arm-1787907847-26|marina-a1-4c24g) ;;
   *) echo 'ERROR: target must be one canonical OCI VM' >&2; exit 2 ;;
 esac
 if [[ "$(hostname -s)" != "$TARGET" ]]; then echo 'ERROR: wrong host' >&2; exit 2; fi

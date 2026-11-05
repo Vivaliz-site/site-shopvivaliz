@@ -65,7 +65,6 @@ run_suite python3 scripts/validate-retired-windows-tasks.py
 run_suite python3 scripts/validate-final-response-deploy-gate.py
 run_suite python3 scripts/validate-audit-governance.py
 run_suite bash tests/disk-hygiene-policy-contract-test.sh
-run_suite bash tests/backend-disk-hygiene-reconcile-contract-test.sh
 run_suite python3 tests/test_retired_source_workflow_guards.py
 run_suite python3 tests/test_workspace_housekeeper_safety.py
 run_suite python3 tests/test_production_functional_audit_security.py

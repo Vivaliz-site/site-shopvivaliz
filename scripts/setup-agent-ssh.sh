@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 ACTION="${1:-status}"
 HOST="$(hostname)"
-SITE_HOST="shopvivaliz-free-a1"
 BACKEND_HOST="always-free-arm-1787907847-26"
 AGENT_USER="shopvivaliz-agent"
 AGENT_HOME="/home/$AGENT_USER"
@@ -18,7 +17,7 @@ require_root() {
 
 assert_host() {
   case "$HOST" in
-    "$SITE_HOST"|"$BACKEND_HOST") ;;
+    "$BACKEND_HOST") ;;
     *) die host_mismatch 21 ;;
   esac
 }

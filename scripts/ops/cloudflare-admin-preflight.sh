@@ -9,7 +9,6 @@ export PATH
 host="$(/usr/bin/hostname -s)"
 case "$host" in
   always-free-arm-1787907847-26) role=backend ;;
-  shopvivaliz-free-a1) role=origin ;;
   marina-a1-4c24g) role=marina ;;
   *) printf 'PREFLIGHT_STATUS=UNKNOWN_HOST\nHOST=%s\n' "$host"; exit 3 ;;
 esac

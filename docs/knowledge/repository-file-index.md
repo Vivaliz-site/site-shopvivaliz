@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5697 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -778,8 +778,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `.github/workflows/ai-squad-contract-tests.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/ai-staging-schema-maintenance.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/ai-stale-pr-repair.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/amazon-returns-safet-recovery.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/amazon-support-reply-oci-breakglass.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/apply-gsc-indexing-fix-20260824.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/approved-purchase-tracking-fallback-test.yml` | Governanca e integracao continua - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/audit-authorized-exchange-admin-apps-20260816.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
@@ -808,7 +806,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `.github/workflows/autonomy-boundary.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/backend-continuity-direct-recovery.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/backend-control-plane-recovery.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/backend-disk-hygiene-reconcile.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/backend-oci-agent-readonly-diagnostic.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/blog-editorial-repair-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/blog-publish-scheduled.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -910,7 +907,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `.github/workflows/fredwin-read-exo-ui-log-20260816.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/fredwin-relay-reset-20260816.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/fredwin-relay-vm-inspect-20260816.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/free-a1-desktop-commander-recovery.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/gemini-cli-capability-probe.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/gemini-native-auth-probe-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/gemini-real-admin-smoke.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -1075,7 +1071,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `.github/workflows/oci-marina-serial-recovery.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/oci-principal-controller-downsize.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/oci-private-access-bootstrap.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/oci-site-runner-recovery.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/okx-paper-runtime.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/olist-sync.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/openai-image-real-smoke.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -1101,9 +1096,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `.github/workflows/production-functional-audit-marina.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/production-functional-audit.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/production-release-await.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/production-runner-bastion-rescue-contract.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/production-runner-bastion-rescue.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/production-runner-rescue.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/production-storefront-image-audit.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/provision-governed-backend-ci-runners-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/provision-governed-backend-ci-runners.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -1121,10 +1113,8 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `.github/workflows/recover-env-from-backups.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/recover-erp-from-backups-manual.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/recover-governed-ci-runners-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/recover-shopvivaliz-runner.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/recover-solange-runners.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/recovery-two-a1-backend-state.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/refresh-a1-delete-repo-scope-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/refresh-backend-delete-repo-scope-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/refresh-olist-token-2h.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/remote-control-browser-mcp-ci.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -2431,8 +2421,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `docs/audits/reorganization-final-report.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/repository-cleanup-backlog.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/repository-hygiene.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/audits/repository-hygiene.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/audits/repository-hygiene.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/shopee-runtime-credentials-2026-08-14.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/static-tree-audit-runbook.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/auto-gate-replay-e2e-20260901.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2501,8 +2489,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `docs/knowledge/product-images.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/project.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/quality-gates.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/knowledge/repository-file-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/knowledge/repository-file-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/repository-file-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/repository-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/routines/repository-safe-migration.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -3309,7 +3295,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `ops/fredwin-observe-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/fredwin-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/fredwin-terminal-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
-| `ops/free-a1-desktop-commander-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/gmail-oauth-finalize.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/google-ads-antique-decore-latest.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `ops/google-ads-antique-decore-launch.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
@@ -3704,8 +3689,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `scripts/amazon-returns/seller-central-adapter.mjs` | Ferramentas e rotinas de manutencao - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `scripts/amazon-returns/seller-central-bridge-worker.mjs` | Ferramentas e rotinas de manutencao - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs` | Ferramentas e rotinas de manutencao - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
-| `scripts/amazon-support-readback-oci-site.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/amazon-support-reply-oci-site.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/analytics/__init__.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/analytics/performance_tracker.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/analyze-pr-failures.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4246,7 +4229,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `scripts/setup-anydesk-backend.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-auto-sync-linux.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-claude-remote-control.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/setup-iphone-private-ssh-relay.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-oauth-env.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-remote-control-access.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-remote-control-browser-mcp.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4459,12 +4441,14 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `services/okx-trading-pilot/runtime-paper/scripts/provider_watchdog.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/scripts/run.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/scripts/verify_runtime.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
+| `services/okx-trading-pilot/runtime-paper/systemd/shopvivaliz-okx-paper-gemini-free-credentials.conf` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/systemd/shopvivaliz-okx-paper-watchdog.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/systemd/shopvivaliz-okx-paper-watchdog.timer` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/systemd/shopvivaliz-okx-paper.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_ai_engine.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_decision.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_domain_config.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `services/okx-trading-pilot/runtime-paper/tests/test_gemini_systemd_credentials.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_market_scanner.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_orchestrator.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_paper_metrics.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -5674,7 +5658,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `tests/amazon-returns-gmail-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-returns-policy-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-returns-program-regression-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/amazon-returns-recovery-deploy-gate-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-returns-reliability-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-returns-remote-bridge-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-returns-report-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -5684,7 +5667,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `tests/amazon-returns-spapi-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-support-ephemeral-profile-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-support-reopen-existing-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/amazon-support-reply-oci-breakglass-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/analytics-session-consent-regression-test.cjs` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/anydesk-backend-access-test.sh` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/apache-access-log-redaction-contract-test.sh` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -5696,7 +5678,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `tests/authoritative-stock-carry-forward-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/authoritative-stock-refresh-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/backend-control-plane-recovery-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/backend-disk-hygiene-reconcile-contract-test.sh` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/blog-article-experience-regression.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/blog-comments-smoke.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/blog-editorial-autopilot-smoke.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -5904,7 +5885,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `tests/integration-health-credentials-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/integration-health-critical-gate-test.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/integration-validator-real-probe-test.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/iphone-private-ssh-relay-contract-test.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/japi-chumbo-color-attribute-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/legacy-diagnostic-workflows-disabled-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/legacy-product-seo-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6005,8 +5985,6 @@ Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. 
 | `tests/product-video-embed-fix-static.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/product-video-sources-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/production-automation-workflows-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/production-runner-bastion-rescue-v2-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/production-runner-rescue-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/production-runtime-parity-contract.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/production-runtime-reconciliation-regression.sh` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/production-storefront-image-audit.mjs` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |

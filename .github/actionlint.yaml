@@ -12,12 +12,6 @@ paths:
   .github/workflows/abandoned-cart-cron-install.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/amazon-returns-safet-recovery.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/backend-disk-hygiene-reconcile.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
   .github/workflows/dc-four-host-login-once.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
@@ -45,13 +39,7 @@ paths:
   .github/workflows/oci-principal-controller-downsize.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/oci-site-runner-recovery.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
   .github/workflows/production-functional-audit.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/recover-shopvivaliz-runner.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
   .github/workflows/remote-control-mcp-bootstrap.yml:
