@@ -28,7 +28,7 @@ class MarinaDirectAccessDocumented(unittest.TestCase):
         for required in ("marina_mcp_agent_client.py", "MARINA_MCP_ACCESS_CLIENT_SECRET", "Quem le esses arquivos tem root",
                          "marina_admin_shell", "as_root", "marina_gui_session", "marina_browser_navigate",
                          "somente JWT", "root_http_daemon_allowed=false", "headless",
-                         "ACTIVE_LOCAL_SMOKE_GREEN", "Nao validado"):
+                         "ACTIVE_LOCAL_SMOKE_GREEN", "Esse documento nao declara APTO"):
             with self.subTest(expected=required):
                 self.assertIn(required, block)
         # The documented grant file must be the one shipped in the repository.
