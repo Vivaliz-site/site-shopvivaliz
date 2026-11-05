@@ -1,0 +1,18 @@
+[Unit]
+Description=ShopVivaliz OKX PAPER provider decision health and GitHub incident alert
+After=network-online.target shopvivaliz-okx-paper.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/shopvivaliz-okx-watchdog/current/provider_watchdog.py
+StateDirectory=shopvivaliz-okx-watchdog
+StateDirectoryMode=0700
+User=root
+Group=root
+TimeoutStartSec=45s
+SuccessExitStatus=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/shopvivaliz-okx-watchdog
