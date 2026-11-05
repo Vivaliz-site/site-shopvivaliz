@@ -84,7 +84,7 @@ function svmlm_scoped_run(): string
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $action = (string)($_GET['action'] ?? '');
 $readActions = ['listings', 'status', 'rows', 'export'];
-$writeActions = ['start', 'resume'];
+$writeActions = ['start', 'resume', 'preview'];
 if (!in_array($action, [...$readActions, ...$writeActions], true)
     || ($method !== 'GET' && $method !== 'POST')
     || ($method === 'GET' && !in_array($action, $readActions, true))
@@ -140,6 +140,36 @@ if ($action === 'listings') {
         'account_id' => $account,
         'scope' => $scope,
         'item_ids' => $scope === 'ALL' ? [] : array_values(array_unique($ids)),
+    ], JSON_THROW_ON_ERROR);
+} elseif ($action === 'preview') {
+    // Price preview is a local ESTIMATED quote only; it never calls any
+    // marketplace/ERP write endpoint. Account binding is server-side.
+    $input = file_get_contents('php://input');
+    if (!is_string($input) || strlen($input) > 1024) {
+        svmlm_fail('INVALID_PREVIEW_INPUT');
+    }
+    try {
+        $payload = json_decode($input, true, 8, JSON_THROW_ON_ERROR);
+    } catch (JsonException) {
+        svmlm_fail('INVALID_JSON');
+    }
+    if (!is_array($payload)
+        || array_diff(array_keys($payload), ['item_id', 'requested_price']) !== []
+        || count($payload) !== 2
+        || !is_string($payload['item_id'] ?? null)
+        || preg_match('/^MLB[0-9]+$/D', $payload['item_id']) !== 1
+        || !is_string($payload['requested_price'] ?? null)
+        || preg_match('/^(?:0|[1-9][0-9]{0,6})(?:\\.[0-9]{1,2})?$/D', $payload['requested_price']) !== 1
+        || (float)$payload['requested_price'] <= 0
+        || (float)$payload['requested_price'] > 1000000) {
+        svmlm_fail('INVALID_PREVIEW_INPUT');
+    }
+    $path = '/v1/pricing/quote';
+    $body = json_encode([
+        'account_id' => $account,
+        'item_id' => $payload['item_id'],
+        'quantity' => 1,
+        'requested_price' => $payload['requested_price'],
     ], JSON_THROW_ON_ERROR);
 } else {
     $run = svmlm_scoped_run();
