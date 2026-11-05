@@ -1,3 +1,7 @@
+<!-- OWNER_MCP_FIRST_REAL_ATTEMPT_20261105 -->
+> **PRIORIDADE MCP ADMINISTRATIVO — ORDEM EXPRESSA DO PROPRIETARIO (2026-11-05).** Todo agente ShopVivaliz deve **descobrir e tentar uma chamada real** ao MCP autorizado do host antes de RDC, SSH ou concluir bloqueio. `hosts_list`/status de plugin e mero registro, nao sao teste de comando. Central `shopvivaliz-remote-control`: backend, Fred-Win, KOCEPSV; Marina: MCP independente e somente capacidades com grants validos. Executar comando/consulta MCP apropriado e registrar `remote_access_attempts` com host, ferramenta, hora, resultado e task_id. Sem ferramenta publicada, registrar `MCP_NOT_EXPOSED` e continuar apenas por fallback legitimamente autorizado; nunca alegar tentativa inexistente. Timeout do RDC NAO dispensa o MCP. Contrato completo: [MCP primeiro](../ops/mcp-first-agent-execution-2026-11-05.md).
+<!-- /OWNER_MCP_FIRST_REAL_ATTEMPT_20261105 -->
+
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
 
@@ -548,3 +552,16 @@ Preços: `scripts/quality/audit-storefront-erp-prices.py` reconsulta a **tabela 
 ## Preflight obrigatorio de identidade Git
 
 Antes de qualquer operacao Git de agente remoto, resolva a propriedade real do worktree e utilize `scripts/maintenance/git_as_repo_owner.py --repo <worktree> -- <git-subcommand>`. Um shell MCP com `uid=0` nao e autorizacao para agir como root no repositorio pertencente a `ubuntu`. Nao mitigar `dubious ownership` com `safe.directory=*`, chown recursivo, copia de tokens ou troca da identidade de autenticacao. Testar o caminho seguro via `tests/test_git_as_repo_owner.py`.
+<!-- MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
+# Prioridade de roteamento MCP (2026-11-05)
+
+O MCP é a rota prioritária para agentes nos quatro hosts canônicos:
+`always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e
+`marina-a1-4c24g`. Use as funções por host e, quando autorizadas, os comandos
+administrativos `admin_command_run`, `service_action` e `task_submit`; tarefas
+longas devem ser duráveis. Para Marina, o MCP central e o MCP independente
+`https://mcp-marina.shopvivaliz.com.br/mcp` são vias complementares e cada uma
+tem seu próprio grant/identidade. Não inferir privilégio por catálogo: testar a
+chamada e respeitar fail-closed, leases, fencing, MFA e RBAC. SSH, RDC e Actions
+são fallback/recuperação documentados, não a primeira rota.
+<!-- /MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->

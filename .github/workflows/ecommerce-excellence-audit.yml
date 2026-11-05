@@ -32,7 +32,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: ecommerce-excellence-${{ github.event_name }}-${{ github.event.workflow_run.id || github.ref }}
+  group: ecommerce-excellence-audit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -177,7 +177,7 @@ jobs:
     name: Validate real production from Oracle
     needs: production-audit-gate
     if: needs.production-audit-gate.outputs.should_run == 'true'
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-audit]
     timeout-minutes: 25
     steps:
       - name: Checkout exact commit

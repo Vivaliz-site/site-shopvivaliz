@@ -8,7 +8,7 @@ Discover active spot instruments quoted in USD/USDT/USDC and linear SWAP/FUTURES
 
 ## Simulation boundary and limitations
 
-The operational decision provider is the local authenticated ChatGPT/Codex bridge using gpt-5.6-terra at medium reasoning effort. Every model result must satisfy an exact 20-layer schema, from market_regime through adversarial_review, contain supporting and contrary evidence, and expire within 120 seconds. At most two model analyses may be in flight at once; the market/position loop never waits for them. Invalid JSON, unavailable or revoked authentication, wrong model identity, stale decisions, or missing required evidence fail closed for new entries. There is no heuristic fallback in the production runner. The heuristic provider remains only as a deterministic unit-test fixture.
+The operational decision provider is the local authenticated ChatGPT/Codex bridge using gpt-6-luna at medium reasoning effort. Every model result must satisfy an exact 20-layer schema, from market_regime through adversarial_review, contain supporting and contrary evidence, and expire within 120 seconds. At most two model analyses may be in flight at once; the market/position loop never waits for them. Invalid JSON, unavailable or revoked authentication, wrong model identity, stale decisions, or missing required evidence fail closed for new entries. There is no heuristic fallback in the production runner. The heuristic provider remains only as a deterministic unit-test fixture.
 
 The 20-layer engine does not place orders and cannot modify risk limits. It receives normalized public OKX context (5m/1h/4h candles, order book, derivatives open interest/funding where applicable) plus the local PAPER portfolio/risk state. No exchange credentials are passed to the model. The deterministic Risk Gateway remains authoritative after every model decision.
 
@@ -37,4 +37,10 @@ Run tests with `python -m pytest -q`. Run the operational read-only check with `
 
 ## Login-only deployment requirement
 
-The candidate defaults to Terra + medium and permits only a loopback Codex bridge. OpenAI API-key access and silent model/transport fallback are not supported. Authenticate a corporate Codex profile with the native executable, not a legacy profile-selection wrapper; never copy browser cookies or paste credentials in chat. This candidate is not operational until the real login/inference gate in reports/ai-engine-validation.md passes.
+The candidate defaults to Luna (gpt-6-luna) + medium and permits only a loopback Codex bridge. OpenAI API-key access and silent model/transport fallback are not supported. Authenticate a corporate Codex profile with the native executable, not a legacy profile-selection wrapper; never copy browser cookies or paste credentials in chat. This candidate is not operational until the real login/inference gate in reports/ai-engine-validation.md passes.
+
+## Decision-provider watchdog and incident alerts
+
+The process can be `active (running)` while no valid 20-layer decisions can be obtained. In that condition `ai_20_layers_active=false` and there can be **zero PAPER trades** despite healthy market polling. The watchdog `scripts/provider_watchdog.py` checks the PAPER-only boundary, recent status timestamps, and actual provider readiness, rather than service liveness. It runs on `shopvivaliz-okx-paper-watchdog.timer` every ten minutes, posting the initial failure, a reminder after six hours, and recovery to the existing VM incident issue #1586 (deduplicated by a restricted local state file). It does not place orders or reset the account ledger. The `--dry-run` flag is read-only and returns status code 2 if degraded; never force a positive status for a failed AI bridge. The Codex bridge `paid_provider_disabled` manual approval policy remains untouched: resolving the approval or onboarding an independently verified free-tier model is required before AI-driven trades can resume.
+
+Run a direct status check on the backend using `python3 scripts/provider_watchdog.py --dry-run`. Never mark the simulated strategy APTO solely because market scans advance or systemd reports the service running.

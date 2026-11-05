@@ -203,9 +203,40 @@ class RemoteControlMcpTests(unittest.TestCase):
         ]
         for name, args in blocked:
             with self.subTest(name=name), mock.patch.object(m, "run_host_command") as executor:
-                with self.assertRaisesRegex(PermissionError, "marina_central_read_only_requires_owner_grant"):
+                with self.assertRaisesRegex(PermissionError, "marina_central_(?:read_only_requires_owner_grant|admin_route_not_approved)"):
                     m.execute_tool(name, args)
                 executor.assert_not_called()
+
+    def test_marina_admin_capability_exposes_all_four_host_admin_tools(self):
+        with mock.patch.object(m, "marina_central_admin_grant_active", return_value=True):
+            specs = {item["name"]: item for item in m.tool_specs()}
+            for name in ("service_action", "admin_command_run", "task_submit"):
+                self.assertIn(m.MARINA_HOST, specs[name]["inputSchema"]["properties"]["host"]["enum"])
+
+            with mock.patch.object(m, "run_host_command", return_value={"host": m.MARINA_HOST, "exit_code": 0}) as runner:
+                result = m.execute_tool("admin_command_run", {
+                    "host": m.MARINA_HOST,
+                    "command": "id",
+                    "timeout": 20,
+                })
+            self.assertEqual(result["exit_code"], 0)
+            runner.assert_called_once_with(
+                m.MARINA_HOST, "id", 20, None, marina_admin=True,
+            )
+
+    def test_marina_durable_task_uses_privileged_invocation(self):
+        key = Path(self.tmp.name) / "marina-key"
+        known_hosts = Path(self.tmp.name) / "marina-known-hosts"
+        key.write_text("dummy", encoding="utf-8")
+        known_hosts.write_text("dummy", encoding="utf-8")
+        key.chmod(0o600)
+        known_hosts.chmod(0o600)
+        with mock.patch.object(m, "marina_central_admin_grant_active", return_value=True), \
+             mock.patch.object(m, "MARINA_SSH_KEY", key), \
+             mock.patch.object(m, "MARINA_PINNED_HOSTS", known_hosts):
+            privileged = m.privileged_invocation(m.MARINA_HOST, "id")
+            expected = m.marina_admin_ssh_invocation("id")
+            self.assertEqual(privileged, expected)
         with mock.patch.object(m, "run_host_command") as executor:
             with self.assertRaisesRegex(ValueError, "marina_service_not_allowlisted"):
                 m.execute_tool("service_status", {

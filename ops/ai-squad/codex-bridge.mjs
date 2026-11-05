@@ -6,7 +6,11 @@ import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+// gpt-6-luna is the default model on every host. The older entries stay allowed so a caller
+// still pinned to them during a rollout is not rejected; the allowlist is a safety control,
+// not the default.
 const ALLOWED_MODELS = new Set([
+  'gpt-6-luna',
   'gpt-5.6-sol',
   'gpt-5.6-terra',
   'gpt-5.6-luna',

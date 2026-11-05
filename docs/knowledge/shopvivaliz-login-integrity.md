@@ -53,6 +53,25 @@ divergente **nao e repetida nem aceita**. Duas falhas permanecem
 `PROBE_ERROR`, alimentando WATCH/DEGRADED normalmente. Nao reiniciar
 navegadores nem copiar sessoes ao observar apenas `PROBE_ERROR`.
 
+### Dev auxiliar não adotado (CDP9557)
+
+O Dev canônico autenticado utiliza CDP9559. O Dev auxiliar CDP9557 é um perfil separado,
+criado para fallback, mas só é rota operacional do MCP Dev 5583 quando ambos opt-ins
+específicos (CDP9557 e marcador de adoção) estiverem ativos.
+
+O monitor verifica a configuração efetiva de shopvivaliz-browser-dev-mcp.service e
+o health local. Se a rota efetiva for exatamente CDP9559 e o health indicar
+somente transporte (account_authenticated=null, account_identity_verified=false),
+o auxiliar fica INACTIVE_NOT_ROUTED, verified=false, required=false.
+Isso não declara o auxiliar autenticado nem permite utilizá-lo em tarefas.
+A integridade do perfil e o serviço auxiliar continuam obrigatórios no monitor.
+Dev canônico e Atendimento continuam exigindo identidade exata.
+
+Com MCP Dev adotado no CDP9557, a autenticação exata do auxiliar continua obrigatória.
+Configuração desconhecida, erro de leitura, health inesperado e identidade não verificada
+continuam WATCH/DEGRADED (fail-closed). Esta correção não inicia login, copia cookies,
+encerra/reinicia Chromium, cria opt-in, nem altera grants, leases ou fencing.
+
 ## Inspecao (somente leitura)
 
 ```bash

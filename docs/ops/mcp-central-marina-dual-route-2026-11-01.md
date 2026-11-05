@@ -1,5 +1,15 @@
 # Duas rotas autorizadas para Marina: MCP central e MCP independente
 
+> **Atualização de implementação 2026-11-05:** o servidor central agora mantém
+> o catálogo de quatro hosts e implementa `processes_list`, `file_read`,
+> `file_list`, `logs_tail`, `service_action`, `admin_command_run` e
+> `task_submit` para Marina sob grants separados e verificados em cada chamada;
+> tarefas duráveis usam o transporte administrativo pinado. O catálogo só
+> inclui Marina para cada grupo quando o grant correspondente está ativo. A
+> validação de runtime do grant administrativo central ainda depende da PR P2
+> específica; enquanto ela não existir, use o MCP independente da Marina para
+> administração autorizada e mantenha o central em fail-closed.
+
 Data: 2026-11-01. Estado observado no backend apos #3474/#3484/#3486/#3491: **rota central read-only anunciada e grant atestado; app ChatGPT ainda sem catalogo de ferramentas atualizado; nenhuma chamada E2E central->Marina certificada**. MCP independente da Marina continua inativo/nao conectado. Paridade RDC: **NOT_CERTIFIED**.
 
 O `hosts_list` autenticado anunciou `marina-a1-4c24g` com `route_enabled=true` (audit `402aa25d-e002-4559-8cb0-dd99d029bb54`). Isso **nao** comprova a execucao remota de `marina_host_health` ou `marina_service_status` a partir do ChatGPT. As ferramentas existem no servidor, mas sua publicacao/Refresh e habilitacao em Workspace Settings > Apps pelo administrador do app continuam pendentes. Nao chamar `host_health` com um host fora do schema congelado nem contornar autorizacao por shell/RDC. Evidencias e status: issue #3152.

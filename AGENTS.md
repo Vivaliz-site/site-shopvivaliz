@@ -1,3 +1,14 @@
+<!-- OWNER_NO_UNAPPROVED_RESTRICTIONS_20261105 -->
+> **Regra do proprietario (2026-11-05): nenhum agente cria restricao ou bloqueio sem aprovacao expressa do dono.** Isso vale para qualquer agente (Claude, GPT, Codex, Gemini, Copilot, workers e subagentes) e para qualquer lugar: instrucoes, documentacao, codigo, workflows, testes de contrato, configuracao de MCP, permissoes, politicas e grants. Nao adicionar, reintroduzir nem endurecer proibicao, trava ou "NAO USE" por conta propria; se achar que algo precisa de limite, propor ao dono em PR ou pergunta e esperar a aprovacao. Restricao que o dono diga que nao aprovou deve ser removida quando ele pedir. Protecoes que o dono ja aprovou continuam valendo, e o agente nao as enfraquece por conta propria. Contexto: a proibicao de SSH direto, RDC e Bastion foi colocada sem aprovacao e retirada em 2026-11-05.
+
+> **REGRA DO PROPRIETARIO: MCP PRIMEIRO = TENTATIVA REAL.** Antes de optar por RDC/SSH ou encerrar tarefa remota, chamar uma ferramenta MCP adequada e autorizada para o host na sessao atual. Consultar catalogo nao conta como tentativa. Registrar host, ferramenta, data/hora, task_id/request_id e resultado; se indisponivel, declarar MCP_NOT_EXPOSED, nunca MCP_ATTEMPTED. Fonte: docs/ops/mcp-first-agent-execution-2026-11-05.md.
+
+<!-- OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
+> **ORDEM EXPRESSA DO PROPRIETARIO — MCP PRIMEIRO, TENTATIVA REAL OBRIGATORIA:** antes de acionar RDC, SSH, RustDesk ou alegar que uma tarefa remota ShopVivaliz esta bloqueada, identificar o MCP administrativo disponivel **na sessao atual** e **executar uma chamada MCP adequada e autorizada** para o host/operacao. `hosts_list`, `claude mcp list` e `codex mcp list` isolados NAO contam como tentativa de execucao. Backend/Fred-Win/KOCEPSV: `shopvivaliz-remote-control` (`admin_command_run` ou `task_submit` + `task_status`, quando expostos). Marina: MCP independente `shopvivaliz-marina-admin` e rota central somente conforme grants atuais. Um timeout de RDC/GUI NAO e motivo para ignorar MCP.
+> **EVIDENCIA OBRIGATORIA:** registrar `remote_access_attempts` com host, ferramenta, horario, `request_id`/`task_id`, resultado e proxima acao. Diferenciar `MCP_ATTEMPTED_OK`, `MCP_ATTEMPTED_FAILED`, `MCP_NOT_EXPOSED`, `MCP_NOT_AUTHORIZED` e `MCP_NOT_APPLICABLE`. Sem chamada nao afirmar que tentou MCP. Falha MCP comprovada permite fallback independente e autorizado, sem contornar recusas, MFA, RBAC, lease ou grant; prosseguir ate validacao.
+> **FONTE DE VERDADE:** [Contrato MCP primeiro](docs/ops/mcp-first-agent-execution-2026-11-05.md). Vale para ChatGPT dev/atendimento, Codex, Claude Code, Gemini e subagentes; sessoes abertas precisam carregar estas instrucoes ou verificar sua versao atual.
+<!-- /OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
+
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
 
@@ -65,6 +76,29 @@ A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso 
 <!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
 > O MCP ShopVivaliz **central** tambem deve alcancar `marina-a1-4c24g`, alem do MCP proprio da Marina, que deve permanecer independente do backend/RDC. Paridade com RDC exige capacidades por host e operacao comprovadas por E2E, sem shell/root universal. Rota central read-only em PR nao equivale a runtime conectado; nunca ativar sem grant oficial, lease e autorizacao. Fonte: `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
 <!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
+
+<!-- MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
+## Rota MCP prioritária de quatro hosts
+
+Para agentes, a rota prioritária de operação é MCP, por nome canônico de host:
+`always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e `marina-a1-4c24g`.
+O ShopVivaliz Remote Control MCP central oferece funções de saúde, processos,
+serviços, arquivos, logs e tarefas/comandos administrativos nos quatro hosts
+quando o grant correspondente estiver atestado; a Marina usa transporte privado
+pinado e o catálogo repete a checagem do grant antes de executar. O MCP
+independente da Marina (`https://mcp-marina.shopvivaliz.com.br/mcp`) é a rota
+complementar para as funções próprias da Marina e para shell administrativo
+quando o JWT de Cloudflare Access e o grant da Marina estiverem válidos.
+
+`admin_command_run`, `service_action` e `task_submit` são as funções
+administrativas universais, auditadas e limitadas por host; tarefas longas usam
+`task_submit`/`durable=true`. Não trocar MCP por SSH/RDC como primeira escolha.
+SSH privado, RDC e Actions são fallback documentado ou recuperação, não o
+catálogo operacional primário. A presença no catálogo não substitui grant,
+lease, fencing, identidade e teste E2E reais; sem grant a ferramenta deve ficar
+oculta ou recusar em fail-closed. `shopvivaliz-free-a1` continua fora do
+catálogo e nunca é destino.
+<!-- /MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
 <!-- MARINA_BROKER_SERVICE_RESTART_PATTERN_20261103 -->
 > **Decisao do owner (2026-11-03): restart de servicos Marina por padrao de nome.** Na `marina-a1-4c24g`, o broker administrativo root pode **reiniciar** (`systemctl restart`) qualquer unit cujo nome case com `shopvivaliz-*.service`, sem novo PR por servico. Vale somente para restart. Nao autoriza start, stop, enable, disable, edicao de unit, criacao de arquivo, shell generico, comando arbitrario, mudanca de rede, banco, pagamento ou permissao. Toda execucao exige lease de manutencao, fencing emitido pelo host, ticket de uso unico, auditoria persistente e reconciliacao do resultado, sem repetir restart indeterminado. Units fora do padrao continuam exigindo concessao explicita por PR. **Atencao:** esta regra so vale como enforcement quando o verificador de concessao (`scripts/validate-owner-pr-grant.py`) e o broker aceitarem o padrao; ate la, a execucao usa apenas `allowed_units` explicitas da concessao vigente (`security/owner-approvals/3560.json`). Nao presumir cobertura de um servico novo sem confirmar no codigo. Fonte: `docs/ops/marina-root-broker-activation-2026-11-02.md`.
 ### Instrucao para agente que cria servico novo na Marina
@@ -1038,3 +1072,24 @@ Antes de qualquer escrita, todos os agentes (ChatGPT/Gepeto/Codex/Claude/Gemini/
 
 Um workflow disparado mas não concluído, skipped, com relatório não gerado ou release SHA diferente é **NÃO VALIDADO**, jamais CONCLUIDO. Não substituir evidência real por texto do agente.
 <!-- /DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
+
+## Bloco herdado do CLAUDE.md (AGENTS.md e CLAUDE.md sao espelhos identicos)
+> Este arquivo e a fonte da verdade. `CLAUDE.md` e uma copia byte a byte gerada por `python3 scripts/sync-agent-instructions.py`; nao edite `CLAUDE.md` a mao. Os imports `@` abaixo valem para o Claude Code.
+
+> **MCP Marina ATIVO com ferramentas admin (2026-11-05, prevalente):** o MCP independente do Marina esta ativo e aceita `marina_admin_shell` (usuario de servico e `as_root`). Ignore afirmacoes antigas de "inativo" ou "NAO APTO" abaixo. Como acessar e evidencias: `docs/knowledge/marina-mcp-admin-agent-access.md`.
+## Checkpoint obrigatorio antes de executar
+Toda tarefa longa, delegacao, investigacao material ou mutacao deve executar `scripts/agent_task_state.py start` antes da primeira etapa material. Apos cada etapa, executar `scripts/agent_task_state.py progress` com evidencia e `next_action`. Na retomada, ler o checkpoint existente e preservar ownership e gates. Se o registro duravel nao estiver acessivel, falhar fechado para tarefas dependentes de retomada automatica e usar rota autorizada auditavel. Nao declarar conclusao sem validacao e `terminal`.
+> **AUDITORIA EXTREMA V5 = UI REAL OBRIGATORIA.** Antes de declarar `APTO` ou `CONCLUIDO`, o proprio agente percorre cada jornada material na interface grafica real (navegacao, cliques, preenchimento, resultado visivel, reload/revisita, persistencia e evidencia visual com ambiente/release). API, terminal, SQL, codigo, screenshot isolado, mocks e testes apenas headless nao substituem prova pela UI. A auditoria inclui investigacao, correcao e reauditoria visual apos reparo. Nao ocultar uma UI marcando `browser.required=false` ou `journey.ui=false`. Somente componentes comprovadamente sem UI podem usar excecao com inventario negativo documentado e evidencias. Em bloqueio de sessao, esgotar rotas autorizadas; nao burlar MFA/permissaos. Leia e obedeça a secao `EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1` de `AGENTS.md` antes da tarefa.
+> **AUDITORIA EXTERNA:** também é corretiva. Se houver autorização de escrita, corrigir + testar + reauditar. Se o auditor for somente leitura/independente, o relatório não é estado terminal: encaminhar os achados a executor autorizado e manter a tarefa aberta até correção e revalidação independente ou bloqueio externo comprovado.
+<!-- CLAUDE_READ_ROOT_AGENTS_FIRST_V1 -->
+> **BOOTSTRAP OBRIGATÓRIO DO CLAUDE:** antes de analisar, planejar, editar, executar comandos, usar navegador, abrir PR, fazer merge, deploy ou validar qualquer tarefa, leia integralmente o `AGENTS.md` da raiz deste repositório e siga suas regras. Em particular, leia `docs/AGENT-REMOTE-ACCESS.md` antes de qualquer operação em host/VM/runtime/browser.
+@docs/knowledge/claude-vm-bootstrap.md
+@docs/AGENTS.md
+<!-- audit-refs: AUDIT_POLICY.md docs/quality/EXTREME_AUDIT_PROTOCOL.md docs/quality/AUDIT_RUNTIME_PARITY_V1.md docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md docs/quality/AUDIT_SELF_TEST_V1.md docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md -->
+<!-- gate: FINAL_RESPONSE_DEPLOY_GATE_V1 — resposta final só após validação pós-deploy completa -->
+> **AUDITORIA CORRETIVA OBRIGATÓRIA:** para qualquer auditoria, não apenas extrema, siga `AGENTS.md` e `REGRAS-AGENTES-CENTRALIZADAS.md`: investigar causa raiz, corrigir achados materiais seguros/autorizados, prevenir recorrência quando pertinente, testar e reauditar. Não encerrar em relatório de erros. APTO/CONCLUIDO exige evidência fresca pós-correção/E2E aplicável.
+> **DIAGNÓSTICO CORRETIVO GLOBAL:** em qualquer tarefa, diagnóstico confirmado obriga correção segura, prevenção pertinente, testes e validação real/E2E aplicável antes de `CONCLUIDO`. Enquanto houver ação executável, permaneça `RUNNING`; só `BLOCKED_EXTERNAL` comprovado permite encerrar sem corrigir. Siga `AGENTS.md` e `REGRAS-AGENTES-CENTRALIZADAS.md`.
+Leia primeiro `AGENTS.md`. Para auditoria/aptidão, cumpra `AUDIT_ABSOLUTE_GATE_V1.md`, `AUDIT_BROWSER_E2E_REAL_V1.md`, `AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1.md`, `AUDIT_PROJECT_REQUIREMENTS_V1.md` e o manifesto local de requisitos. Somente o certifier pode autorizar APTO.
+Leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`; preserve o governance bridge e o Absolute Audit Main Guard. Somente o certifier absoluto autoriza APTO.
+- Contrato detalhado: `docs/knowledge/task-continuity.md`; protocolo canônico de conclusão: `AI-TO-CLI-PROTOCOL.md`.
+Preservar a cota do Codex. Para continuidade de tarefas, priorizar rotas determinísticas/controle remoto auditável e executores alternativos autenticados adequados ao trabalho; usar Codex somente como último recurso finito. Falta de cota, rate limit ou indisponibilidade do Codex mantém a tarefa `RUNNING` e nunca constitui, isoladamente, `BLOCKED_EXTERNAL`.

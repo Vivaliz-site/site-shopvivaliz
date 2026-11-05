@@ -181,7 +181,7 @@ HOST_DURABLE_LIMITS = {
     "always-free-arm-1787907847-26": 2,
     "Fred-Win": 1,
     "KOCEPSV": 1,
-    "marina-a1-4c24g": 0,  # No administrative/durable jobs on the Marina route.
+    "marina-a1-4c24g": 1,
 }
 
 REVERSE_SSH_RECOVERABLE_ERRORS = (
@@ -1237,7 +1237,7 @@ def run_task_entrypoint(task_id: str) -> int:
             ).rowcount
             if claimed:
                 proc = subprocess.Popen(
-                    remote_invocation(str(row["host"]), str(row["command"])),
+                    privileged_invocation(str(row["host"]), str(row["command"])),
                     stdout=out, stderr=err, start_new_session=True,
                 )
         if not claimed:
@@ -1501,6 +1501,13 @@ def remote_invocation(host: str, command: str) -> list[str]:
     script = "$ProgressPreference='SilentlyContinue'; & {\n" + command + "\n}"
     encoded = base64.b64encode(script.encode("utf-16le")).decode()
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
+
+
+def privileged_invocation(host: str, command: str) -> list[str]:
+    """Build the fixed administrative transport for any canonical host."""
+    if host == MARINA_HOST:
+        return marina_admin_ssh_invocation(command)
+    return remote_invocation(host, command)
 
 
 def is_recoverable_reverse_ssh_error(host: str, stderr: str) -> bool:
@@ -2573,7 +2580,16 @@ def execute_tool(
     if isinstance(host, str) and host in RETIRED_HOSTS:
         raise ValueError("retired_host_not_executable")
     if host == MARINA_HOST and name not in {"host_health", "service_status"}:
-        raise PermissionError("marina_central_read_only_requires_owner_grant")
+        readonly_tools = {"processes_list", "file_read", "file_list", "logs_tail"}
+        admin_tools = {"service_action", "admin_command_run", "task_submit"}
+        if name in readonly_tools:
+            if not marina_central_readonly_grant_active():
+                raise PermissionError("marina_central_read_only_requires_owner_grant")
+        elif name in admin_tools:
+            if not marina_central_admin_grant_active():
+                raise PermissionError("marina_central_admin_route_not_approved")
+        else:
+            raise PermissionError("marina_central_route_capability_not_approved")
     if host == MARINA_HOST and name == "service_status":
         marina_readonly_service_command(args.get("service"))
     _assert_runtime_mutation(name, args)
@@ -2844,16 +2860,15 @@ def execute_tool(
         action = str(args.get("action") or "")
         if action not in {"start", "stop", "restart"}:
             raise ValueError("invalid_service_action")
+        service_cmd = service_command(
+            platform,
+            str(args.get("service") or ""),
+            action,
+            str(cfg.get("service_user_owner") or "") or None,
+        )
+        service_kwargs = {"marina_admin": True} if host == MARINA_HOST else {}
         result = run_host_command(
-            str(host),
-            service_command(
-                platform,
-                str(args.get("service") or ""),
-                action,
-                str(cfg.get("service_user_owner") or "") or None,
-            ),
-            timeout,
-            cancel_check,
+            str(host), service_cmd, timeout, cancel_check, **service_kwargs,
         )
     elif name == "file_read":
         result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check, recover_transport=False)
@@ -2950,13 +2965,22 @@ def tool_specs() -> list[dict[str, Any]]:
         if name == "browser_navigate":
             optional.add("tab_id")
         schema_props = dict(props)
-        # Do not advertise Marina for tools without an implemented host grant.
+        # Advertise Marina only for capabilities whose protected runtime grant
+        # is currently valid; the handler repeats the check before execution.
         if name in {
             "processes_list", "service_action", "file_read", "file_list",
             "logs_tail", "admin_command_run", "task_submit",
         } and "host" in schema_props:
+            if name in {"processes_list", "file_read", "file_list", "logs_tail"}:
+                allowed_hosts = list(HOSTS) if marina_central_readonly_grant_active() else [
+                    host for host in HOSTS if host != MARINA_HOST
+                ]
+            else:
+                allowed_hosts = list(HOSTS) if marina_central_admin_grant_active() else [
+                    host for host in HOSTS if host != MARINA_HOST
+                ]
             schema_props["host"] = {"type": "string", "enum": [
-                host for host in HOSTS if host != MARINA_HOST
+                host for host in allowed_hosts
             ]}
         if name in MUTATING_RUNTIME_ACTIONS:
             schema_props.update({

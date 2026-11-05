@@ -14,7 +14,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: runtime-token-security-${{ github.event_name }}-${{ github.event.workflow_run.id || github.ref }}
+  group: runtime-token-security-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
     needs: production-audit-gate
     if: needs.production-audit-gate.outputs.should_run == 'true'
     name: Audit production runtime credentials
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-audit]
     timeout-minutes: 20
     steps:
       - name: Configure verified SSH host
