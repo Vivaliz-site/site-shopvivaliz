@@ -16,6 +16,11 @@ All of these must hold:
   `auth.openai.com`, `accounts.google.com`, `login.microsoftonline.com`, `appleid.apple.com`);
 - its ChatGPT conversation is **not** bound (`bind-conversation`) to a task whose status is
   `RUNNING` or `READY_TO_COMPLETE` in the agent task-state directory (work in progress);
+- for a tab **outside ChatGPT**, no `RUNNING`/`READY_TO_COMPLETE` task is bound to that
+  browser session (`dev` covers the `dev` and `dev-aux` browsers, `atendimento` covers its
+  own). A task may be typing in a form or SPA, which leaves URL and title unchanged, so such
+  a tab cannot be shown idle. Unbound ChatGPT tabs, the bulk of the accumulation, are still
+  closed;
 - its URL and title have not changed for `--idle-hours` (default 1), counted from the
   reaper's own first observation. CDP exposes no last-activity time, so a tab seen for the
   first time always starts a new clock and cannot be closed on that run. The grace only
@@ -24,8 +29,8 @@ All of these must hold:
   and at most `--max-closes` (default 10) tabs are closed per browser per run, so a
   browser with many tabs converges to one over a few hourly runs.
 
-Fail closed: if the task-state directory is missing or contains an unreadable file, no
-ChatGPT tab is closed and the run exits 3.
+Fail closed: if the task-state directory is missing or contains an unreadable file, **no tab
+is closed** (the reaper cannot tell what is in use) and the run exits 3.
 
 The report prints host names and counts only. It never prints URLs, titles or conversation
 identifiers. Only loopback CDP endpoints are used. The state file

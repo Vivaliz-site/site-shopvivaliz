@@ -7,7 +7,9 @@ alive. This reaper therefore closes every tab that is not in use, and it is a dr
 unless --apply is given. A tab is closed only when ALL of the following hold:
 
 * the tab is a normal page (not chrome://, devtools, an extension, or a login page);
-* its conversation is not bound to a non-terminal task checkpoint (work in progress);
+* its conversation is not bound to a non-terminal task checkpoint (work in progress), and,
+  for a tab outside ChatGPT, no non-terminal task is bound to that browser session
+  (a task may be typing in a form or SPA, which leaves URL and title unchanged);
 * its (url, title) fingerprint has not changed for --idle-hours (default 1), measured
   from the reaper's own first observation. CDP exposes no last-activity time, so a tab
   seen for the first time always starts a fresh clock; this only protects a tab an agent
@@ -35,6 +37,8 @@ from urllib.parse import urlparse
 from urllib.request import urlopen
 
 DEFAULT_BROWSERS = {"dev": 9559, "atendimento": 9556, "dev-aux": 9557}
+# Task checkpoints bind to a browser session name (agent_task_state.py: dev|atendimento).
+BROWSER_SESSION = {"dev": "dev", "dev-aux": "dev", "atendimento": "atendimento"}
 CANONICAL_STATE_DIR = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
 NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 AUTH_HOSTS = frozenset({
@@ -49,15 +53,16 @@ CONVERSATION_RE = re.compile(r"/c/([A-Za-z0-9_-]{8,160})")
 EXIT_OK, EXIT_USAGE, EXIT_STATE_UNREADABLE = 0, 2, 3
 
 
-def load_active_conversations(state_dir: Path) -> set[str] | None:
-    """Conversation ids bound to non-terminal tasks, or None when state is unreadable."""
+def load_active_state(state_dir: Path) -> tuple[set[str], set[str]] | None:
+    """(conversation ids, browser sessions) of non-terminal tasks, or None when unreadable."""
     if not state_dir.is_dir():
         return None
     try:
         files = sorted(state_dir.glob("*.json"))
     except OSError:
         return None
-    active: set[str] = set()
+    conversations: set[str] = set()
+    sessions: set[str] = set()
     for path in files:
         if path.name.startswith("_"):
             continue
@@ -65,12 +70,27 @@ def load_active_conversations(state_dir: Path) -> set[str] | None:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        if not isinstance(payload, dict):
+        if not isinstance(payload, dict) or str(payload.get("status", "")) not in NON_TERMINAL_STATES:
             continue
         conversation = str(payload.get("conversation_id", "")).strip()
-        if conversation and str(payload.get("status", "")) in NON_TERMINAL_STATES:
-            active.add(conversation)
-    return active
+        session = str(payload.get("browser_session", "")).strip()
+        if conversation:
+            conversations.add(conversation)
+        if session:
+            sessions.add(session)
+    return conversations, sessions
+
+
+def load_active_conversations(state_dir: Path) -> set[str] | None:
+    """Conversation ids bound to non-terminal tasks, or None when state is unreadable."""
+    state = load_active_state(state_dir)
+    return None if state is None else state[0]
+
+
+def browser_busy(name: str, sessions: set[str]) -> bool:
+    """True when a non-terminal task is bound to this browser (unknown names: any task)."""
+    mapped = BROWSER_SESSION.get(name)
+    return mapped in sessions if mapped else bool(sessions)
 
 
 def parse_tab(tab: dict) -> tuple[str, str, str | None]:
@@ -86,17 +106,20 @@ def fingerprint(tab: dict) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def protection_reason(tab: dict, active: set[str] | None) -> str | None:
+def protection_reason(tab: dict, active: set[str] | None, busy: bool = False) -> str | None:
     scheme, host, conversation = parse_tab(tab)
     if scheme in PROTECTED_SCHEMES:
         return "internal_page"
     if host in AUTH_HOSTS:
         return "login_page"
-    if host in CHATGPT_HOSTS:
-        if active is None:
-            return "task_state_unreadable"
-        if conversation and conversation in active:
-            return "bound_to_active_task"
+    if active is None:
+        return "task_state_unreadable"  # cannot tell what is in use: close nothing
+    if conversation and conversation in active:
+        return "bound_to_active_task"
+    # A task bound to this browser may be typing in a form or SPA on any site, which leaves
+    # URL and title unchanged, so a non-ChatGPT tab cannot be shown idle. Leave it alone.
+    if busy and host not in CHATGPT_HOSTS:
+        return "browser_in_use_by_active_task"
     return None
 
 
@@ -136,8 +159,8 @@ def save_state(path: Path, state: dict) -> None:
             os.unlink(tmp)
 
 
-def reap_browser(name: str, port: int, *, state: dict, active: set[str] | None, now: float,
-                 idle_seconds: float, keep_min: int, max_closes: int, apply: bool,
+def reap_browser(name: str, port: int, *, state: dict, active: set[str] | None, busy: bool,
+                 now: float, idle_seconds: float, keep_min: int, max_closes: int, apply: bool,
                  timeout: float) -> dict:
     report: dict = {"browser": name, "port": port, "pages": 0, "protected": {}, "candidates": {},
                     "closed": 0, "would_close": 0, "failed": 0, "status": "OK"}
@@ -159,7 +182,7 @@ def reap_browser(name: str, port: int, *, state: dict, active: set[str] | None, 
         if not record or record.get("fp") != fp:
             record = {"fp": fp, "first_seen": now, "last_change": now}
             records[target_id] = record
-        reason = protection_reason(tab, active)
+        reason = protection_reason(tab, active, busy)
         if reason:
             report["protected"][reason] = report["protected"].get(reason, 0) + 1
             continue
@@ -219,12 +242,14 @@ def main(argv: list[str] | None = None, *, now: float | None = None) -> int:
         print("BROWSER_TAB_REAPER=USAGE error=idle-hours>=0.25, keep-min>=1, max-closes>=0", file=sys.stderr)
         return EXIT_USAGE
     clock = time.time() if now is None else now
-    active = load_active_conversations(Path(args.state_dir))
+    active_state = load_active_state(Path(args.state_dir))
+    active = None if active_state is None else active_state[0]
+    sessions = set() if active_state is None else active_state[1]
     state_path = Path(args.state_file)
     state = load_state(state_path)
     reports = [
-        reap_browser(name, port, state=state, active=active, now=clock,
-                     idle_seconds=args.idle_hours * 3600, keep_min=args.keep_min,
+        reap_browser(name, port, state=state, active=active, busy=browser_busy(name, sessions),
+                     now=clock, idle_seconds=args.idle_hours * 3600, keep_min=args.keep_min,
                      max_closes=args.max_closes, apply=args.apply, timeout=args.timeout)
         for name, port in browsers.items()
     ]
