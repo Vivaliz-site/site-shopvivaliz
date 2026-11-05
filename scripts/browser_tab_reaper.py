@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Close abandoned tabs in the ShopVivaliz agent browsers.
 
-Policy: agent browsers must not stay open abandoned. This reaper closes a tab only
-when ALL of the following hold, and it is a dry run unless --apply is given:
+Policy (owner): an agent browser keeps only the tab it needs to stay open and logged in.
+Login persists in the browser profile, not in tabs, and a browser needs one tab to stay
+alive. This reaper therefore closes every tab that is not in use, and it is a dry run
+unless --apply is given. A tab is closed only when ALL of the following hold:
 
 * the tab is a normal page (not chrome://, devtools, an extension, or a login page);
-* its conversation is not bound to a non-terminal task checkpoint;
-* its (url, title) fingerprint has not changed for --idle-hours, measured from the
-  reaper's own first observation (CDP exposes no last-activity time, so a tab seen for
-  the first time always starts a fresh clock);
-* the browser keeps at least --keep-min tabs afterwards.
+* its conversation is not bound to a non-terminal task checkpoint (work in progress);
+* its (url, title) fingerprint has not changed for --idle-hours (default 1), measured
+  from the reaper's own first observation. CDP exposes no last-activity time, so a tab
+  seen for the first time always starts a fresh clock; this only protects a tab an agent
+  just opened and has not bound to a task yet;
+* the browser keeps at least --keep-min tabs afterwards (default 1, the most recently
+  changed one), so the browser stays open.
 
 Fail closed: if the task-state directory cannot be read, no ChatGPT tab is closed and
 the exit status is 3. Only loopback CDP HTTP endpoints are used. The report contains
@@ -198,9 +202,9 @@ def main(argv: list[str] | None = None, *, now: float | None = None) -> int:
     parser.add_argument("--state-dir", default=os.getenv("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", str(CANONICAL_STATE_DIR)))
     parser.add_argument("--state-file", default=os.getenv(
         "SHOPVIVALIZ_TAB_REAPER_STATE", str(Path.home() / ".local/state/shopvivaliz/browser-tab-reaper.json")))
-    parser.add_argument("--idle-hours", type=float, default=24.0)
+    parser.add_argument("--idle-hours", type=float, default=1.0)
     parser.add_argument("--keep-min", type=int, default=1)
-    parser.add_argument("--max-closes", type=int, default=5, help="per browser per run")
+    parser.add_argument("--max-closes", type=int, default=10, help="per browser per run")
     parser.add_argument("--timeout", type=float, default=4.0)
     parser.add_argument("--apply", action="store_true", help="actually close tabs (default: dry run)")
     args = parser.parse_args(argv)
@@ -211,8 +215,8 @@ def main(argv: list[str] | None = None, *, now: float | None = None) -> int:
     except ValueError as error:
         print(f"BROWSER_TAB_REAPER=USAGE error={error}", file=sys.stderr)
         return EXIT_USAGE
-    if args.idle_hours < 1 or args.keep_min < 1 or args.max_closes < 0:
-        print("BROWSER_TAB_REAPER=USAGE error=idle-hours>=1, keep-min>=1, max-closes>=0", file=sys.stderr)
+    if args.idle_hours < 0.25 or args.keep_min < 1 or args.max_closes < 0:
+        print("BROWSER_TAB_REAPER=USAGE error=idle-hours>=0.25, keep-min>=1, max-closes>=0", file=sys.stderr)
         return EXIT_USAGE
     clock = time.time() if now is None else now
     active = load_active_conversations(Path(args.state_dir))

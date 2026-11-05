@@ -188,6 +188,37 @@ class BrowserTabReaperTest(unittest.TestCase):
         self.run_reaper(server, 0.0)
         self.assertEqual(self.state_file.stat().st_mode & 0o777, 0o600)
 
+    def test_defaults_converge_to_single_most_recent_tab(self):
+        tabs = [page(f"TAB{i:05d}", f"https://chatgpt.com/c/old-conversation-{i}") for i in range(5)]
+        server = self.cdp(tabs)
+        self.run_reaper(server, 0.0)
+        server.tabs[4]["title"] = "recent"
+        _, browser, _ = self.run_reaper(server, 2 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 4)
+        self.assertEqual([t["id"] for t in server.tabs], ["TAB00004"])
+
+    def test_default_idle_grace_is_one_hour(self):
+        server = self.cdp([page("TABAAAAA", "https://example.com/a"), page("TABBBBBB", "https://example.com/b")])
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 0.5 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 0)
+        _, browser, _ = self.run_reaper(server, 1.01 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 1)
+        self.assertEqual(len(server.tabs), 1)
+
+    def test_active_task_tabs_and_login_survive_total_cleanup(self):
+        server = self.cdp([
+            page("BOUNDTAB", "https://chatgpt.com/c/in-progress-conversation"),
+            page("LOGINTAB", "https://accounts.google.com/signin"),
+            page("STALE001", "https://example.com/1"),
+            page("STALE002", "https://example.com/2"),
+        ])
+        self.task("live", "in-progress-conversation", "READY_TO_COMPLETE")
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 3 * HOUR, "--apply")
+        self.assertEqual(sorted(t["id"] for t in server.tabs), ["BOUNDTAB", "LOGINTAB"])
+        self.assertEqual(browser["closed"], 2)
+
     def test_apply_env_must_be_exactly_one(self):
         import os
         from unittest import mock
