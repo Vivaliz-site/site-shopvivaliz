@@ -1,3 +1,5 @@
+> **Matriz completa de rotas por host (2026-11-05):** [host-routes-matrix.md](host-routes-matrix.md) lista MCP admin, RDC, SSH, GUI, Actions, OCI e RustDesk para os quatro hosts. Consulte-a antes de declarar um host inacessivel.
+
 <!-- GITHUB_ADMIN_TOKEN_LOCATIONS_20261103 -->
 ## GitHub administrative credential discovery (2026-11-03)
 
