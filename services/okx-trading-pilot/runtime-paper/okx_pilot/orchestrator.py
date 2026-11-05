@@ -100,6 +100,7 @@ class PilotOrchestrator:
         self.provider_available = False
         lowered = self.last_provider_error.lower()
         if any(marker in lowered for marker in (
+            "fallback_exhausted:",
             "decision_bridge:codex_unavailable",
             "decision_bridge:bridge_busy",
             "decision_bridge:timeouterror",
@@ -135,6 +136,10 @@ class PilotOrchestrator:
         self.decision_successes_total += 1
         self.last_provider_error = None
         self.provider_available = True
+        actual_provider = raw.get("_provider_source") if isinstance(raw, dict) else None
+        provider_label = actual_provider if actual_provider in ("gemini", "ollama", "chatgpt_normal", "codex") else (
+            getattr(self.decision_provider, "provider_name", type(self.decision_provider).__name__)
+        )
         effective_state = state if state is not None else self.paper_broker.pilot_state()
         verdict = self.risk_gateway.authorize(intent, snap, effective_state, now=now)
         self._audit({
@@ -152,7 +157,7 @@ class PilotOrchestrator:
             "layers": list(intent.layers),
             "approved": verdict.approved,
             "reason": verdict.reason,
-            "provider": getattr(self.decision_provider, "provider_name", type(self.decision_provider).__name__),
+            "provider": provider_label,
         })
 
         if not verdict.approved:
@@ -169,7 +174,7 @@ class PilotOrchestrator:
                 "stop": str(intent.stop),
                 "targets": [str(x) for x in intent.targets],
                 "leverage": str(intent.suggested_leverage),
-                "decision_provider": getattr(self.decision_provider, "provider_name", type(self.decision_provider).__name__),
+                "decision_provider": provider_label,
                 "quantity": str(ex.filled_quantity),
                 "entry_price": str(ex.entry_price),
                 "fee": str(ex.fee),
