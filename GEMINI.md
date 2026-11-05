@@ -7,6 +7,8 @@
 > **FONTE DE VERDADE:** [Contrato MCP primeiro](docs/ops/mcp-first-agent-execution-2026-11-05.md). Vale para ChatGPT dev/atendimento, Codex, Claude Code, Gemini e subagentes; sessoes abertas precisam carregar estas instrucoes ou verificar sua versao atual.
 <!-- /OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
 
+> **PRIORIDADE MCP DO OWNER: tentar de verdade, NAO apenas listar.** Antes de recorrer a RDC, SSH ou declarar bloqueio de uma tarefa ShopVivaliz, chamar a ferramenta administrativa MCP disponivel e autorizada na sessao atual. Backend/Fred-Win/KOCEPSV: `shopvivaliz-remote-control` (`admin_command_run` ou `task_submit` e depois `task_status`). Marina: `shopvivaliz-marina-admin` quando habilitado pelo grant; fallback central apenas nas capacidades comprovadas. Registrar resultado real em `remote_access_attempts`; nao confundir `claude mcp list`/`codex mcp list` com uma tentativa. Se o MCP estiver ausente, registrar `MCP_NOT_EXPOSED`, investigar e seguir por alternativa legitimamente autorizada. Ver `docs/ops/mcp-first-agent-execution-2026-11-05.md`.
+
 <!-- AGENT_NATIVE_MCP_ADMIN_ROUTE_V1 -->
 ## Preferencia operacional por MCP administrativo (Gemini e agentes autonomos)
 
