@@ -1,0 +1,18 @@
+[Unit]
+Description=Close abandoned tabs in the ShopVivaliz agent browsers (dry run unless enabled)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+# Dry run by default. Set SHOPVIVALIZ_TAB_REAPER_APPLY=1 in the file below to close tabs.
+EnvironmentFile=-/etc/default/shopvivaliz-browser-tab-reaper
+# Exit codes: 2 usage, 3 task state unreadable (no ChatGPT tab is closed). Output has no URLs.
+ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/browser_tab_reaper.py
+Nice=10
+CPUQuota=20%
+MemoryMax=128M
+NoNewPrivileges=true
+PrivateTmp=true
