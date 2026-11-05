@@ -16,13 +16,14 @@ All of these must hold:
   `auth.openai.com`, `accounts.google.com`, `login.microsoftonline.com`, `appleid.apple.com`);
 - its ChatGPT conversation is **not** bound (`bind-conversation`) to a task whose status is
   `RUNNING` or `READY_TO_COMPLETE` in the agent task-state directory (work in progress);
-- for a tab **outside ChatGPT**, no `RUNNING`/`READY_TO_COMPLETE` task whose checkpoint was
-  updated within `--task-fresh-hours` (default 6) is bound to that browser session (`dev`
-  covers the `dev` and `dev-aux` browsers, `atendimento` covers its own). A task may be
-  typing in a form or SPA, which leaves URL and title unchanged, so such a tab cannot be
-  shown idle. The freshness window keeps an abandoned checkpoint left `RUNNING` from
-  disabling the reaper for that browser forever; running tasks update their checkpoint after
-  each step. A conversation binding (one specific tab) has no time limit. Unbound ChatGPT
+- for a tab **outside ChatGPT**, no `RUNNING`/`READY_TO_COMPLETE` task that made progress
+  within `--task-fresh-hours` (default 6) is bound to that browser session (`dev` covers the
+  `dev` and `dev-aux` browsers, `atendimento` covers its own). A task may be typing in a form
+  or SPA, which leaves URL and title unchanged, so such a tab cannot be shown idle. Progress
+  is the checkpoint's logical `updated_at`, advanced by every real step. File mtime is only a
+  fallback when `updated_at` is missing or unreadable, because recovery bookkeeping rewrites
+  the file without advancing `updated_at`. The window keeps an abandoned checkpoint left
+  `RUNNING` from disabling the reaper for that browser forever. A conversation binding (one specific tab) has no time limit. Unbound ChatGPT
   tabs, the bulk of the accumulation, are still closed;
 - its URL and title have not changed for `--idle-hours` (default 1), counted from the
   reaper's own first observation. CDP exposes no last-activity time, so a tab seen for the
