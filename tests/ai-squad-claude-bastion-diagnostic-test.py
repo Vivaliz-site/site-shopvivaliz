@@ -20,10 +20,21 @@ for marker in required:
     assert marker in workflow, marker
 
 # O job bootstrap esta aposentado (VM de origem excluida em 2026-10-29) e deve
-# permanecer fail-closed: o diagnostico so e aceitavel enquanto nao puder
-# executar. O passo ainda cita o host excluido; isso e inerte por causa da
-# guarda abaixo e fica sinalizado para decisao do proprietario.
+# permanecer fail-closed.
 assert "RETIRED_SOURCE_JOB_GUARD_20261029" in workflow
+# O passo de diagnostico nao pode apontar para o host excluido nem chamar o MCP
+# sem alvo definido: sem alvo valido, ele falha de forma explicita.
+step_start = workflow.index("- name: Diagnose AI Squad Claude bridge through Remote Control MCP")
+step = workflow[step_start:]
+next_step = step.find("\n      - name:", 10)
+if next_step != -1:
+    step = step[:next_step]
+assert "shopvivaliz-free-a1" not in step, "diagnostic step targets the retired host"
+assert "RETIRED_HOST_TARGET_REMOVED_20261105" in step
+assert "AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=target_host_not_defined" in step
+assert "'host':target_host" in step
+assert step.index("target_host_not_defined") < step.index("urllib.request.Request("), \
+    "target check must run before any MCP request"
 assert "${{\n        false && (" in workflow
 
 for forbidden in (
