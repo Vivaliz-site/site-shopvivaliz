@@ -1,0 +1,32 @@
+name: Install Marina Audit Runner
+
+# Instalacao manual, uma vez, do runner de auditoria no host Marina.
+# Dispara somente por workflow_dispatch (nunca por push/PR/cron).
+# O token de registro vem do secret MARINA_AUDIT_RUNNER_REG_TOKEN, criado pelo dono.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite INSTALAR para confirmar'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-marina-audit-runner
+  cancel-in-progress: false
+
+jobs:
+  install:
+    if: github.event.inputs.confirm == 'INSTALAR' && github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install audit runner (no sudo, pinned checksum)
+        env:
+          RUNNER_REG_TOKEN: ${{ secrets.MARINA_AUDIT_RUNNER_REG_TOKEN }}
+        run: bash scripts/install-marina-audit-runner.sh
