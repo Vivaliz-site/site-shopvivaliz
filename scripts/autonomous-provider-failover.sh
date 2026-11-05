@@ -12,7 +12,7 @@ ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
 CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-6-luna}}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-flash-lite}"
-ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
+ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-5-5}"
 CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.50}"
 CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"
 CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"
@@ -126,7 +126,12 @@ run_claude() (
     launcher="$(command -v claude || true)"
   fi
   [ -n "$launcher" ] && [ -x "$launcher" ] || return 127
-  "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+  if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+    # Bound the actual CLI process: GNU timeout cannot exec shell functions.
+    timeout "$BACKGROUND_TIER_TIMEOUT" "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+  else
+    "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+  fi
 )
 
 run_codex_auto() (
@@ -160,12 +165,14 @@ fi
 # ChatGPT common is the first external fallback, coordinated by the dispatcher
 # and its conversation lease. Paid CLI providers NEVER run from a background job,
 # even if a stale installer or inherited environment sets the legacy flags.
-BACKGROUND_ORDER=(gemini ollama)
+# Owner decision 2026-11-05: Gemini Flash > local Ollama > Claude Code Haiku 5.5 > GPT 6 Luna.
+# Paid tiers run ONLY through login (never API key), each capped by a timeout and
+# a single attempt per execution. The legacy SHOPVIVALIZ_BACKGROUND_*_FALLBACK flags
+# no longer gate this chain; the chain itself is the gate.
+BACKGROUND_ORDER=(gemini ollama claude_haiku gpt_luna)
+BACKGROUND_TIER_TIMEOUT="${BACKGROUND_TIER_TIMEOUT:-900}"
 if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
-  echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
-  if [ "$SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK" = "1" ] || [ "$SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK" = "1" ]; then
-    echo "background_paid_fallback_ignored=true" | tee -a "$OUTPUT"
-  fi
+  echo "background_chain=gemini,ollama,claude_haiku,gpt_luna login_only_capped" | tee -a "$OUTPUT"
   ORDER=("${BACKGROUND_ORDER[@]}")
 else
   ORDER=(gemini ollama)
@@ -197,6 +204,14 @@ for provider in "${ORDER[@]}"; do
       ;;
     anthropic)
       try_provider anthropic run_claude && exit 0
+      ;;
+    claude_haiku)
+      # Login-only (run_claude unsets ANTHROPIC_API_KEY); one attempt, bounded time.
+      try_provider claude_haiku run_claude && exit 0
+      ;;
+    gpt_luna)
+      # Login-only GPT 6 Luna; never OPENAI_API_KEY; one attempt, bounded time.
+      try_provider gpt_luna timeout "$BACKGROUND_TIER_TIMEOUT" env -u OPENAI_API_KEY -u CODEX_API_KEY codex exec --model "$CODEX_MODEL" -c 'model_reasoning_effort="medium"' -c 'model_verbosity="low"' "$PROMPT" && exit 0
       ;;
     codex_auto)
       try_provider codex_auto run_codex_auto && exit 0

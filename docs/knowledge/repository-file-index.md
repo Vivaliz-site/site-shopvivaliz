@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5697 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -4079,6 +4079,7 @@ Gerado deterministicamente a partir de 5697 arquivos versionados no indice Git. 
 | `scripts/olist-sync-master.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/openai-secure-mcp-platform-auth.mjs` | Ferramentas e rotinas de manutencao - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `scripts/openai-secure-mcp-platform-probe.mjs` | Ferramentas e rotinas de manutencao - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
+| `scripts/ops/activate-mcp-central-marina-admin.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/activate-mcp-central-marina-readonly.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/activate_owner_merge_queue_ruleset.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/authorize-chatgpt-plugin-permissions-lease.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -6045,6 +6046,7 @@ Gerado deterministicamente a partir de 5697 arquivos versionados no indice Git. 
 | `tests/test_abandoned_cart_origin_fence.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_about_email_obfuscation.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_actions_high_impact_performance_contract.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_activate_mcp_central_marina_admin.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_admin_identity_smoke_resolver.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_agent_clone_lifecycle.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_agent_docs_gate.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |

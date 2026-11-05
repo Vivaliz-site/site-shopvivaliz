@@ -912,9 +912,9 @@ state_path.write_text(json.dumps(state))
     def test_background_resume_cannot_fall_through_to_paid_cli_providers(self) -> None:
         failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_RESUME_BACKGROUND", failover)
-        self.assertIn("BACKGROUND_ORDER=(gemini ollama)", failover)
+        self.assertIn("BACKGROUND_ORDER=(gemini ollama claude_haiku gpt_luna)", failover)
         self.assertIn('ORDER=("${BACKGROUND_ORDER[@]}")', failover)
-        self.assertIn("background_paid_fallback_forbidden=true", failover)
+        self.assertIn("background_chain=gemini,ollama,claude_haiku,gpt_luna login_only_capped", failover)
 
     def test_autonomous_loop_re_resolves_current_release_every_cycle(self) -> None:
         loop = (SCRIPTS / "autonomous-agent-loop.sh").read_text(encoding="utf-8")
