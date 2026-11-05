@@ -74,9 +74,11 @@ class BrowserTabReaperTest(unittest.TestCase):
         self.servers.append(server)
         return server
 
-    def task(self, name, conversation, status):
-        (self.state_dir / f"{name}.json").write_text(
-            json.dumps({"conversation_id": conversation, "status": status}), encoding="utf-8")
+    def task(self, name, conversation, status, session=None):
+        payload = {"conversation_id": conversation, "status": status}
+        if session:
+            payload["browser_session"] = session
+        (self.state_dir / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
 
     def run_reaper(self, server, now, *extra):
         args = ["--browser", f"dev={server.port}", "--state-dir", str(self.state_dir),
@@ -147,7 +149,7 @@ class BrowserTabReaperTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             code = reaper.main(args + ["--apply"], now=99 * HOUR)
         self.assertEqual(code, 3)
-        self.assertEqual(server.closed, ["OTHER001"])
+        self.assertEqual(server.closed, [])
 
     def test_corrupt_task_state_file_fails_closed(self):
         (self.state_dir / "broken.json").write_text("{not json", encoding="utf-8")
@@ -187,6 +189,41 @@ class BrowserTabReaperTest(unittest.TestCase):
         server = self.cdp([page("TABAAAAA", "https://example.com/a")])
         self.run_reaper(server, 0.0)
         self.assertEqual(self.state_file.stat().st_mode & 0o777, 0o600)
+
+    def test_active_task_on_this_browser_protects_non_chatgpt_tabs_only(self):
+        # A form or SPA keeps URL and title unchanged while a task types in it.
+        server = self.cdp([
+            page("FORMTAB1", "https://admin.example.com/orders/edit"),
+            page("GPTOLD01", "https://chatgpt.com/c/unbound-old-conversation-1"),
+            page("GPTOLD02", "https://chatgpt.com/c/unbound-old-conversation-2"),
+        ])
+        self.task("live", "some-other-conversation", "RUNNING", session="dev")
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertEqual([t["id"] for t in server.tabs], ["FORMTAB1"])
+        self.assertEqual(browser["protected"], {"browser_in_use_by_active_task": 1})
+        self.assertEqual(sorted(server.closed), ["GPTOLD01", "GPTOLD02"])
+
+    def test_task_bound_to_another_browser_does_not_protect_this_one(self):
+        server = self.cdp([page("TABAAAAA", "https://example.com/a"), page("TABBBBBB", "https://example.com/b")])
+        self.task("live", "conversation-on-atendimento", "RUNNING", session="atendimento")
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 1)
+        self.assertEqual(browser["protected"], {})
+
+    def test_terminal_task_session_does_not_protect_tabs(self):
+        server = self.cdp([page("TABAAAAA", "https://example.com/a"), page("TABBBBBB", "https://example.com/b")])
+        self.task("done", "finished-conversation-1", "CONCLUIDO", session="dev")
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 1)
+
+    def test_dev_aux_follows_the_dev_session(self):
+        self.assertTrue(reaper.browser_busy("dev-aux", {"dev"}))
+        self.assertFalse(reaper.browser_busy("dev-aux", {"atendimento"}))
+        self.assertTrue(reaper.browser_busy("custom", {"atendimento"}))
+        self.assertFalse(reaper.browser_busy("custom", set()))
 
     def test_defaults_converge_to_single_most_recent_tab(self):
         tabs = [page(f"TAB{i:05d}", f"https://chatgpt.com/c/old-conversation-{i}") for i in range(5)]
