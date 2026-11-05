@@ -21,6 +21,13 @@ Para cada erro, executar e evidenciar: (1) RED/reproducao observavel e impacto, 
 <!-- /ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 
 # Knowledge Base do ShopVivaliz
+
+**Rota prioritária de agentes (2026-11-05):** usar o MCP por nome canônico nos
+quatro hosts `always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e
+`marina-a1-4c24g`; os comandos administrativos são `admin_command_run`,
+`service_action` e `task_submit` quando o grant efetivo estiver atestado. O
+MCP independente da Marina complementa o central. SSH/RDC/Actions são fallback
+ou recuperação documentada, e a origem `shopvivaliz-free-a1` nunca é alvo.
 - [Disponibilidade de credenciais para agentes — metadados apenas](agent-credential-availability-2026-11-02.md) — armazenamento verificado, consumidores autorizados e limites do PAT/MCP.
 - [Monitor de provedores gratuitos](ai-free-provider-sentinel.md) — monitor somente leitura das duas VMs para uso de provedores pagos e desvios da política Gemini/Ollama.
 
