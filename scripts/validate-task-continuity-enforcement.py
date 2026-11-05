@@ -127,8 +127,8 @@ else:
         "task_state_signature",
         "task_state_advanced",
         "SHOPVIVALIZ_RESUME_BACKGROUND",
-        "BACKGROUND_ORDER=(gemini ollama)",
-        "background_paid_fallback_forbidden=true",
+        "BACKGROUND_ORDER=(gemini ollama claude_haiku gpt_luna)",
+
     ):
         if token not in fallback_text:
             errors.append(f"scripts/autonomous-provider-failover.sh: missing {token}")

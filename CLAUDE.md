@@ -1035,16 +1035,19 @@ retomada automática e use a rota operacional auditável que consiga registrar o
 
 <!-- FREE_PROVIDER_FALLBACK_V2 -->
 ## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
-- Camada primaria: Gemini Flash elegivel ao nivel gratuito e Ollama local;
-  ambos sao os unicos modelos autorizados nas tentativas autonomas de background.
+- Cadeia de background (decisao do proprietario, 2026-11-05): Gemini Flash >
+  Ollama local > Claude Code Haiku 5.5 (`claude-haiku-5-5`, login, nunca API key)
+  > GPT 6 Luna (`gpt-6-luna`, login, nunca API key). Cada degrau pago roda uma
+  unica tentativa com timeout (`BACKGROUND_TIER_TIMEOUT`, padrao 900 s).
+  O ChatGPT normal fica no despachante, com lease.
 - Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
   nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
 - Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
   ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
 - Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
   interativa, finita, com aprovacao humana explicita e controle de cota.
-- Cron, controller, worker e bridges nao podem promover fallback pago por
-  variavel de ambiente legada, healthcheck ou indisponibilidade do Gemini.
+- Fora da cadeia acima, nenhum cron, controller, worker ou bridge pode promover
+  fallback pago por variavel de ambiente legada ou healthcheck.
 - Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
   e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
 - Prevenir recorrencia: instalador escreve paid fallback=0; execucao background

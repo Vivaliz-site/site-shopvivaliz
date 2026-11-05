@@ -138,7 +138,7 @@ def free_router_present() -> bool:
     script = entry.parent / "autonomous-provider-failover.sh"
     try:
         data = script.read_text()
-        return "FREE_PROVIDER_FALLBACK_V2" in data and "BACKGROUND_ORDER=(gemini ollama)" in data
+        return "FREE_PROVIDER_FALLBACK_V2" in data and "BACKGROUND_ORDER=(gemini ollama claude_haiku gpt_luna)" in data
     except OSError:
         return False
 
