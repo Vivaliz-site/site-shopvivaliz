@@ -52,7 +52,7 @@ function Get-ProcessRows {
   return @(Get-CimInstance Win32_Process -ErrorAction Stop)
 }
 
-$now=Get-Date
+$now=(Get-Date).ToUniversalTime()
 $items=@(Get-ProcessRows)
 $byId=@{}
 foreach($p in $items){$byId[[int]$p.ProcessId]=$p}
@@ -60,7 +60,7 @@ $eligible=@{}
 foreach($p in $items){
   $kind=Get-AgentKind $p $byId
   if(-not $kind){continue}
-  $start=[datetime]$p.CreationDate
+  $start=([datetime]$p.CreationDate).ToUniversalTime()
   if($start -eq [datetime]::MinValue){continue}
   $age=($now-$start).TotalHours
   if($age -gt $MaxAgeHours){
@@ -82,7 +82,7 @@ function Has-NewerAgentDescendant([int]$targetPid){
       if([int]$p.ParentProcessId -ne $parentId){continue}
       $childId=[int]$p.ProcessId
       $childKind=Get-AgentKind $p $byId
-      if($childKind -and ($now-([datetime]$p.CreationDate)).TotalHours -le $MaxAgeHours){
+      if($childKind -and ($now-([datetime]$p.CreationDate).ToUniversalTime()).TotalHours -le $MaxAgeHours){
         return $true
       }
       if(-not $seen.ContainsKey($childId)){$queue.Enqueue($childId)}
@@ -92,15 +92,17 @@ function Has-NewerAgentDescendant([int]$targetPid){
 }
 
 $logDir=Join-Path $env:LOCALAPPDATA 'ShopVivaliz'
+$selectedCount=0
 foreach($id in @($eligible.Keys | Sort-Object)){
   $x=$eligible[$id]
   if(Has-NewerAgentDescendant ([int]$id)){continue}
+  $selectedCount++
   $outcome='WOULD_CLOSE'
   if($Apply){
     try{
       # Re-read PID and creation time to prevent a recycled PID from being terminated.
       $current=Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction Stop
-      if(-not $current -or ([datetime]$current.CreationDate) -ne $x.Start){
+      if(-not $current -or ([datetime]$current.CreationDate).ToUniversalTime() -ne $x.Start){
         $outcome='SKIPPED_CHANGED'
       } elseif((Get-AgentKind $current $byId) -ne $x.Kind){
         $outcome='SKIPPED_RECLASSIFIED'
@@ -132,4 +134,4 @@ foreach($id in @($eligible.Keys | Sort-Object)){
     Add-Content -LiteralPath (Join-Path $logDir 'agent-session-ttl.jsonl') -Value $line -Encoding UTF8
   }
 }
-Write-Output ('ELIGIBLE_SESSIONS='+$eligible.Count+' MODE='+$(if($Apply){'apply'}else{'dry-run'}))
+Write-Output ('ELIGIBLE_SESSIONS='+$selectedCount+' MODE=+$(if($Apply){'apply'}else{'dry-run'}))
