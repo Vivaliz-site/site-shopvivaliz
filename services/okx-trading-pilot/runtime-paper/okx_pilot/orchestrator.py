@@ -230,7 +230,13 @@ class PilotOrchestrator:
             )
 
         available = self._max_pending - len(self._pending)
-        if available > 0:
+        if available > 0 and candidates:
+            claim_slot = getattr(self.decision_provider, "claim_analysis_slot", None)
+            if claim_slot is not None and not claim_slot():
+                return CycleResult(
+                    "PAPER", len(candidates), decisions, approved, fills,
+                    pending=len(self._pending), provider_errors=provider_errors,
+                )
             base_context = (
                 self.decision_provider.context_builder.paper_context()
                 if getattr(self.decision_provider, "context_builder", None)
