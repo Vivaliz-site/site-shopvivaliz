@@ -1192,8 +1192,10 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("[REDACTED_EMAIL]", expression)
         daybreak = m.browser_navigate_command("ABC123", "https://openai.com/form/enterprise-trusted-access-for-cyber/")
         self.assertIn("openai.com", daybreak)
-        with self.assertRaisesRegex(ValueError, "browser_url_not_allowlisted"):
-            m.browser_navigate_command("ABC123", "https://mail.google.com/mail/u/0/")
+        # Policy: any https site is navigable; credential-bearing queries stay denied.
+        mail_command = m.browser_navigate_command("ABC123", "https://mail.google.com/mail/u/0/")
+        mail_b64 = re.search(r"SHOPVIVALIZ_EXPR_B64=([A-Za-z0-9+/=]+)", mail_command).group(1)
+        self.assertIn("mail.google.com", base64.b64decode(mail_b64).decode())
         with self.assertRaisesRegex(ValueError, "browser_url_query_not_allowed"):
             m.browser_navigate_command("ABC123", "https://auth.openai.com/log-in?state=opaque")
 

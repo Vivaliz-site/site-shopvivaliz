@@ -1964,7 +1964,7 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "if(matches.length===0) throw new Error('tab_not_found'); if(matches.length>1) throw new Error('tab_id_ambiguous'); "
         "const {t,session}=matches[0]; "
         "const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']); "
-        "const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted'); "
+        "const u=new URL(String(t.url||'')); if(!u.hostname) throw new Error('tab_origin_not_allowlisted'); "
         "const ws=new WebSocket(t.webSocketDebuggerUrl); "
         "await Promise.race([new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))]); "
         "const c=new Cdp(ws); "
@@ -2050,7 +2050,7 @@ if (denyCorporateLogout(e)) throw new Error("corporate_logout_guard_denied");
 def browser_open_command(url: str) -> str:
     _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
-    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+    if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("browser_url_not_allowlisted")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("browser_url_query_not_allowed")
@@ -2078,7 +2078,7 @@ def browser_controls_command(tab_id: str) -> str:
 def browser_navigate_command(tab_id: str, url: str) -> str:
     _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
-    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+    if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("browser_url_not_allowlisted")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("browser_url_query_not_allowed")
@@ -2089,7 +2089,7 @@ def browser_navigate_command(tab_id: str, url: str) -> str:
 def browser_focused_navigate_command(url: str) -> str:
     _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
-    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+    if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("browser_url_not_allowlisted")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("browser_url_query_not_allowed")
@@ -2155,7 +2155,7 @@ if(matches.length===0) throw new Error('tab_not_found');
 if(matches.length>1) throw new Error('tab_id_ambiguous');
 const {t}=matches[0];
 const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
-const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted');
+const u=new URL(String(t.url||'')); if(!u.hostname) throw new Error('tab_origin_not_allowlisted');
 const ws=new WebSocket(t.webSocketDebuggerUrl);
 await Promise.race([
   new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),
