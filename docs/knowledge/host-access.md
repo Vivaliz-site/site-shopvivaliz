@@ -1,3 +1,5 @@
+> **Diretiva do proprietario (2026-11-05):** o acesso de agentes e automacoes aos hosts e pelo MCP com funcoes admin (Marina: `docs/knowledge/marina-mcp-admin-agent-access.md`; backend: Remote Control MCP `admin_command_run`). Aliases SSH do laptop do proprietario sao pessoais e nao servem a automacoes. Ver bloco `OWNER_DIRECTIVES_20261105` em `AGENTS.md`.
+
 <!-- GITHUB_ADMIN_TOKEN_LOCATIONS_20261103 -->
 ## GitHub administrative credential discovery (2026-11-03)
 
