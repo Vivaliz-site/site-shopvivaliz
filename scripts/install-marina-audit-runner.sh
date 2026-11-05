@@ -21,7 +21,7 @@ RUNNER_NAME="marina-audit-a1"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/actions-runner-audit}"
 
 [ "$(id -u)" != "0" ] || { echo "ERROR=do_not_run_as_root" >&2; exit 2; }
-[ -n "${RUNNER_REG_TOKEN:-}" ] || { echo "ERROR=RUNNER_REG_TOKEN_missing" >&2; exit 3; }
+[ -n "${RUNNER_REG_TOKEN:-}" ] || { echo "ERROR=registration_token_missing" >&2; exit 3; }
 
 if [ -f "$INSTALL_DIR/.runner" ]; then
   echo "RUNNER_ALREADY_CONFIGURED=true dir=$INSTALL_DIR"
