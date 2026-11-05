@@ -164,6 +164,9 @@ function percent(x){
 }
 const missingReasonLabels = Object.freeze({
  'MISSING_COST':'Custo, embalagem ou despesa variável sem comprovação',
+ 'MISSING_PRODUCT_COST':'Custo de compra do produto não vinculado no ERP',
+ 'MISSING_PACKAGING_COST':'Valor de embalagem não informado',
+ 'MISSING_OTHER_VARIABLE_COST':'Outras despesas variáveis não informadas',
  'MISSING_TAX_PROFILE':'Imposto deste anúncio não configurado',
  'MISSING_FEE_QUOTE':'Tarifa de venda do ML não obtida',
  'MISSING_SHIPPING_QUOTE':'Frete do vendedor ainda não cotado',
@@ -183,7 +186,9 @@ function missingReasons(row){
  let values=raw;
  try{if(typeof raw==='string')values=JSON.parse(raw);}catch{return ['Motivos inválidos no relatório'];}
  if(!Array.isArray(values))return ['Motivos inválidos no relatório'];
- return [...new Set(values.filter(x=>typeof x==='string'))].map(x=>missingReasonLabels[x]||x);
+ const codes=[...new Set(values.filter(x=>typeof x==='string'))];
+ const hasDetailedCost=codes.some(x=>x==='MISSING_PRODUCT_COST'||x==='MISSING_PACKAGING_COST'||x==='MISSING_OTHER_VARIABLE_COST');
+ return codes.filter(x=>!(x==='MISSING_COST'&&hasDetailedCost)).map(x=>missingReasonLabels[x]||x);
 }
 function diagnostic(row){
  if(!row)return 'Não auditado';
