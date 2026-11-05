@@ -1,0 +1,62 @@
+name: AI Squad Contract Tests
+
+# Contratos estaticos do AI Squad (instaladores das bridges, deploy, docs e
+# UI admin). Rodam em runner hospedado pelo GitHub: nao tocam VM nem segredos.
+on:
+  pull_request:
+    paths:
+      - 'ops/ai-squad/**'
+      - 'tests/ai-squad-*'
+      - 'scripts/deploy-production.sh'
+      - 'includes/ai-squad-core.php'
+      - 'admin/buscador.php'
+      - 'docs/knowledge/ai-squad.md'
+      - 'docs/knowledge/claude-vm-bootstrap.md'
+      - 'docs/knowledge/agent-rules.md'
+      - 'CLAUDE.md'
+      - '.github/workflows/ai-squad-contract-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/ai-squad/**'
+      - 'tests/ai-squad-*'
+      - 'scripts/deploy-production.sh'
+      - 'includes/ai-squad-core.php'
+      - 'admin/buscador.php'
+      - 'docs/knowledge/ai-squad.md'
+      - 'docs/knowledge/claude-vm-bootstrap.md'
+      - 'docs/knowledge/agent-rules.md'
+      - 'CLAUDE.md'
+      - '.github/workflows/ai-squad-contract-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-squad-contract-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Shell contracts
+        run: |
+          set -euo pipefail
+          bash tests/ai-squad-three-provider-runtime-contract-test.sh
+          bash tests/ai-squad-runtime-drain-contract-test.sh
+          bash tests/ai-squad-provider-timeout-contract.sh
+          bash tests/ai-squad-ui-audit-contract-test.sh
+          bash tests/ai-squad-ui-browser-mode-contract.sh
+          bash tests/ai-squad-codex-bridge-install-test.sh
+      - name: Bridge unit tests
+        run: |
+          set -euo pipefail
+          node tests/ai-squad-claude-bridge-test.mjs
+          node tests/ai-squad-codex-bridge-test.mjs

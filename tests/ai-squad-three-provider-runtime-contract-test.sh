@@ -18,13 +18,25 @@ test -f "$claude_bridge"
 test -f "$codex_installer"
 
 grep -q 'shopvivaliz-squad-claude-bridge.service' "$claude_installer"
-grep -q 'current/ops/ai-squad/claude-bridge.mjs' "$claude_installer"
+# O instalador copia a bridge do proprio diretorio (nao de current/) para um
+# local estavel do usuario, evitando que symlink de release antiga reabilite
+# inferencia paga durante rollback.
+grep -Fq 'bridge_source="$(cd -- "$(dirname -- "$0")" && pwd -P)/claude-bridge.mjs"' "$claude_installer"
+grep -Fq 'bridge="$HOME/.local/share/shopvivaliz-ai-squad/claude-bridge.mjs"' "$claude_installer"
+grep -Fq 'ExecStart=$node_bin $bridge' "$claude_installer"
+! grep -q 'current/ops/ai-squad/claude-bridge.mjs' "$claude_installer"
 grep -q 'AI_SQUAD_CLAUDE_BRIDGE_PORT=17657' "$claude_installer"
 grep -q 'AI_SQUAD_CLAUDE_ENV_PATH=' "$claude_installer"
 grep -q 'AI_SQUAD_CLAUDE_CREDENTIALS_PATH=' "$claude_installer"
 grep -q 'systemctl --user' "$claude_installer"
 grep -q 'fuser -k 17657/tcp' "$claude_installer"
-grep -q 'authenticated.*true' "$claude_installer"
+# A prontidao da bridge Claude e decidida por bridge-health-policy.py (o
+# instalador apenas o invoca); ela exige authenticated === true.
+health_policy="$root/ops/ai-squad/bridge-health-policy.py"
+test -f "$health_policy"
+grep -Fq 'python3 "$checker" claude' "$claude_installer"
+grep -Fq 'checker="$(cd -- "$(dirname -- "$0")" && pwd -P)/bridge-health-policy.py"' "$claude_installer"
+grep -Fq 'body.get("authenticated") is True' "$health_policy"
 grep -q 'seq 1 120' "$claude_installer"
 grep -Fq 'bootstrap_doc="/home/ubuntu/shopvivaliz-deploy/current/docs/knowledge/claude-vm-bootstrap.md"' "$claude_installer"
 grep -Fq "bootstrap_import='@~/.claude/shopvivaliz-bootstrap.md'" "$claude_installer"
