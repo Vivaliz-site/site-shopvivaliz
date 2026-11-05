@@ -74,10 +74,16 @@ class BrowserTabReaperTest(unittest.TestCase):
         self.servers.append(server)
         return server
 
-    def task(self, name, conversation, status, session=None):
+    def task(self, name, conversation, status, session=None, updated_hours_ago=None, updated_at=None):
         payload = {"conversation_id": conversation, "status": status}
         if session:
             payload["browser_session"] = session
+        if updated_hours_ago is not None:
+            import time
+            stamp = time.time() - updated_hours_ago * HOUR
+            payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stamp))
+        if updated_at is not None:
+            payload["updated_at"] = updated_at
         (self.state_dir / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
 
     def run_reaper(self, server, now, *extra):
@@ -229,6 +235,43 @@ class BrowserTabReaperTest(unittest.TestCase):
         _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply", "--task-fresh-hours", "24")
         self.assertEqual(browser["closed"], 0)
         self.assertEqual(browser["protected"], {"browser_in_use_by_active_task": 2})
+
+    def test_recovery_rewrite_does_not_make_an_abandoned_task_look_active(self):
+        # Recovery bookkeeping rewrites the checkpoint (fresh mtime) without advancing the
+        # logical progress marker `updated_at`; the logical marker must win.
+        server = self.cdp([page("FORMTAB1", "https://admin.example.com/a"),
+                           page("FORMTAB2", "https://admin.example.com/b")])
+        self.task("abandoned", "dead-conversation-2", "RUNNING", session="dev", updated_hours_ago=10)
+        self.run_reaper(server, 0.0)  # the file itself was just written, so its mtime is fresh
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 1)
+        self.assertNotIn("browser_in_use_by_active_task", browser["protected"])
+
+    def test_recent_logical_progress_wins_over_an_old_file_mtime(self):
+        server = self.cdp([page("FORMTAB1", "https://admin.example.com/a"),
+                           page("FORMTAB2", "https://admin.example.com/b")])
+        self.task("working", "live-conversation-3", "RUNNING", session="dev", updated_hours_ago=1)
+        self.age_task("working", 30)  # old mtime, recent logical progress
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 0)
+        self.assertEqual(browser["protected"], {"browser_in_use_by_active_task": 2})
+
+    def test_unreadable_updated_at_falls_back_to_file_mtime(self):
+        server = self.cdp([page("FORMTAB1", "https://admin.example.com/a"),
+                           page("FORMTAB2", "https://admin.example.com/b")])
+        self.task("legacy", "legacy-conversation-4", "RUNNING", session="dev", updated_at="not-a-date")
+        self.age_task("legacy", 10)
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 1)
+
+    def test_logical_progress_time_parses_utc_and_rejects_garbage(self):
+        self.assertEqual(reaper.logical_progress_time({"updated_at": "1970-01-01T01:00:00Z"}), 3600.0)
+        self.assertEqual(reaper.logical_progress_time({"updated_at": "1970-01-01T01:00:00+00:00"}), 3600.0)
+        self.assertIsNone(reaper.logical_progress_time({"updated_at": "garbage"}))
+        self.assertIsNone(reaper.logical_progress_time({"updated_at": 123}))
+        self.assertIsNone(reaper.logical_progress_time({}))
 
     def test_stale_task_still_protects_its_own_bound_conversation_tab(self):
         server = self.cdp([page("BOUNDTAB", "https://chatgpt.com/c/old-but-running-conv"),
