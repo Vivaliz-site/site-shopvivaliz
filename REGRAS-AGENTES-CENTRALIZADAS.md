@@ -1,3 +1,9 @@
+<!-- OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
+> **ORDEM EXPRESSA DO PROPRIETARIO — MCP PRIMEIRO, TENTATIVA REAL OBRIGATORIA:** antes de acionar RDC, SSH, RustDesk ou alegar que uma tarefa remota ShopVivaliz esta bloqueada, identificar o MCP administrativo disponivel **na sessao atual** e **executar uma chamada MCP adequada e autorizada** para o host/operacao. `hosts_list`, `claude mcp list` e `codex mcp list` isolados NAO contam como tentativa de execucao. Backend/Fred-Win/KOCEPSV: `shopvivaliz-remote-control` (`admin_command_run` ou `task_submit` + `task_status`, quando expostos). Marina: MCP independente `shopvivaliz-marina-admin` e rota central somente conforme grants atuais. Um timeout de RDC/GUI NAO e motivo para ignorar MCP.
+> **EVIDENCIA OBRIGATORIA:** registrar `remote_access_attempts` com host, ferramenta, horario, `request_id`/`task_id`, resultado e proxima acao. Diferenciar `MCP_ATTEMPTED_OK`, `MCP_ATTEMPTED_FAILED`, `MCP_NOT_EXPOSED`, `MCP_NOT_AUTHORIZED` e `MCP_NOT_APPLICABLE`. Sem chamada nao afirmar que tentou MCP. Falha MCP comprovada permite fallback independente e autorizado, sem contornar recusas, MFA, RBAC, lease ou grant; prosseguir ate validacao.
+> **FONTE DE VERDADE:** [Contrato MCP primeiro](docs/ops/mcp-first-agent-execution-2026-11-05.md). Vale para ChatGPT dev/atendimento, Codex, Claude Code, Gemini e subagentes; sessoes abertas precisam carregar estas instrucoes ou verificar sua versao atual.
+<!-- /OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
+
 <!-- AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
 ## Auditoria Extrema V5: prova real pela UI e continuidade até APTO
 
