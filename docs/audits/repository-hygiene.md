@@ -4,9 +4,9 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 5717
+- Arquivos versionados: 5719
 - Diretorios versionados: 684
-- Grupos de conteudo identico: 203
+- Grupos de conteudo identico: 204
 - Grupos identicos que incluem codigo: 13
 - Nomes de funcao encontrados em mais de um arquivo: 737
 - Arquivos em diretorios explicitamente legados: 1
@@ -1299,6 +1299,10 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 ### Git blob ID `751a04d2f91922f3ef1510562505dcbb2a461521`
 - `.vinext/fonts/geist-mono-00e989178794/geist-mono-44745446.woff2`
 - `dist/client/assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-44745446.woff2`
+
+### Git blob ID `762aa30fadcc544099c9621d383925c3123aba8b`
+- `AGENTS.md`
+- `CLAUDE.md`
 
 ### Git blob ID `7ab581f7b347b642702d806e03391499013b6462`
 - `.vinext/fonts/geist-8ac0455e797f/geist-ff2310f5.woff2`

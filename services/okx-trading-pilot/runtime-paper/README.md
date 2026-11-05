@@ -51,3 +51,28 @@ Run a direct status check on the backend using `python3 scripts/provider_watchdo
 Priority is exactly: Gemini > Ollama > ChatGPT normal > Codex. A provider is attempted only while its channel is eligible and within its respective access/cost policy. Gemini Free requires an operator-verified Free billing tier for the exact API key and Google project, recorded in the existing protected 0600 attestation for at most 30 days. Without this proof, Gemini is skipped without generating a paid request. Ollama uses a local structured-output model, and every one of its 20 analytical layers must contain model-generated assessment and evidence; invalid results fall through and cannot trigger a paper order. Normal ChatGPT is interactive and has no sanctioned headless inference adapter in this runtime. Until an authorized interactive adapter is available, its slot is skipped rather than manipulating browser sessions or extracting cookies. Codex remains last and retains its provider-side manual approval/cost gate. The provider chain must never bypass a 403.
 
 HOLD and REJECT are valid outcomes from the earliest qualified provider and do not trigger fallback just because no trade was created. The immutable Risk Gateway and PAPER-only broker remain authoritative. Actual source, fallback order, errors and last valid decision timestamp are emitted in status for diagnostics. A running service alone does not prove strategy availability. Ollama calls are bounded to 75 seconds and timeouts cool down for 15 minutes to avoid starving the VM.
+
+
+## Gemini credentials in the isolated PAPER worker
+
+The worker retains systemd DynamicUser=yes and ProtectHome=yes. Install
+the systemd/shopvivaliz-okx-paper-gemini-free-credentials.conf fragment at
+/etc/systemd/system/shopvivaliz-okx-paper.service.d/10-gemini-free-credentials.conf
+and run systemctl daemon-reload before restarting. systemd LoadCredential
+copies two protected sources to private CREDENTIALS_DIRECTORY, which the
+provider reads without exposing the originals or putting secrets in argv/env.
+
+The Gemini Free proof recorded in Google AI Studio on 2026-10-12 was
+recovered from Marina and fully SHA-256 matched against the existing backend
+key on 2026-11-05 (project gen-lang-client-0341449504). No new key or paid
+billing was enabled. Recheck the exact project's Free billing tier before
+the 30-day attestation expires; never auto-renew it without evidence.
+
+Observe a real 20-layer PAPER-only Gemini decision, the running source
+commit, persisted portfolio parity and the active watchdog after deployment.
+
+Systemd 255 exposes private LoadCredential files as root-owned mode 0440 under a root-owned mode 0550 directory beneath /run/credentials/. The permission verifier recognizes only this exact secure systemd layout as the exception to the original protected 0600 source-file requirement. Arbitrary group-readable proof files remain refused.
+
+Gemini generateContent must send JSON Schema through generationConfig.responseJsonSchema (not responseSchema), since the legacy OpenAPI responseSchema rejects additionalProperties and otherwise returns HTTP 400 before inference. The strict 20-layer parser remains the final validation gate.
+
+Continuous market polls remain five-second, but the PAPER decision engine now admits at most one unattended model-analysis attempt each five minutes (288 per 24 hours), regardless of Free-tier provider or fallback. Idle wait is not a provider error and does not make the prior validated AI decision inactive. The provider status exposes seconds until the next analysis slot. This is a conservative ceiling; the project's actual Gemini rate limits are provider-controlled and may be lower.
