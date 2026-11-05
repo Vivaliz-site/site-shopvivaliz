@@ -69,6 +69,23 @@ $checks = [
         && str_contains($page, 'Motivos inválidos no relatório')
         && str_contains($page, 'function diagnostic(row)')
         && str_contains($page, 'td.textContent='),
+    'price simulation uses only the existing quote endpoint and server account binding' =>
+        str_contains($api, "\$writeActions = ['start', 'resume', 'preview'];")
+        && str_contains($api, "'/v1/pricing/quote'")
+        && str_contains($api, "'requested_price' => \$payload['requested_price']")
+        && str_contains($api, "'account_id' => \$account")
+        && str_contains($api, "'quantity' => 1")
+        && str_contains($api, "array_diff(array_keys(\$payload), ['item_id', 'requested_price'])")
+        && str_contains($page, "request('preview',{method:'POST'")
+        && str_contains($page, "quote.sources?.price?.origin!=='REQUESTED_PRICE'"),
+    'simulation requires active and variant-free listing and never publishes prices' =>
+        str_contains($page, "simulationListing.status==='active'")
+        && str_contains($page, "simulationListing.variants||[]")
+        && str_contains($page, "Nenhuma alteração é enviada ao Mercado Livre ou ao ERP.")
+        && str_contains($page, "SIMULAÇÃO: preço NÃO alterado")
+        && !str_contains($api, "'/items/")
+        && !str_contains($api, "'/produtos/")
+        && !str_contains($api, "'/v1/pricing/price-update"),
     'dashboard linked from the existing Mercado Livre admin' =>
         str_contains($parent, '/admin/mercadolivre-margin.php'),
 ];
