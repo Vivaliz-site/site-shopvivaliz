@@ -1,6 +1,14 @@
 <!-- OWNER_NO_UNAPPROVED_RESTRICTIONS_20261105 -->
 > **Regra do proprietario (2026-11-05): nenhum agente cria restricao ou bloqueio sem aprovacao expressa do dono.** Isso vale para qualquer agente (Claude, GPT, Codex, Gemini, Copilot, workers e subagentes) e para qualquer lugar: instrucoes, documentacao, codigo, workflows, testes de contrato, configuracao de MCP, permissoes, politicas e grants. Nao adicionar, reintroduzir nem endurecer proibicao, trava ou "NAO USE" por conta propria; se achar que algo precisa de limite, propor ao dono em PR ou pergunta e esperar a aprovacao. Restricao que o dono diga que nao aprovou deve ser removida quando ele pedir. Protecoes que o dono ja aprovou continuam valendo, e o agente nao as enfraquece por conta propria. Contexto: a proibicao de SSH direto, RDC e Bastion foi colocada sem aprovacao e retirada em 2026-11-05.
 
+<!-- AGENT_NATIVE_MCP_ADMIN_ROUTE_V1 -->
+## Descoberta e prioridade do MCP administrativo (Claude Code)
+
+Para operacoes ShopVivaliz, consultar primeiro o catalogo MCP realmente registrado no perfil do agente e a topologia de `AGENTS.md#rota-mcp-prioritaria-de-quatro-hosts`. Priorizar o MCP central `shopvivaliz-remote-control` para backend, Fred-Win e KOCEPSV; para Marina utilizar tambem o MCP independente `shopvivaliz-marina-admin`, quando autenticado, e a rota central somente nas capacidades que o grant vigente efetivamente anuncie. Se `admin_command_run`, `service_action` ou `task_submit` nao constar no schema de um host, **nao** interpretar `hosts_list` como prova de autorizacao para aquela chamada. A Marina independente expoe `marina_admin_shell` por JWT validado, inclusive `as_root` conforme concessao vigente.
+
+Na sessao Claude Code, usar `claude mcp list` para conferir registro e `Connected` antes de alegar disponibilidade; a configuracao nativa do MCP Marina usa `headersHelper` com arquivos protegidos, sem inserir segredos em prompts, TOML, Git ou logs. Diante de MCP ausente, investigar instalacao/escopo/credencial existente e revalidar, sem copiar credenciais entre hosts ou contornar recusa de identidade, grant, lease e RBAC. SSH, RDC e outros canais continuam alternativas autorizadas quando houver necessidade tecnica ou indisponibilidade verificada; nao interromper reparos independentes. Aplicar o contrato completo de `AGENTS.md` e `docs/knowledge/agent-rules.md`.
+<!-- /AGENT_NATIVE_MCP_ADMIN_ROUTE_V1 -->
+
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
 
