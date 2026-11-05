@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import pwd
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -41,6 +42,46 @@ def probe(mod,session):
    state="AUTHENTICATED" if verified else "UNKNOWN"
   return {"state":state if state in ("AUTHENTICATED","NOT_AUTHENTICATED","IDENTITY_MISMATCH","UNKNOWN") else "UNKNOWN","verified":verified}
  except Exception:return {"state":"PROBE_ERROR","verified":False}
+def dev_aux_route_mode():
+ # The auxiliary Dev browser is optional only when the Dev MCP is bound
+ # to canonical CDP9559. Do not infer adoption from a running Chrome.
+ try:
+  result=subprocess.run(
+   ["/usr/bin/systemctl","show","--property=Environment","--value",
+    "shopvivaliz-browser-dev-mcp.service"],
+   capture_output=True,text=True,timeout=4,check=False)
+  if result.returncode!=0:return "unknown"
+  values={}
+  for assignment in shlex.split(result.stdout):
+   if "=" in assignment:
+    key,value=assignment.split("=",1)
+    if key in ("SHOPVIVALIZ_BROWSER_CDP_URL","SHOPVIVALIZ_DEV_ADOPTED_CDP"):
+     values[key]=value
+  cdp=values.get("SHOPVIVALIZ_BROWSER_CDP_URL")
+  adopted=values.get("SHOPVIVALIZ_DEV_ADOPTED_CDP")
+  if cdp=="http://127.0.0.1:9559" and adopted is None:return "canonical"
+  if cdp=="http://127.0.0.1:9557" and adopted=="9557":return "auxiliary"
+ except (OSError,ValueError,subprocess.TimeoutExpired):
+  pass
+ return "unknown"
+
+def inactive_aux_state():
+ # Transport-only /health is never proof of an authenticated session.
+ # It can only exempt a demonstrably unused auxiliary transport.
+ if dev_aux_route_mode()!="canonical":return None
+ try:
+  health=aux_health()
+  if (isinstance(health,dict) and health.get("ok") is True
+      and health.get("session")=="dev"
+      and health.get("cdp_reachable") is True
+      and "account_authenticated" in health
+      and health.get("account_authenticated") is None
+      and health.get("account_identity_verified") is False):
+   return {"state":"INACTIVE_NOT_ROUTED","verified":False,"required":False}
+ except (OSError,TimeoutError,ValueError,TypeError):
+  pass
+ return None
+
 def profile_ok(name,uid):
  try:
   p=Path("/home/fredrdp/.config")/name
@@ -74,11 +115,17 @@ def main():
  uid=pwd.getpwnam("fredrdp").pw_uid
  data={}
  for name,(session,prof,unit) in EXPECTED.items():
-  row=probe(mod,session)
+  row=inactive_aux_state() if name=="dev_aux_9557" else None
+  if row is None:
+   row=probe(mod,session)
+   row["required"]=True
   row["profile_intact"]=profile_ok(prof,uid)
   row["service_active"]=service_ok(unit)
   data[name]=row
- healthy=all(x["verified"] and x["profile_intact"] and x["service_active"] for x in data.values())
+ healthy=all(
+  x["profile_intact"] and x["service_active"] and
+  (x["verified"] if x["required"] else x["state"]=="INACTIVE_NOT_ROUTED")
+  for x in data.values())
  try:
   prev=json.loads(DEST.read_text(encoding="utf8"))
   n=max(0,min(999,int(prev.get("consecutive_failures",0))))

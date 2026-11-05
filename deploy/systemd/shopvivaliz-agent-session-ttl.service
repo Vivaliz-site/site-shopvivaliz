@@ -1,0 +1,16 @@
+[Unit]
+Description=ShopVivaliz agent CLI session TTL (Claude Code/Codex, 24h)
+Documentation=https://github.com/Vivaliz-site/site-shopvivaliz/blob/main/scripts/maintenance/agent-session-ttl.py
+ConditionPathExists=/home/ubuntu/.local/bin/shopvivaliz-agent-session-ttl.py
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+ExecStart=/usr/bin/python3 /home/ubuntu/.local/bin/shopvivaliz-agent-session-ttl.py --apply
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+UMask=0077
+TimeoutStartSec=300

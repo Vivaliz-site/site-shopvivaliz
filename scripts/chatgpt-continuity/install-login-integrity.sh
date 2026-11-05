@@ -58,7 +58,10 @@ p='/var/lib/shopvivaliz-login-integrity/state.json'
 s=json.load(open(p))
 assert s.get('status') == 'HEALTHY', s.get('status')
 assert s.get('readonly') is True
-assert all(row.get('verified') and row.get('profile_intact') and row.get('service_active') for row in s['sessions'].values())
+assert all(row.get('profile_intact') and row.get('service_active') and
+           (row.get('verified') is True or
+            (row.get('required') is False and row.get('state') == 'INACTIVE_NOT_ROUTED'))
+           for row in s['sessions'].values())
 print('SHOPVIVALIZ_LOGIN_INTEGRITY=HEALTHY')
 print('CHROMIUM_BROWSERS_UNTOUCHED=true')
 PY
