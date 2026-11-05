@@ -1,0 +1,12 @@
+[Unit]
+Description=Check interactive Claude Code/Codex session age hourly
+
+[Timer]
+OnBootSec=5min
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1min
+Unit=shopvivaliz-agent-session-ttl.service
+
+[Install]
+WantedBy=timers.target
