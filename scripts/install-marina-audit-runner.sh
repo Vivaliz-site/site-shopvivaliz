@@ -21,34 +21,36 @@ RUNNER_NAME="marina-audit-a1"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/actions-runner-audit}"
 
 [ "$(id -u)" != "0" ] || { echo "ERROR=do_not_run_as_root" >&2; exit 2; }
-[ -n "${RUNNER_REG_TOKEN:-}" ] || { echo "ERROR=registration_token_missing" >&2; exit 3; }
+if [ -z "${RUNNER_REG_TOKEN:-}" ]; then
+  echo "ERROR=registration_token_missing" >&2
+  exit 3
+fi
 
 if [ -f "$INSTALL_DIR/.runner" ]; then
   echo "RUNNER_ALREADY_CONFIGURED=true dir=$INSTALL_DIR"
-  exit 0
+else
+  mkdir -p "$INSTALL_DIR"
+  cd "$INSTALL_DIR"
+
+  archive="actions-runner-linux-arm64-${RUNNER_VERSION}.tar.gz"
+  curl -fsSL -o "$archive" \
+    "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${archive}"
+  echo "${RUNNER_SHA256}  ${archive}" | sha256sum -c - >/dev/null \
+    || { echo "ERROR=runner_checksum_mismatch" >&2; rm -f "$archive"; exit 4; }
+  tar xzf "$archive"
+  rm -f "$archive"
+
+  ./config.sh \
+    --unattended \
+    --url "$REPO_URL" \
+    --token "$RUNNER_REG_TOKEN" \
+    --name "$RUNNER_NAME" \
+    --labels "$RUNNER_LABEL" \
+    --work _work \
+    --replace=false >/dev/null \
+    || { echo "ERROR=runner_config_failed" >&2; exit 5; }
+
+  echo "RUNNER_CONFIGURED=true name=$RUNNER_NAME label=$RUNNER_LABEL dir=$INSTALL_DIR"
+  echo "PERSISTENCE_STEP_REQUIRES_SUDO (executar uma vez, pelo dono):"
+  echo "  cd $INSTALL_DIR && sudo ./svc.sh install ubuntu && sudo ./svc.sh start"
 fi
-
-mkdir -p "$INSTALL_DIR"
-cd "$INSTALL_DIR"
-
-archive="actions-runner-linux-arm64-${RUNNER_VERSION}.tar.gz"
-curl -fsSL -o "$archive" \
-  "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${archive}"
-echo "${RUNNER_SHA256}  ${archive}" | sha256sum -c - >/dev/null \
-  || { echo "ERROR=runner_checksum_mismatch" >&2; rm -f "$archive"; exit 4; }
-tar xzf "$archive"
-rm -f "$archive"
-
-./config.sh \
-  --unattended \
-  --url "$REPO_URL" \
-  --token "$RUNNER_REG_TOKEN" \
-  --name "$RUNNER_NAME" \
-  --labels "$RUNNER_LABEL" \
-  --work _work \
-  --replace=false >/dev/null \
-  || { echo "ERROR=runner_config_failed" >&2; exit 5; }
-
-echo "RUNNER_CONFIGURED=true name=$RUNNER_NAME label=$RUNNER_LABEL dir=$INSTALL_DIR"
-echo "PERSISTENCE_STEP_REQUIRES_SUDO (executar uma vez, pelo dono):"
-echo "  cd $INSTALL_DIR && sudo ./svc.sh install ubuntu && sudo ./svc.sh start"
