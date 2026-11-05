@@ -1,0 +1,38 @@
+{
+  "schema": "SHOPVIVALIZ_MCP_LIVE_TOOL_INVENTORY_V1",
+  "captured_at": "2026-11-05",
+  "source": "scripts/marina_mcp_agent_client.py tools via the public Marina MCP route (Cloudflare Access service token)",
+  "compared_against": "docs/ops/mcp-rdc-capability-parity-2026-11-01.json",
+  "certification": "NOT_CERTIFIED",
+  "live_tools": [
+    "marina_admin_shell",
+    "marina_browser_navigate",
+    "marina_gui_session",
+    "marina_host_health",
+    "marina_kernel_telemetry",
+    "marina_kernel_telemetry_batch",
+    "marina_processes_list",
+    "marina_service_status",
+    "marina_system_usage"
+  ],
+  "report": {
+    "certification": "NOT_CERTIFIED",
+    "documented_not_live": [],
+    "live_count": 9,
+    "live_not_documented": [
+      "marina_admin_shell",
+      "marina_browser_navigate",
+      "marina_gui_session"
+    ],
+    "note": "Report only. The parity matrix is attested; the certifier decides any update.",
+    "state_conflicts": [
+      "document_says_marina_independent_offline_but_live_tools_list_answered"
+    ]
+  },
+  "limits": [
+    "Covers only the independent Marina MCP tools/list; the central MCP tool list and the frozen ChatGPT tool catalog were not compared.",
+    "marina_gui_session and marina_browser_navigate were listed but not exercised; marina_admin_shell was exercised only with id commands.",
+    "The attested parity matrix was not edited. Updating it, and any certification, belongs to the certifier."
+  ],
+  "regenerate": "python3 scripts/mcp_tool_inventory_diff.py --from-client"
+}
