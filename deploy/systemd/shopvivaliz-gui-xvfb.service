@@ -1,0 +1,17 @@
+[Unit]
+Description=ShopVivaliz isolated Xvfb display for the remote-control MCP (dedicated cookie, no shared sessions)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+ExecStartPre=/usr/bin/test -s /home/ubuntu/.shopvivaliz/secrets/gui-xvfb.xauth
+ExecStart=/usr/bin/Xvfb :97 -screen 0 1440x900x24 -nolisten tcp -auth /home/ubuntu/.shopvivaliz/secrets/gui-xvfb.xauth
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

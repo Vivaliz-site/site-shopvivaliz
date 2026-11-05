@@ -146,7 +146,9 @@ RETIRED_HOSTS = frozenset({"shopvivaliz-free-a1"})
 
 # Keep enough durable capacity for a control/diagnostic task even when one
 # long job is active. Windows relay work stays serialized.
-DESKTOP_HOSTS = ("Fred-Win", "KOCEPSV")
+# The backend exposes only its isolated Xvfb display (see remote-control-browser-mcp),
+# never a user's logged-in console session.
+DESKTOP_HOSTS = ("Fred-Win", "KOCEPSV", "always-free-arm-1787907847-26")
 RUSTDESK_ID_RE = re.compile(r"^[0-9]{6,20}$")
 
 
