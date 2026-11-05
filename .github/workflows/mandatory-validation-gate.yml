@@ -115,7 +115,7 @@ jobs:
             echo "push_full_validation_required=true"
           fi
       - name: Validate fail-closed impact-selection contract
-        run: python3 -m unittest tests.test_ci_impact_selection tests.test_ci_scoped_validation_contract tests.test_ci_review_reuse_gate -v
+        run: python3 -m unittest tests.test_ci_impact_selection tests.test_ci_scoped_validation_contract tests.test_ci_review_reuse_gate tests.test_merge_group_continuity_scope -v
       - name: Set up PHP 8.4
         if: steps.impact.outputs.needs_php != 'false'
         uses: shivammathur/setup-php@v2
