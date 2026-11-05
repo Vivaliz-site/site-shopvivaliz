@@ -59,6 +59,16 @@ $checks = [
         && str_contains($page, 'outra auditoria em execução')
         && str_contains($page, 'Aguarde a conclusão')
         && str_contains($page, "if(!response.ok){"),
+    'incomplete audit rows expose real price cost tax fee and shipping gaps' =>
+        str_contains($page, 'missing_inputs_json')
+        && str_contains($page, 'MARKETPLACE_PRICE_NOT_SYNCED')
+        && str_contains($page, 'MISSING_COST')
+        && str_contains($page, 'MISSING_TAX_PROFILE')
+        && str_contains($page, 'MISSING_FEE_QUOTE')
+        && str_contains($page, 'MISSING_SHIPPING_QUOTE')
+        && str_contains($page, 'Motivos inválidos no relatório')
+        && str_contains($page, 'function diagnostic(row)')
+        && str_contains($page, 'td.textContent='),
     'dashboard linked from the existing Mercado Livre admin' =>
         str_contains($parent, '/admin/mercadolivre-margin.php'),
 ];
