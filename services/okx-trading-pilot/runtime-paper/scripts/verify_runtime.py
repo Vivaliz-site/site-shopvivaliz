@@ -16,7 +16,9 @@ def main():
     age=(datetime.now(timezone.utc)-datetime.fromisoformat(report['updated_at'])).total_seconds()
     assert 0<=age<=45, 'stale_status'
     assert report['mode']=='PAPER' and report['real_orders_enabled'] is False
-    assert report.get('decision_provider')=='CODEX_20_LAYER'
+    assert report.get('decision_provider')=='PRIORITY_FALLBACK'
+    assert report.get('decision_provider_priority')==['gemini','ollama','chatgpt_normal','codex'], 'wrong_fallback_order'
+    assert report.get('decision_provider_selected') in ('gemini','ollama','chatgpt_normal','codex'), 'no_provider_selected'
     assert report.get('ai_20_layers_configured') is True
     assert report.get('ai_20_layers_active') is True, 'ai_20_layers_not_active'
     assert report.get('decision_model')=='gpt-6-luna', 'wrong_decision_model'
