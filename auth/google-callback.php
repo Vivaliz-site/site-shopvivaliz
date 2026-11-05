@@ -52,12 +52,10 @@ function sv_google_cloud_enable_project(string $state): ?string
 
 function sv_google_ads_pending_dir(): string
 {
-    $dir = sys_get_temp_dir() . '/shopvivaliz-google-ads-refresh';
-    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
-        throw new RuntimeException('Não foi possível preparar armazenamento temporário do token.');
-    }
-    @chmod($dir, 0700);
-    return $dir;
+    // Apache's PrivateTmp is destroyed on restart; OAuth callbacks must keep
+    // their one-time grant in the protected, non-public shared state directory.
+    require_once __DIR__ . '/../includes/google-oauth-private-pending.php';
+    return sv_google_oauth_private_pending_dir('/home/ubuntu/shopvivaliz-deploy/shared/private-oauth');
 }
 
 function sv_google_ads_pending_token_path(string $job): string
