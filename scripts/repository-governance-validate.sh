@@ -58,6 +58,7 @@ run_suite() {
 python3 -m unittest tests.test_ci_suite_relevance -v
 run_suite python3 scripts/check_pr_review_routing.py
 run_suite python3 -m unittest tests/test_pr_review_routing.py -v
+run_suite python3 -m unittest tests/test_owner_review_request_router.py -v
 bash -n .githooks/pre-commit .githooks/pre-push scripts/repository-governance-validate.sh
 run_suite python3 scripts/validate-recurring-ai-policy.py
 run_suite python3 scripts/validate-retired-windows-tasks.py

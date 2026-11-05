@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Request the real owner reviewer for trusted owner-protected PRs only.
+
+Run from protected main on the existing self-hosted runner; never execute PR code.
+This requests a review, not an approval, a merge, or a grant.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from scripts.ops.owner_approved_merge_queue import protected
+from scripts.quality.verify_owner_protected_pr_review import is_protected_path
+
+REPO = "Vivaliz-site/site-shopvivaliz"
+HUMAN = "shopvivaliz-human"
+SHA40 = re.compile(r"[0-9a-f]{40}\Z")
+OWNER_LABELS = frozenset({"owner-review-required", "owner-approval-required", "commercial-owner-approval"})
+POLICY_DOCS = frozenset({"AGENTS.md", "CLAUDE.md", "docs/knowledge/agent-rules.md", "docs/knowledge/host-access.md"})
+OWNER_DIRECTIVE_MARKERS = ("OWNER_DIRECTIVES_", "OWNER_NO_UNAPPROVED_RESTRICTIONS_",
+                           "SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1", "PR_HUMAN_VISIBILITY_ROUTING_V1",
+                           "PROTECTED_OWNER_REVIEW_REQUEST_VISIBILITY_V1",
+                           "OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2")
+
+
+def requires_owner(files: object, labels: object) -> bool:
+    if not isinstance(files, list) or not files or len(files) >= 3000:
+        raise ValueError("changed_files_incomplete")
+    if not isinstance(labels, list):
+        raise ValueError("labels_unavailable")
+    if any(not isinstance(label, dict) or not isinstance(label.get("name"), str) for label in labels):
+        raise ValueError("labels_invalid")
+    if any(label["name"].casefold() in OWNER_LABELS for label in labels):
+        return True
+    for f in files:
+        if not isinstance(f, dict) or not isinstance(f.get("filename"), str):
+            raise ValueError("changed_files_invalid")
+        name = f["filename"]
+        if protected(name) or is_protected_path(name):
+            return True
+        if name not in POLICY_DOCS:
+            continue
+        patch = f.get("patch")
+        if not isinstance(patch, str):
+            return True  # An uninspectable policy change cannot silently skip owner review.
+        for line in patch.splitlines():
+            if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
+                continue
+            if any(marker in line for marker in OWNER_DIRECTIVE_MARKERS):
+                return True
+    return False
+
+
+def decision(pr: dict, files: list, reviews: list, expected_sha: str) -> str:
+    if (pr.get("state") != "open" or pr.get("head", {}).get("sha") != expected_sha
+            or not SHA40.fullmatch(expected_sha)
+            or pr.get("base", {}).get("ref") != "main"
+            or pr.get("head", {}).get("repo", {}).get("full_name") != REPO):
+        raise ValueError("untrusted_or_changed_pr")
+    if not requires_owner(files, pr.get("labels")):
+        return "common_pr_no_owner_review"
+    if pr.get("draft") is not False:
+        return "protected_pr_must_be_ready"
+    requested = pr.get("requested_reviewers")
+    if not isinstance(requested, list):
+        raise ValueError("review_requests_unavailable")
+    if any(isinstance(r, dict) and r.get("login", "").casefold() == HUMAN for r in requested):
+        return "owner_already_requested"
+    if not isinstance(reviews, list) or len(reviews) >= 100:
+        raise ValueError("review_history_unavailable_or_incomplete")
+    owner = [r for r in reviews if isinstance(r, dict)
+             and isinstance(r.get("user"), dict)
+             and r["user"].get("login", "").casefold() == HUMAN
+             and r.get("state") in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}]
+    if owner:
+        if any(not isinstance(r.get("submitted_at"), str) for r in owner):
+            raise ValueError("review_timestamp_missing")
+        latest = max(owner, key=lambda r: r["submitted_at"])
+        if latest.get("commit_id") == expected_sha and latest.get("state") in {"APPROVED", "CHANGES_REQUESTED"}:
+            return "owner_already_reviewed_current_head"
+    return "request_owner_review"
+
+
+def github(path: str, token: str, *, method: str = "GET", data: object = None) -> object:
+    body = json.dumps(data).encode("utf-8") if data is not None else None
+    request = Request("https://api.github.com/repos/" + REPO + path, data=body, method=method,
+                      headers={"Authorization": "Bearer " + token,
+                               "Accept": "application/vnd.github+json",
+                               "X-GitHub-Api-Version": "2022-11-28",
+                               "Content-Type": "application/json",
+                               "User-Agent": "shopvivaliz-owner-review-router"})
+    with urlopen(request, timeout=15) as response:
+        content = response.read(2_000_001)
+    if len(content) > 2_000_000:
+        raise ValueError("github_response_too_large")
+    return json.loads(content)
+
+
+def files_for_pr(number: int, token: str) -> list:
+    files = []
+    for page in range(1, 31):
+        items = github(f"/pulls/{number}/files?per_page=100&page={page}", token)
+        if not isinstance(items, list):
+            raise ValueError("changed_files_invalid")
+        files.extend(items)
+        if len(items) < 100:
+            return files
+    raise ValueError("changed_files_pagination_incomplete")
+
+
+def run(number: int, expected_sha: str, token: str) -> int:
+    if number < 1 or not SHA40.fullmatch(expected_sha) or len(token) < 10:
+        print("OWNER_REVIEW_REQUEST=ERROR invalid_arguments")
+        return 2
+    try:
+        pr = github(f"/pulls/{number}", token)
+        files = files_for_pr(number, token)
+        if not isinstance(pr, dict):
+            raise ValueError("pr_response_invalid")
+        # Only query review history for protected PRs. Common PRs stay invisible to the reviewer inbox.
+        owner_required = requires_owner(files, pr.get("labels"))
+        reviews = github(f"/pulls/{number}/reviews?per_page=100", token) if owner_required else []
+        status = decision(pr, files, reviews, expected_sha)
+        if status == "protected_pr_must_be_ready":
+            print("OWNER_REVIEW_REQUEST=PENDING protected_pr_must_be_ready")
+            return 3
+        if status != "request_owner_review":
+            print("OWNER_REVIEW_REQUEST=SKIPPED reason=" + status)
+            return 0
+        # Prevent an event with an obsolete SHA from requesting a new review after a concurrent push.
+        current = github(f"/pulls/{number}", token)
+        if current.get("head", {}).get("sha") != expected_sha or current.get("state") != "open":
+            raise ValueError("pr_changed_before_request")
+        github(f"/pulls/{number}/requested_reviewers", token, method="POST", data={"reviewers": [HUMAN]})
+        readback = github(f"/pulls/{number}", token)
+        if readback.get("head", {}).get("sha") != expected_sha:
+            raise ValueError("pr_changed_after_request")
+        if not any(isinstance(r, dict) and r.get("login", "").casefold() == HUMAN
+                   for r in readback.get("requested_reviewers", [])):
+            raise ValueError("reviewer_request_not_persisted")
+        print("OWNER_REVIEW_REQUEST=SUCCESS reviewer=shopvivaliz-human")
+        return 0
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        # A real 401/403/422 terminates this attempt; never change identity to bypass it.
+        print("OWNER_REVIEW_REQUEST=ERROR kind=" + type(exc).__name__)
+        return 2
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pr", type=int, required=True)
+    parser.add_argument("--expected-head", required=True)
+    args = parser.parse_args()
+    if os.getenv("GITHUB_REPOSITORY") != REPO:
+        print("OWNER_REVIEW_REQUEST=ERROR repository_mismatch")
+        return 2
+    return run(args.pr, args.expected_head, os.getenv("GITHUB_TOKEN", ""))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
