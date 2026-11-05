@@ -331,7 +331,7 @@ async function refresh(){
 }
 function canonicalPreviewPrice(raw){
  const value=raw.trim().replace(',', '.');
- if(!/^(?:0|[1-9][0-9]{0,6})(?:\\.[0-9]{1,2})?$/.test(value))return null;
+ if(!/^(?:0|[1-9][0-9]{0,6})(?:\.[0-9]{1,2})?$/.test(value))return null;
  const n=Number(value);
  return Number.isFinite(n)&&n>0&&n<=1000000?value:null;
 }
