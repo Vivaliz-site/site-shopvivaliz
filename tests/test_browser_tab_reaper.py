@@ -204,6 +204,45 @@ class BrowserTabReaperTest(unittest.TestCase):
         self.assertEqual(browser["protected"], {"browser_in_use_by_active_task": 1})
         self.assertEqual(sorted(server.closed), ["GPTOLD01", "GPTOLD02"])
 
+    def age_task(self, name, hours):
+        import os
+        import time
+        stamp = time.time() - hours * HOUR
+        os.utime(self.state_dir / f"{name}.json", (stamp, stamp))
+
+    def test_abandoned_running_checkpoint_does_not_keep_browser_busy_forever(self):
+        server = self.cdp([page("FORMTAB1", "https://admin.example.com/a"),
+                           page("FORMTAB2", "https://admin.example.com/b")])
+        self.task("abandoned", "dead-conversation-1", "RUNNING", session="dev")
+        self.age_task("abandoned", 10)  # default freshness window is 6 h
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertEqual(browser["closed"], 1)
+        self.assertNotIn("browser_in_use_by_active_task", browser["protected"])
+
+    def test_task_fresh_window_is_configurable_and_boundary_protects(self):
+        server = self.cdp([page("FORMTAB1", "https://admin.example.com/a"),
+                           page("FORMTAB2", "https://admin.example.com/b")])
+        self.task("slow", "slow-conversation-1", "RUNNING", session="dev")
+        self.age_task("slow", 10)
+        self.run_reaper(server, 0.0)
+        _, browser, _ = self.run_reaper(server, 5 * HOUR, "--apply", "--task-fresh-hours", "24")
+        self.assertEqual(browser["closed"], 0)
+        self.assertEqual(browser["protected"], {"browser_in_use_by_active_task": 2})
+
+    def test_stale_task_still_protects_its_own_bound_conversation_tab(self):
+        server = self.cdp([page("BOUNDTAB", "https://chatgpt.com/c/old-but-running-conv"),
+                           page("OTHER001", "https://example.com/x"),
+                           page("OTHER002", "https://example.com/y")])
+        self.task("old", "old-but-running-conv", "RUNNING", session="dev")
+        self.age_task("old", 72)
+        self.run_reaper(server, 0.0)
+        self.run_reaper(server, 5 * HOUR, "--apply")
+        self.assertIn("BOUNDTAB", [t["id"] for t in server.tabs])
+
+    def test_task_fresh_hours_must_be_at_least_a_quarter_hour(self):
+        self.assertEqual(reaper.main(["--task-fresh-hours", "0.1"]), 2)
+
     def test_task_bound_to_another_browser_does_not_protect_this_one(self):
         server = self.cdp([page("TABAAAAA", "https://example.com/a"), page("TABBBBBB", "https://example.com/b")])
         self.task("live", "conversation-on-atendimento", "RUNNING", session="atendimento")
