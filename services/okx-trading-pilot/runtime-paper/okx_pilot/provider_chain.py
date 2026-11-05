@@ -48,8 +48,28 @@ def _read_free_key(env_path: Path, proof_path: Path) -> str:
     """Never run a Gemini API request without current proof for the exact key."""
     try:
         meta = proof_path.stat()
-        if not stat.S_ISREG(meta.st_mode) or stat.S_IMODE(meta.st_mode) & 0o077:
-            raise ValueError("proof_permissions")
+        if not stat.S_ISREG(meta.st_mode):
+            raise ValueError("proof_not_regular")
+        proof_mode = stat.S_IMODE(meta.st_mode)
+        if proof_mode & 0o077:
+            # systemd LoadCredential uses root-owned 0440 files in its private
+            # root-owned 0550 directory, and grants the service access through
+            # a protected runtime mount. This is not a world-readable secret.
+            credential_root = os.environ.get("CREDENTIALS_DIRECTORY", "")
+            if not credential_root.startswith("/run/credentials/"):
+                raise ValueError("proof_permissions")
+            private_root = Path(credential_root)
+            root_meta = private_root.stat()
+            if not (
+                proof_path == private_root / "gemini-free-tier.json"
+                and not proof_path.is_symlink()
+                and proof_mode == 0o440
+                and meta.st_uid == 0
+                and stat.S_ISDIR(root_meta.st_mode)
+                and root_meta.st_uid == 0
+                and stat.S_IMODE(root_meta.st_mode) == 0o550
+            ):
+                raise ValueError("proof_permissions")
         proof = json.loads(proof_path.read_text())
         if (proof.get("schema_version") != 1 or proof.get("billing_tier") != "free"
                 or proof.get("verified_source") != "google_ai_studio"
@@ -162,8 +182,17 @@ class GeminiFreeProvider:
     def __init__(self, *, model="gemini-3.1-flash-lite", env_path=GEMINI_ENV,
                  proof_path=GEMINI_PROOF, transport=_post_json):
         self.model = model
-        self.env_path = Path(env_path)
-        self.proof_path = Path(proof_path)
+        # systemd LoadCredential copies root-protected source files into a
+        # private per-service path readable to DynamicUser without exposing home.
+        # Never fall back to home if the credential directory is provided.
+        credentials_dir = os.environ.get("CREDENTIALS_DIRECTORY", "").strip()
+        if credentials_dir:
+            sandbox = Path(credentials_dir)
+            self.env_path = sandbox / "gemini.env" if Path(env_path) == GEMINI_ENV else Path(env_path)
+            self.proof_path = sandbox / "gemini-free-tier.json" if Path(proof_path) == GEMINI_PROOF else Path(proof_path)
+        else:
+            self.env_path = Path(env_path)
+            self.proof_path = Path(proof_path)
         self.transport = transport
 
     def analyze(self, snapshot, context: dict):
@@ -171,7 +200,7 @@ class GeminiFreeProvider:
         response = self.transport(
             f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
             {"contents": [{"parts": [{"text": _compact_prompt(snapshot, context)}]}],
-             "generationConfig": {"responseMimeType": "application/json", "responseSchema": _compact_schema()}},
+             "generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": _compact_schema()}},
             timeout=70, headers={"x-goog-api-key": key},
         )
         try:
@@ -245,13 +274,29 @@ class PriorityFallbackDecisionProvider:
         self._clock = clock
         self._lock = Lock()
         self._retry_after = {}
+        # PAPER market polls every 5 seconds, but unattended Free-tier inference
+        # must be bounded independently of the polling cadence (<=288/day here).
+        self._minimum_analysis_spacing_seconds = 300.0
+        self._next_analysis_not_before = 0.0
         self.last_successful_source = None
         self.last_failures = {}
         self.last_successful_at = None
 
+    def claim_analysis_slot(self):
+        """Atomically rate-limit every unattended analysis, across all fallbacks."""
+        with self._lock:
+            now = self._clock()
+            if now < self._next_analysis_not_before:
+                return False
+            self._next_analysis_not_before = now + self._minimum_analysis_spacing_seconds
+            return True
+
     def describe(self):
         with self._lock:
             return {
+                "decision_provider_next_analysis_seconds": round(
+                    max(0.0, self._next_analysis_not_before - self._clock()), 1
+                ),
                 "decision_provider_priority": list(PROVIDER_ORDER),
                 "decision_provider_selected": self.last_successful_source,
                 "decision_provider_last_success_at": self.last_successful_at,

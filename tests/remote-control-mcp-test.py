@@ -1402,7 +1402,22 @@ systemctl() {
     def test_backend_config_declares_canonical_user_service_owner(self):
         self.assertEqual(m.HOSTS["always-free-arm-1787907847-26"]["service_user_owner"], "ubuntu")
 
+    def _without_systemd_scope(self):
+        """Pin the direct (unwrapped) execution path of run_host_command.
+
+        isolated_invocation() wraps commands in `systemd-run --scope` only when
+        the process is root AND the binary exists. A root container without
+        systemd as PID 1 (common sandbox/CI image) then fails every command
+        with exit 1 before it runs, which is unrelated to what the tests below
+        check. The wrapping itself is covered by
+        test_root_runtime_wraps_commands_in_transient_systemd_scope.
+        """
+        original = m.SYSTEMD_RUN
+        m.SYSTEMD_RUN = "/nonexistent/shopvivaliz-test-systemd-run"
+        self.addCleanup(setattr, m, "SYSTEMD_RUN", original)
+
     def test_run_host_command_tolerates_non_utf8_output(self):
+        self._without_systemd_scope()
         result = m.run_host_command(
             "always-free-arm-1787907847-26", "printf 'before\\xa2after'"
         )
@@ -1437,6 +1452,7 @@ systemctl() {
             m.INLINE_COMMAND_SLOTS = original_slots
 
     def test_inline_command_cancels_entire_process_group_when_client_disconnects(self):
+        self._without_systemd_scope()
         marker = Path(self.tmp.name) / "orphan-child-wrote"
         started = time.monotonic()
 
@@ -3136,7 +3152,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("action=chatgpt-freeze-task-state", workflow)
         self.assertIn("freeze-state", workflow)
         self.assertIn("admin_command_run", helper)
-        self.assertIn('SITE = "shopvivaliz-free-a1"', helper)
+        self.assertIn('SITE = "marina-a1-4c24g"', helper)
         self.assertIn("chatgpt-freeze-root-cause-20260928-g*.json", helper)
         self.assertIn("max(candidates)", helper)
         self.assertNotIn("canonical_task_id = 'chatgpt-freeze-root-cause-20260928-g2'", helper)

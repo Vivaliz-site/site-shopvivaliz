@@ -93,14 +93,6 @@ jobs:
     uses: ./.github/workflows/codex-auto-continuity-v7-launcher.yml
     secrets: inherit
 
-  refresh-a1-delete-scope:
-    needs: classify
-    if: needs.classify.outputs.route == 'refresh_a1_delete_scope'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/refresh-a1-delete-repo-scope-once.yml
-    secrets: inherit
-
   remote-access:
     needs: classify
     if: needs.classify.outputs.route == 'remote_access'
@@ -133,14 +125,6 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/codex-global-issue-comment-routing.yml
-    secrets: inherit
-
-  amazon-support-breakglass:
-    needs: classify
-    if: needs.classify.outputs.route == 'amazon_support_breakglass'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/amazon-support-reply-oci-breakglass.yml
     secrets: inherit
 
   dc-reauth:

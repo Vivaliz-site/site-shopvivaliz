@@ -18,7 +18,6 @@ APPROVED_BINARY_PATHS = ('/opt/shopvivaliz-cloudflared-admin/releases/2026.10.4/
 
 HOSTS = {
     'always-free-arm-1787907847-26',
-    'shopvivaliz-free-a1',
     'marina-a1-4c24g',
 }
 

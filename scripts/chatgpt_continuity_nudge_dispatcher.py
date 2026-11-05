@@ -355,7 +355,7 @@ def _bridge_host_header(bridge_url: str) -> str:
     if configured:
         return configured
     host = (urllib.parse.urlparse(bridge_url).hostname or "").lower()
-    return DEFAULT_BRIDGE_HOST_HEADER if host in {"127.0.0.1", "localhost", "10.0.1.112"} else ""
+    return DEFAULT_BRIDGE_HOST_HEADER if host in {"127.0.0.1", "localhost"} else ""
 
 
 def enqueue_nudge_via_bridge(

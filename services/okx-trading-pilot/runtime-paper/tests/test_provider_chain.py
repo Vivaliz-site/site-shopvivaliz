@@ -178,3 +178,38 @@ def test_stale_snapshot_cannot_be_approved():
     ])
     with pytest.raises(DecisionValidationError, match="fallback_exhausted"):
         chain.analyze(stale)
+
+
+def test_gemini_free_analysis_cadence_is_independent_of_five_second_market_polling():
+    clock=[100.]
+    m=snap()
+    calls=[]
+    response=valid_payload(m)
+    chain=PriorityFallbackDecisionProvider([
+        Stub(name,{name:response},calls) for name in PROVIDER_ORDER
+    ],clock=lambda:clock[0])
+    assert chain.claim_analysis_slot() is True
+    assert chain.claim_analysis_slot() is False
+    assert chain.describe()["decision_provider_next_analysis_seconds"] == 300.0
+    clock[0]+=299
+    assert chain.claim_analysis_slot() is False
+    clock[0]+=1
+    assert chain.claim_analysis_slot() is True
+
+
+def test_orchestrator_respects_global_analysis_budget_without_treating_idle_as_failure(tmp_path):
+    from okx_pilot.orchestrator import PilotOrchestrator
+    from okx_pilot.scanner import MarketScanner
+    from okx_pilot.risk import RiskGateway
+    from okx_pilot.domain import PilotLimits
+    from okx_pilot.paper import PaperBroker
+    from okx_pilot.decision import DecisionValidationError
+    clock=[100.]
+    calls=[]
+    m=snap()
+    # Invalid free proof is deliberately allowed only as a negative fixture.
+    providers=[Stub(n,{n:DecisionValidationError("unavailable")},calls) for n in PROVIDER_ORDER]
+    chain=PriorityFallbackDecisionProvider(providers,clock=lambda:clock[0])
+    assert chain.claim_analysis_slot()
+    assert chain.claim_analysis_slot() is False
+    assert chain.describe()["decision_provider_next_analysis_seconds"]>0
