@@ -200,10 +200,14 @@ Repositório canônico: `Vivaliz-site/site-shopvivaliz`.
 
 Estado operacional esperado em 2026-09-21:
 
-- OpenAI: `gpt-6-luna`, effort `medium`;
+- OpenAI: `gpt-5.6-terra`, effort `medium`;
 - Anthropic: `claude-sonnet-5`, effort `medium`;
 - Gemini: `gemini-2.5-flash`, thinking `MEDIUM`;
 - Fable: proibido.
+
+Atualização de 2026-11-05: o modelo padrão do Codex/OpenAI passou a ser `gpt-6-luna`, no lugar de
+`gpt-5.6-terra`. A lista acima é o registro datado de 2026-09-21; a configuração atual está em
+`docs/knowledge/ai-squad.md`.
 
 Regras:
 
