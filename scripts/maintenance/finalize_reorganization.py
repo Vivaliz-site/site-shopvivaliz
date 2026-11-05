@@ -247,23 +247,8 @@ def looks_like_password_literal(value: str) -> bool:
     )
 
 
-def tracked_text_files() -> list[Path]:
-    result = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
-    )
-    files: list[Path] = []
-    for raw in result.stdout.split(b"\0"):
-        if not raw:
-            continue
-        path = ROOT / raw.decode("utf-8", errors="replace")
-        if path.is_file() and (
-            path.suffix.lower() in TEXT_SUFFIXES or path.name in {"Dockerfile", "Makefile"}
-        ):
-            files.append(path)
-    return files
-
-
 def tracked_paths() -> set[str]:
+    """Read the Git index once for canonical checks and credential scanning."""
     result = subprocess.run(
         ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
     )
@@ -272,6 +257,19 @@ def tracked_paths() -> set[str]:
         for raw in result.stdout.split(b"\0")
         if raw
     }
+
+
+def tracked_text_files(tracked: set[str] | None = None) -> list[Path]:
+    if tracked is None:
+        tracked = tracked_paths()
+    files: list[Path] = []
+    for relative in sorted(tracked):
+        path = ROOT / relative
+        if path.is_file() and (
+            path.suffix.lower() in TEXT_SUFFIXES or path.name in {"Dockerfile", "Makefile"}
+        ):
+            files.append(path)
+    return files
 
 
 def validate_wrapper(legacy: str, target: str) -> bool:
@@ -293,9 +291,9 @@ def should_block_candidate(pattern_name: str, candidate: str) -> bool:
     return looks_like_secret_literal(candidate)
 
 
-def credential_findings() -> tuple[list[Finding], int]:
+def credential_findings(tracked: set[str] | None = None) -> tuple[list[Finding], int]:
     findings: list[Finding] = []
-    files = tracked_text_files()
+    files = tracked_text_files(tracked)
     seen: set[tuple[str, int, str]] = set()
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -381,7 +379,7 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
         if not manual_only:
             findings.append(Finding("critical", "shopee_automatic_trigger", shopee_relative, "Shopee production workflow must be manual-only."))
 
-    secret_findings, scanned = credential_findings()
+    secret_findings, scanned = credential_findings(tracked)
     findings.extend(secret_findings)
     checks["credential_scan_file_count"] = scanned
 
