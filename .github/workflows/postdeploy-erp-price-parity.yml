@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: shopvivaliz-postdeploy-erp-price-parity
-  cancel-in-progress: false
+  group: shopvivaliz-postdeploy-erp-price-parity-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   contract:

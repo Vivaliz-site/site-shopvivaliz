@@ -14,7 +14,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: runtime-token-security-${{ github.event_name }}-${{ github.event.workflow_run.id || github.ref }}
+  group: runtime-token-security-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
