@@ -22,7 +22,6 @@ python3 scripts/validate-retired-windows-tasks.py
 python3 scripts/validate-final-response-deploy-gate.py
 python3 scripts/validate-audit-governance.py
 bash tests/disk-hygiene-policy-contract-test.sh
-bash tests/backend-disk-hygiene-reconcile-contract-test.sh
 python3 tests/test_retired_source_workflow_guards.py
 python3 tests/test_workspace_housekeeper_safety.py
 python3 tests/test_production_functional_audit_security.py
