@@ -42,24 +42,30 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 lock="$tmp/runtime.lock"
 ready="$tmp/ready"
+finished="$tmp/finished"
 
-php -r '$h=fopen($argv[1],"c"); if(!$h || !flock($h, LOCK_SH)) exit(2); file_put_contents($argv[2],"ready"); usleep(700000);' "$lock" "$ready" &
+# O mantenedor segura LOCK_SH, sinaliza "ready" e so cria "finished" ao fim do
+# ciclo, ainda com o lock. A garantia testada e de ORDEM (o lock exclusivo so
+# e obtido depois do fim do ciclo compartilhado), nao de duracao: medir tempo
+# a partir do polling de "ready" falhava em runners lentos (ex.: 371ms) mesmo
+# com o lock correto.
+php -r '$h=fopen($argv[1],"c"); if(!$h || !flock($h, LOCK_SH)) exit(2); file_put_contents($argv[2],"ready"); usleep(700000); file_put_contents($argv[3],"finished");' "$lock" "$ready" "$finished" &
 holder=$!
-for _ in $(seq 1 40); do
+for _ in $(seq 1 100); do
   [ -f "$ready" ] && break
   sleep 0.05
 done
 test -f "$ready"
-start_ms="$(date +%s%3N)"
 exec 8>"$lock"
-flock -w 3 8
-elapsed_ms=$(( $(date +%s%3N) - start_ms ))
+flock -w 10 8
+drained=0
+[ -f "$finished" ] && drained=1
 flock -u 8
 exec 8>&-
 wait "$holder"
 
-if [ "$elapsed_ms" -lt 450 ]; then
-  echo "FAIL: exclusive deploy lock did not drain active shared cycle: ${elapsed_ms}ms" >&2
+if [ "$drained" -ne 1 ]; then
+  echo "FAIL: exclusive deploy lock was granted before the active shared cycle finished" >&2
   exit 1
 fi
 

@@ -14,6 +14,8 @@ from okx_pilot.domain import PilotLimits, InstrumentType
 from okx_pilot.market import OkxPublicMarketClient, MarketDataError
 from okx_pilot.scanner import MarketScanner
 from okx_pilot.decision import CodexBridgeDecisionProvider, DecisionContextBuilder
+from okx_pilot.provider_chain import (PriorityFallbackDecisionProvider, GeminiFreeProvider,
+    OllamaLocalProvider, ChatGPTNormalProvider, CodexLastResortProvider, PROVIDER_ORDER)
 from okx_pilot.risk import RiskGateway
 from okx_pilot.paper import PaperBroker
 from okx_pilot.orchestrator import PilotOrchestrator
@@ -42,6 +44,8 @@ def main():
     p.add_argument('--decision-url',default='http://127.0.0.1:17656/v1/respond')
     p.add_argument('--decision-model',default='gpt-6-luna')
     p.add_argument('--decision-effort',default='medium',choices=('low','medium','high','xhigh'))
+    p.add_argument('--gemini-model',default='gemini-3.1-flash-lite')
+    p.add_argument('--ollama-model',default='qwen2.5:3b')
     args=p.parse_args()
     if args.cycles<0 or not 1<=args.interval<=3600: p.error('invalid cycles/interval')
     args.state.parent.mkdir(parents=True,exist_ok=True)
@@ -52,13 +56,22 @@ def main():
     broker=PaperBroker(state_path=args.state)
     client=OkxPublicMarketClient()
     context_builder=DecisionContextBuilder(client,broker)
-    decision_provider=CodexBridgeDecisionProvider(
-        args.decision_url, model=args.decision_model, effort=args.decision_effort,
-        timeout_seconds=45, context_builder=context_builder,
+    decision_provider=PriorityFallbackDecisionProvider(
+        context_builder=context_builder,
+        providers=[
+            GeminiFreeProvider(model=args.gemini_model),
+            OllamaLocalProvider(model=args.ollama_model),
+            ChatGPTNormalProvider(),
+            CodexLastResortProvider(CodexBridgeDecisionProvider(
+                args.decision_url, model=args.decision_model, effort=args.decision_effort,
+                timeout_seconds=45, context_builder=None,
+            )),
+        ],
     )
     orch=PilotOrchestrator(MarketScanner(),decision_provider,RiskGateway(PilotLimits()),broker,args.audit)
     orch._audit({'event':'RUN_START','run_id':broker.run_id,'started_at':broker.started_at,'mode':'PAPER',
-                 'decision_provider':'CODEX_20_LAYER','decision_model':args.decision_model})
+                 'decision_provider':'PRIORITY_FALLBACK','decision_provider_priority':list(PROVIDER_ORDER),
+                 'decision_model':args.decision_model})
     eligible={}; refreshed=0.; cycle=0
     with ThreadPoolExecutor(max_workers=3) as pool:
         while not STOP and (args.cycles==0 or cycle<args.cycles):
@@ -100,7 +113,8 @@ def main():
             report=broker.summary()
             report.update({'updated_at':datetime.now(timezone.utc).isoformat(),'cycle':cycle,'markets':counts,
                 'eligible':{k.value:len(v) for k,v in eligible.items()},'entries_blocked':bool(errors),'errors':errors,
-                'decision_provider':'CODEX_20_LAYER','decision_model':args.decision_model,
+                'decision_provider':'PRIORITY_FALLBACK','decision_model':args.decision_model,
+                **decision_provider.describe(),
                 'ai_20_layers_configured':True,'ai_20_layers_active':orch.provider_ready,
                 'decision_provider_cooldown_seconds':round(orch.provider_cooldown_seconds,3),
                 'decision_pending':orch.pending_count,'decision_provider_errors_total':orch.provider_errors_total,

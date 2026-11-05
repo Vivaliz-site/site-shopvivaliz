@@ -1,6 +1,8 @@
 name: Owner Approved Native Merge Queue
 
 on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, labeled]
   pull_request_review:
     types: [submitted, dismissed]
   workflow_run:
@@ -19,8 +21,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  request-protected-owner-review:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository
+    name: Request exact human reviewer for protected ready PRs
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: protected-owner-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted router from protected main, never PR code
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Request review only for owner-protected paths and explicit owner directives
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/ops/request_owner_pr_review.py --pr "$PR_NUMBER" --expected-head "$EXPECTED_HEAD"
   enqueue:
-    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    if: github.event_name != 'pull_request_target' && github.repository == 'Vivaliz-site/site-shopvivaliz'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 8
     steps:

@@ -7,6 +7,16 @@ on:
     paths:
       - 'ops/ai-squad/**'
       - 'tests/ai-squad-*'
+      - 'tests/squad-chat-*'
+      - 'tests/admin-squad-chat-*'
+      - 'admin/squad-chat.*'
+      - 'admin/index.php'
+      - 'admin/.htaccess'
+      - 'api/agent/buscador.php'
+      - 'claude/api/agent/squad-chat.php'
+      - 'includes/admin-guard.php'
+      - '.htaccess'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
       - 'scripts/deploy-production.sh'
       - 'includes/ai-squad-core.php'
       - 'admin/buscador.php'
@@ -20,6 +30,16 @@ on:
     paths:
       - 'ops/ai-squad/**'
       - 'tests/ai-squad-*'
+      - 'tests/squad-chat-*'
+      - 'tests/admin-squad-chat-*'
+      - 'admin/squad-chat.*'
+      - 'admin/index.php'
+      - 'admin/.htaccess'
+      - 'api/agent/buscador.php'
+      - 'claude/api/agent/squad-chat.php'
+      - 'includes/admin-guard.php'
+      - '.htaccess'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
       - 'scripts/deploy-production.sh'
       - 'includes/ai-squad-core.php'
       - 'admin/buscador.php'
@@ -60,3 +80,11 @@ jobs:
           set -euo pipefail
           node tests/ai-squad-claude-bridge-test.mjs
           node tests/ai-squad-codex-bridge-test.mjs
+      - name: PHP and Python contracts
+        run: |
+          set -euo pipefail
+          php tests/ai-squad-core-test.php
+          php tests/admin-squad-chat-entrypoint-test.php
+          php tests/squad-chat-admin-hardening-test.php
+          php tests/squad-chat-admin-route-test.php
+          python3 -I tests/ai-squad-claude-bastion-diagnostic-test.py
