@@ -26,7 +26,7 @@ main{max-width:1480px;margin:auto;padding:20px}
 .muted{color:var(--muted)}.small{font-size:.87rem}.danger{color:var(--bad)}.positive{color:#147548}.warning{color:var(--warn)}
 .flex{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.spread{justify-content:space-between}
 h2{font-size:1.06rem;margin:0 0 8px}p{line-height:1.5}
-button,select,input[type=search]{font:inherit;border:1px solid #bdcbd9;border-radius:7px;background:#fff;padding:9px 12px;color:var(--ink)}
+button,select,input[type=search],input[type=text]{font:inherit;border:1px solid #bdcbd9;border-radius:7px;background:#fff;padding:9px 12px;color:var(--ink)}
 button{font-weight:650;cursor:pointer}button:disabled{cursor:not-allowed;opacity:.46}
 button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}button.teal{background:var(--sea);color:#fff;border-color:var(--sea)}
 input[type=search]{flex:1;min-width:230px}select{min-width:165px}
@@ -81,6 +81,16 @@ progress{width:100%;height:15px;margin-top:12px;accent-color:var(--sea)}
   </div>
   <div id="feedback" role="status" aria-live="polite"></div>
  </section>
+ <section class="card" aria-label="Simulador de preço sem publicação">
+  <h2>Simular outro preço, sem alterar o anúncio</h2>
+  <p class="muted small">Selecione exatamente um anúncio ativo sem variações e informe o preço desejado. Esta simulação recalcula apenas a estimativa com as taxas, frete e custos disponíveis. <strong>Nenhuma alteração é enviada ao Mercado Livre ou ao ERP.</strong></p>
+  <div class="flex">
+   <label for="simulate-price" class="small">Preço de venda (R$)</label>
+   <input id="simulate-price" type="text" inputmode="decimal" maxlength="11" placeholder="Ex.: 159,90" aria-label="Preço para simulação">
+   <button id="simulate" type="button" disabled>Calcular margem simulada</button>
+  </div>
+  <div class="muted small" id="simulation-result" role="status" aria-live="polite">Selecione um anúncio para simular.</div>
+ </section>
  <section class="card">
   <h2>Anúncios Mercado Livre</h2>
   <div class="flex">
@@ -116,7 +126,7 @@ progress{width:100%;height:15px;margin-top:12px;accent-color:var(--sea)}
 const csrf = <?php echo json_encode($csrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR); ?>;
 const endpoint = '/admin/mercadolivre-margin-api.php';
 const $ = id => document.getElementById(id);
-const state = {listings:[], results:new Map(), selected:new Set(), status:null, filter:'all', activeOnly:false, visibleLimit:100, updating:false, configured:false};
+const state = {listings:[], results:new Map(), selected:new Set(), status:null, filter:'all', activeOnly:false, visibleLimit:100, updating:false, simulating:false, simulatedItem:null, configured:false};
 const completeStatuses = new Set(['COMPLETED','COMPLETED_WITH_ERRORS']);
 const processingStatuses = new Set(['QUEUED','RUNNING','WAITING_PROVIDER']);
 const columns = 15;
@@ -232,6 +242,14 @@ function render(){
  $('audit-all').textContent=state.activeOnly?'Auditar todos os ativos':'Auditar todos';
  $('audit-all').disabled=!state.configured||(state.activeOnly?activeCount===0:!state.listings.length)||state.updating;
  $('audit-selected').disabled=!state.configured||state.selected.size===0||state.updating;
+ const simulationId=state.selected.size===1?[...state.selected][0]:null;
+ const simulationListing=state.listings.find(l=>l.item_id===simulationId);
+ const eligibleSimulation=!!simulationListing&&simulationListing.status==='active'&&(simulationListing.variants||[]).length===0;
+ $('simulate').disabled=!state.configured||!eligibleSimulation||state.updating||state.simulating;
+ if(state.simulatedItem!==null&&state.simulatedItem!==simulationId){
+  state.simulatedItem=null;
+  $('simulation-result').textContent='Selecione um anúncio e calcule uma nova simulação; nenhum preço foi alterado.';
+ }
  const table=$('rows');table.replaceChildren();
  if(!subset.length){const tr=document.createElement('tr');const td=createCell(tr,state.configured?'Nenhum anúncio corresponde ao filtro.':'Aguardando a integração da API.');td.colSpan=columns;table.appendChild(tr);}
  for(const listing of subset){
@@ -311,6 +329,57 @@ async function refresh(){
  }
  finally{state.updating=false;render();}
 }
+function canonicalPreviewPrice(raw){
+ const value=raw.trim().replace(',', '.');
+ if(!/^(?:0|[1-9][0-9]{0,6})(?:\\.[0-9]{1,2})?$/.test(value))return null;
+ const n=Number(value);
+ return Number.isFinite(n)&&n>0&&n<=1000000?value:null;
+}
+async function simulatePrice(){
+ if(state.updating||state.simulating||!state.configured)return;
+ if(state.selected.size!==1){feedback('Selecione exatamente um anúncio para simular.',true);return;}
+ const itemId=[...state.selected][0];
+ const listing=state.listings.find(l=>l.item_id===itemId);
+ if(!listing||listing.status!=='active'||(listing.variants||[]).length){
+  feedback('A simulação exige anúncio ativo, sem variações, identificado no catálogo.',true);return;
+ }
+ const price=canonicalPreviewPrice($('simulate-price').value);
+ if(price===null){feedback('Informe um preço positivo em reais, sem separador de milhar e com até duas casas decimais.',true);return;}
+ state.simulating=true;
+ $('simulation-result').textContent='Consultando as taxas, o frete e os dados de margem para '+itemId+'...';
+ render();
+ try{
+  const quote=await request('preview',{method:'POST',body:{item_id:itemId,requested_price:price}});
+  if(quote.subject_id!==itemId||quote.state!=='ESTIMATED'||quote.sources?.price?.origin!=='REQUESTED_PRICE'){
+   throw new Error('A API devolveu uma cotação diferente da simulação solicitada.');
+  }
+  const missing=Array.isArray(quote.completeness?.missing)?quote.completeness.missing.map(x=>missingReasonLabels[x]||x):[];
+  const costs=quote.components||{};
+  const fields=[
+   'MLB '+itemId,
+   'Preço simulado: R$ '+money(quote.effective_revenue),
+   'Custo produto: R$ '+money(costs.product_cost),
+   'Embalagem: R$ '+money(costs.packaging_cost),
+   'Outras despesas: R$ '+money(costs.other_variable_cost),
+   'Imposto: R$ '+money(costs.tax_amount),
+   'Tarifas: R$ '+money(costs.sale_fee_net),
+   'Frete vendedor: R$ '+money(costs.seller_shipping_cost),
+   'Contribuição estimada: R$ '+money(quote.contribution_margin),
+   'Margem estimada: '+percent(quote.contribution_margin_pct)+'%',
+   'Confiabilidade: '+(quote.completeness?.status||'INCOMPLETE'),
+  ];
+  if(missing.length)fields.push('Pendências: '+missing.join('; '));
+  fields.push('SIMULAÇÃO: preço NÃO alterado no Mercado Livre nem no ERP.');
+  $('simulation-result').textContent=fields.join(' · ');
+  state.simulatedItem=itemId;
+  feedback('Simulação calculada. Nenhum anúncio ou produto ERP foi alterado.');
+ }catch(e){
+  $('simulation-result').textContent='Simulação não concluída: '+e.message;
+  feedback('Simulação não concluída: '+e.message,true);
+ }finally{
+  state.simulating=false;render();
+ }
+}
 async function start(scope){
  if(state.updating)return;
  let ids=scope==='SELECTED'?[...state.selected]:[];
@@ -331,6 +400,7 @@ async function start(scope){
  finally{state.updating=false;render();}
 }
 $('audit-all').addEventListener('click',()=>start('ALL'));
+$('simulate').addEventListener('click',simulatePrice);
 $('audit-selected').addEventListener('click',()=>start('SELECTED'));
 $('refresh').addEventListener('click',refresh);
 $('search').addEventListener('input',()=>{state.visibleLimit=100;render();});
