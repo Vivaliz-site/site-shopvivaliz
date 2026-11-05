@@ -5,6 +5,7 @@ import io
 import json
 import re
 import runpy
+import subprocess
 import shlex
 from pathlib import Path
 import unittest
@@ -98,7 +99,10 @@ class LoginIntegrityAuxProbeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Execute only function definitions; never run the production monitor.
-        cls.probe_fn = staticmethod(runpy.run_path(str(MONITOR), run_name="integrity_test")["probe"])
+        functions=runpy.run_path(str(MONITOR), run_name="integrity_test")
+        cls.probe_fn=staticmethod(functions["probe"])
+        cls.route_fn=staticmethod(functions["dev_aux_route_mode"])
+        cls.inactive_fn=staticmethod(functions["inactive_aux_state"])
 
     def test_transient_aux_timeout_retries_then_confirms_exact_identity(self):
         healthy = {
@@ -130,6 +134,38 @@ class LoginIntegrityAuxProbeTests(unittest.TestCase):
             result = self.probe_fn(None, None)
         self.assertEqual(result, {"state": "UNKNOWN", "verified": False})
         endpoint.assert_called_once()
+
+    def test_canonical_route_is_dormant_not_authenticated(self):
+        env="SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9559 SHOPVIVALIZ_BROWSER_SESSION_NAME=dev"
+        health={"ok":True,"session":"dev","cdp_reachable":True,
+                "account_authenticated":None,"account_identity_verified":False}
+        with mock.patch("subprocess.run",return_value=subprocess.CompletedProcess([],0,stdout=env)):
+            with mock.patch("urllib.request.urlopen",return_value=io.BytesIO(json.dumps(health).encode())):
+                self.assertEqual(self.route_fn(),"canonical")
+                self.assertEqual(self.inactive_fn(),{"state":"INACTIVE_NOT_ROUTED","verified":False,"required":False})
+
+    def test_adopted_and_ambiguous_routes_never_exempt_aux(self):
+        cases=[
+            ("SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9557 SHOPVIVALIZ_DEV_ADOPTED_CDP=9557","auxiliary"),
+            ("SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9557","unknown"),
+            ("SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9999","unknown"),
+            ("","unknown"),
+        ]
+        for env,expected in cases:
+            with self.subTest(env=env):
+                with mock.patch("subprocess.run",return_value=subprocess.CompletedProcess([],0,stdout=env)):
+                    self.assertEqual(self.route_fn(),expected)
+                    self.assertIsNone(self.inactive_fn())
+
+    def test_unexpected_health_cannot_silence_authentication_alarm(self):
+        env="SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9559"
+        bad={"ok":True,"session":"dev","cdp_reachable":True,
+             "account_authenticated":False,"account_identity_verified":False}
+        with mock.patch("subprocess.run",return_value=subprocess.CompletedProcess([],0,stdout=env)):
+            with mock.patch("urllib.request.urlopen",return_value=io.BytesIO(json.dumps(bad).encode())):
+                self.assertIsNone(self.inactive_fn())
+        with mock.patch("subprocess.run",side_effect=subprocess.TimeoutExpired("systemctl",4)):
+            self.assertEqual(self.route_fn(),"unknown")
 
 
 if __name__ == "__main__":

@@ -280,3 +280,19 @@ A conta `atendimento@shopvivaliz.com.br` possui senha própria já configurada. 
 ## Git remoto sob a identidade proprietaria (prevencao root/ubuntu)
 
 O transporte `ShopVivaliz Remote Control` pode iniciar comandos administrativos como `root`, mas os worktrees e a autenticacao GitHub pertencem ao usuario `ubuntu`. Nao execute Git inicialmente como root, nao acrescente `safe.directory` global e nao copie credenciais entre identidades. Use `python3 scripts/maintenance/git_as_repo_owner.py --repo /caminho/absoluto/do/worktree -- status --short` para selecionar o proprietario real do worktree e executar Git com esse usuario, preservando seu perfil e autenticacao. O utilitario recusa caminhos que nao sejam raizes de worktrees, repositorios root-owned e chamadores sem permissao. Quando a operacao precisar de `gh`, execute com a identidade autorizada documentada (`runuser -u ubuntu -- gh ...` no backend), verificando permissao antes da escrita. Os testes `tests/test_git_as_repo_owner.py` devem passar no gate. Nunca interpretar `dubious ownership` como falta de acesso ao GitHub.
+<!-- MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
+# Rota prioritária MCP — quatro hosts (2026-11-05)
+
+Para agentes, MCP é a rota operacional primária e deve ser tentada primeiro
+por nome canônico: `always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e
+`marina-a1-4c24g`. O MCP central expõe funções por capacidade atestada e os
+comandos administrativos `admin_command_run`, `service_action` e `task_submit`
+quando o grant efetivo estiver válido. A Marina também possui MCP independente
+em `https://mcp-marina.shopvivaliz.com.br/mcp`, com Cloudflare Access e grant
+próprios; ele complementa, não substitui, a rota central.
+
+SSH/Tailscale, RDC 1/2 e GitHub Actions só entram como fallback documentado,
+bootstrap ou recuperação. Catálogo de ferramenta não é prova de autorização:
+validar identidade, grant, lease/fencing e o resultado real de cada chamada.
+O host retirado `shopvivaliz-free-a1` nunca é alvo.
+<!-- /MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
