@@ -8,8 +8,10 @@ unless --apply is given. A tab is closed only when ALL of the following hold:
 
 * the tab is a normal page (not chrome://, devtools, an extension, or a login page);
 * its conversation is not bound to a non-terminal task checkpoint (work in progress), and,
-  for a tab outside ChatGPT, no non-terminal task is bound to that browser session
-  (a task may be typing in a form or SPA, which leaves URL and title unchanged);
+  for a tab outside ChatGPT, no non-terminal task updated within --task-fresh-hours
+  (default 6) is bound to that browser session (a task may be typing in a form or SPA,
+  which leaves URL and title unchanged; an abandoned checkpoint left RUNNING must not
+  disable the reaper for that browser forever);
 * its (url, title) fingerprint has not changed for --idle-hours (default 1), measured
   from the reaper's own first observation. CDP exposes no last-activity time, so a tab
   seen for the first time always starts a fresh clock; this only protects a tab an agent
@@ -53,8 +55,23 @@ CONVERSATION_RE = re.compile(r"/c/([A-Za-z0-9_-]{8,160})")
 EXIT_OK, EXIT_USAGE, EXIT_STATE_UNREADABLE = 0, 2, 3
 
 
-def load_active_state(state_dir: Path) -> tuple[set[str], set[str]] | None:
-    """(conversation ids, browser sessions) of non-terminal tasks, or None when unreadable."""
+def checkpoint_is_fresh(path: Path, fresh_seconds: float, ref_time: float) -> bool:
+    """True when the checkpoint file was updated within fresh_seconds (unknown age: fresh)."""
+    try:
+        return ref_time - path.stat().st_mtime <= fresh_seconds
+    except OSError:
+        return True
+
+
+def load_active_state(state_dir: Path, fresh_seconds: float | None = None,
+                      ref_time: float | None = None) -> tuple[set[str], set[str]] | None:
+    """(conversation ids, browser sessions) of non-terminal tasks, or None when unreadable.
+
+    A conversation binding protects exactly one tab, so it holds for as long as the task is
+    non-terminal. A browser session binding protects every non-ChatGPT tab in that browser,
+    so with fresh_seconds set it only counts when the checkpoint was updated recently: an
+    abandoned checkpoint left RUNNING must not disable the reaper for a browser forever.
+    """
     if not state_dir.is_dir():
         return None
     try:
@@ -76,7 +93,8 @@ def load_active_state(state_dir: Path) -> tuple[set[str], set[str]] | None:
         session = str(payload.get("browser_session", "")).strip()
         if conversation:
             conversations.add(conversation)
-        if session:
+        if session and (fresh_seconds is None
+                        or checkpoint_is_fresh(path, fresh_seconds, time.time() if ref_time is None else ref_time)):
             sessions.add(session)
     return conversations, sessions
 
@@ -228,6 +246,8 @@ def main(argv: list[str] | None = None, *, now: float | None = None) -> int:
     parser.add_argument("--idle-hours", type=float, default=1.0)
     parser.add_argument("--keep-min", type=int, default=1)
     parser.add_argument("--max-closes", type=int, default=10, help="per browser per run")
+    parser.add_argument("--task-fresh-hours", type=float, default=6.0,
+                        help="a task checkpoint older than this no longer marks its browser busy")
     parser.add_argument("--timeout", type=float, default=4.0)
     parser.add_argument("--apply", action="store_true", help="actually close tabs (default: dry run)")
     args = parser.parse_args(argv)
@@ -238,11 +258,12 @@ def main(argv: list[str] | None = None, *, now: float | None = None) -> int:
     except ValueError as error:
         print(f"BROWSER_TAB_REAPER=USAGE error={error}", file=sys.stderr)
         return EXIT_USAGE
-    if args.idle_hours < 0.25 or args.keep_min < 1 or args.max_closes < 0:
-        print("BROWSER_TAB_REAPER=USAGE error=idle-hours>=0.25, keep-min>=1, max-closes>=0", file=sys.stderr)
+    if args.idle_hours < 0.25 or args.keep_min < 1 or args.max_closes < 0 or args.task_fresh_hours < 0.25:
+        print("BROWSER_TAB_REAPER=USAGE error=idle-hours>=0.25, keep-min>=1, max-closes>=0, "
+              "task-fresh-hours>=0.25", file=sys.stderr)
         return EXIT_USAGE
     clock = time.time() if now is None else now
-    active_state = load_active_state(Path(args.state_dir))
+    active_state = load_active_state(Path(args.state_dir), args.task_fresh_hours * 3600, time.time())
     active = None if active_state is None else active_state[0]
     sessions = set() if active_state is None else active_state[1]
     state_path = Path(args.state_file)
