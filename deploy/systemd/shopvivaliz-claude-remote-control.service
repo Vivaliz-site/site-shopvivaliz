@@ -26,7 +26,6 @@ Nice=5
 MemoryHigh=2G
 MemoryMax=3G
 TasksMax=128
-ProtectSystem=full
 StandardOutput=journal
 StandardError=journal
 
