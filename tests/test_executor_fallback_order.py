@@ -24,6 +24,12 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("timeout ", self.script)
         self.assertIn("env -u OPENAI_API_KEY -u CODEX_API_KEY", self.script)
 
+    def test_background_claude_timeout_wraps_executable_not_shell_function(self) -> None:
+        # GNU timeout cannot exec Bash functions (exit 127); bound the real CLI.
+        self.assertNotIn('timeout "$BACKGROUND_TIER_TIMEOUT" run_claude', self.script)
+        self.assertIn('try_provider claude_haiku run_claude && exit 0', self.script)
+        self.assertIn('timeout "$BACKGROUND_TIER_TIMEOUT" "$launcher" --print', self.script)
+
     def test_background_paid_tiers_never_use_api_keys(self) -> None:
         self.assertIn("unset ANTHROPIC_API_KEY", self.script)
         self.assertIn("unset OPENAI_API_KEY CODEX_API_KEY", self.script)
