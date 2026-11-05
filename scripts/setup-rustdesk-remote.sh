@@ -4,7 +4,6 @@ set -Eeuo pipefail
 ACTION="${1:-status}"
 HOST="$(hostname)"
 BACKEND_HOST="always-free-arm-1787907847-26"
-SITE_HOST="shopvivaliz-free-a1"
 SERVER_PRIVATE_IP="10.0.1.38"
 SERVER_TAILSCALE_IP="100.66.174.74"
 SERVER_ROOT="/opt/shopvivaliz-rustdesk-server"
@@ -33,7 +32,7 @@ require_root() {
 
 assert_host() {
   case "$HOST" in
-    "$SITE_HOST"|"$BACKEND_HOST") ;;
+    "$BACKEND_HOST") ;;
     *) die host_mismatch 21 ;;
   esac
 }

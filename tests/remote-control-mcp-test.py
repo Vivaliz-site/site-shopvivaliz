@@ -3136,7 +3136,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("action=chatgpt-freeze-task-state", workflow)
         self.assertIn("freeze-state", workflow)
         self.assertIn("admin_command_run", helper)
-        self.assertIn('SITE = "shopvivaliz-free-a1"', helper)
+        self.assertIn('SITE = "marina-a1-4c24g"', helper)
         self.assertIn("chatgpt-freeze-root-cause-20260928-g*.json", helper)
         self.assertIn("max(candidates)", helper)
         self.assertNotIn("canonical_task_id = 'chatgpt-freeze-root-cause-20260928-g2'", helper)

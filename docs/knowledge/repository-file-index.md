@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5697 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -4229,7 +4229,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `scripts/setup-anydesk-backend.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-auto-sync-linux.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-claude-remote-control.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/setup-iphone-private-ssh-relay.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-oauth-env.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-remote-control-access.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/setup-remote-control-browser-mcp.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -5886,7 +5885,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/integration-health-credentials-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/integration-health-critical-gate-test.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/integration-validator-real-probe-test.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/iphone-private-ssh-relay-contract-test.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/japi-chumbo-color-attribute-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/legacy-diagnostic-workflows-disabled-contract-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/legacy-product-seo-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |

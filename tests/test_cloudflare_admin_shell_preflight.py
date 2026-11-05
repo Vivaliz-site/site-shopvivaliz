@@ -114,10 +114,10 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
         self.assertIn('safe_root_directory /etc/shopvivaliz/cloudflare-admin; then',
                       source)
 
-    def test_origin_does_not_boot_or_claim_apt(self):
+    def test_retired_origin_is_an_unknown_host(self):
         p = self.run_for("shopvivaliz-free-a1")
-        self.assertEqual(p.returncode, 0)
-        self.assertIn("ROLE=origin", p.stdout)
+        self.assertEqual(p.returncode, 3)
+        self.assertIn("PREFLIGHT_STATUS=UNKNOWN_HOST", p.stdout)
         self.assertNotIn("APTO", p.stdout)
 
 

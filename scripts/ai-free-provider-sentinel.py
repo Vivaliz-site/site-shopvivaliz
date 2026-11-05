@@ -131,17 +131,11 @@ def read_runtime_entry() -> Path | None:
     return None
 
 
-def free_router_present(is_site: bool) -> bool:
-    if is_site:
-        script = Path("/home/ubuntu/shopvivaliz-deploy/current/scripts/autonomous-provider-failover.sh")
-        sha = Path("/home/ubuntu/shopvivaliz-deploy/current/.release-sha")
-        if not sha.is_file():
-            return False
-    else:
-        entry = read_runtime_entry()
-        if not entry:
-            return False
-        script = entry.parent / "autonomous-provider-failover.sh"
+def free_router_present() -> bool:
+    entry = read_runtime_entry()
+    if not entry:
+        return False
+    script = entry.parent / "autonomous-provider-failover.sh"
     try:
         data = script.read_text()
         return "FREE_PROVIDER_FALLBACK_V2" in data and "BACKGROUND_ORDER=(gemini ollama)" in data
@@ -172,17 +166,11 @@ def gemini_free_billing_guard_present(script_dir: Path) -> bool:
     )
 
 
-def runtime_gemini_guard_present(is_site: bool) -> bool:
-    if is_site:
-        script_dir = Path("/home/ubuntu/shopvivaliz-deploy/current/scripts")
-        if not Path("/home/ubuntu/shopvivaliz-deploy/current/.release-sha").is_file():
-            return False
-    else:
-        entry = read_runtime_entry()
-        if entry is None:
-            return False
-        script_dir = entry.parent
-    return gemini_free_billing_guard_present(script_dir)
+def runtime_gemini_guard_present() -> bool:
+    entry = read_runtime_entry()
+    if entry is None:
+        return False
+    return gemini_free_billing_guard_present(entry.parent)
 
 
 def proc_potential_paid(remote_daemon_pid: int, proc_root: Path = Path("/proc")) -> list[str]:
@@ -543,21 +531,20 @@ def compare_counters(prior: dict, current: dict[str, list[int]]) -> list[str]:
 
 
 def policy_anomalies(host: str) -> list[str]:
-    is_site = host == "shopvivaliz-free-a1"
     is_backend = host == "always-free-arm-1787907847-26"
     # Marina now serves a versioned web release but has no AI-agent
     # controller or Ollama: watch unauthorized paid activity without
     # falsely requiring services belonging to the old hosts.
     if host == "marina-a1-4c24g":
         return []
-    if not (is_site or is_backend):
+    if not is_backend:
         return ["HOST_IDENTITY_UNKNOWN"]
     issues = []
-    unit_names = (["shopvivaliz-agent.service", "ollama.service"] if is_site else [
+    unit_names = [
         "shopvivaliz-gemini-24x7-controller.service",
         "shopvivaliz-task-resume-worker.service",
         "ollama.service",
-    ])
+    ]
     for unit in unit_names:
         if not active(unit):
             issues.append("REQUIRED_SERVICE_DOWN_" + unit.split(".")[0].upper().replace("-", "_"))
@@ -565,12 +552,11 @@ def policy_anomalies(host: str) -> list[str]:
         if unit == "ollama.service":
             continue
         env = selected_environment(service_pid(unit))
-        required = (*FLAGS, INTERACTIVE_FLAG) if is_site else FLAGS
-        if any(env.get(flag) != "0" for flag in required):
+        if any(env.get(flag) != "0" for flag in FLAGS):
             issues.append("PAID_FALLBACK_ENV_DRIFT")
-    if not free_router_present(is_site):
+    if not free_router_present():
         issues.append("FREE_ROUTER_MISSING")
-    if not runtime_gemini_guard_present(is_site):
+    if not runtime_gemini_guard_present():
         issues.append("GEMINI_FREE_BILLING_GUARD_DRIFT")
     for role in PORTS:
         if not bridge_disabled(role):

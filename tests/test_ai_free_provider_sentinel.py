@@ -62,7 +62,7 @@ class Tests(unittest.TestCase):
               patch.object(s, "bridge_disabled", return_value=True)):
             self.assertIn(
                 "GEMINI_FREE_BILLING_GUARD_DRIFT",
-                s.policy_anomalies("shopvivaliz-free-a1"),
+                s.policy_anomalies("always-free-arm-1787907847-26"),
             )
         with (patch.object(s, "active", return_value=True),
               patch.object(s, "service_pid", return_value=100),
@@ -73,7 +73,7 @@ class Tests(unittest.TestCase):
               patch.object(s, "bridge_disabled", return_value=True)):
             self.assertNotIn(
                 "GEMINI_FREE_BILLING_GUARD_DRIFT",
-                s.policy_anomalies("shopvivaliz-free-a1"),
+                s.policy_anomalies("always-free-arm-1787907847-26"),
             )
 
     def test_marina_passive_host_has_no_invented_ollama_dependency(self):
