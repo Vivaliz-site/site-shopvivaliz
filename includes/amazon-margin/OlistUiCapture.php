@@ -62,6 +62,7 @@ final class SvAmazonMarginOlistUiCapture
             }
             $image=$evidenceDir.'/olist-'.$slug.'-p'.$n.'-'.$date.'.png';
             if (is_link($image) || !is_file($image) || filesize($image)>6*1024*1024
+                || (string)file_get_contents($image,false,null,0,8)!=="\\x89PNG\\r\\n\\x1a\\n"
                 || hash_file('sha256',$image)!==$hash) {
                 throw new RuntimeException('olist_ui_screenshot_integrity_failed');
             }
