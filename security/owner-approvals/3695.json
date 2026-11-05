@@ -1,0 +1,63 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3695,
+  "resource": "service:ml-pricing-api:readonly-margin-audit",
+  "principal": "marina-mcp-service",
+  "host": "marina-a1-4c24g",
+  "target_repository": "Vivaliz-site/ml-pricing-api",
+  "operation": "activate_readonly_ml_margin_audit",
+  "capabilities": [
+    "deploy_exact_immutable_readonly_release",
+    "mlrr_access_only_snapshot_consume",
+    "olist_v3_access_only_consume",
+    "link_existing_seller_readonly",
+    "issue_single_scoped_audit_api_client",
+    "site_admin_private_gateway_binding"
+  ],
+  "approved_code_revision": "1485596693d689f1c08f0c7dbf2948e525a6b5a6",
+  "tenant_id": "01a1a3ff-5ba4-77b1-8d60-455147e4aae0",
+  "seller_id": "112962856",
+  "site_id": "MLB",
+  "mlrr_access_only_source": "/home/ubuntu/shopvivaliz-deploy/shared/storage/private/ml-access-token.json",
+  "olist_v3_access_only_source": "/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json",
+  "target_runtime_keys": [
+    "MLRR_ACCESS_TENANT_ID",
+    "MLRR_ACCESS_SNAPSHOT_FILE",
+    "OLIST_V3_TENANT_ID",
+    "OLIST_V3_TOKEN_STORE_FILE"
+  ],
+  "site_gateway_runtime_keys": [
+    "ML_PRICING_ACCOUNT_ID",
+    "ML_PRICING_AUDIT_API_TOKEN"
+  ],
+  "api_client_scopes": [
+    "admin:sync",
+    "pricing:read"
+  ],
+  "forbidden_scopes": [
+    "costs:write",
+    "listings:write",
+    "prices:write",
+    "catalog:write"
+  ],
+  "forbidden_operations": [
+    "write_marketplace_price",
+    "write_erp_price",
+    "write_inventory",
+    "write_marketplace_listing",
+    "refresh_mlrr_oauth",
+    "refresh_olist_oauth",
+    "disable_provider_authorization"
+  ],
+  "requires_provider_authorization": true,
+  "previous_provider_refusal_must_be_honored": true,
+  "owner_pr_review_required": true,
+  "runtime_lease_fencing_required": true,
+  "audit_required": true,
+  "commercial_mutation_allowed": false,
+  "release_activation_requires_readback": true,
+  "public_ui_e2e_required": true,
+  "expires_at_utc": "2026-11-20T23:59:00Z",
+  "runbook": "docs/ops/ml-pricing-readonly-activation-2026-11-05.md"
+}
