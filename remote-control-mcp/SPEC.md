@@ -177,7 +177,7 @@ No custom UI is required in V1; these are tool-only conversational flows.
 
 ## Contrato de desktop
 
-O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open`, `desktop_screenshot`, `desktop_click` e `desktop_type` somente para `Fred-Win` e `KOCEPSV`; a implementação fica no wrapper `remote-control-browser-mcp` da backend.
+O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open`, `desktop_screenshot`, `desktop_click` e `desktop_type` somente para `Fred-Win`, `KOCEPSV` e o backend `always-free-arm-1787907847-26`; a implementação fica no wrapper `remote-control-browser-mcp` da backend. Para o backend, a superfície é apenas o display Xvfb isolado `:97` (1440x900, cookie próprio, sem `-ac`, sem sessão de outro usuário), instalado por `scripts/install-backend-gui-xvfb.sh` e `deploy/systemd/shopvivaliz-gui-xvfb.service`. A Marina não faz parte desta superfície.
 
 No `Fred-Win`, o wrapper usa o reverse SSH canônico para invocar `scripts/shopvivaliz-native-desktop-bridge.ps1`. O dispatcher recebe a requisição JSON por stdin e executa um worker efêmero na sessão Windows interativa, permitindo screenshot, mouse e teclado sem transportar senha RustDesk e sem depender do registro cloud do Remote Desktop Commander. Texto digitado não entra em argv nem no audit.
 

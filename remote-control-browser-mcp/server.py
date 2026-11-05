@@ -337,8 +337,149 @@ def native_desktop_bridge(host: str, payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# Isolated Linux GUI surface for the backend: a dedicated Xvfb display owned by
+# the MCP user, with its own xauth cookie. It never attaches to another user's
+# session (fredconsole/lightdm), never uses sudo and never runs with -ac.
+BACKEND_GUI_HOST = "always-free-arm-1787907847-26"
+LINUX_GUI_HOSTS = {
+    BACKEND_GUI_HOST: {
+        "display": os.environ.get("SHOPVIVALIZ_BACKEND_GUI_DISPLAY", ":97"),
+        "geometry": (1440, 900),
+        "xauthority": os.environ.get(
+            "SHOPVIVALIZ_BACKEND_GUI_XAUTHORITY",
+            str(Path.home() / ".shopvivaliz" / "secrets" / "gui-xvfb.xauth"),
+        ),
+    },
+}
+LINUX_GUI_TIMEOUT = 15
+
+
+def linux_gui_config(host: str) -> dict[str, Any]:
+    if host not in LINUX_GUI_HOSTS:
+        raise ValueError("linux_gui_host_unsupported")
+    base.validate_desktop_host(host)
+    return LINUX_GUI_HOSTS[host]
+
+
+def linux_gui_run(cfg: dict[str, Any], argv: list[str], *, timeout: int = LINUX_GUI_TIMEOUT,
+                  input_text: str | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
+    require_binary(argv[0])
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(Path.home()),
+        "DISPLAY": cfg["display"],
+        "XAUTHORITY": cfg["xauthority"],
+        "TMPDIR": "/var/tmp",
+    }
+    completed = subprocess.run(argv, env=env, input=input_text, text=True, capture_output=True,
+                               timeout=timeout, check=False)
+    if check and completed.returncode != 0:
+        stderr = base.redact_text((completed.stderr or completed.stdout or "linux_gui_command_failed").strip())
+        raise RuntimeError(stderr)
+    return completed
+
+
+def linux_gui_health(host: str) -> dict[str, Any]:
+    cfg = linux_gui_config(host)
+    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xwd")}
+    geometry: list[int] | None = None
+    display_accessible = False
+    if dependencies["xdotool"]:
+        probe = linux_gui_run(cfg, ["xdotool", "getdisplaygeometry"], check=False)
+        parts = (probe.stdout or "").split()
+        if probe.returncode == 0 and len(parts) == 2 and all(part.isdigit() for part in parts):
+            geometry = [int(parts[0]), int(parts[1])]
+            display_accessible = tuple(geometry) == cfg["geometry"]
+    return {
+        "ok": all(dependencies.values()) and display_accessible,
+        "host": host,
+        "surface": "linux_isolated_display",
+        "display": cfg["display"],
+        "dependencies": dependencies,
+        "geometry": geometry,
+        "expected_geometry": list(cfg["geometry"]),
+        "display_accessible": display_accessible,
+        "session_open": display_accessible,
+    }
+
+
+def linux_gui_open(host: str) -> dict[str, Any]:
+    # The display is owned by its systemd service; this never launches or restarts it.
+    result = linux_gui_health(host)
+    if not result["ok"]:
+        raise RuntimeError("linux_gui_display_unavailable")
+    result["action"] = "display_ready"
+    return result
+
+
+def linux_gui_screenshot(host: str) -> dict[str, Any]:
+    cfg = linux_gui_config(host)
+    tmpdir = tempfile.mkdtemp(prefix="shopvivaliz-backend-gui-")
+    try:
+        os.chmod(tmpdir, 0o700)
+        path = str(Path(tmpdir) / "screen.xwd")
+        linux_gui_run(cfg, ["xwd", "-root", "-silent", "-out", path], timeout=20)
+        raw_png = xwd_to_png_bytes(Path(path).read_bytes())
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    width, height = struct.unpack(">II", raw_png[16:24])
+    if (width, height) != cfg["geometry"]:
+        raise RuntimeError("linux_gui_screenshot_geometry_mismatch")
+    encoded = base64.b64encode(raw_png).decode("ascii")
+    encoded, image_mime, image_size = bounded_native_desktop_image(
+        {"mime_type": "image/png", "width": width, "height": height, "bytes": len(raw_png)},
+        encoded,
+    )
+    return {
+        "ok": True,
+        "host": host,
+        "surface": "linux_isolated_display",
+        "mime_type": image_mime,
+        "bytes": image_size,
+        "sha256": hashlib.sha256(raw_png).hexdigest(),
+        "transcoded_for_transport": image_mime == "image/jpeg",
+        "__mcp_image__": encoded,
+    }
+
+
+def linux_gui_click(host: str, x: int, y: int, button_name: str, clicks: int) -> dict[str, Any]:
+    cfg = linux_gui_config(host)
+    button = {"left": "1", "middle": "2", "right": "3"}.get(button_name)
+    if button is None:
+        raise ValueError("desktop_invalid_mouse_button")
+    width, height = cfg["geometry"]
+    if not (0 <= x < width and 0 <= y < height):
+        raise ValueError("desktop_click_outside_geometry")
+    linux_gui_run(cfg, ["xdotool", "mousemove", "--sync", str(x), str(y)])
+    for _ in range(clicks):
+        linux_gui_run(cfg, ["xdotool", "click", button])
+    return {"ok": True, "host": host, "surface": "linux_isolated_display",
+            "x": x, "y": y, "button": button_name, "clicks": clicks}
+
+
+def linux_gui_type(host: str, text: str, press_enter: bool) -> dict[str, Any]:
+    cfg = linux_gui_config(host)
+    tmpdir = tempfile.mkdtemp(prefix="shopvivaliz-backend-type-")
+    try:
+        os.chmod(tmpdir, 0o700)
+        path = Path(tmpdir) / "text.txt"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        # Text travels through a 0600 file, never argv, and never through the clipboard.
+        linux_gui_run(cfg, ["xdotool", "type", "--delay", "20", "--file", str(path)], timeout=60)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    if press_enter:
+        linux_gui_run(cfg, ["xdotool", "key", "Return"])
+    return {"ok": True, "host": host, "surface": "linux_isolated_display",
+            "typed_characters": len(text), "press_enter": press_enter}
+
+
 def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
+    if host in LINUX_GUI_HOSTS:
+        return linux_gui_health(host)
     if host == "Fred-Win":
         result = native_desktop_bridge(host, {"action": "health"})
         result["surface"] = "windows_interactive"
@@ -366,6 +507,8 @@ def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
 
 def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
+    if host in LINUX_GUI_HOSTS:
+        return linux_gui_open(host)
     if host == "Fred-Win":
         result = native_desktop_bridge(host, {"action": "health"})
         result["surface"] = "windows_interactive"
@@ -403,6 +546,8 @@ def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
     y = int(args.get("y"))
     button_name = str(args.get("button") or "left")
     clicks = max(1, min(int(args.get("clicks", 1)), 3))
+    if host in LINUX_GUI_HOSTS:
+        return linux_gui_click(host, x, y, button_name, clicks)
     if host == "Fred-Win":
         result = native_desktop_bridge(
             host,
@@ -434,6 +579,8 @@ def desktop_type(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("desktop_text_required")
     if len(text) > 4096:
         raise ValueError("desktop_text_too_long")
+    if host in LINUX_GUI_HOSTS:
+        return linux_gui_type(host, text, bool(args.get("press_enter", False)))
     if host == "Fred-Win":
         result = native_desktop_bridge(
             host,
@@ -874,6 +1021,8 @@ def bounded_native_desktop_image(result: dict[str, Any], image_b64: object) -> t
 
 def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
+    if host in LINUX_GUI_HOSTS:
+        return linux_gui_screenshot(host)
     if host == "Fred-Win":
         result = native_desktop_bridge(host, {"action": "screenshot"})
         image_b64 = result.pop("image_b64", None)
