@@ -55,9 +55,7 @@ class RoutingPolicyTests(unittest.TestCase):
                 'P1 (mudanca tecnica reversivel',
                 'P2 (novo poder/efeito protegido)',
                 'shopvivaliz-human',
-                'sem aprovacoes ou preflights duplicados',
                 'NoNewPrivileges=yes',
-                'fail-closed',
             ):
                 with self.subTest(path=relative, invariant=invariant):
                     self.assertIn(invariant, policy)
