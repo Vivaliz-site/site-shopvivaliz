@@ -126,7 +126,12 @@ run_claude() (
     launcher="$(command -v claude || true)"
   fi
   [ -n "$launcher" ] && [ -x "$launcher" ] || return 127
-  "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+  if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+    # Bound the actual CLI process: GNU timeout cannot exec shell functions.
+    timeout "$BACKGROUND_TIER_TIMEOUT" "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+  else
+    "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+  fi
 )
 
 run_codex_auto() (
@@ -202,7 +207,7 @@ for provider in "${ORDER[@]}"; do
       ;;
     claude_haiku)
       # Login-only (run_claude unsets ANTHROPIC_API_KEY); one attempt, bounded time.
-      try_provider claude_haiku timeout "$BACKGROUND_TIER_TIMEOUT" run_claude && exit 0
+      try_provider claude_haiku run_claude && exit 0
       ;;
     gpt_luna)
       # Login-only GPT 6 Luna; never OPENAI_API_KEY; one attempt, bounded time.
