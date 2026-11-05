@@ -75,6 +75,8 @@ A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso 
 > O MCP ShopVivaliz **central** tambem deve alcancar `marina-a1-4c24g`, alem do MCP proprio da Marina, que deve permanecer independente do backend/RDC. Paridade com RDC exige capacidades por host e operacao comprovadas por E2E, sem shell/root universal. Rota central read-only em PR nao equivale a runtime conectado; nunca ativar sem grant oficial, lease e autorizacao. Fonte: `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
 <!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
 
+> **REGRA DO PROPRIETARIO: MCP PRIMEIRO = TENTATIVA REAL.** Antes de optar por RDC/SSH ou encerrar tarefa remota, chamar uma ferramenta MCP adequada e autorizada para o host na sessao atual. Consultar catalogo nao conta como tentativa. Registrar host, ferramenta, data/hora, task_id/request_id e resultado; se indisponivel, declarar MCP_NOT_EXPOSED, nunca MCP_ATTEMPTED. Fonte: docs/ops/mcp-first-agent-execution-2026-11-05.md.
+
 <!-- MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
 ## Rota MCP prioritária de quatro hosts
 
