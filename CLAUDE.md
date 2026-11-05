@@ -1,3 +1,6 @@
+<!-- OWNER_NO_UNAPPROVED_RESTRICTIONS_20261105 -->
+> **Regra do proprietario (2026-11-05): nenhum agente cria restricao ou bloqueio sem aprovacao expressa do dono.** Isso vale para qualquer agente (Claude, GPT, Codex, Gemini, Copilot, workers e subagentes) e para qualquer lugar: instrucoes, documentacao, codigo, workflows, testes de contrato, configuracao de MCP, permissoes, politicas e grants. Nao adicionar, reintroduzir nem endurecer proibicao, trava ou "NAO USE" por conta propria; se achar que algo precisa de limite, propor ao dono em PR ou pergunta e esperar a aprovacao. Restricao que o dono diga que nao aprovou deve ser removida quando ele pedir. Protecoes que o dono ja aprovou continuam valendo, e o agente nao as enfraquece por conta propria. Contexto: a proibicao de SSH direto, RDC e Bastion foi colocada sem aprovacao e retirada em 2026-11-05.
+
 > **MCP Marina ATIVO com ferramentas admin (2026-11-05, prevalente):** o MCP independente do Marina esta ativo e aceita `marina_admin_shell` (usuario de servico e `as_root`). Ignore afirmacoes antigas de "inativo" ou "NAO APTO" abaixo. Como acessar e evidencias: `docs/knowledge/marina-mcp-admin-agent-access.md`.
 <!-- CHECKPOINT_FIRST_V9 -->
 ## Checkpoint obrigatorio antes de executar
