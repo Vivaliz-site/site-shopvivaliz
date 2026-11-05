@@ -2,6 +2,7 @@ self-hosted-runner:
   labels:
     - shopvivaliz-a1-deploy
     - shopvivaliz-backend-browser
+    - shopvivaliz-audit
 
 # Deleted-host jobs intentionally remain fail closed. Suppress only actionlint's
 # literal-false advisory in these exact retired workflow files. Syntax, other
