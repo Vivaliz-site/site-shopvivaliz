@@ -40,7 +40,7 @@ final class SvAmazonMarginOlistUiCapture
             || !is_array($data['entries']??null)
             || count($data['entries'])<1 || count($data['entries'])>10000
             || !is_array($data['pages']??null)
-            || count($data['pages'])<1 || count($data['pages'])>100)) {
+            || count($data['pages'])<1 || count($data['pages'])>100) {
             throw new RuntimeException('olist_ui_capture_invalid');
         }
         try { $stamp=new DateTimeImmutable($when); }
