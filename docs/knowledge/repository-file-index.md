@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5711 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5715 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -4097,6 +4097,7 @@ Gerado deterministicamente a partir de 5711 arquivos versionados no indice Git. 
 | `scripts/ops/authorize-chatgpt-plugin-permissions-lease.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/cloudflare-admin-preflight.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/owner_approved_merge_queue.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/ops/request_owner_pr_review.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/shopvivaliz-independent-ci.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/optimize-performance.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/parallel-executor.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4444,6 +4445,7 @@ Gerado deterministicamente a partir de 5711 arquivos versionados no indice Git. 
 | `services/okx-trading-pilot/runtime-paper/okx_pilot/metrics.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/okx_pilot/orchestrator.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/okx_pilot/paper.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
+| `services/okx-trading-pilot/runtime-paper/okx_pilot/provider_chain.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/okx_pilot/risk.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/okx_pilot/scanner.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/okx_pilot/simulation.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4462,6 +4464,7 @@ Gerado deterministicamente a partir de 5711 arquivos versionados no indice Git. 
 | `services/okx-trading-pilot/runtime-paper/tests/test_market_scanner.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_orchestrator.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_paper_metrics.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `services/okx-trading-pilot/runtime-paper/tests/test_provider_chain.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_provider_watchdog.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_risk.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `services/okx-trading-pilot/runtime-paper/tests/test_runtime_regressions.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6247,6 +6250,7 @@ Gerado deterministicamente a partir de 5711 arquivos versionados no indice Git. 
 | `tests/test_owner_merge_queue_authorization.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_protected_pr_merge_guard.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_required_review_gate.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_owner_review_request_router.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_security_merge_guard.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_technical_native_queue_merge.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_unit_pattern.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
