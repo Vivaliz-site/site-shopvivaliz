@@ -1,0 +1,29 @@
+{
+  "schema": "AUDIT_PROJECT_REQUIREMENTS_V1",
+  "project": "Vivaliz-site/site-shopvivaliz",
+  "policy_version": "2026-09-21-absolute-v5",
+  "scope": "marina-mcp-public-route",
+  "scope_note": "Escopo parcial: somente a rota publica do Marina MCP. NAO substitui AUDIT_PROJECT_REQUIREMENTS.json (site inteiro). Exige aprovacao explicita do proprietario antes de uso num certificado.",
+  "required_invariants": [
+    {
+      "id": "MARINA_MCP_EDGE_AUTH_V1",
+      "type": "evidence",
+      "description": "Rota publica mcp-marina.shopvivaliz.com.br: com credencial valida o smoke retorna OK; sem credencial ou com credencial invalida a requisicao e recusada na borda (Cloudflare Access) e a origem nao e alcancada."
+    },
+    {
+      "id": "MARINA_MCP_TOOLS_READONLY_V1",
+      "type": "evidence",
+      "description": "Descoberta de ferramentas pela rota publica retorna as ferramentas esperadas e uma chamada somente leitura (marina_host_health) responde sem erro no host marina-a1-4c24g."
+    },
+    {
+      "id": "MARINA_MCP_TOKEN_LIFECYCLE_V1",
+      "type": "evidence",
+      "description": "Somente o service token vigente esta habilitado na regra Service Auth e na allowlist da origem; o token antigo esta desativado/excluido e nenhuma referencia a ele resta."
+    },
+    {
+      "id": "MARINA_MCP_EDGE_SMOKE_SCHEDULED_V1",
+      "type": "evidence",
+      "description": "Smoke de borda executado por timer systemd recorrente na backend com resultado registrado (Result=success e status OK)."
+    }
+  ]
+}
