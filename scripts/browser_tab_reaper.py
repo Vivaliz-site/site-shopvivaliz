@@ -33,6 +33,7 @@ import re
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import urlparse
@@ -55,12 +56,34 @@ CONVERSATION_RE = re.compile(r"/c/([A-Za-z0-9_-]{8,160})")
 EXIT_OK, EXIT_USAGE, EXIT_STATE_UNREADABLE = 0, 2, 3
 
 
-def checkpoint_is_fresh(path: Path, fresh_seconds: float, ref_time: float) -> bool:
-    """True when the checkpoint file was updated within fresh_seconds (unknown age: fresh)."""
+def logical_progress_time(payload: dict) -> float | None:
+    """Epoch of the checkpoint's logical progress marker (`updated_at`, ISO UTC), or None."""
+    raw = payload.get("updated_at")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
     try:
-        return ref_time - path.stat().st_mtime <= fresh_seconds
-    except OSError:
-        return True
+        parsed = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def checkpoint_is_fresh(path: Path, payload: dict, fresh_seconds: float, ref_time: float) -> bool:
+    """True when the task made progress within fresh_seconds (unknown age: fresh).
+
+    The logical `updated_at` is authoritative: recovery bookkeeping rewrites the file without
+    advancing it, so file mtime alone would make an abandoned task look active after every
+    retry. mtime is only a fallback for checkpoints that carry no readable `updated_at`.
+    """
+    stamp = logical_progress_time(payload)
+    if stamp is None:
+        try:
+            stamp = path.stat().st_mtime
+        except OSError:
+            return True
+    return ref_time - stamp <= fresh_seconds
 
 
 def load_active_state(state_dir: Path, fresh_seconds: float | None = None,
@@ -69,7 +92,7 @@ def load_active_state(state_dir: Path, fresh_seconds: float | None = None,
 
     A conversation binding protects exactly one tab, so it holds for as long as the task is
     non-terminal. A browser session binding protects every non-ChatGPT tab in that browser,
-    so with fresh_seconds set it only counts when the checkpoint was updated recently: an
+    so with fresh_seconds set it only counts when the task made progress recently (its logical `updated_at`, falling back to file mtime): an
     abandoned checkpoint left RUNNING must not disable the reaper for a browser forever.
     """
     if not state_dir.is_dir():
@@ -94,7 +117,8 @@ def load_active_state(state_dir: Path, fresh_seconds: float | None = None,
         if conversation:
             conversations.add(conversation)
         if session and (fresh_seconds is None
-                        or checkpoint_is_fresh(path, fresh_seconds, time.time() if ref_time is None else ref_time)):
+                        or checkpoint_is_fresh(path, payload, fresh_seconds,
+                                               time.time() if ref_time is None else ref_time)):
             sessions.add(session)
     return conversations, sessions
 
