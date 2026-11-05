@@ -1,6 +1,8 @@
 <!-- OWNER_NO_UNAPPROVED_RESTRICTIONS_20261105 -->
 > **Regra do proprietario (2026-11-05): nenhum agente cria restricao ou bloqueio sem aprovacao expressa do dono.** Isso vale para qualquer agente (Claude, GPT, Codex, Gemini, Copilot, workers e subagentes) e para qualquer lugar: instrucoes, documentacao, codigo, workflows, testes de contrato, configuracao de MCP, permissoes, politicas e grants. Nao adicionar, reintroduzir nem endurecer proibicao, trava ou "NAO USE" por conta propria; se achar que algo precisa de limite, propor ao dono em PR ou pergunta e esperar a aprovacao. Restricao que o dono diga que nao aprovou deve ser removida quando ele pedir. Protecoes que o dono ja aprovou continuam valendo, e o agente nao as enfraquece por conta propria. Contexto: a proibicao de SSH direto, RDC e Bastion foi colocada sem aprovacao e retirada em 2026-11-05.
 
+> **REGRA DO PROPRIETARIO: MCP PRIMEIRO = TENTATIVA REAL.** Antes de optar por RDC/SSH ou encerrar tarefa remota, chamar uma ferramenta MCP adequada e autorizada para o host na sessao atual. Consultar catalogo nao conta como tentativa. Registrar host, ferramenta, data/hora, task_id/request_id e resultado; se indisponivel, declarar MCP_NOT_EXPOSED, nunca MCP_ATTEMPTED. Fonte: docs/ops/mcp-first-agent-execution-2026-11-05.md.
+
 <!-- OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
 > **ORDEM EXPRESSA DO PROPRIETARIO — MCP PRIMEIRO, TENTATIVA REAL OBRIGATORIA:** antes de acionar RDC, SSH, RustDesk ou alegar que uma tarefa remota ShopVivaliz esta bloqueada, identificar o MCP administrativo disponivel **na sessao atual** e **executar uma chamada MCP adequada e autorizada** para o host/operacao. `hosts_list`, `claude mcp list` e `codex mcp list` isolados NAO contam como tentativa de execucao. Backend/Fred-Win/KOCEPSV: `shopvivaliz-remote-control` (`admin_command_run` ou `task_submit` + `task_status`, quando expostos). Marina: MCP independente `shopvivaliz-marina-admin` e rota central somente conforme grants atuais. Um timeout de RDC/GUI NAO e motivo para ignorar MCP.
 > **EVIDENCIA OBRIGATORIA:** registrar `remote_access_attempts` com host, ferramenta, horario, `request_id`/`task_id`, resultado e proxima acao. Diferenciar `MCP_ATTEMPTED_OK`, `MCP_ATTEMPTED_FAILED`, `MCP_NOT_EXPOSED`, `MCP_NOT_AUTHORIZED` e `MCP_NOT_APPLICABLE`. Sem chamada nao afirmar que tentou MCP. Falha MCP comprovada permite fallback independente e autorizado, sem contornar recusas, MFA, RBAC, lease ou grant; prosseguir ate validacao.
@@ -84,6 +86,29 @@ A conta GitHub shopvivaliz-human deve poder visualizar todas as PRs pelo acesso 
 <!-- MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
 > O MCP ShopVivaliz **central** tambem deve alcancar `marina-a1-4c24g`, alem do MCP proprio da Marina, que deve permanecer independente do backend/RDC. Paridade com RDC exige capacidades por host e operacao comprovadas por E2E, sem shell/root universal. Rota central read-only em PR nao equivale a runtime conectado; nunca ativar sem grant oficial, lease e autorizacao. Fonte: `docs/ops/mcp-central-marina-dual-route-2026-11-01.md`.
 <!-- /MCP_CENTRAL_MARINA_AND_INDEPENDENT_ROUTE_20261101 -->
+
+<!-- MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
+## Rota MCP prioritária de quatro hosts
+
+Para agentes, a rota prioritária de operação é MCP, por nome canônico de host:
+`always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e `marina-a1-4c24g`.
+O ShopVivaliz Remote Control MCP central oferece funções de saúde, processos,
+serviços, arquivos, logs e tarefas/comandos administrativos nos quatro hosts
+quando o grant correspondente estiver atestado; a Marina usa transporte privado
+pinado e o catálogo repete a checagem do grant antes de executar. O MCP
+independente da Marina (`https://mcp-marina.shopvivaliz.com.br/mcp`) é a rota
+complementar para as funções próprias da Marina e para shell administrativo
+quando o JWT de Cloudflare Access e o grant da Marina estiverem válidos.
+
+`admin_command_run`, `service_action` e `task_submit` são as funções
+administrativas universais, auditadas e limitadas por host; tarefas longas usam
+`task_submit`/`durable=true`. Não trocar MCP por SSH/RDC como primeira escolha.
+SSH privado, RDC e Actions são fallback documentado ou recuperação, não o
+catálogo operacional primário. A presença no catálogo não substitui grant,
+lease, fencing, identidade e teste E2E reais; sem grant a ferramenta deve ficar
+oculta ou recusar em fail-closed. `shopvivaliz-free-a1` continua fora do
+catálogo e nunca é destino.
+<!-- /MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
 <!-- MARINA_BROKER_SERVICE_RESTART_PATTERN_20261103 -->
 > **Decisao do owner (2026-11-03): restart de servicos Marina por padrao de nome.** Na `marina-a1-4c24g`, o broker administrativo root pode **reiniciar** (`systemctl restart`) qualquer unit cujo nome case com `shopvivaliz-*.service`, sem novo PR por servico. Vale somente para restart. Nao autoriza start, stop, enable, disable, edicao de unit, criacao de arquivo, shell generico, comando arbitrario, mudanca de rede, banco, pagamento ou permissao. Toda execucao exige lease de manutencao, fencing emitido pelo host, ticket de uso unico, auditoria persistente e reconciliacao do resultado, sem repetir restart indeterminado. Units fora do padrao continuam exigindo concessao explicita por PR. **Atencao:** esta regra so vale como enforcement quando o verificador de concessao (`scripts/validate-owner-pr-grant.py`) e o broker aceitarem o padrao; ate la, a execucao usa apenas `allowed_units` explicitas da concessao vigente (`security/owner-approvals/3560.json`). Nao presumir cobertura de um servico novo sem confirmar no codigo. Fonte: `docs/ops/marina-root-broker-activation-2026-11-02.md`.
 ### Instrucao para agente que cria servico novo na Marina
