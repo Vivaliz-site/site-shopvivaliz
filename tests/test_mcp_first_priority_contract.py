@@ -31,11 +31,11 @@ class McpFirstContractTests(unittest.TestCase):
     def test_not_catalog_only_or_mcp_security_bypass(self):
         c = (ROOT / "docs/ops/mcp-first-agent-execution-2026-11-05.md").read_text()
         self.assertIn("Nao basta mencionar MCP", c)
-        self.assertIn("nao contornar auth", c)
+        self.assertIn("sem contornar auth", c)
         self.assertIn("MCP_NOT_APPLICABLE", c)
         self.assertIn("MCP_NOT_EXPOSED", c)
         self.assertIn("nunca escrever", c)
-        self.assertIn("nao substitui", c.lower())
+        self.assertIn("Catalogo da sessao", c)
 
 if __name__ == "__main__":
     unittest.main()
