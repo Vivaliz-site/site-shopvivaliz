@@ -1,0 +1,22 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3705,
+  "resource": "mcp:kocepsv:gui-validation",
+  "principal": "shopvivaliz-central-mcp",
+  "host": "KOCEPSV",
+  "controller_host": "always-free-arm-1787907847-26",
+  "capabilities": [
+    "desktop_gui_validation"
+  ],
+  "operation": "validate_kocepsv_gui_click_navigation",
+  "allowed_actions": [
+    "desktop_open",
+    "desktop_click",
+    "desktop_type"
+  ],
+  "target_origin": "https://shopvivaliz.com.br",
+  "one_use": true,
+  "ttl_seconds": 300,
+  "expires_at_utc": "2026-11-12T00:00:00Z"
+}
