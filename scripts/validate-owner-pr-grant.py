@@ -278,6 +278,30 @@ def decide(pr: object, grant: object, *, repository: str, pr_number: int,
                 type(grant.get("ttl_seconds")) is not int or
                 grant["ttl_seconds"] != 180):
             return False, "fred_win_plugin_permissions_scope_not_approved"
+    # KOCEPSV graphical validation: one-use, public storefront only, no accounts.
+    # It never mints a runtime lock itself and never widens the Fred-Win grant.
+    if resource == "mcp:kocepsv:gui-validation":
+        exact_fields = {
+            "schema", "repository", "pr_number", "resource", "principal",
+            "host", "controller_host", "capabilities", "operation",
+            "allowed_actions", "target_origin", "one_use", "ttl_seconds",
+            "expires_at_utc",
+        }
+        if (set(grant) != exact_fields or
+                principal != "shopvivaliz-central-mcp" or
+                capability != "desktop_gui_validation" or
+                caps != ["desktop_gui_validation"] or
+                operation != "validate_kocepsv_gui_click_navigation" or
+                target_repository is not None or
+                grant.get("host") != "KOCEPSV" or
+                grant.get("controller_host") != "always-free-arm-1787907847-26" or
+                grant.get("allowed_actions") != ["desktop_open", "desktop_click", "desktop_type"] or
+                grant.get("target_origin") != "https://shopvivaliz.com.br" or
+                grant.get("one_use") is not True or
+                type(grant.get("ttl_seconds")) is not int or
+                grant["ttl_seconds"] != 300 or
+                "expires_at_utc" not in grant):
+            return False, "kocepsv_gui_validation_scope_not_approved"
     if resource == "mcp:marina":
         if (not isinstance(target_repository, str) or
                 not REPO.fullmatch(target_repository) or
