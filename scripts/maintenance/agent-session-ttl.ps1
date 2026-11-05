@@ -134,4 +134,4 @@ foreach($id in @($eligible.Keys | Sort-Object)){
     Add-Content -LiteralPath (Join-Path $logDir 'agent-session-ttl.jsonl') -Value $line -Encoding UTF8
   }
 }
-Write-Output ('ELIGIBLE_SESSIONS='+$selectedCount+' MODE=+$(if($Apply){'apply'}else{'dry-run'}))
+Write-Output ('ELIGIBLE_SESSIONS='+$selectedCount+' MODE='+$(if($Apply){'apply'}else{'dry-run'}))
