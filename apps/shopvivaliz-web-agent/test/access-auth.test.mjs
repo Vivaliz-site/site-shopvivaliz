@@ -6,7 +6,7 @@ import {accessConfiguration,createAccessVerifier} from '../src/access-auth.mjs';
 const {privateKey,publicKey}=generateKeyPairSync('rsa',{modulusLength:2048});
 const jwk={...publicKey.export({format:'jwk'}),kid:'owner-test-key',alg:'RS256',use:'sig'};
 const env={WEB_AGENT_ACCESS_TEAM_DOMAIN:'vivaliz-test.cloudflareaccess.com',
-  WEB_AGENT_ACCESS_AUDIENCE:'audience_identifier_test_123456789',
+  WEB_AGENT_ACCESS_AUDIENCE:'audience_identifier_test_123456789', // gitleaks:allow test fixture, not a credential
   WEB_AGENT_ACCESS_ALLOWED_EMAILS:'owner@example.com'};
 const config=accessConfiguration(env);
 const now=1800000000;
