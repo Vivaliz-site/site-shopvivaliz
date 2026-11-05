@@ -152,11 +152,38 @@ function percent(x){
  if(x===null||x===undefined||x==='')return '—';
  const n=Number(x);return Number.isFinite(n)?n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
 }
+const missingReasonLabels = Object.freeze({
+ 'MISSING_COST':'Custo, embalagem ou despesa variável sem comprovação',
+ 'MISSING_TAX_PROFILE':'Imposto deste anúncio não configurado',
+ 'MISSING_FEE_QUOTE':'Tarifa de venda do ML não obtida',
+ 'MISSING_SHIPPING_QUOTE':'Frete do vendedor ainda não cotado',
+ 'PROMOTION_FUNDING_RECONCILIATION_REQUIRED':'Promoção exige conciliação',
+ 'REQUIRES_ACTUAL_RECONCILIATION':'Requer conciliação de valores efetivos',
+});
+const auditErrorLabels = Object.freeze({
+ 'MARKETPLACE_PRICE_NOT_SYNCED':'Preço vigente ainda não sincronizado',
+ 'VARIATIONS_REQUIRE_INDIVIDUAL_AUDIT':'Variações precisam de auditoria por SKU',
+ 'LISTING_NOT_ACTIVE':'Anúncio não está ativo',
+ 'LISTING_STATUS_UNKNOWN':'Status do anúncio ainda não sincronizado',
+ 'ITEM_NOT_FOUND':'Anúncio não encontrado na conta',
+});
+function missingReasons(row){
+ const raw=row?.missing_inputs_json;
+ if(!raw)return [];
+ let values=raw;
+ try{if(typeof raw==='string')values=JSON.parse(raw);}catch{return ['Motivos inválidos no relatório'];}
+ if(!Array.isArray(values))return ['Motivos inválidos no relatório'];
+ return [...new Set(values.filter(x=>typeof x==='string'))].map(x=>missingReasonLabels[x]||x);
+}
 function diagnostic(row){
  if(!row)return 'Não auditado';
  if(row.audit_status==='COMPLETE')return 'Completo';
- const suffix=row.error_code||row.completeness_status||'';
- return row.audit_status+(suffix?' · '+suffix:'');
+ if(row.audit_status==='QUEUED')return 'Na fila';
+ const issues=missingReasons(row);
+ const error=row.error_code?(auditErrorLabels[row.error_code]||row.error_code):'';
+ const summary=[...(error?[error]:[]),...issues].join(' · ');
+ const label=row.audit_status==='FAILED'?'Falha':'Incompleto';
+ return summary?label+' · '+summary:label;
 }
 function resultCategory(listing){
  const row=state.results.get(listing.item_id);
