@@ -14,7 +14,7 @@ final class SvAmazonMarginOlistUiCapture
     public static function path(): string
     {
         return (string)(getenv('SV_AMAZON_OLIST_UI_CAPTURE_PATH')
-            ?: '/home/ubuntu/.shopvivaliz/runtime/amazon-margin/olist-ui-capture-20261105.json');
+            ?: '/home/ubuntu/.shopvivaliz/runtime/amazon-margin/olist-ui-capture.json');
     }
 
     public static function load(?string $path = null): array
