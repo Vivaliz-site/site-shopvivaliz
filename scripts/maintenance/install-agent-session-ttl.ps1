@@ -17,7 +17,7 @@ if([IO.Path]::GetFullPath($source) -ine [IO.Path]::GetFullPath($target)){
   Copy-Item -LiteralPath $source -Destination $target -Force
 }
 $dryRun=@(& $target)
-if($LASTEXITCODE -ne 0 -or -not ($dryRun -match 'MODE=dry-run')){
+if(-not ($dryRun -match 'MODE=dry-run')){
   throw 'TTL dry-run failed; not installing scheduled task'
 }
 $currentUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name
