@@ -86,7 +86,10 @@ class BackendGeometryAndRoutingTests(unittest.TestCase):
             captured["env"] = kwargs["env"]
             return subprocess.CompletedProcess(argv, 0, stdout="1440 900\n", stderr="")
 
-        with mock.patch.object(m, "require_binary", return_value="/usr/bin/xdotool"), \
+        # linux_gui_health checks shutil.which directly; mock it so the test does not
+        # depend on xdotool/xwd being installed on the CI runner.
+        with mock.patch.object(m.shutil, "which", return_value="/usr/bin/xdotool"), \
+             mock.patch.object(m, "require_binary", return_value="/usr/bin/xdotool"), \
              mock.patch.object(m.subprocess, "run", side_effect=fake_run):
             m.linux_gui_health(BACKEND)
         self.assertNotIn("sudo", captured["argv"])
