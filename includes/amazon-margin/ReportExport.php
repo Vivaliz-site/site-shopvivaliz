@@ -41,6 +41,11 @@ final class SvAmazonMarginExport
             'Auditoria custo anterior'=>isset($reference['verified_run_id']) ? (int)$reference['verified_run_id'] : null,
             'SKU ERP anterior'=>(string)($reference['erp_sku']??''),
             'Fonte do vinculo'=>(string)($row['erp_match_method'] ?? ''),
+            'Vinculo por UI Olist validado em'=>(string)($row['erp_ui_observed_at']??''),
+            'Produto sugerido pela UI Olist'=>(string)($row['erp_ui_candidate_sku']??''),
+            'Divergencia UI Olist'=>(!empty($row['erp_ui_conflict'])?'Sim':'Nao'),
+            'Motivo divergencia UI'=>(string)($row['erp_ui_conflict']??''),
+            'Candidato UI historico'=>(string)($row['erp_historical_ui_candidate']['erp_sku']??''),
             'Integração ERP Amazon'=>(string)($row['erp_integration'] ?? ''),
             'Exportação Olist - data do vínculo'=>(string)($row['erp_export_observed_at']??''),
             'SKU ERP candidato histórico'=>(string)($row['erp_historical_candidate']['erp_sku']??''),
@@ -57,7 +62,7 @@ final class SvAmazonMarginExport
             'Lucro confirmado (R$)'=>isset($row['profit_cents']) ? round(((int)$row['profit_cents'])/100,2) : null,
             'Data ultimo custo'=>(string)($row['last_cost_date'] ?? ''),
             'Situacao'=>(string)($row['status'] ?? 'unverified'),
-            'Diagnostico'=>$reason,
+            'Diagnostico'=>!empty($row['erp_ui_conflict']) ? 'Divergencia de produto ERP com UI Olist: custo/margem bloqueados' : $reason,
         ];
     }
 
@@ -213,6 +218,8 @@ final class SvAmazonMarginExport
                 $content .= self::pdfText(509,$y,8,$get('Margem ponderada (%)'));
                 $content .= self::pdfText(568,$y,8,$get('Unidades confirmadas'));
                 $state=(($row['Ativo Amazon']??'')==='Sim'?'Ativo: ':'Inativo: ').$get('Situacao');
+                if (($row['Divergencia UI Olist']??'Nao')==='Sim')
+                    $state='DIVERGENCIA UI OLIST (nao certificado)';
                 $content .= self::pdfText(627,$y,8,mb_strimwidth($state,0,35,'...'));
                 if($i%2===1)$content.="0.86 w 27 ".($y-7)." m 813 ".($y-7)." l S\n";
             }
