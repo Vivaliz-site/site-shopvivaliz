@@ -266,8 +266,8 @@ function filtered(){
 const reasonText={
  confirmed:'Margem apurada pelas vendas conciliadas',
  partial:'Parte dos fretes/lançamentos ainda pendente de conciliação',
- unmapped_erp:'Produto ERP não identificado por EAN, SKU, pedido Amazon ou exportação atual Olist',
- ambiguous_erp:'Vínculo ERP ambíguo (EAN ou pedidos divergentes)',
+ unmapped_erp:'Produto ERP não identificado por EAN, SKU, pedido Amazon ou fonte atual Olist',
+ ambiguous_erp:'Vínculo ERP ambíguo (EAN, pedidos ou relação atual Olist divergentes)',
  erp_or_catalog_read_failed:'Falha de consulta ao ERP ou catálogo Amazon',
  erp_identity_mismatch:'Identificação de produto divergente entre Amazon e ERP',
  price_or_cost_missing:'Preço efetivo ou custo de aquisição indisponível',
@@ -319,7 +319,9 @@ function render(){
   const sku=String(r.seller_sku??'');
   const chosen=selected.has(sku);
   const st=state(r),active=isActive(r);
-  const diag=reasonText[r.status]||String(r.status??'Não verificado');
+  const diag=r.erp_ui_conflict
+   ?'Divergência entre vínculo da interface atual Olist e identificação anterior; custo e margem não certificados'
+   :(reasonText[r.status]||String(r.status??'Não verificado'));
   const marginText=r.margin_weighted_bps===null||r.margin_weighted_bps===undefined
    ?'—<span class="cell-note warn">Margem não apurada</span>'
    :margin(r.margin_weighted_bps)+(r.status==='partial'?'<span class="cell-note warn">Conciliação parcial</span>':'');
@@ -331,6 +333,10 @@ function render(){
      (r.erp_integration?'<span class="cell-note">ERP: '+escapeHtml(r.erp_integration)+'</span>':'')+
      (r.erp_match_method==='OLIST_AMAZON_ORDER'?'<span class="cell-note">Vínculo por '+Number(r.erp_order_evidence_count||0)+' pedido(s) Amazon/Olist</span>':'')+
      (r.erp_match_method==='OLIST_ADS_EXPORT'?'<span class="cell-note">Vínculo por exportação Olist recente, validado contra o produto ERP ativo em '+escapeHtml(r.erp_export_observed_at||'')+'</span>':'')+
+     (r.erp_match_method==='OLIST_AUTHENTICATED_UI'?'<span class="cell-note">Vínculo pela interface autenticada de anúncios Olist, produto ativo confirmado na API em '+escapeHtml(r.erp_ui_observed_at||'')+'</span>':'')+
+     (r.erp_ui_verified_same_product?'<span class="cell-note">Anúncio confirmado na interface atual Olist</span>':'')+
+     (r.erp_ui_conflict?'<span class="cell-note warn">CONFLITO ERP: interface atual indica '+escapeHtml(r.erp_ui_candidate_sku||'sem SKU')+'. Custo e margem bloqueados até conciliação.</span>':'')+
+     (r.erp_historical_ui_candidate?'<span class="cell-note warn">Captura antiga da interface Olist, SKU candidato '+escapeHtml(r.erp_historical_ui_candidate.erp_sku||'')+'; sem certificação.</span>':'')+
      (r.erp_historical_candidate?'<span class="cell-note warn">Exportação histórica: SKU candidato '+escapeHtml(r.erp_historical_candidate.erp_sku||'')+' ('+escapeHtml(r.erp_historical_candidate.observed_at||'')+'). Sem custo confirmado neste vínculo.</span>':'')+
      (r.erp_gtin_differs_from_amazon?'<span class="cell-note warn">GTIN do anúncio difere do ERP; vínculo conferido via pedido</span>':'')+'</td>'
    +'<td>'+escapeHtml(programLabel(r))+'</td>'

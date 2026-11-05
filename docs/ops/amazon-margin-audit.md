@@ -117,6 +117,53 @@ de teste, CSRF exigido, upload histórico sem auditoria duplicada, rejeição de
 extensão inválida, índice 0640 fora do site e 459 BUYABLE no painel. Não
 autoriza escrever preços no Olist nem na Amazon.
 
+## Evidência independente pela interface autenticada Olist (05/11/2026)
+
+A tela de anúncios ERP já autenticada pode ser lida **sem alterar anúncios, preços ou
+cookies**. Essa rota é independente da importação oficial XLS/XLSX/CSV acima:
+**nunca** classificar captura da UI como `OLIST_ERP_ANUNCIOS_EXPORT`.
+O serviço de devoluções utiliza um perfil persistente Playwright na Marina;
+o agente deve abrir **somente uma aba temporária própria** e fechá-la após
+a coleta, sem interromper o serviço, autenticação nem páginas existentes.
+
+A captura privada usa `OLIST_ERP_AUTHENTICATED_UI_CAPTURE` e preserva
+`seller_sku` exato, SKU do produto relacionado, integração ERP, instante UTC,
+total/paginação e prova de captura gráfica de cada página. A rotina deve
+recusar páginas parciais, registros duplicados, produtos não relacionados e
+integrações não verificadas. **Preço exibido nessa UI não é origem para custo
+nem margem.** Arquivo canônico privado:
+`/home/ubuntu/.shopvivaliz/runtime/amazon-margin/olist-ui-capture.json`.
+Evidências em `.../amazon-margin/evidence/olist-<integracao>-p<PAGINA>-<YYYYMMDD>.png`.
+Não colocar índice, imagens, compradores, credenciais ou cookies no Git ou no
+`current/storage` público.
+
+O consumidor `OlistUiCapture.php` verifica integridade, privacidade,
+assinatura PNG, hashes SHA-256, paginação, unicidade, timestamp e prazo de
+até 48h. Busca o **produto ativo e custo positivo diretamente na API oficial
+Olist v3, SKU ERP exato e único**. Nunca usa preço da captura.
+Quando a relação **atual** da UI diverge de EAN/pedido anterior, a linha
+fica `ambiguous_erp` com `erp_ui_conflict`, custo e margem **nulos** até
+reconciliação manual/independente; nunca aceita automaticamente o histórico.
+Se a captura tiver vencido, ela vira referência, não fonte de custo corrente;
+divergência histórica ainda não reconciliada não restaura certificação.
+Relatórios PDF/XLSX e tela exibem a origem e a divergência explicitamente.
+Nenhuma escrita comercial é permitida neste módulo.
+
+**Escopo observado em 05/11/2026:** canal ERP Amazon com 192 anúncios
+(50+50+50+42), cruzamento exato com run Amazon #7 encontra 27 dos 80
+BUYABLE sem custo e oito diferenças contra produto ERP antes certificado,
+sendo três com margens parcialmente calculadas. Outros 53 continuam
+sem prova nessa integração. Canais ERP `Amazon Onsite` e `Amazon Classic`
+precisam de evidência atual independente; nomes ERP não significam
+logística FBA clássica. Sem cobertura e UI/E2E reais do módulo publicado,
+o veredito de projeto permanece `NAO_APTO` até certificador V5 oficial.
+
+Testes mínimos: `OlistUiCaptureTest.php`,
+`OlistUiReportConflictTest.php`, `OlistAmazonOrderLinkTest.php`,
+`FinanceFeeWindowTest.php`, `MarginMathTest.php`,
+`ReportExportTest.php` e prova de execução real na UI autenticada,
+seguida de reload/readback da auditoria publicada.
+
 ## Resiliência às cotas e referência de custos validados anteriormente
 
 - Olist ERP v3 limita chamadas de leitura **por conta**, compartilhadas entre aplicativos, e fornece os cabeçalhos x-ratelimit-limit, x-ratelimit-remaining e x-ratelimit-reset. A auditoria reserva capacidade para integrações existentes, aguarda o reset indicado e aplica backoff em HTTP 429/503, sem tentar contornar 401/403. O limite é obtido dos cabeçalhos, não fixado no código.

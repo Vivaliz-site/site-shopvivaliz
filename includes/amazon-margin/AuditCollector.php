@@ -8,6 +8,7 @@ require_once __DIR__ . '/OlistQuotaPolicy.php';
 require_once __DIR__ . '/ReadErrorPolicy.php';
 require_once __DIR__ . '/OlistAmazonOrderLink.php';
 require_once __DIR__ . '/OlistAdsIndex.php';
+require_once __DIR__ . '/OlistUiCapture.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -350,6 +351,10 @@ final class SvAmazonMarginCollector
             $adsIndex=[];
             $this->warnings[]='olist_ads_index_unreadable:'.get_class($e);
         }
+        // This source is independently labelled AUTHENTICATED UI, never XLS.
+        // A present but corrupt capture is a hard read failure: publishing
+        // new certified costs without its conflict evidence is unsafe.
+        $uiCapture=SvAmazonMarginOlistUiCapture::load();
         $this->note('reading_transactions');
         // Order-to-product identity may predate the 30-day margin window.
         // Fetch 90 days once, but calculate money ONLY for postedAfter sales.
@@ -446,6 +451,48 @@ final class SvAmazonMarginCollector
                         $row['erp_gtin_differs_from_amazon']=($ean!==null&&$ean!==''
                             && (string)$candidate['erp_gtin']!==$ean);
                     }
+                }
+                // A browser capture of Olist's actual Anuncios -> Produto (SKU)
+                // is corroborating current identity evidence, NOT an XLS export.
+                // The capture never supplies a cost or price. Even when the
+                // existing EAN or historical order matched an active product,
+                // contradicting current UI data invalidates certification.
+                $uiLink=SvAmazonMarginOlistUiCapture::lookup(
+                    $uiCapture,(string)$sku,$this->productsBySku);
+                $decision=SvAmazonMarginOlistUiCapture::decision($link,$prod,$uiLink);
+                if ($decision==='hold') {
+                    $row['erp_ui_conflict']='current_or_historical_ui_disagrees_with_'
+                        .(string)($link['method']??$link['status']??'unknown');
+                    $row['erp_ui_observed_at']=$uiLink['observed_at']
+                        ??($uiCapture['observed_at']??null);
+                    $row['erp_ui_candidate_sku']=$uiLink['erp_sku']
+                        ??$uiLink['candidate_erp_sku']??null;
+                    $link=['status'=>'ambiguous_erp','id'=>null,'method'=>null,
+                        'reason'=>'olist_ui_product_identity_conflict'];
+                    $prod=null;
+                } elseif ($decision==='use_ui') {
+                    $candidate=$this->product((int)$uiLink['id']);
+                    if (!$candidate['active']
+                        || (string)$candidate['erp_sku']!==(string)$uiLink['erp_sku']) {
+                        $link=['status'=>'ambiguous_erp','id'=>null,'method'=>null,
+                            'reason'=>'olist_ui_product_inactive_or_changed'];
+                        $prod=null;
+                    } else {
+                        $prod=$candidate;
+                        $link=$uiLink;
+                        $row['erp_integration']=$uiLink['integration'];
+                        $row['erp_ui_observed_at']=$uiLink['observed_at'];
+                        $row['erp_gtin_differs_from_amazon']=($ean!==null&&$ean!==''
+                            &&(string)$candidate['erp_gtin']!==$ean);
+                    }
+                } elseif ($decision==='verified_same') {
+                    $row['erp_ui_observed_at']=$uiLink['observed_at'];
+                    $row['erp_ui_verified_same_product']=true;
+                } elseif ($decision==='reference_only') {
+                    $row['erp_historical_ui_candidate']=[
+                        'erp_sku'=>$uiLink['candidate_erp_sku']??null,
+                        'observed_at'=>$uiLink['observed_at']??null,
+                        'source'=>'OLIST_ERP_AUTHENTICATED_UI_CAPTURE'];
                 }
                 $row['erp_match_method']=$link['method'];
                 $row['erp_mapping_reason']=$link['reason'];
