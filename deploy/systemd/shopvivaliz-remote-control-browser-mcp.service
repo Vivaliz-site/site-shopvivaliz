@@ -12,6 +12,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
 Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5581
 Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
+Environment=SHOPVIVALIZ_BACKEND_GUI_XAUTHORITY=/home/ubuntu/.shopvivaliz/secrets/gui-xvfb.xauth
 Environment=SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER=/opt/shopvivaliz-remote-control/server.py
 Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole
 Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0

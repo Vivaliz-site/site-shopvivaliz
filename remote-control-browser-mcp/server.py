@@ -345,9 +345,11 @@ LINUX_GUI_HOSTS = {
     BACKEND_GUI_HOST: {
         "display": os.environ.get("SHOPVIVALIZ_BACKEND_GUI_DISPLAY", ":97"),
         "geometry": (1440, 900),
+        # Explicit path, not Path.home(): this service runs as root, so Path.home()
+        # resolves to /root and points at a cookie that does not exist.
         "xauthority": os.environ.get(
             "SHOPVIVALIZ_BACKEND_GUI_XAUTHORITY",
-            str(Path.home() / ".shopvivaliz" / "secrets" / "gui-xvfb.xauth"),
+            "/home/ubuntu/.shopvivaliz/secrets/gui-xvfb.xauth",
         ),
     },
 }
