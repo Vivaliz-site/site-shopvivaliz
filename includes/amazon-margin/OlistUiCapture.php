@@ -88,6 +88,70 @@ final class SvAmazonMarginOlistUiCapture
     }
 
     /**
+     * Each real Olist integration has a distinct channel ID and independently
+     * signed screenshot evidence. Keep the historical single-Amazon capture
+     * compatible, while accepting optional captures of Onsite and Classic.
+     * A Seller SKU linked to different products in different ERP channels
+     * must NEVER choose one automatically, even if one is newer.
+     */
+    public static function loadAll(?string $path = null): array
+    {
+        $primary=$path??self::path();
+        $dir=dirname($primary);
+        $files=[
+            'Amazon'=>$primary,
+            'Amazon Onsite'=>$dir.'/olist-ui-capture-amazon-onsite.json',
+            'Amazon Classic'=>$dir.'/olist-ui-capture-amazon-classic.json',
+        ];
+        $merged=[
+            'source'=>'OLIST_ERP_AUTHENTICATED_UI_CAPTURE_SET',
+            'observed_at'=>null,
+            'integration'=>'MULTI',
+            'integrations'=>[],
+            'entries'=>[],
+        ];
+        foreach ($files as $channel=>$file) {
+            $capture=self::load($file);
+            if (!$capture) continue;
+            if (($capture['integration']??'')!==$channel) {
+                throw new RuntimeException('olist_ui_capture_channel_mismatch');
+            }
+            $when=(string)$capture['observed_at'];
+            $merged['integrations'][]=$channel;
+            if ($merged['observed_at']===null
+                || strcmp($when,(string)$merged['observed_at'])>0) {
+                $merged['observed_at']=$when;
+            }
+            foreach ($capture['entries'] as $sku=>$source) {
+                $candidate=(string)($source['erp_sku']??'');
+                $entry=[
+                    'erp_sku'=>$candidate,
+                    'integration'=>$channel,
+                    'observed_at'=>$when,
+                ];
+                if (!isset($merged['entries'][$sku])) {
+                    $merged['entries'][$sku]=$entry;
+                    continue;
+                }
+                $previous=$merged['entries'][$sku];
+                if (($previous['erp_sku']??'')!==$candidate
+                    || !empty($previous['conflict'])) {
+                    $merged['entries'][$sku]['conflict']=true;
+                    $merged['entries'][$sku]['reason']='olist_ui_integrations_product_conflict';
+                    continue;
+                }
+                // The same exact product in two channels is corroboration.
+                // Prefer the newer observed record for freshness checks,
+                // while never using prices or product costs from the UI.
+                if (strcmp($when,(string)($previous['observed_at']??''))>0) {
+                    $merged['entries'][$sku]=$entry;
+                }
+            }
+        }
+        return $merged;
+    }
+
+    /**
      * @param array<string,mixed> $capture
      * @param array<string,list<array<string,mixed>>> $bySku
      */
@@ -98,8 +162,18 @@ final class SvAmazonMarginOlistUiCapture
         $entry=$capture['entries'][$sellerSku]??null;
         if (!is_array($entry))return $absent;
         $candidate=(string)($entry['erp_sku']??'');
-        $observed=(string)($capture['observed_at']??'');
-        $integration=(string)($capture['integration']??'');
+        $observed=(string)($entry['observed_at']??$capture['observed_at']??'');
+        $integration=(string)($entry['integration']??$capture['integration']??'');
+        if (!empty($entry['conflict'])) {
+            return [
+                'status'=>'ambiguous_erp',
+                'id'=>null,
+                'candidate_erp_sku'=>$candidate,
+                'observed_at'=>$observed,
+                'integration'=>$integration,
+                'reason'=>'olist_ui_integrations_product_conflict',
+            ];
+        }
         $stale=['status'=>'historical','id'=>null,
             'candidate_erp_sku'=>$candidate,'observed_at'=>$observed,
             'integration'=>$integration,
