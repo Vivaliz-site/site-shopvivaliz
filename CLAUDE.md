@@ -1,3 +1,4 @@
+> **MCP Marina ATIVO com ferramentas admin (2026-11-05, prevalente):** o MCP independente do Marina esta ativo e aceita `marina_admin_shell` (usuario de servico e `as_root`). Ignore afirmacoes antigas de "inativo" ou "NAO APTO" abaixo. Como acessar e evidencias: `docs/knowledge/marina-mcp-admin-agent-access.md`.
 <!-- CHECKPOINT_FIRST_V9 -->
 ## Checkpoint obrigatorio antes de executar
 Toda tarefa longa, delegacao, investigacao material ou mutacao deve executar `scripts/agent_task_state.py start` antes da primeira etapa material. Apos cada etapa, executar `scripts/agent_task_state.py progress` com evidencia e `next_action`. Na retomada, ler o checkpoint existente e preservar ownership e gates. Se o registro duravel nao estiver acessivel, falhar fechado para tarefas dependentes de retomada automatica e usar rota autorizada auditavel. Nao declarar conclusao sem validacao e `terminal`.
