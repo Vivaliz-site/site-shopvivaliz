@@ -9,6 +9,16 @@
 > **FONTE DE VERDADE:** [Contrato MCP primeiro](docs/ops/mcp-first-agent-execution-2026-11-05.md). Vale para ChatGPT dev/atendimento, Codex, Claude Code, Gemini e subagentes; sessoes abertas precisam carregar estas instrucoes ou verificar sua versao atual.
 <!-- /OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
 
+> **PRIORIDADE MCP DO OWNER: tentar de verdade, NAO apenas listar.** Antes de recorrer a RDC, SSH ou declarar bloqueio de uma tarefa ShopVivaliz, chamar a ferramenta administrativa MCP disponivel e autorizada na sessao atual. Backend/Fred-Win/KOCEPSV: `shopvivaliz-remote-control` (`admin_command_run` ou `task_submit` e depois `task_status`). Marina: `shopvivaliz-marina-admin` quando habilitado pelo grant; fallback central apenas nas capacidades comprovadas. Registrar resultado real em `remote_access_attempts`; nao confundir `claude mcp list`/`codex mcp list` com uma tentativa. Se o MCP estiver ausente, registrar `MCP_NOT_EXPOSED`, investigar e seguir por alternativa legitimamente autorizada. Ver `docs/ops/mcp-first-agent-execution-2026-11-05.md`.
+
+<!-- AGENT_NATIVE_MCP_ADMIN_ROUTE_V1 -->
+## Descoberta e prioridade do MCP administrativo (Claude Code)
+
+Para operacoes ShopVivaliz, consultar primeiro o catalogo MCP realmente registrado no perfil do agente e a topologia de `AGENTS.md#rota-mcp-prioritaria-de-quatro-hosts`. Priorizar o MCP central `shopvivaliz-remote-control` para backend, Fred-Win e KOCEPSV; para Marina utilizar tambem o MCP independente `shopvivaliz-marina-admin`, quando autenticado, e a rota central somente nas capacidades que o grant vigente efetivamente anuncie. Se `admin_command_run`, `service_action` ou `task_submit` nao constar no schema de um host, **nao** interpretar `hosts_list` como prova de autorizacao para aquela chamada. A Marina independente expoe `marina_admin_shell` por JWT validado, inclusive `as_root` conforme concessao vigente.
+
+Na sessao Claude Code, usar `claude mcp list` para conferir registro e `Connected` antes de alegar disponibilidade; a configuracao nativa do MCP Marina usa `headersHelper` com arquivos protegidos, sem inserir segredos em prompts, TOML, Git ou logs. Diante de MCP ausente, investigar instalacao/escopo/credencial existente e revalidar, sem copiar credenciais entre hosts ou contornar recusa de identidade, grant, lease e RBAC. SSH, RDC e outros canais continuam alternativas autorizadas quando houver necessidade tecnica ou indisponibilidade verificada; nao interromper reparos independentes. Aplicar o contrato completo de `AGENTS.md` e `docs/knowledge/agent-rules.md`.
+<!-- /AGENT_NATIVE_MCP_ADMIN_ROUTE_V1 -->
+
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
 

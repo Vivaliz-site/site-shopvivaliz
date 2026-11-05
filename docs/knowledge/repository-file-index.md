@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5717 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5719 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -2431,6 +2431,8 @@ Gerado deterministicamente a partir de 5717 arquivos versionados no indice Git. 
 | `docs/audits/reorganization-final-report.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/repository-cleanup-backlog.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/repository-hygiene.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/audits/repository-hygiene.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/audits/repository-hygiene.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/shopee-runtime-credentials-2026-08-14.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/audits/static-tree-audit-runbook.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/auto-gate-replay-e2e-20260901.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2482,8 +2484,6 @@ Gerado deterministicamente a partir de 5717 arquivos versionados no indice Git. 
 | `docs/knowledge/google-ads-budget-policy.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/guardian-probe-budget.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/host-access.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/knowledge/host-access.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/knowledge/host-access.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/host-routes-matrix.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/image-generation-identity-policy.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/image-policy.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2501,6 +2501,8 @@ Gerado deterministicamente a partir de 5717 arquivos versionados no indice Git. 
 | `docs/knowledge/product-images.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/project.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/quality-gates.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/knowledge/repository-file-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/knowledge/repository-file-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/repository-file-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/repository-index.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/knowledge/routines/repository-safe-migration.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
