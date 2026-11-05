@@ -10,20 +10,25 @@ if [ "$phase" = "absolute-audit" ]; then
   exec bash scripts/absolute-audit-governance-validate.sh ci
 fi
 
-# ChatGPT continuity and browser suites are expensive (~70s of Node and
-# unittest runtime). On pull_request they run only when the diff touches their
-# paths. Push to main and merge_group always run them, so main and the merge
-# queue keep full coverage. Any doubt, including an uncomputable diff, runs them.
+# ChatGPT continuity and browser suites are expensive (~70s). On PRs and
+# merge groups, use the verified base..HEAD diff to select related suites.
+# Missing/untrusted comparison data always runs the full suites (fail closed).
+# Push to main retains the full post-merge validation.
 continuity_suites_needed() {
+  local base_ref changed
   case "${GITHUB_EVENT_NAME:-}" in
-    pull_request|pull_request_review) ;;
+    pull_request|pull_request_review)
+      [ -n "${GITHUB_BASE_REF:-}" ] || return 0
+      base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF" 2>/dev/null)" || return 0 ;;
+    merge_group)
+      [ -n "${MERGE_GROUP_BASE_SHA:-}" ] || return 0
+      base_ref="$MERGE_GROUP_BASE_SHA"
+      git cat-file -e "${base_ref}^{commit}" 2>/dev/null || return 0 ;;
     *) return 0 ;;
   esac
-  [ -n "${GITHUB_BASE_REF:-}" ] || return 0
-  local base_ref changed
-  base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF" 2>/dev/null)" || return 0
   changed="$(git diff --name-only "$base_ref"..HEAD 2>/dev/null)" || return 0
-  printf '%s\n' "$changed" | grep -Eq '^(scripts/chatgpt-continuity/|scripts/install-chatgpt-continuity|scripts/validate-task-continuity|scripts/agent_task_state\.py|scripts/repository-governance-validate\.sh|tests/chatgpt-|tests/test_chatgpt_|tests/test_task_|tests/test_global_task_continuity|tests/test_checkpoint_first|tests/test_executor_fallback_order|remote-control-browser-mcp/|scripts/(chatgpt|agent-bridge|continuity))'
+  [ -n "$changed" ] || return 0
+  printf '%s\n' "$changed" | grep -Eq '^(scripts/chatgpt-continuity/|scripts/install-chatgpt-continuity|scripts/validate-task-continuity|scripts/agent_task_state\.py|scripts/repository-governance-validate\.sh|tests/chatgpt-|tests/test_chatgpt_|tests/test_task_|tests/test_global_task_continuity|tests/test_checkpoint_first|tests/test_executor_fallback_order|remote-control-browser-mcp/|scripts/(chatgpt|agent-bridge|continuity)|\.github/workflows/mandatory-validation-gate\.yml)'
 }
 
 
