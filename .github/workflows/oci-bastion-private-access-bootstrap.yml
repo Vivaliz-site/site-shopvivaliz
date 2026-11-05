@@ -1294,6 +1294,17 @@ jobs:
           printf 'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS=%s\n' "$failure_class"
           '''
 
+          # RETIRED_HOST_TARGET_REMOVED_20261105: this diagnostic used to run on
+          # the web/site host through the central MCP. That VM was deleted
+          # (2026-10-29), the current site host (Marina) is not in the central
+          # MCP allowlist, and the bootstrap job is fail-closed. There is no
+          # valid central-MCP target, so fail explicitly instead of calling a
+          # retired host. Define a reviewed target before re-enabling this step.
+          target_host = ''
+          if not target_host:
+              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=target_host_not_defined')
+              raise SystemExit(1)
+
           body = json.dumps({
               'jsonrpc':'2.0',
               'id':1,
@@ -1301,7 +1312,7 @@ jobs:
               'params':{
                   'name':'admin_command_run',
                   'arguments':{
-                      'host':'shopvivaliz-free-a1',
+                      'host':target_host,
                       'command':command,
                       'timeout':55,
                   },
