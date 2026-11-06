@@ -70,3 +70,14 @@ O resultado da simulação mostra receita hipotética, custo de compra ERP, emba
 **Publicação futura de novo preço exige um escopo P2 próprio**, além de validação independente da correspondência do MLB com o **produto ERP exato e suas outras publicações vinculadas**, status ativo, ausência de automação, ofertas/variações, controles de concorrência, idempotência, rollback e confirmação de escrita/leitura em **ambos** os sistemas. Segundo docs oficiais vigentes, Mercado Livre usa `PUT /items/{itemId}` para preço padrão (automação ativa bloqueia a edição) e Olist V3 `PUT /produtos/{idProduto}/preco`, com estrutura de preço própria. **Nenhum desses endpoints de escrita foi liberado pelo gateway de simulação.**
 
 Fontes: https://developers.mercadolivre.com.br/pt_br/automatizacoes-de-precos e https://api-docs.erp.olist.com/api-reference/produtos/atualizar-pre%C3%A7o-do-produto
+
+## Bloqueio preventivo para simulador de preços antigo (06/11/2026)
+
+**Problema identificado em E2E real:** a interface publicada oferece `Simular outro preço`, mas o backend de margens aprovado para a primeira release somente leitura (`148559...`) ainda grava `requested_price` como snapshot financeiro estimado. A correção não persistente da PR #81 usa `state=SIMULATED`, `persisted=false`, `snapshot_id=null`; o código antigo retornava `state=ESTIMATED`, criando registros hipotéticos que poderiam contaminar o histórico.
+
+O gateway autenticado no site **primeiro consulta `GET https://pricing.shopvivaliz.com.br/v1/health` pelo mesmo canal HTTPS fixo** e exige `ok=true` mais `capabilities.pricing_requested_price_preview="simulated-no-ledger-v1"` antes de transmitir qualquer `POST /v1/pricing/quote` com preço hipotético. Se o backend estiver antigo, indisponível ou apresentar outra capacidade, ele retorna **503 `PREVIEW_BACKEND_UPGRADE_REQUIRED`**, sem emitir o POST e sem registrar simulação. O health básico sem capacidade **não** habilita o simulador.
+
+Após o POST, o gateway exige que a resposta tenha o MLB solicitado, `state=SIMULATED`, `persisted=false`, `snapshot_id=null` e origem `REQUESTED_PRICE`. Resposta fora desse contrato retorna 502 `PREVIEW_BACKEND_CONTRACT_INVALID`; o painel mostra erro em português e jamais exibe uma cotação como válida. A API não concede operações de alteração de preço/estoque/ERP; o botão é exclusivamente simulação.
+
+**Aceite:** teste estático do gateway, lint PHP e JavaScript, validação do login real. O simulador completo só será considerado funcional quando a release do ML Pricing que contém a PR #82 for efetivamente publicada com o grant correto e for testada por navegação autenticada. O pacote read-only atual pinado no grant #3695 **não atende a esse contrato**; o site deve falhar fechado para ele.
+

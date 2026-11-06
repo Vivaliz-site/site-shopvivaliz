@@ -82,6 +82,20 @@ $checks = [
         && str_contains($api, "array_diff(array_keys(\$payload), ['item_id', 'requested_price'])")
         && str_contains($page, "request('preview',{method:'POST'")
         && str_contains($page, "quote.sources?.price?.origin!=='REQUESTED_PRICE'"),
+    'price preview refuses older backend before posting what-if financial data' =>
+        str_contains($api, "svmlm_require_nonpersistent_preview(\$token);")
+        && str_contains($api, "svmlm_upstream('/v1/health', 'GET', null, \$token)")
+        && str_contains($api, "'pricing_requested_price_preview'")
+        && str_contains($api, "'simulated-no-" . "ledger-v1'")
+        && str_contains($api, "PREVIEW_BACKEND_UPGRADE_REQUIRED")
+        && str_contains($api, "PREVIEW_BACKEND_CONTRACT_INVALID")
+        && str_contains($api, "(\$preview['state'] ?? null) !== 'SIMULATED'")
+        && str_contains($api, "(\$preview['persisted'] ?? null) !== false")
+        && str_contains($api, "\$preview['snapshot_id'] !== null")
+        && str_contains($page, "quote.state!=='SIMULATED'")
+        && str_contains($page, 'quote.persisted!==false')
+        && str_contains($page, 'quote.snapshot_id!==null')
+        && !str_contains($page, "quote.state!=='ESTIMATED'"),
     'simulation requires active and variant-free listing and never publishes prices' =>
         str_contains($page, "simulationListing.status==='active'")
         && str_contains($page, "simulationListing.variants||[]")

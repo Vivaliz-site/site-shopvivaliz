@@ -149,6 +149,8 @@ async function request(action, opts={}){
   const code=result?.error?.code||'BACKEND_UNAVAILABLE';
   if(code==='ML_MARGIN_NOT_CONFIGURED')throw new Error('Integração ainda não provisionada: conta e credencial da API de margens pendentes.');
   if(code==='AUDIT_ALREADY_RUNNING_DIFFERENT_SELECTION')throw new Error('Há outra auditoria em execução para esta conta, com uma seleção diferente. Aguarde a conclusão antes de auditar outro conjunto de anúncios.');
+  if(code==='PREVIEW_BACKEND_UPGRADE_REQUIRED')throw new Error('A versão atual da API não garante simulação sem registro financeiro. Aguarde a atualização segura da integração.');
+  if(code==='PREVIEW_BACKEND_CONTRACT_INVALID')throw new Error('A API não confirmou uma simulação não persistente. Nenhum resultado foi considerado válido.');
   throw new Error(code);
  }
  return result;
@@ -355,7 +357,7 @@ async function simulatePrice(){
  render();
  try{
   const quote=await request('preview',{method:'POST',body:{item_id:itemId,requested_price:price}});
-  if(quote.subject_id!==itemId||quote.state!=='ESTIMATED'||quote.sources?.price?.origin!=='REQUESTED_PRICE'){
+  if(quote.subject_id!==itemId||quote.state!=='SIMULATED'||quote.persisted!==false||quote.snapshot_id!==null||quote.sources?.price?.origin!=='REQUESTED_PRICE'){
    throw new Error('A API devolveu uma cotação diferente da simulação solicitada.');
   }
   const missing=Array.isArray(quote.completeness?.missing)?quote.completeness.missing.map(x=>missingReasonLabels[x]||x):[];
