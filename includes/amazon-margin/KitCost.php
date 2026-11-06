@@ -113,4 +113,70 @@ final class SvAmazonMarginKitCost
         return array_replace($result,['cost'=>round(($cents*$offerCount)/100,2),
             'multiplier'=>$offerCount,'basis'=>'OLIST_COMPONENT_COST_X_AMAZON_PACK_UNITS']);
     }
+    /**
+     * A kit marked K in the Olist V3 catalog has an explicit bill of materials.
+     * Do not assume that a separately stored historical kit cost agrees with
+     * the current costs or quantities of those same components.
+     *
+     * This is READ ONLY. A mismatch is held for reconciliation instead of
+     * silently replacing a documented kit cost, which might include packing
+     * or acquisition charges missing from the BOM.
+     *
+     * @param list<array{id:mixed,quantity:mixed}> $components
+     * @param callable(int):array<string,mixed> $readComponent
+     * @return array{status:string,reason:?string,sum_cost:?float,total_units:int}
+     */
+    public static function checkBillOfMaterials(
+        int $kitId,array $components,float $registeredCost,callable $readComponent
+    ): array {
+        $fail=static fn(string $reason,?float $sum=null,int $units=0):array=>[
+            'status'=>'unverified','reason'=>$reason,'sum_cost'=>$sum,
+            'total_units'=>$units,
+        ];
+        if ($kitId<=0 || count($components)<1 || count($components)>100
+            || !is_finite($registeredCost) || $registeredCost<=0) {
+            return $fail('missing_kit_bill_of_materials_or_registered_cost');
+        }
+        $cents=0;$totalUnits=0;$seen=[];
+        foreach ($components as $part) {
+            if (!is_array($part))return $fail('invalid_kit_component_schema');
+            $id=$part['id']??null;
+            $count=$part['quantity']??null;
+            if (!is_numeric($id)||!is_numeric($count)
+                || (int)$id<1 || (int)$id===$kitId
+                || (float)$count<1 || (float)$count>1000
+                || floor((float)$count)!==(float)$count) {
+                return $fail('invalid_kit_component_identity_or_quantity');
+            }
+            $id=(int)$id;$count=(int)$count;
+            if (isset($seen[$id]))return $fail('duplicate_kit_component_id');
+            $seen[$id]=true;
+            $member=$readComponent($id);
+            $unit=$member['last_cost']??null;
+            if (($member['active']??false)!==true
+                || !in_array(strtoupper((string)($member['erp_product_type']??'')),['S','P'],true)
+                || !is_numeric($unit) || !is_finite((float)$unit)
+                || (float)$unit<=0) {
+                return $fail('kit_component_inactive_nested_or_cost_missing');
+            }
+            $unitCents=(int)round(((float)$unit)*100,0,PHP_ROUND_HALF_UP);
+            $totalUnits+=$count;
+            if ($unitCents<=0 || $unitCents>100000000
+                || $totalUnits>10000) {
+                return $fail('kit_component_cost_or_units_out_of_range');
+            }
+            $cents+=$unitCents*$count;
+            if ($cents>100000000000) {
+                return $fail('kit_total_cost_overflow');
+            }
+        }
+        $sum=round($cents/100,2);
+        $registeredCents=(int)round($registeredCost*100,0,PHP_ROUND_HALF_UP);
+        if ($registeredCents!==$cents) {
+            return $fail('kit_registered_cost_disagrees_with_component_costs',$sum,$totalUnits);
+        }
+        return ['status'=>'confirmed','reason'=>null,
+            'sum_cost'=>$sum,'total_units'=>$totalUnits];
+    }
+
 }
