@@ -1,3 +1,8 @@
+<!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->
+> **ESTADO PREVALENTE EM 06/11/2026:** MCP central `5580/5581` e clientes stdio Claude/Codex executam comandos administrativos de identificacao na Marina sob grant vigente. **Os aplicativos ChatGPT/Orquestrador continuam com o schema de ferramentas do cliente desatualizado**: Marina nao aceita como `host` em `admin_command_run`, `task_submit` e `service_action`; o Orquestrador ainda anuncia o host extinto `shopvivaliz-free-a1`. O runtime / `hosts_list` ser verde nao certifica o cliente. Status: `SERVER_ADMIN_APTO=true` e `CHATGPT_CLIENT_CATALOG_APTO=NAO_COMPROVADO`. Nunca usar a VM extinta; aplicar autorizacao por operacao e registrar `MCP_NOT_EXPOSED` quando o inputSchema da sessao nao expor Marina.
+> **Proxima etapa oficial:** publicar/refrescar as actions MCP em **ambos** apps no workspace e validar uma ferramenta nativa, numa nova sessao, com `hostname -s; id -un` em Marina. Nao contornar bloqueio do provedor com outra rota. [Runbook e testes](../ops/mcp-client-catalog-publication-2026-11-06.md); [Evidencias persistentes](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3152#issuecomment-6677266585).
+<!-- /MCP_CLIENT_CATALOG_PARITY_20261106 -->
+
 # ChatGPT Dev — bootstrap da conta corporativa
 
 **Conta:** `dev@shopvivaliz.com.br`  
