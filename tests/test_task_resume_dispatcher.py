@@ -82,6 +82,21 @@ class DetachedTaskResumeTests(unittest.TestCase):
         }
         (self.runtime / "_resume-requests.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
 
+    def test_old_origin_cannot_reenter_after_recent_progress(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["created_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=11)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        state["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=5)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        request = {
+            "task_id": state["task_id"],
+            "checkpoint_updated_at": state["updated_at"],
+        }
+        self.assertFalse(dispatcher._request_matches_state(request, state))
+
     def _executor(self, *, advance: bool) -> list[str]:
         script = self.root / ("advance.py" if advance else "noop.py")
         if advance:
@@ -312,7 +327,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(second["in_flight"], 1)
         self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 1)
 
-    def test_task_older_than_ten_days_can_resume_after_recent_verified_update(self) -> None:
+    def test_task_older_than_ten_days_cannot_resume_after_recent_update(self) -> None:
         dispatcher = load_dispatcher()
         fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
         original_datetime = dispatcher.datetime
@@ -332,8 +347,8 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         finally:
             dispatcher.datetime = original_datetime
 
-        self.assertEqual(result["launched"], 1)
-        self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 1)
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 0)
 
     def test_task_at_ten_day_cutoff_keeps_current_boundary_semantics(self) -> None:
         dispatcher = load_dispatcher()

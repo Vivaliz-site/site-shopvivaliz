@@ -60,7 +60,7 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(watchdog.read_requests(self.runtime), [])
 
-    def test_watchdog_preserves_tasks_with_recent_progress_even_if_created_before_lookback(self) -> None:
+    def test_watchdog_excludes_old_task_even_if_recently_updated(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
 
         state.start_task("recent-task", "recent", "gpt")
@@ -82,7 +82,7 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         historical["created_at"] = (
             datetime.now(timezone.utc) - timedelta(days=11)
         ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        # Recent verified progress keeps long-running work within the lookback.
+        # Progress is preserved but must not silently renew the lookback.
         historical["updated_at"] = (
             datetime.now(timezone.utc) - timedelta(seconds=600)
         ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -91,11 +91,12 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
 
         self.assertEqual(result["lookback_days"], 10)
-        self.assertEqual(result["scanned"], 2)
-        self.assertEqual(result["eligible"], 2)
-        self.assertEqual(result["dispatched"], 2)
-        self.assertEqual(result["skipped_outside_lookback"], 0)
-        self.assertEqual([row["task_id"] for row in watchdog.read_requests(self.runtime)], ["historical-task", "recent-task"])
+        self.assertEqual(result["scanned"], 1)
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(result["skipped_outside_lookback"], 1)
+        self.assertEqual([row["task_id"] for row in watchdog.read_requests(self.runtime)], ["recent-task"])
+        self.assertEqual(json.loads(historical_path.read_text(encoding="utf-8"))["status"], "RUNNING")
 
     def test_stale_running_task_dispatches_once_per_checkpoint_revision(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
