@@ -10,6 +10,8 @@ install -o root -g root -m 0644 "$base/deploy/systemd/shopvivaliz-mysql-native-o
 systemd-analyze verify /etc/systemd/system/shopvivaliz-mysql-native-oci-backup.service /etc/systemd/system/shopvivaliz-mysql-native-oci-backup.timer
 systemctl daemon-reload
 /usr/local/sbin/shopvivaliz-mysql-native-oci-backup --check
+systemctl start shopvivaliz-mysql-native-oci-backup.service
+[[ "$(systemctl show shopvivaliz-mysql-native-oci-backup.service -p Result --value)" == "success" ]]
 systemctl enable --now shopvivaliz-mysql-native-oci-backup.timer
 systemctl is-enabled --quiet shopvivaliz-mysql-native-oci-backup.timer
 systemctl is-active --quiet shopvivaliz-mysql-native-oci-backup.timer
