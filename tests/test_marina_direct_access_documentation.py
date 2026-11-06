@@ -11,8 +11,8 @@ class MarinaDirectAccessDocumented(unittest.TestCase):
         assert "<!-- MARINA_DIRECT_RDC_V1 -->" in text
         section = text.split("<!-- MARINA_DIRECT_RDC_V1 -->", 1)[1].split("<!-- /MARINA_DIRECT_RDC_V1 -->", 1)[0]
         for required in ("Remote Desktop Commander", "sem passar pela controladora",
-                         "NoNewPrivileges=yes", "ShopVivaliz Remote Control", "nao provisionado",
-                         "RDC 2", "ESPOSA", "10.80.1.116"):
+                         "NoNewPrivileges=yes", "MCP central e Orquestrador",
+                         "Registro historico de 29/10", "RDC 2", "ESPOSA", "10.80.1.116"):
             with self.subTest(expected=required):
                 self.assertIn(required, section)
         self.assertIn("nao contornar", section.lower())

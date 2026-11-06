@@ -1,4 +1,4 @@
-"""Regression: long-running checkpoints remain eligible after recent verified progress."""
+"""Regression: the 10-day automatic recovery window follows creation time, not recent progress."""
 import json
 import tempfile
 import unittest
@@ -27,23 +27,23 @@ class ActiveCheckpointProgressTests(unittest.TestCase):
             "next_action": "Continue authorized audited task",
         }
 
-    def test_controller_scans_old_created_recently_progressed(self):
+    def test_controller_excludes_old_created_recently_progressed_from_auto_recovery(self):
         state = self.checkpoint()
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, state["task_id"] + ".json").write_text(json.dumps(state))
             result = controller._completion_sweep(Path(tmp), durable_handoff_enabled=True)
-        self.assertEqual(result["active"], 1)
-        self.assertEqual(result["active_outside_lookback"], 0)
-        self.assertEqual(result["unbound_active"], 1)
+        self.assertEqual(result["active"], 0)
+        self.assertEqual(result["active_outside_lookback"], 1)
+        self.assertEqual(result["unbound_active"], 0)
 
-    def test_watchdog_does_not_discard_recent_progress_or_invent_route(self):
+    def test_watchdog_preserves_old_progress_but_does_not_auto_resume(self):
         state = self.checkpoint()
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, state["task_id"] + ".json").write_text(json.dumps(state))
             result = watchdog.run_once(runtime_dir=Path(tmp), proactive=True)
-        self.assertGreaterEqual(result["scanned"], 1)
-        self.assertEqual(result["skipped_outside_lookback"], 0)
-        self.assertEqual(result["skipped_unbound_origin"], 1)
+        self.assertEqual(result["scanned"], 0)
+        self.assertEqual(result["skipped_outside_lookback"], 1)
+        self.assertEqual(result["skipped_unbound_origin"], 0)
         self.assertEqual(result["dispatched"], 0)
 
     def test_route_reconciler_inspects_but_does_not_guess_proof(self):
@@ -55,14 +55,14 @@ class ActiveCheckpointProgressTests(unittest.TestCase):
         self.assertEqual(result["skipped_no_proof"], 1)
         self.assertEqual(result["bound"], 0)
 
-    def test_dispatcher_accepts_matching_recent_progress(self):
+    def test_dispatcher_rejects_old_created_recently_progressed_auto_resume(self):
         state = self.checkpoint()
         request = {
             "task_id": state["task_id"], "repository": state["repository"],
             "checkpoint_updated_at": state["updated_at"],
             "next_action": state["next_action"], "fingerprint": "verified",
         }
-        self.assertTrue(dispatcher._request_matches_state(request, state))
+        self.assertFalse(dispatcher._request_matches_state(request, state))
 
     def test_nudge_accepts_matching_recent_progress(self):
         state = self.checkpoint()
