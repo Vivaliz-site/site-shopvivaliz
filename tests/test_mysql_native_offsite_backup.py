@@ -44,7 +44,7 @@ class MysqlOffsiteBackupTests(unittest.TestCase):
 
     def _fake_oci(self, files):
         def run(argv, timeout=600):
-            action = argv[2]
+            action = argv[3]
             name = argv[argv.index("--name") + 1]
             local = Path(argv[argv.index("--file") + 1])
             if action == "put":
@@ -69,7 +69,7 @@ class MysqlOffsiteBackupTests(unittest.TestCase):
         objects = {}
         def damaged(argv, timeout=600):
             self._fake_oci(objects)(argv, timeout)
-            if argv[2] == "get" and not argv[argv.index("--name") + 1].endswith(".sha256"):
+            if argv[3] == "get" and not argv[argv.index("--name") + 1].endswith(".sha256"):
                 local = Path(argv[argv.index("--file") + 1])
                 local.write_bytes(b"broken" + local.read_bytes()[6:])
         with mock.patch.object(backup, "run_checked", side_effect=damaged):
