@@ -15,8 +15,10 @@ const crypto = require('crypto');
 const {chromium} = require('/home/ubuntu/amazon-returns-deploy/shared/olist-erp-browser/runtime/node_modules/playwright-core');
 
 const base = '/home/ubuntu/.shopvivaliz/runtime/amazon-margin';
-const inputPath = base + '/product-tab-audit-input-active-all-20261106.json';
-const outputPath = base + '/olist-active-product-edit-capture-20261106.json';
+const inputPath = process.env.SV_AMAZON_OLIST_PRODUCT_TABS_INPUT
+  || base + '/product-tab-audit-input-active-all-20261106.json';
+const outputPath = process.env.SV_AMAZON_OLIST_PRODUCT_TABS_OUTPUT
+  || base + '/olist-active-product-edit-capture-20261106.json';
 const evidenceDir = base + '/evidence/olist-product-tabs';
 const channels = {'27473':'Amazon', '27478':'Amazon Onsite', '27482':'Amazon Classic'};
 const start = Number(process.argv[2] || 0);
@@ -56,21 +58,22 @@ function summarize(data) {
 (async () => {
   const input = readPrivateJson(inputPath);
   const ids = input.product_ids;
-  if (!Array.isArray(ids) || ids.length !== input.active_total || ids.length !== 202) {
+  if (!Array.isArray(ids) || ids.length !== input.active_total || ids.length < 1 || ids.length > 10000) {
     throw Error('active_product_index_incomplete');
   }
   const targets = new Set(input.target_seller_skus || []);
   const data = fs.existsSync(outputPath) ? readPrivateJson(outputPath) : {
     schema: 1,
     source: 'OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI',
-    active_count: 202,
+    active_count: ids.length,
     observed_at: new Date().toISOString(),
     input_observed_at: input.observed_at,
     channels,
     records: {},
     errors: {}
   };
-  if (data.source !== 'OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI' || data.active_count !== 202) {
+  if (data.source !== 'OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI' || data.active_count !== ids.length
+      || data.input_observed_at !== input.observed_at) {
     throw Error('capture_schema_mismatch');
   }
   fs.mkdirSync(evidenceDir, {recursive: true, mode: 0o700});
@@ -126,7 +129,8 @@ function summarize(data) {
         if (targetBindings.length) {
           await page.locator('#link-ecommerce').click({timeout: 4500});
           await page.waitForTimeout(130);
-          const screenshot = evidenceDir + '/product-' + key + '-20261106.png';
+          const screenshotDate = record.observed_at.slice(0, 10).replace(/-/g, '');
+          const screenshot = evidenceDir + '/product-' + key + '-' + screenshotDate + '.png';
           await page.screenshot({path: screenshot, fullPage: false});
           fs.chmodSync(screenshot, 0o600);
           record.screenshot_sha256 =
