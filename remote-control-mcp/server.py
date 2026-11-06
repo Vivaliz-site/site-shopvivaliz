@@ -1236,13 +1236,32 @@ def run_task_entrypoint(task_id: str) -> int:
                 (now(), now(), task_id),
             ).rowcount
             if claimed:
-                proc = subprocess.Popen(
-                    privileged_invocation(str(row["host"]), str(row["command"])),
-                    stdout=out, stderr=err, start_new_session=True,
-                )
+                try:
+                    proc = subprocess.Popen(
+                        privileged_invocation(str(row["host"]), str(row["command"])),
+                        stdout=out, stderr=err, start_new_session=True,
+                    )
+                except PermissionError:
+                    # A policy refusal happens before spawning the remote
+                    # command. Persist a terminal denial in the SAME
+                    # transaction as the runner claim; otherwise its rollback
+                    # leads reconcile_task() to endlessly requeue the job.
+                    db.execute(
+                        "UPDATE tasks SET state='failed',execution_started_at=NULL,"
+                        "finished_at=?,heartbeat_at=?,exit_code=77,"
+                        "progress='denied_before_execution',"
+                        "recovery_note='authorization_denied_before_execution' "
+                        "WHERE id=? AND state IN ('starting','running')",
+                        (now(), now(), task_id),
+                    )
+                    permission_denied = True
+                else:
+                    permission_denied = False
         if not claimed:
             finalize_cancelled_without_result(task_id)
             return 0
+        if permission_denied:
+            return finalize_task(task_id, "failed", 77, result_dir)
         deadline = time.monotonic() + int(row["timeout"])
         transport_retry_used = False
         while True:
