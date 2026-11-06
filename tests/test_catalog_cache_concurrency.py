@@ -37,7 +37,11 @@ def _cross_process_throttle_worker(cache_path, barrier, queue):
     daemon._MIN_REQUEST_INTERVAL = 0.18
     barrier.wait(timeout=10)
     daemon.throttle()
-    queue.put(time.monotonic())
+    # Measure the reserved request slot timestamp written under flock,
+    # not the worker's later queue.put() call. Scheduler preemption between
+    # releasing the lock and publishing to the queue can distort the gap
+    # by several milliseconds even when both reservations were correct.
+    queue.put(daemon._LAST_REQUEST)
 
 
 

@@ -263,6 +263,11 @@ final class SvAmazonMarginCollector
             'erp_product_type'=>(string)($p['tipo']??''),
             'erp_description'=>(string)($p['descricao']??''),
             'erp_kit_component_count'=>is_array($p['kit']??null) ? count($p['kit']) : 0,
+            'erp_kit_components'=>is_array($p['kit']??null)
+                ? array_map(static fn($c):array=>[
+                    'id'=>$c['produto']['id']??null,
+                    'quantity'=>$c['quantidade']??null,
+                ],$p['kit']) : [],
         ];
     }
 
@@ -505,7 +510,32 @@ final class SvAmazonMarginCollector
                     $rows[]=$row;
                     continue;
                 }
+                $kitComponents=$prod['erp_kit_components']??[];
+                unset($prod['erp_kit_components']); // No raw BOM in persisted report.
                 $row = array_merge($row,$prod);
+                if (($prod['erp_product_type']??'')==='K') {
+                    // A complete Olist K is NOT multiplied again, but its
+                    // recorded price history must match the verified LIVE
+                    // composition. The same BOM can exist under multiple
+                    // ERP records with conflicting historical kit costs.
+                    $bom=SvAmazonMarginKitCost::checkBillOfMaterials(
+                        (int)$prod['erp_id'],$kitComponents,
+                        (float)($prod['last_cost']??0),
+                        fn(int $id):array=>$this->product($id)
+                    );
+                    $row['erp_kit_bom_cost']=$bom['sum_cost'];
+                    $row['erp_kit_bom_total_units']=$bom['total_units'];
+                    if ($bom['status']!=='confirmed') {
+                        $row['erp_base_cost']=$prod['last_cost'];
+                        $row['last_cost']=null;
+                        $row['kit_cost_multiplier']=null;
+                        $row['kit_cost_basis']='OLIST_KIT_BOM_COST_UNVERIFIED';
+                        $row['kit_cost_issue']=$bom['reason'];
+                        $row['status']='kit_cost_unverified';
+                        $rows[]=$row;
+                        continue;
+                    }
+                }
             } catch (Throwable $e) {
                 // A per-SKU mismatch is not a global failure. An account-level
                 // Olist/Amazon outage or throttling IS: retry the job instead

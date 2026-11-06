@@ -289,9 +289,17 @@ function costMarkup(r){
   const desc=multiplier>1
    ?'<span class="cell-note">Peça '+price(r.erp_base_cost)+' × '+multiplier+' unidades = custo do kit completo</span>'
    :r.kit_cost_basis==='ERP_COMPLETE_KIT_COST'
-    ?'<span class="cell-note">Custo do kit completo cadastrado no Olist, sem multiplicar duas vezes</span>'
+    ?'<span class="cell-note">Kit completo conferido com a soma dos componentes do Olist: '+price(r.erp_kit_bom_cost)+'. Sem multiplicar duas vezes.</span>'
     :'<span class="cell-note">Custo por unidade vendida</span>';
   return price(r.last_cost)+desc+(r.last_cost_date?'<span class="cell-note">Custo de '+escapeHtml(r.last_cost_date)+'</span>':'');
+ }
+ if(r.status==='kit_cost_unverified') {
+  const registered=Number(r.erp_base_cost||0),bom=Number(r.erp_kit_bom_cost||0);
+  const trace=registered>0&&bom>0
+    ?'Custo histórico do kit '+price(registered)+' difere da soma dos componentes '+price(bom)+'.'
+    :'Composição ou custo unitário dos componentes não comprovado.';
+  return '—<span class="cell-note warn">'+trace+
+    ' <strong>Custo e margem bloqueados até reconciliação.</strong></span>';
  }
  const prior=r.prior_cost_reference;
  if(prior&&Number.isFinite(Number(prior.cost))&&Number(prior.cost)>0) {
@@ -316,7 +324,8 @@ function refreshMetrics(){
  el('n-risk').textContent=low;
  el('n-good').textContent=healthy;
  el('n-pending').textContent=base.length-low-healthy;
- const fallback=base.filter(r=>r.last_cost===null&&r.prior_cost_reference?.cost>0).length;
+ const fallback=base.filter(r=>r.last_cost===null&&r.status!=='kit_cost_unverified'
+   &&r.prior_cost_reference?.cost>0).length;
  const indicator=el('prior-cost-indicator');
  indicator.hidden=fallback===0;
  indicator.textContent=fallback+' anúncios com último custo de uma auditoria anterior. Esses valores são históricos, não custos confirmados nesta execução, e não habilitam margem certificada.';
