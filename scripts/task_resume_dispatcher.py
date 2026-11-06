@@ -133,7 +133,7 @@ def _bound_session_authenticated(session: str) -> bool:
         return False
 
 
-def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any]) -> dict[str, Any] | None:
+def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any], *, timeout_seconds: int = 900) -> dict[str, Any] | None:
     if not _durable_handoff_enabled():
         return state
     task_id = str(state.get("task_id", "")).strip()
@@ -141,6 +141,20 @@ def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: d
     if not task_id or not request_id:
         raise ValueError("durable resume ownership requires task and request ids")
     owner_id = f"resume:{request_id}"
+    if request.get("execution_route") == "detached":
+        if state.get("execution_route") != "detached":
+            raise ValueError("detached execution route changed")
+        previous_runtime = continuity_state.RUNTIME_DIR
+        try:
+            continuity_state.RUNTIME_DIR = Path(runtime_dir)
+            return continuity_state.claim_detached_recovery_ownership(
+                task_id, owner_id=owner_id, ttl_seconds=max(
+                    30, int(timeout_seconds) + 120,
+                    int(os.getenv("SHOPVIVALIZ_RESUME_OWNERSHIP_TTL_SECONDS", "900"))
+                )
+            )
+        finally:
+            continuity_state.RUNTIME_DIR = previous_runtime
     previous_runtime = continuity_state.RUNTIME_DIR
     try:
         continuity_state.RUNTIME_DIR = Path(runtime_dir)
@@ -161,6 +175,18 @@ def _release_resume_ownership(runtime_dir: Path, state: dict[str, Any], request:
         return
     task_id = str(state.get("task_id", "")).strip()
     owner_id = f"resume:{str(request.get('id', '')).strip()}"
+    if request.get("execution_route") == "detached":
+        previous_runtime = continuity_state.RUNTIME_DIR
+        try:
+            continuity_state.RUNTIME_DIR = Path(runtime_dir)
+            continuity_state.release_detached_recovery_ownership(
+                task_id, owner_id=owner_id, reason=reason
+            )
+        except continuity_state.TaskStateError:
+            pass
+        finally:
+            continuity_state.RUNTIME_DIR = previous_runtime
+        return
     previous_runtime = continuity_state.RUNTIME_DIR
     try:
         continuity_state.RUNTIME_DIR = Path(runtime_dir)
@@ -516,6 +542,10 @@ def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bo
         return False
     if str(request.get("task_id", "")).strip() != str(state.get("task_id", "")).strip():
         return False
+    if (request.get("execution_route") == "detached") != (state.get("execution_route") == "detached"):
+        return False
+    if request.get("execution_route") == "detached" and request.get("preferred_executor") != "cli":
+        return False
     request_repository = str(request.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
     state_repository = str(state.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
     if request_repository != state_repository:
@@ -749,13 +779,15 @@ def _execute(
         env["SHOPVIVALIZ_RESUME_REQUEST_ID"] = str(request.get("id", ""))
         env["SHOPVIVALIZ_RESUME_FINGERPRINT"] = str(request.get("fingerprint", ""))
         if _durable_handoff_enabled():
-            env["SHOPVIVALIZ_RESUME_CONVERSATION_ID"] = str(state.get("conversation_id", ""))
+            env["SHOPVIVALIZ_RESUME_EXECUTION_ROUTE"] = str(request.get("execution_route", "chatgpt"))
             env["SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION"] = str(state.get("recovery_checkpoint_version", state.get("checkpoint_version", "")))
             env["SHOPVIVALIZ_RESUME_OWNER_ID"] = str(state.get("recovery_owner_id", ""))
-            env["SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID"] = str(state.get("recovery_lease_id", ""))
-            env["SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN"] = str(state.get("recovery_fencing_token", ""))
             env["SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID"] = str(state.get("runtime_lease_id", ""))
             env["SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN"] = str(state.get("runtime_fencing_token", ""))
+            if request.get("execution_route") != "detached":
+                env["SHOPVIVALIZ_RESUME_CONVERSATION_ID"] = str(state.get("conversation_id", ""))
+                env["SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID"] = str(state.get("recovery_lease_id", ""))
+                env["SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN"] = str(state.get("recovery_fencing_token", ""))
 
         completed = subprocess.run(
             command,
@@ -895,24 +927,26 @@ def run_once(
                 summary["deferred_browser_probe"] += 1
                 continue
 
-            if _durable_handoff_enabled() and not str(state.get("conversation_id", "")).strip():
+            detached = request.get("execution_route") == "detached"
+            if _durable_handoff_enabled() and not detached and not str(state.get("conversation_id", "")).strip():
                 summary["deferred_unbound"] += 1
                 continue
-            if _durable_handoff_enabled() and str(state.get("browser_session", "")).strip() not in {"fred", "atendimento", "dev"}:
+            if _durable_handoff_enabled() and not detached and str(state.get("browser_session", "")).strip() not in {"fred", "atendimento", "dev"}:
                 summary["deferred_unbound_session"] += 1
                 continue
-            if _durable_handoff_enabled() and not _bound_session_authenticated(str(state.get("browser_session", "")).strip()):
-                # Do not create RECOVERY_CLAIMED for logged-out or unknown
-                # profiles; this must precede conversation/runtime fencing.
+            if _durable_handoff_enabled() and not detached and not _bound_session_authenticated(str(state.get("browser_session", "")).strip()):
+                # Do not claim an unauthenticated ChatGPT profile; detached
+                # tasks use an independently fenced task-scoped route.
                 summary["deferred_bound_session_auth"] += 1
                 continue
 
             try:
-                claimed_state = _claim_resume_ownership(runtime, state, request)
+                claimed_state = _claim_resume_ownership(runtime, state, request, timeout_seconds=timeout_seconds)
             except continuity_state.TaskStateError as exc:
                 message = str(exc).strip().lower()
                 ownership_busy = (
-                    message == "conversation recovery ownership is busy"
+                    message.startswith("detached runtime lock busy:")
+                    or message == "conversation recovery ownership is busy"
                     or message.startswith("cannot claim conversation recovery lease: conversation lease already held")
                     or message.startswith("cannot claim runtime mutation lock: runtime lock already held")
                 )

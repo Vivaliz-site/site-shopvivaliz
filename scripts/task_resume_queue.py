@@ -41,14 +41,17 @@ TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 
 
 def checkpoint_fingerprint(payload: dict[str, Any]) -> str:
-    basis = "\n".join(
-        [
-            str(payload.get("repository", DEFAULT_REPOSITORY)).strip(),
-            str(payload.get("task_id", "")).strip(),
-            str(payload.get("updated_at", "")).strip(),
-            str(payload.get("next_action", "")).strip(),
-        ]
-    )
+    parts = [
+        str(payload.get("repository", DEFAULT_REPOSITORY)).strip(),
+        str(payload.get("task_id", "")).strip(),
+        str(payload.get("updated_at", "")).strip(),
+        str(payload.get("next_action", "")).strip(),
+    ]
+    # Preserve every historical ChatGPT fingerprint byte-for-byte; opt-in
+    # changes the detached execution route even within the same UTC second.
+    if payload.get("execution_route") == "detached":
+        parts.append("execution_route=detached")
+    basis = "\n".join(parts)
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 

@@ -312,6 +312,20 @@ def _require_current_resume(payload: dict[str, Any]) -> None:
     if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") != "1":
         return
     if os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip() == "1":
+        if os.getenv("SHOPVIVALIZ_RESUME_EXECUTION_ROUTE", "chatgpt").strip() == "detached":
+            if payload.get("execution_route") != "detached":
+                raise TaskStateError("detached resume route does not match task source")
+            try:
+                verify_detached_recovery_ownership(
+                    str(payload.get("task_id", "")),
+                    owner_id=os.getenv("SHOPVIVALIZ_RESUME_OWNER_ID", ""),
+                    lease_id=os.getenv("SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID", ""),
+                    fencing_token=int(os.getenv("SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN", "0")),
+                    checkpoint_version=int(os.getenv("SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION", "0")),
+                )
+            except (ValueError, TypeError) as exc:
+                raise TaskStateError("invalid detached recovery ownership metadata") from exc
+            return
         required = {
             "owner_id": os.getenv("SHOPVIVALIZ_RESUME_OWNER_ID", "").strip(),
             "conversation_id": os.getenv("SHOPVIVALIZ_RESUME_CONVERSATION_ID", "").strip(),
@@ -1176,6 +1190,129 @@ def release_foreground_lease_for_task(task_id: str, *, lease_id: str, fencing_to
     _atomic_write(_path(task_id), payload)
     return payload
 
+
+@_serialized_transition
+def authorize_detached_route(task_id: str, *, expected_checkpoint_version: int,
+                             authorized_by: str, reason: str) -> dict[str, Any]:
+    """Explicit, CAS-pinned opt-in for a non-ChatGPT task's task-scoped recovery.
+
+    This does not bind a ChatGPT conversation, authorize new provider privileges,
+    or retroactively treat an unverified browser event as evidence.
+    """
+    payload = _load(task_id)
+    agent = str(payload.get("agent_id", "")).strip().lower()
+    if str(payload.get("status", "")).strip() != "RUNNING":
+        raise TaskStateError("only RUNNING tasks may authorize detached recovery")
+    if not agent.startswith(("claude", "gemini", "ollama", "codex")):
+        raise TaskStateError("detached route requires an identified non-ChatGPT provider")
+    if CHATGPT_AGENT_ID_RE.search(agent) or payload.get("conversation_id") or payload.get("browser_session"):
+        raise TaskStateError("ChatGPT-bound tasks must use their original conversation")
+    if not str(payload.get("next_action", "")).strip():
+        raise TaskStateError("detached route requires a concrete next_action")
+    if int(expected_checkpoint_version) != _checkpoint_version(payload):
+        raise TaskStateError("detached route checkpoint version changed")
+    owner = str(authorized_by).strip()
+    why = str(reason).strip()
+    if not owner or len(why) < 15:
+        raise TaskStateError("detached route needs named authorization and reason")
+    if payload.get("execution_route"):
+        raise TaskStateError("task already has an execution route")
+    payload["execution_route"] = "detached"
+    payload["detached_authorization"] = {
+        "authorized_by": owner, "reason": why, "at": utc_now(),
+        "source_agent_id": payload.get("agent_id"),
+        "source_checkpoint_version": _checkpoint_version(payload),
+    }
+    _bump_checkpoint_version(payload)
+    payload["updated_at"] = utc_now()
+    payload.setdefault("history", []).append({
+        "at": payload["updated_at"], "event": "detached_route_authorized",
+        "authorized_by": owner,
+    })
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+def _detached_route_checked(payload: dict[str, Any]) -> None:
+    agent = str(payload.get("agent_id", "")).strip().lower()
+    if (str(payload.get("status", "")).strip() not in {"RUNNING", "READY_TO_COMPLETE"}
+            or payload.get("execution_route") != "detached"
+            or not agent.startswith(("claude", "gemini", "ollama", "codex"))
+            or CHATGPT_AGENT_ID_RE.search(agent)
+            or payload.get("conversation_id") or payload.get("browser_session")
+            or not isinstance(payload.get("detached_authorization"), dict)
+            or not str(payload["detached_authorization"].get("authorized_by", "")).strip()):
+        raise TaskStateError("detached task origin is not explicitly authorized")
+
+
+@_serialized_transition
+def claim_detached_recovery_ownership(task_id: str, *, owner_id: str,
+                                      ttl_seconds: int = 900) -> dict[str, Any]:
+    payload = _load(task_id)
+    _detached_route_checked(payload)
+    owner = str(owner_id).strip()
+    if not owner:
+        raise TaskStateError("detached recovery requires owner identity")
+    if str(payload.get("status", "")) == "RUNNING" and not str(payload.get("next_action", "")).strip():
+        raise TaskStateError("detached task has no executable next_action")
+    with _continuity_state_env():
+        try:
+            lease = runtime_lock.acquire_runtime_lock(
+                "durable-recovery", owner, int(ttl_seconds), ["checkpoint_mutation"]
+            )
+        except runtime_lock.RuntimeLockConflict as exc:
+            raise TaskStateError(f"detached runtime lock busy: {exc}") from exc
+    payload["recovery_owner_id"] = owner
+    payload["recovery_checkpoint_version"] = _checkpoint_version(payload)
+    payload["runtime_lease_id"] = lease["lease_id"]
+    payload["runtime_fencing_token"] = lease["fencing_token"]
+    _append_recovery_state(payload, "RECOVERY_CLAIMED",
+                           checkpoint_version=_checkpoint_version(payload))
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+@_serialized_transition
+def release_detached_recovery_ownership(task_id: str, *, owner_id: str,
+                                        reason: str) -> dict[str, Any]:
+    payload = _load(task_id)
+    if payload.get("execution_route") != "detached":
+        raise TaskStateError("task is not detached")
+    if str(payload.get("recovery_owner_id", "")).strip() != str(owner_id).strip():
+        raise TaskStateError("detached recovery ownership does not belong to caller")
+    with _continuity_state_env():
+        try:
+            runtime_lock.release_runtime_lock(
+                payload["runtime_lease_id"], int(payload["runtime_fencing_token"]), str(reason)
+            )
+        except runtime_lock.RuntimeLockConflict:
+            pass
+    payload["recovery_released_at"] = utc_now()
+    payload["recovery_release_reason"] = str(reason)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+def verify_detached_recovery_ownership(task_id: str, *, owner_id: str,
+                                       lease_id: str, fencing_token: int,
+                                       checkpoint_version: int) -> bool:
+    payload = _load(task_id)
+    _detached_route_checked(payload)
+    if (str(payload.get("recovery_owner_id", "")) != str(owner_id)
+            or str(payload.get("runtime_lease_id", "")) != str(lease_id)
+            or int(payload.get("runtime_fencing_token", 0)) != int(fencing_token)
+            or int(payload.get("recovery_checkpoint_version", 0)) != int(checkpoint_version)):
+        raise TaskStateError("detached recovery fencing or checkpoint mismatch")
+    with _continuity_state_env():
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, fencing_token, "checkpoint_mutation")
+        except runtime_lock.RuntimeLockConflict as exc:
+            raise TaskStateError(f"detached runtime lease invalid: {exc}") from exc
+    if lease.get("owner_kind") != "durable-recovery" or lease.get("owner_id") != str(owner_id):
+        raise TaskStateError("detached runtime lock owner mismatch")
+    return True
+
+
 @_serialized_transition
 def claim_recovery_ownership(task_id: str, *, owner_id: str, allowed_actions: Iterable[str], ttl_seconds: int = 90) -> dict[str, Any]:
     payload = _load(task_id)
@@ -1375,6 +1512,19 @@ def _parser() -> argparse.ArgumentParser:
     browser.add_argument("--task", required=True)
     browser.add_argument("--browser-session", required=True, choices=["dev", "atendimento"])
 
+    detached = sub.add_parser("authorize-detached")
+    detached.add_argument("--task", required=True)
+    detached.add_argument("--expected-checkpoint-version", type=int, required=True)
+    detached.add_argument("--authorized-by", required=True)
+    detached.add_argument("--reason", required=True)
+
+    verify_detached = sub.add_parser("verify-detached-lease")
+    verify_detached.add_argument("--task", required=True)
+    verify_detached.add_argument("--owner-id", required=True)
+    verify_detached.add_argument("--lease-id", required=True)
+    verify_detached.add_argument("--fencing-token", type=int, required=True)
+    verify_detached.add_argument("--checkpoint-version", type=int, required=True)
+
     show = sub.add_parser("show")
     show.add_argument("--task", required=True)
 
@@ -1447,6 +1597,15 @@ def main() -> int:
             payload = bind_conversation(args.task, conversation_id=args.conversation_id)
         elif args.command == "bind-browser-session":
             payload = bind_browser_session(args.task, browser_session=args.browser_session)
+        elif args.command == "authorize-detached":
+            payload = authorize_detached_route(args.task, expected_checkpoint_version=args.expected_checkpoint_version,
+                                               authorized_by=args.authorized_by, reason=args.reason)
+        elif args.command == "verify-detached-lease":
+            verify_detached_recovery_ownership(args.task, owner_id=args.owner_id,
+                                               lease_id=args.lease_id, fencing_token=args.fencing_token,
+                                               checkpoint_version=args.checkpoint_version)
+            print(json.dumps({"ok": True, "mode": "detached", "task_id": args.task}))
+            return 0
         elif args.command == "show":
             payload = load_task(args.task)
         elif args.command == "terminal":
