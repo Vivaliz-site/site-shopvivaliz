@@ -99,10 +99,15 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   </section>
   <section class="card" id="olist-import-section">
     <h2>Vínculos dos anúncios no ERP Olist</h2>
-    <p class="note">Exporte os anúncios em <strong>Cadastros → Anúncios</strong> das integrações
-      <strong>Amazon</strong>, <strong>Amazon Onsite</strong> e <strong>Amazon Classic</strong>,
-      e selecione os arquivos originais Excel (.xls/.xlsx) ou CSV. O sistema cruza o código
-      exato do anúncio com o SKU do produto ativo na API Olist. Exportações com mais de
+    <p class="note">Importe arquivos de anúncios apenas das integrações que oferecem
+      exportação em <strong>Cadastros → Anúncios</strong>, quando disponíveis.
+      <strong>Amazon Classic</strong> não disponibiliza exportação de anúncios no ERP Olist:
+      seus vínculos devem ser conferidos em <strong>Produtos → editar → Anúncios</strong>,
+      pelo Seller SKU e por pedidos importados. Para <strong>Amazon Onsite</strong>,
+      também não presuma que existe exportação: use as evidências atuais disponíveis.
+      O auditor cruza vínculos atuais da aba Anúncios dos produtos nas três integrações,
+      quando a captura autenticada é íntegra e recente. Selecione apenas arquivos originais
+      Excel (.xls/.xlsx) ou CSV para a importação opcional. Exportações com mais de
       <strong>48 horas</strong> são referências históricas e <strong>não certificam custo ou margem</strong>.
       Nenhuma alteração é realizada na Amazon ou no ERP.</p>
     <div class="controls">
