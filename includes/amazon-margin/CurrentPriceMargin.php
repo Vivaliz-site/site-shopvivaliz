@@ -97,7 +97,8 @@ final class SvAmazonCurrentPriceMargin
     public static function logisticsCents(string $program,int $price,?float $kg,?string $region): ?int
     {
         if(!in_array($program,['FBA_ONSITE','DBA'],true)||$price<=0)return null;
-        if($price<3000)return $program==='DBA'?450:625;
+        if($program==='DBA'&&$price<=3000)return 450;
+        if($program==='FBA_ONSITE'&&$price<3000)return 625;
         if($price<5000)return 650;
         if($price<7900)return 675;
         if($kg===null||$kg<=0||$kg>30)return null;
