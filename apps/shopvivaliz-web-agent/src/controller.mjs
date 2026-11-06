@@ -44,6 +44,49 @@ export class TakeoverController {
       return {session_id:id,mode:s.mode,...await this.driver.click(selector)};
     });
   }
+  async navigate(id,url) {
+    return this._exclusive(async()=>{
+      const s=this._get(id);
+      if(s.mode!=='agent')error('human_takeover_active');
+      return {session_id:id,mode:s.mode,...await this.driver.navigate(url)};
+    });
+  }
+  async back(id) {
+    return this._exclusive(async()=>{
+      const s=this._get(id);
+      if(s.mode!=='agent')error('human_takeover_active');
+      return {session_id:id,mode:s.mode,...await this.driver.back()};
+    });
+  }
+  async forward(id) {
+    return this._exclusive(async()=>{
+      const s=this._get(id);
+      if(s.mode!=='agent')error('human_takeover_active');
+      return {session_id:id,mode:s.mode,...await this.driver.forward()};
+    });
+  }
+  async scroll(id,deltaY) {
+    return this._exclusive(async()=>{
+      const s=this._get(id);
+      if(s.mode!=='agent')error('human_takeover_active');
+      return {session_id:id,mode:s.mode,...await this.driver.scroll(deltaY)};
+    });
+  }
+  async fill(id,selector,value) {
+    return this._exclusive(async()=>{
+      const s=this._get(id);
+      if(s.mode!=='agent')error('human_takeover_active');
+      return {session_id:id,mode:s.mode,...await this.driver.fill(selector,value)};
+    });
+  }
+  async key(id,name) {
+    return this._exclusive(async()=>{
+      const s=this._get(id);
+      if(s.mode!=='agent')error('human_takeover_active');
+      await this.driver.key(name);
+      return {session_id:id,mode:s.mode,...await this.driver.snapshot()};
+    });
+  }
   async handoff(id) {
     return this._exclusive(async()=>{
       const s=this._get(id);
@@ -78,6 +121,9 @@ export class TakeoverController {
       if(action==='mouse')await this.driver.mouse(input.x,input.y);
       else if(action==='type')await this.driver.type(input.text);
       else if(action==='key')await this.driver.key(input.key);
+      else if(action==='scroll')await this.driver.scroll(input.delta_y);
+      else if(action==='back')await this.driver.back();
+      else if(action==='forward')await this.driver.forward();
       else error('unsupported_action');
       return {ok:true};
     });
