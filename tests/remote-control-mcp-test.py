@@ -84,6 +84,34 @@ class RemoteControlMcpTests(unittest.TestCase):
             if spec["name"] in {"host_health", "service_status"}:
                 self.assertIn(m.MARINA_HOST, host.get("enum", []))
 
+    def test_marina_host_inventory_tracks_grants_not_static_label(self):
+        cases = (
+            (False, False, "private_ssh_read_only", "owner_grant_required", []),
+            (True, False, "private_ssh_read_only", "marina_readonly", ["marina_readonly"]),
+            (False, True, "private_ssh_pinned", m.MARINA_ADMIN_CAPABILITY,
+             [m.MARINA_ADMIN_CAPABILITY]),
+            (True, True, "private_ssh_pinned", m.MARINA_ADMIN_CAPABILITY,
+             ["marina_readonly", m.MARINA_ADMIN_CAPABILITY]),
+        )
+        for readonly, admin, transport, capability, capabilities in cases:
+            with self.subTest(readonly=readonly, admin=admin), \\
+                 mock.patch.object(m, "marina_central_readonly_grant_active", return_value=readonly), \\
+                 mock.patch.object(m, "marina_central_admin_grant_active", return_value=admin):
+                listed = m.execute_tool("hosts_list", {})["hosts"]
+                marina = next(item for item in listed if item["name"] == m.MARINA_HOST)
+                self.assertEqual(marina["transport"], transport)
+                self.assertEqual(marina["capability"], capability)
+                self.assertEqual(marina["capabilities"], capabilities)
+                self.assertEqual(marina["route_enabled"], readonly or admin)
+                self.assertEqual(marina["read_only_enabled"], readonly)
+                self.assertEqual(marina["admin_enabled"], admin)
+                specs = {item["name"]: item for item in m.tool_specs()}
+                admin_hosts = specs["admin_command_run"]["inputSchema"]["properties"]["host"]["enum"]
+                self.assertEqual(m.MARINA_HOST in admin_hosts, admin)
+                readonly_hosts = specs["file_read"]["inputSchema"]["properties"]["host"]["enum"]
+                self.assertEqual(m.MARINA_HOST in readonly_hosts, readonly)
+                self.assertNotIn("shopvivaliz-free-a1", {item["name"] for item in listed})
+
     def test_retired_source_rejected_before_network_or_mutation(self):
         for name, args in (
             ("host_health", {"host": "shopvivaliz-free-a1"}),
