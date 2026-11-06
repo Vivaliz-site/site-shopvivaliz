@@ -9,6 +9,37 @@ declare(strict_types=1);
  */
 final class SvAmazonCurrentFeeEstimates
 {
+    /** Verify seller SKU, BRL, marketplace, current price and permissible selling fees. */
+    public static function normalize(array $item,array $expected,string $marketplace): ?array
+    {
+        $id=$item['FeesEstimateIdentifier']??[];
+        if(!is_array($id)||($item['Status']??'')!=='Success'
+            ||(string)($id['IdValue']??'')!==(string)$expected['sku'])return null;
+        $priceData=$id['PriceToEstimateFees']['ListingPrice']??[];
+        if(($priceData['CurrencyCode']??'')!=='BRL'
+            ||!is_numeric($priceData['Amount']??null)
+            ||(int)round((float)$priceData['Amount']*100)!==$expected['price_cents']
+            ||(string)($id['MarketplaceId']??'')!==$marketplace)return null;
+        $fees=$item['FeesEstimate']['FeeDetailList']??null;
+        if(!is_array($fees))return null;
+        $commission=0;$hasReferral=false;
+        foreach($fees as $f){
+            $type=(string)($f['FeeType']??'');
+            // Classic FBA fulfillment estimates must NEVER replace FBA Onsite tariffs.
+            if($type==='FBAFees')continue;
+            if(!in_array($type,['ReferralFee','VariableClosingFee','FixedClosingFee',
+                'ClosingFee','PerItemSellingFee'],true))return null;
+            $money=$f['FinalFee']??$f['FeeAmount']??[];
+            if(($money['CurrencyCode']??'')!=='BRL'||!is_numeric($money['Amount']??null)
+                ||(float)$money['Amount']<0)return null;
+            $commission+=(int)round((float)$money['Amount']*100,0,PHP_ROUND_HALF_UP);
+            if($type==='ReferralFee')$hasReferral=true;
+        }
+        return $hasReferral?[
+            'commission_cents'=>$commission,'price_cents'=>$expected['price_cents']
+        ]:null;
+    }
+
     /**
      * @return array<string, array{commission_cents:int,price_cents:int}>
      */
@@ -51,33 +82,10 @@ final class SvAmazonCurrentFeeEstimates
             $items=$response['data'];
             if(!array_is_list($items))throw new RuntimeException('amazon_current_fee_quote_not_list');
             foreach($items as $item){
-                $id=$item['FeesEstimateIdentifier']??[];
-                if(!is_array($id))continue;
-                $sku=(string)($id['IdValue']??'');
-                if(!isset($candidates[$sku])||($item['Status']??'')!=='Success')continue;
-                $expected=$candidates[$sku];
-                $priceData=$id['PriceToEstimateFees']['ListingPrice']??[];
-                if(($priceData['CurrencyCode']??'')!=='BRL'
-                    ||(int)round(((float)($priceData['Amount']??-1))*100)!==$expected['price_cents']
-                    ||(string)($id['MarketplaceId']??'')!==$marketplace)continue;
-                $fees=$item['FeesEstimate']['FeeDetailList']??null;
-                if(!is_array($fees))continue;
-                $commission=0;$hasReferral=false;$valid=true;
-                foreach($fees as $f){
-                    $type=(string)($f['FeeType']??'');
-                    // This is the classic FBA fulfillment fee: DO NOT use it for Onsite.
-                    if($type==='FBAFees')continue;
-                    if(!in_array($type,['ReferralFee','VariableClosingFee','FixedClosingFee',
-                        'ClosingFee','PerItemSellingFee'],true)){$valid=false;break;}
-                    $money=$f['FinalFee']??$f['FeeAmount']??[];
-                    if(($money['CurrencyCode']??'')!=='BRL'||!is_numeric($money['Amount']??null)
-                        ||(float)$money['Amount']<0){$valid=false;break;}
-                    $commission+=(int)round((float)$money['Amount']*100,0,PHP_ROUND_HALF_UP);
-                    if($type==='ReferralFee')$hasReferral=true;
-                }
-                if($valid&&$hasReferral)$result[$sku]=[
-                    'commission_cents'=>$commission,'price_cents'=>$expected['price_cents']
-                ];
+                $sku=(string)($item['FeesEstimateIdentifier']['IdValue']??'');
+                if(!isset($candidates[$sku]))continue;
+                $normalized=self::normalize($item,$candidates[$sku],$marketplace);
+                if($normalized!==null)$result[$sku]=$normalized;
             }
             $done+=count($batch);
             if($progress!==null)$progress($done,count($prices));
