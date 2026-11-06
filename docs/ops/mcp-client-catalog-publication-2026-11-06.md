@@ -1,6 +1,6 @@
 # MCP central / Orquestrador — publicação e validação do catálogo ChatGPT
 
-**Estado observado:** 2026-11-06. **Servidor operacional; catálogo ChatGPT ainda não certificado.**
+**Estado atualizado:** 2026-11-06. **Servidor e dois clientes ChatGPT com comando administrativo nativo aprovado nesta sessão; paridade total MCP/RDC ainda não certificada.**
 Esta página é a referência atual para esta falha e prevalece sobre snapshots históricos
 que apresentem a VM excluída como ativa ou a Marina como somente leitura.
 
@@ -20,28 +20,21 @@ que apresentem a VM excluída como ativa ou a Marina como somente leitura.
 - Backend, Fred-Win e KOCEPSV: comandos de identificação via MCP passaram,
   e as sessões gráficas Windows foram verificadas separadamente.
 
-## A inconsistência que permanece
+## Resultado atual: bloqueio de catálogo não reproduzido
 
-O aplicativo **ShopVivaliz Remote Control** e o **Orquestrador ShopVivaliz**
-retornam `hosts_list` já atualizado, mas a **definição publicada** das
-ferramentas `admin_command_run`, `task_submit` e `service_action` ainda
-não contém `marina-a1-4c24g` no enum do argumento `host`.
+Em 06/11/2026, os esquemas de ferramentas efetivamente expostos **nesta sessão do ChatGPT** pelos aplicativos ShopVivaliz Remote Control e ShopVivaliz Remote Control - Orquestrador reconhecem `marina-a1-4c24g` em `admin_command_run`, `task_submit` e `service_action`. A VM aposentada `shopvivaliz-free-a1` não consta desses seis enums.
 
-Pior: o catálogo antigo do Orquestrador ainda contém
-`shopvivaliz-free-a1`, uma VM definitivamente excluída. O servidor
-continua rejeitando esse destino; sua presença no catálogo não autoriza nem
-justifica qualquer tentativa de acesso.
+Testes nativos do cliente (sem SSH, RDC ou salto indireto):
+- Central: `admin_command_run(host=marina-a1-4c24g, command=hostname -s; id -un, timeout=5)` => `exit_code=0`, saída `marina-a1-4c24g / ubuntu`, audit_id `9571c723-f6d6-4dce-a2f6-5bdeff286def`.
+- Orquestrador: mesmo comando => `exit_code=0`, audit_id `8436a1dc-a386-4804-b600-f7f2cc89ee04`.
+- `inputSchema.host.enum`: quatro hosts ativos, nenhum aposentado, nos dois apps e nas três ferramentas citadas.
 
-**Não confundir:**
-1. Servidor responde 200 / grant válido = saúde do transporte e autorização
-   em runtime, **não** prova que o agente conhece a ferramenta.
-2. `hosts_list` anuncia Marina = informação do servidor, **não** prova que
-   o inputSchema congelado do cliente aceite Marina.
-3. Um cliente só está **APTO** quando a ferramenta oficial aparece no cliente,
-   o argumento `host` admite a Marina, nenhuma VM excluída consta da allowlist,
-   e um comando de identificação é realmente executado por aquela ferramenta.
+**CHATGPT_CLIENT_ADMIN_COMMAND_PARITY=APTO_NESTA_SESSAO**; **PARIDADE_TOTAL_MCP_RDC=NAO_CERTIFICADA**. Não bloquear operação da Marina com base em snapshot antigo: verificar esquema real e efetuar tentativa permitida.
 
-## Correção do catálogo publicado — fluxo oficial
+### Histórico da falha, preservado para regressão
+
+Em snapshot anterior, o servidor anunciava Marina, mas o catálogo congelado do ChatGPT não aceitava o host administrativo; o Orquestrador ainda anunciava a VM extinta. Essa evidência histórica era válida naquele momento, mas deixou de se reproduzir. `hosts_list` isolado não comprova uma ferramenta; o canário nativo por aplicativo confirma a correção específica.
+## Correção oficial se a regressão de catálogo reaparecer
 
 1. Na sessão legítima do proprietário/admin do workspace, abrir a gestão de
    **Apps/Plugins** do ChatGPT e selecionar **ShopVivaliz Remote Control**.
@@ -85,13 +78,4 @@ O verificador rejeita `marina-a1-4c24g` ausente, a VM antiga presente,
 tool inexistente, schema quebrado e ausência de qualquer dos dois arquivos.
 Ele **não** publica alterações nem executa comandos.
 
-**Limite da automação nesta sessão:** os conectores disponíveis de gestão de
-apps permitem consultar/alterar permissões, mas não expõem operação para
-republicar o catálogo de tools desses dois apps. A interação gráfica com as
-configurações foi recusada pela plataforma; nenhuma rota alternativa foi
-usada para contornar essa recusa. Este passo requer o mecanismo de
-administração **oficial** do workspace.
-
-Evidências e retomada:
-[issue #3152](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3152),
-[checkpoint de E2E dos clientes](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3152#issuecomment-6677266585).
+**Nota de gestão de aplicativos (06/11/2026):** o catálogo já foi atualizado no cliente e testado nesta sessão, dispensando republicação manual nesta rodada. A atualização das permissões de plugins para `full_access` retornou `404 Action not found` para os três plugins solicitados; nenhuma permissão foi alterada, e a configuração global segue intacta. Este é um problema separado do catálogo MCP. O procedimento de correção futura deve usar somente a interface oficial, sem contornar recusas do provedor.

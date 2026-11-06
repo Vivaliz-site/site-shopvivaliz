@@ -104,7 +104,9 @@ class PublishedMcpCatalogTests(unittest.TestCase):
                 text = (ROOT / path).read_text(encoding="utf-8")
                 first = text[:2100]
                 self.assertIn("<!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->", first)
-                self.assertIn("CHATGPT_CLIENT_CATALOG_APTO=NAO_COMPROVADO", first)
+                self.assertIn("CHATGPT_CLIENT_ADMIN_COMMAND_PARITY=APTO_NESTA_SESSAO", first)
+                self.assertIn("PARIDADE_TOTAL_MCP_RDC=NAO_CERTIFICADA", first)
+                self.assertNotIn("CHATGPT_CLIENT_CATALOG_APTO=NAO_COMPROVADO", first)
                 self.assertIn("mcp-client-catalog-publication-2026-11-06.md", first)
                 self.assertIn("shopvivaliz-free-a1", first)
         runbook = (ROOT / "docs/ops/mcp-client-catalog-publication-2026-11-06.md").read_text(
