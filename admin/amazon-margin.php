@@ -123,7 +123,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   <section class="card">
     <h2>Anúncios Amazon</h2>
     <p class="note">O filtro de ativos considera anúncios com status <strong>BUYABLE</strong> na Amazon. Anúncios só DISCOVERABLE não estão com oferta comprável. A auditoria completa continua verificando todo o catálogo, independente deste filtro.</p>
-    <p class="note"><strong>Margem realizada:</strong> calculada com a receita bruta de cada venda realmente conciliada na Amazon Finances (produto + frete cobrado ao cliente − promoções de frete/descontos), não com o preço atual do anúncio. O valor principal de cada anúncio é o <strong>preço vigente</strong>; quando houver vendas conciliadas, mostramos separadamente o <strong>preço médio efetivo vendido</strong>. A comissão já está no repasse financeiro, sem dedução dupla. Sem venda conciliada, não há margem realizada.</p>
+    <p class="note"><strong>Margem realizada:</strong> calculada com a receita bruta de cada venda realmente conciliada na Amazon Finances (produto + frete cobrado ao cliente − promoções de frete/descontos), não com o preço atual do anúncio. O valor principal de cada anúncio é o <strong>preço vigente</strong>; quando houver vendas conciliadas, mostramos separadamente a <strong>receita bruta média por unidade</strong>, que pode incluir frete cobrado ao comprador e descontos; ela não é o preço isolado do produto. A comissão já está no repasse financeiro, sem dedução dupla. Sem venda conciliada, não há margem realizada.</p>
     <p class="note"><strong>Preço e custo são por unidade VENDIDA</strong> (kit completo, quando aplicável). O lucro por unidade vendida é separado do <strong>lucro total acumulado</strong> nas vendas conciliadas. Produtos simples vendidos como kit usam custo da peça multiplicado pela quantidade confirmada no anúncio; kits cadastrados no ERP não são multiplicados novamente.</p>
     <p class="note" id="prior-cost-indicator" hidden></p>
     <div class="controls" style="margin-top:12px">
@@ -288,9 +288,8 @@ function priceMarkup(r){
  if(r.price!==null&&r.price!==undefined) {
   const actual=r.realized_unit_price;
   const verified=actual!==null&&actual!==undefined&&Number.isFinite(Number(actual))&&Number(actual)>0;
-  const changed=verified&&Math.abs(Number(actual)-Number(r.price))>=0.01;
   const avgNote=verified
-   ?'<span class="cell-note'+(changed?' warn':'')+'">Preço médio realmente vendido: '+price(actual)
+   ?'<span class="cell-note">Receita bruta média por unidade (inclui frete e descontos): '+price(actual)
     +(r.status==='partial'?' (somente vendas conciliadas)':'')+'</span>'
    :'';
   return price(r.price)+'<span class="cell-note">Preço atual do anúncio</span>'+avgNote;
