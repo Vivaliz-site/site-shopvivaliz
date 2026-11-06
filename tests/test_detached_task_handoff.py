@@ -11,6 +11,7 @@ from unittest.mock import patch
 from scripts import agent_task_state as state
 from scripts import task_continuation_watchdog as watchdog
 from scripts import task_resume_dispatcher as dispatcher
+from scripts import task_resume_queue as queue
 
 
 class DetachedTaskHandoffTests(unittest.TestCase):
@@ -45,6 +46,17 @@ class DetachedTaskHandoffTests(unittest.TestCase):
             expected_checkpoint_version=payload["checkpoint_version"],
             authorized_by="owner-approved-scope-20261106",
             reason="Continue exactly this stalled Claude task without any ChatGPT conversation mutation",
+        )
+
+    def test_route_opt_in_changes_only_detached_fingerprint_even_same_second(self):
+        source = self.task()
+        prior_fingerprint = queue.checkpoint_fingerprint(source)
+        detached = self.authorize(source)
+        detached["updated_at"] = source["updated_at"]
+        self.assertNotEqual(queue.checkpoint_fingerprint(detached), prior_fingerprint)
+        self.assertEqual(
+            queue.checkpoint_fingerprint({**source, "execution_route": ""}),
+            prior_fingerprint,
         )
 
     def test_unbound_native_task_does_not_enqueue_without_owner_opt_in(self):
