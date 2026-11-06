@@ -1,5 +1,8 @@
 # Duas rotas autorizadas para Marina: MCP central e MCP independente
 
+> **Correcao 2026-11-06 (a validar apos merge/deploy):** a PR humana P2 #3670, com escopo `marina_admin_command`, foi aprovada e integrada. No runtime do backend, a unit central da porta 5580 apresenta `93-marina-admin-grant.conf`; a unit de navegador da porta 5581 ainda nao. O adaptador stdio prioriza 5581, portanto o schema apresentado a agentes nao correspondia ao admin ja concedido na base. A correcao tecnica na branch atual faz `hosts_list` refletir grants efetivos separadamente (`read_only_enabled`, `admin_enabled`, `capabilities`) e adiciona `repair-browser --pr 3670`, que valida a aprovacao e a atestacao existente, cria somente o drop-in da unit 5581 e verifica seu ambiente apos restart. Nao altera token, SSH principal, grant de leitura, MCP independente, site, DB, workers nem outros hosts. Nao executar `repair-browser` antes de instalar na backend uma versao comprovadamente correspondente ao `main` e um checkout limpo, conforme preflight do script. Aceite: repetir tests Linux/Windows, CI, merge, deploy oficial do codigo central + ativador, `repair-browser --pr 3670`, verificar `tools/list` e chamada real a Marina pelo endpoint de navegador, negativa sem grant e regressao dos outros hosts. Sem readback nao declarar APTO.
+
+
 > **Atualização de implementação 2026-11-05:** o servidor central agora mantém
 > o catálogo de quatro hosts e implementa `processes_list`, `file_read`,
 > `file_list`, `logs_tail`, `service_action`, `admin_command_run` e

@@ -131,8 +131,19 @@ class MarinaAdminGateTests(unittest.TestCase):
         _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY], merger="some-agent-account")
         self.assertFalse(server.marina_central_admin_grant_active())
 
-    def test_marina_durable_jobs_stay_disabled(self) -> None:
-        self.assertEqual(server.HOST_DURABLE_LIMITS[server.MARINA_HOST], 0)
+    def test_marina_durable_jobs_are_singleton_and_require_admin_grant(self) -> None:
+        # Admin grant #3670 allows a bounded one-at-a-time durable task.
+        # Absence of authorization still denies the call before enqueue.
+        self.assertEqual(server.HOST_DURABLE_LIMITS[server.MARINA_HOST], 1)
+        with mock.patch.object(server, "marina_central_admin_grant_active", return_value=False), \
+             mock.patch.object(server, "launch_task_service") as enqueue:
+            with self.assertRaisesRegex(PermissionError, "marina_central_admin_route_not_approved"):
+                server.execute_tool("task_submit", {
+                    "host": server.MARINA_HOST,
+                    "command": "id -u",
+                    "timeout": 10,
+                })
+            enqueue.assert_not_called()
 
     def test_admin_flag_rejected_for_other_hosts(self) -> None:
         with self.assertRaises(ValueError):
