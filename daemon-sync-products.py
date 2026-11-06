@@ -377,6 +377,7 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
     previous = load_previous_cache()
     enriched: dict[str, dict[str, Any]] = {}
     failures = 0
+    retry_failed_ids: list[str] = []
     pending: list[dict[str, Any]] = []
     reusable_count = 0
 
@@ -446,11 +447,35 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
                         fallback["estoque"] = {"quantidade": 0}
                         fallback["_stock_sync_status"] = "unavailable"
                         enriched[product_id] = fallback
+                        retry_failed_ids.append(product_id)
                         print(f"[!] Estoque {product_id} indisponivel; venda bloqueada ({type(exc).__name__})")
                     else:
                         print(f"[!] Produto novo {product_id} adiado sem estoque autoritativo ({type(exc).__name__})")
                 if index % 25 == 0 or index == len(pending):
                     print(f"[+] Produtos com estoque ERP verificado: {index}/{len(pending)}; falhas={failures}")
+
+    # A synchronized batch can hit a short-lived ERP API throttle or timeout.
+    # The first pass must fail closed, but after the concurrent requests finish,
+    # retry each failed product at most once SERIALIZED against the official
+    # /estoque/{id}.disponivel endpoint. Never restore stale cache inventory,
+    # and never infer sellable stock from gross/physical quantities.
+    if retry_failed_ids:
+        recovered = 0
+        for product_id in retry_failed_ids:
+            try:
+                fresh_stock = api_get(f"estoque/{product_id}", token, attempts=2)
+                quantity = authoritative_stock_quantity(fresh_stock)
+            except Exception:
+                continue
+            product = enriched[product_id]
+            product["estoque_disponivel"] = quantity
+            product["estoque"] = {"quantidade": quantity}
+            product["_stock_synced_at"] = datetime.now(timezone.utc).isoformat()
+            product.pop("_stock_sync_status", None)
+            recovered += 1
+        failures -= recovered
+        print(f"[+] Retry sequencial ERP: {recovered}/{len(retry_failed_ids)} consultas recuperadas; "
+              f"{failures} falhas continuam fail-closed")
 
     ordered = [enriched[str(item.get("id", ""))] for item in summaries if str(item.get("id", "")) in enriched]
     return ordered, failures
