@@ -160,7 +160,15 @@ def _run_once_locked(
         # Stale-only compatibility retains its existing queue behavior.
         conversation_id = str(payload.get("conversation_id", "")).strip()
         browser_session = str(payload.get("browser_session", "")).strip()
-        if proactive and (
+        source_agent = str(payload.get("agent_id", "")).strip().lower()
+        detached = (
+            payload.get("execution_route") == "detached"
+            and source_agent.startswith(("claude", "gemini", "ollama", "codex"))
+            and not conversation_id and not browser_session
+            and isinstance(payload.get("detached_authorization"), dict)
+            and bool(str(payload["detached_authorization"].get("authorized_by", "")).strip())
+        )
+        if proactive and not detached and (
             re.fullmatch(r"[A-Za-z0-9_-]{8,160}", conversation_id) is None
             or browser_session not in {"dev", "atendimento"}
         ):
@@ -183,12 +191,12 @@ def _run_once_locked(
             "status": "queued",
             "task_id": task_id,
             "repository": str(payload.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY,
-            "agent_id": "gpt",
-            "preferred_executor": "chatgpt_common",
-            "secondary_executor": "chatgpt_work",
+            "agent_id": previous_agent_id if detached else "gpt",
+            "preferred_executor": "cli" if detached else "chatgpt_common",
+            "secondary_executor": "" if detached else "chatgpt_work",
             "final_fallback": "cli",
-            "executor_order": ["chatgpt_common", "chatgpt_work", "cli"],
-            "fallback_policy": "chatgpt_common_then_work_then_cli",
+            "executor_order": ["cli"] if detached else ["chatgpt_common", "chatgpt_work", "cli"],
+            "fallback_policy": "explicit_fenced_detached" if detached else "chatgpt_common_then_work_then_cli",
             "previous_agent_id": previous_agent_id,
             "goal": str(payload.get("goal", "")).strip(),
             "next_action": next_action,
@@ -197,7 +205,10 @@ def _run_once_locked(
             "fingerprint": fingerprint,
             "created_at": utc_now(),
         }
-        if proactive:
+        if detached:
+            request["execution_route"] = "detached"
+            request["authorized_checkpoint_version"] = payload.get("checkpoint_version")
+        elif proactive:
             # Preserve provenance metadata from the same checkpoint; the
             # dispatcher still revalidates its fingerprint and ownership.
             request["conversation_id"] = conversation_id
