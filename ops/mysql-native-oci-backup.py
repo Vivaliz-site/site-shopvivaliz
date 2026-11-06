@@ -17,7 +17,7 @@ OCI = Path("/home/ubuntu/.venvs/oci-cli/bin/oci")
 NAMESPACE = "grsk1ummvveq"
 BUCKET = "shopvivaliz-marina-archive"
 BACKUPS = Path("/var/backups/shopvivaliz-mysql-native")
-LOCK = Path("/run/lock/shopvivaliz-mysql-native-oci-backup.lock")
+LOCK = Path("/run/shopvivaliz-mysql-native-oci-backup.lock")
 MIN_FREE_BYTES = 10 * 1024**3
 MIN_ARCHIVE_BYTES = 10000
 
@@ -128,7 +128,7 @@ def main():
         return
     BACKUPS.mkdir(mode=0o700, parents=True, exist_ok=True)
     BACKUPS.chmod(0o700)
-    lock_fd = os.open(str(LOCK), os.O_RDWR | os.O_CREAT, 0o600)
+    lock_fd = os.open(str(LOCK), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if opts.verify_existing:
