@@ -20,6 +20,7 @@ final class SvAmazonMarginExport
             'erp_or_catalog_read_failed' => 'Falha consulta ERP/catalogo',
             'erp_identity_mismatch' => 'EAN/SKU divergentes',
             'price_or_cost_missing' => 'Preco efetivo ou custo ausente',
+            'kit_cost_unverified' => 'Custo do kit nao conciliado: conferir quantidade e componentes',
             'no_confirmed_sales' => 'Sem vendas conciliadas no periodo',
             'partial' => 'Conciliacao financeira parcial',
             'confirmed' => 'Conciliado',
@@ -35,7 +36,12 @@ final class SvAmazonMarginExport
             'Canal'=>(string)($row['program'] ?? $row['fulfillment_channel'] ?? ''),
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
             'Preco cadastro Amazon (R$)'=>self::num($row['listed_price'] ?? null),
-            'Custo ERP (R$)'=>self::num($row['last_cost'] ?? null),
+            'Custo ERP por conjunto vendido (R$)'=>self::num($row['last_cost'] ?? null),
+            'Custo base da peca no ERP (R$)'=>self::num($row['erp_base_cost'] ?? $row['last_cost'] ?? null),
+            'Pecas por unidade vendida'=>isset($row['kit_units_per_listing']) ? (int)$row['kit_units_per_listing'] : null,
+            'Multiplicador de custo'=>isset($row['kit_cost_multiplier']) ? (int)$row['kit_cost_multiplier'] : null,
+            'Metodo do custo por conjunto'=>(string)($row['kit_cost_basis']??''),
+            'Motivo da divergencia do kit'=>(string)($row['kit_cost_issue']??''),
             'Custo anterior verificado (R$)'=>self::num($reference['cost']??null),
             'Data custo anterior'=>(string)($reference['cost_date']??''),
             'Auditoria custo anterior'=>isset($reference['verified_run_id']) ? (int)$reference['verified_run_id'] : null,
@@ -59,7 +65,10 @@ final class SvAmazonMarginExport
             'Vendas pendentes'=>(int)($row['pending_sales'] ?? 0),
             'Margem ponderada (%)'=>$margin===null ? null : round($margin/100, 2),
             'Margem minima (%)'=>isset($row['margin_min_bps']) ? round($row['margin_min_bps']/100,2) : null,
-            'Lucro confirmado (R$)'=>isset($row['profit_cents']) ? round(((int)$row['profit_cents'])/100,2) : null,
+            'Lucro por unidade vendida (R$)'=>(isset($row['margin_weighted_bps']) && (int)($row['confirmed_units']??0)>0)
+                ? round(((int)$row['profit_cents'])/100/(int)$row['confirmed_units'],2):null,
+            'Lucro acumulado do periodo (R$)'=>isset($row['margin_weighted_bps'])
+                ? round(((int)$row['profit_cents'])/100,2) : null,
             'Data ultimo custo'=>(string)($row['last_cost_date'] ?? ''),
             'Situacao'=>(string)($row['status'] ?? 'unverified'),
             'Diagnostico'=>!empty($row['erp_ui_conflict']) ? 'Divergencia de produto ERP com UI Olist: custo/margem bloqueados' : $reason,
@@ -210,7 +219,7 @@ final class SvAmazonMarginExport
                     $showPrice=$get('Preco cadastro Amazon (R$)').'*';
                 }
                 $content .= self::pdfText(389,$y,8,$showPrice);
-                $showCost=$get('Custo ERP (R$)');
+                $showCost=$get('Custo ERP por conjunto vendido (R$)');
                 if ($showCost==='-' && $row['Custo anterior verificado (R$)']!==null) {
                     $showCost=$get('Custo anterior verificado (R$)').'^';
                 }
@@ -223,7 +232,8 @@ final class SvAmazonMarginExport
                 $content .= self::pdfText(627,$y,8,mb_strimwidth($state,0,35,'...'));
                 if($i%2===1)$content.="0.86 w 27 ".($y-7)." m 813 ".($y-7)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'* Preco cadastral. ^ Custo historico validado antes (nao certificado neste run).');
+            $content .= self::pdfText(27,24,8,'Preco e custo por unidade VENDIDA (kit completo). * Preco cadastral. ^ Custo historico.');
+            $content .= self::pdfText(27,12,8,'Lucro por unidade e lucro acumulado constam separadamente no Excel.');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
             $objects[$pg]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 '.$fontId.' 0 R >> >> /Contents '.$ct.' 0 R >>';
