@@ -2613,12 +2613,12 @@ def execute_tool(
         readonly_tools = {"processes_list", "file_read", "file_list", "logs_tail"}
         admin_tools = {"service_action", "admin_command_run", "task_submit"}
         if name in readonly_tools:
-            # Read tools may use either a read-only grant or the already
-            # approved administrative grant. Dynamic read commands require
-            # the admin transport; fixed health/status retain read-only SSH.
-            if not (marina_central_readonly_grant_active()
-                    or marina_central_admin_grant_active()):
-                raise PermissionError("marina_central_read_only_requires_owner_grant")
+            # The narrow read-only grant only allows fixed health and service
+            # status commands. Dynamic read tools require the existing admin
+            # grant and its protected SSH transport; do not falsely advertise
+            # these tools in a read-only-only session.
+            if not marina_central_admin_grant_active():
+                raise PermissionError("marina_central_admin_route_not_approved")
         elif name in admin_tools:
             if not marina_central_admin_grant_active():
                 raise PermissionError("marina_central_admin_route_not_approved")
@@ -3042,10 +3042,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "logs_tail", "admin_command_run", "task_submit",
         } and "host" in schema_props:
             if name in {"processes_list", "file_read", "file_list", "logs_tail"}:
-                allowed_hosts = list(HOSTS) if (
-                    marina_central_readonly_grant_active() or
-                    marina_central_admin_grant_active()
-                ) else [
+                allowed_hosts = list(HOSTS) if marina_central_admin_grant_active() else [
                     host for host in HOSTS if host != MARINA_HOST
                 ]
             else:
