@@ -21,7 +21,7 @@ final class SvAmazonCurrentFeeEstimates
             $program=(string)($r['program']??'');
             $price=$r['price']??null;
             $status=$r['amazon_status']??[];
-            if($sku===''||!in_array($program,['DBA','FBA_ONSITE'],true)
+            if($sku===''||!in_array($program,['DBA','DBA_CANDIDATE','FBA_ONSITE'],true)
                 ||!is_numeric($price)||!is_finite((float)$price)||(float)$price<=0
                 ||!is_numeric($r['last_cost']??null)
                 ||!is_array($status)||!in_array('BUYABLE',$status,true))continue;
