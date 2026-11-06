@@ -43,6 +43,12 @@ FREDWIN_NATIVE_DESKTOP_BRIDGE = os.environ.get(
     "SHOPVIVALIZ_FREDWIN_NATIVE_DESKTOP_BRIDGE",
     r"C:\site-shopvivaliz\scripts\shopvivaliz-native-desktop-bridge.ps1",
 )
+# Hosts Windows com sessao interativa usam o worker nativo (sem RustDesk). KOCEPSV entra quando o
+# serviço define o caminho do script no proprio host; sem isso mantem a rota RustDesk.
+KOCEPSV_NATIVE_DESKTOP_BRIDGE = os.environ.get("SHOPVIVALIZ_KOCEPSV_NATIVE_DESKTOP_BRIDGE", "").strip()
+NATIVE_DESKTOP_BRIDGES = {"Fred-Win": FREDWIN_NATIVE_DESKTOP_BRIDGE}
+if KOCEPSV_NATIVE_DESKTOP_BRIDGE:
+    NATIVE_DESKTOP_BRIDGES["KOCEPSV"] = KOCEPSV_NATIVE_DESKTOP_BRIDGE
 DESKTOP_ALIASES = {
     "KOCEPSV": ("kocepsv", "desktop-kocepsv"),
     "Fred-Win": ("fred-win", "laptop-nig4ifuu"),
@@ -296,7 +302,8 @@ def _completed_text(value: Any) -> str:
 
 
 def native_desktop_bridge(host: str, payload: dict[str, Any]) -> dict[str, Any]:
-    if host != "Fred-Win":
+    bridge = NATIVE_DESKTOP_BRIDGES.get(host)
+    if not bridge:
         raise ValueError("native_desktop_bridge_host_unsupported")
     cfg = base.validate_desktop_host(host)
     address = str(cfg.get("address") or "")
@@ -310,7 +317,7 @@ def native_desktop_bridge(host: str, payload: dict[str, Any]) -> dict[str, Any]:
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        FREDWIN_NATIVE_DESKTOP_BRIDGE,
+        bridge,
     ]
     request = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     try:
@@ -482,7 +489,7 @@ def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     if host in LINUX_GUI_HOSTS:
         return linux_gui_health(host)
-    if host == "Fred-Win":
+    if host in NATIVE_DESKTOP_BRIDGES:
         result = native_desktop_bridge(host, {"action": "health"})
         result["surface"] = "windows_interactive"
         result["display_accessible"] = bool(result.get("ok"))
@@ -511,7 +518,7 @@ def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     if host in LINUX_GUI_HOSTS:
         return linux_gui_open(host)
-    if host == "Fred-Win":
+    if host in NATIVE_DESKTOP_BRIDGES:
         result = native_desktop_bridge(host, {"action": "health"})
         result["surface"] = "windows_interactive"
         result["action"] = "native_bridge_ready"
@@ -550,7 +557,7 @@ def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
     clicks = max(1, min(int(args.get("clicks", 1)), 3))
     if host in LINUX_GUI_HOSTS:
         return linux_gui_click(host, x, y, button_name, clicks)
-    if host == "Fred-Win":
+    if host in NATIVE_DESKTOP_BRIDGES:
         result = native_desktop_bridge(
             host,
             {"action": "click", "x": x, "y": y, "button": button_name, "clicks": clicks},
@@ -583,7 +590,7 @@ def desktop_type(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("desktop_text_too_long")
     if host in LINUX_GUI_HOSTS:
         return linux_gui_type(host, text, bool(args.get("press_enter", False)))
-    if host == "Fred-Win":
+    if host in NATIVE_DESKTOP_BRIDGES:
         result = native_desktop_bridge(
             host,
             {"action": "type", "text": text, "press_enter": bool(args.get("press_enter", False))},
@@ -1025,7 +1032,7 @@ def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     if host in LINUX_GUI_HOSTS:
         return linux_gui_screenshot(host)
-    if host == "Fred-Win":
+    if host in NATIVE_DESKTOP_BRIDGES:
         result = native_desktop_bridge(host, {"action": "screenshot"})
         image_b64 = result.pop("image_b64", None)
         encoded, image_mime, image_size = bounded_native_desktop_image(result, image_b64)
