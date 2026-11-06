@@ -264,7 +264,7 @@ final class SvAmazonMarginExport
                 }
                 if($i%2===1)$content.="0.54 w 27 ".($y-23)." m 813 ".($y-23)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; preco medio = transacionado. Custo = conjunto/kit. * Cadastral. ^ Historico.');
+            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; preco medio = transacionado. Custo = kit completo por venda. * Cadastral. ^ Historico.');
             $content .= self::pdfText(27,12,8,'Margem e imposto usam receita bruta das transacoes conciliadas (incluindo frete pago, liquido de descontos).');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
