@@ -107,15 +107,16 @@ function svtpp_push_product_update(int $tinyProductId, array $product): array
         return ['ok' => false, 'status' => 0, 'error' => 'sku_ou_nome_ausente'];
     }
 
+    $payload = svtpp_build_payload($product);
+    if (!svtpp_price_payload_includes_nonzero_cost($payload)) {
+        return ['ok' => false, 'status' => 0, 'error' => 'preco_custo_nao_confirmado_para_put_produto'];
+    }
+
     $token = svtop_tiny_get_token();
     if ($token === '') {
         return ['ok' => false, 'status' => 0, 'error' => 'falha_ao_obter_token'];
     }
 
-    $payload = svtpp_build_payload($product);
-    if (!svtpp_price_payload_includes_nonzero_cost($payload)) {
-        return ['ok' => false, 'status' => 0, 'error' => 'preco_custo_nao_confirmado_para_put_produto'];
-    }
     $res = svtop_tiny_request('PUT', "/produtos/{$tinyProductId}", $token, $payload);
 
     if ($res['status'] === 204 || $res['status'] === 200) {
