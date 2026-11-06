@@ -92,7 +92,7 @@ Outros documentos existentes na pasta podem registrar versões, dispositivos, de
 
 Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta ordem:
 
-1. `host-access.md` e `current-topology-and-access-2026-10-29.md` — descobrir o host e o metodo de acesso corretos, sem usar a origem excluida;
+1. Fontes vigentes: docs/knowledge/host-access.md, docs/knowledge/agent-rules.md e docs/ops/mcp-first-agent-execution-2026-11-05.md. Consultar schema/grant reais. O arquivo docs/knowledge/current-topology-and-access-2026-10-29.md e somente referencia historica, sem autoridade de roteamento atual.
 2. `agent-rules.md` — aplicar regras de evidência e segurança;
 3. `project.md` — entender o sistema e seus módulos;
 4. para o `@dev`/agente programador adicional, `dev-agent-briefing.md`;

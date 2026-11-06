@@ -27,6 +27,8 @@ PRIORITY_DOCS = (
     "docs/knowledge/atendimento-chatgpt-bootstrap.md",
     "docs/knowledge/host-access.md",
     "docs/knowledge/README.md",
+    "docs/knowledge/dev-agent-briefing.md",
+    "docs/AGENTS.md",
     "docs/knowledge/claude-vm-bootstrap.md",
     "docs/knowledge/dev-chatgpt-bootstrap.md",
     ".claude/rules/ai-to-cli.md", ".github/AGENTS.md",
@@ -50,6 +52,9 @@ STALE_POLICY_PATTERNS = (
     r"origem excluida ainda aparece",
     r"nao.*para Marina: hosts_list",
     r"a allowlist MCP central ainda inclui",
+    r"Marina nao esta no MCP central",
+    r"MCP central ainda inclui a origem excluida",
+    r"MCP central ainda possui inventario antigo",
 )
 
 def scan_mcp_routing_text(text: str) -> list[str]:
@@ -134,6 +139,16 @@ class McpAgentMigrationRoutingTests(unittest.TestCase):
         discovered = {
             path.relative_to(ROOT).as_posix()
             for path in (ROOT / "docs/knowledge").glob("*bootstrap*.md")
+        }
+        self.assertTrue(discovered)
+        self.assertTrue(discovered.issubset(set(PRIORITY_DOCS)))
+
+    def test_all_scoped_agent_rules_are_discovered(self):
+        """Future AGENTS.md additions must enter the full-document V5 scanner."""
+        discovered = {
+            path.relative_to(ROOT).as_posix()
+            for path in ROOT.rglob("AGENTS.md")
+            if ".git" not in path.parts
         }
         self.assertTrue(discovered)
         self.assertTrue(discovered.issubset(set(PRIORITY_DOCS)))

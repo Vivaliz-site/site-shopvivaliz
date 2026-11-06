@@ -1,9 +1,13 @@
+<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->
+> **Fonte prevalente em 06/11/2026:** MCP central e Orquestrador publicam backend (always-free-arm-1787907847-26), Fred-Win, KOCEPSV e Marina (marina-a1-4c24g), comprovados por chamadas administrativas exit_code=0 e sujeitos ao schema/grant vigente. O MCP independente da Marina estava ativo localmente desde 04/11; seu E2E publico e distinto e ainda nao certificado. A origem shopvivaliz-free-a1 foi excluida e jamais sera destino. Preservar MFA, RBAC, aprovacao humana, branch protection, leases e recusas da plataforma. Fonte oficial docs/ops/mcp-first-agent-execution-2026-11-05.md; historico sem autoridade atual docs/knowledge/current-topology-and-access-2026-10-29.md.
+<!-- /MCP_ROUTE_CANONICAL_V5_20261106 -->
+
 <!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
-> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+> **Registro historico de 29/10/2026, superado em 06/11/2026:** topologia administrativa evoluiu; consultar schema/grants publicados da sessao, com quatro hosts incluindo Marina no MCP central/Orquestrador. O MCP independente da Marina tem E2E publico a demonstrar, separadamente. Nao acessar a origem excluida.
 <!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
 
 <!-- ACTIVE_MARINA_ROUTING_20261029 -->
-> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+> **Registro historico de 29/10/2026, superado em 06/11/2026:** topologia administrativa evoluiu; consultar schema/grants publicados da sessao, com quatro hosts incluindo Marina no MCP central/Orquestrador. O MCP independente da Marina tem E2E publico a demonstrar, separadamente. Nao acessar a origem excluida.
 <!-- /ACTIVE_MARINA_ROUTING_20261029 -->
 
 # @dev — onboarding canônico de engenharia
@@ -137,7 +141,7 @@ Antes de trabalhar em qualquer um deles, ler `AGENTS.md`, `CLAUDE.md`, README e 
 | Fred-Win | apoio/acesso remoto Windows |
 | KOCEPSV | apoio/acesso remoto Windows |
 
-Fontes canonicas: `docs/knowledge/host-access.md` e `docs/knowledge/current-topology-and-access-2026-10-29.md`. O MCP central ainda inclui a origem excluida e nao inclui Marina; nao tentar comandos da Marina nele. O MCP independente Marina e codigo staged/read-only, inativo e sem vinculo ChatGPT comprovado. Cloudflare admin ativo nao significa MCP ativo.
+Fontes atuais: docs/knowledge/host-access.md e docs/ops/mcp-first-agent-execution-2026-11-05.md. MCP central e Orquestrador alcancam Marina sob schema/grant validos; independente requer propria autenticacao. Inventario de 29/10 e apenas historico.
 
 ### Regra crítica
 
