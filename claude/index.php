@@ -9,7 +9,6 @@ $report_dir = dirname(__DIR__) . '/automation/eha/reports';
 $last_run        = @json_decode(@file_get_contents($report_dir . '/last_run.json'), true) ?: [];
 $last_status     = trim(@file_get_contents($report_dir . '/last_status.txt') ?: 'UNKNOWN');
 $last_ci_run     = @json_decode(@file_get_contents($report_dir . '/last_ci_run.json'), true) ?: [];
-$medusa_run      = @json_decode(@file_get_contents($report_dir . '/medusa-last-run.json'), true) ?: [];
 $eha_log_lines   = @file($report_dir . '/eha_events.txt') ?: [];
 $recent_log      = array_slice($eha_log_lines, -30);
 
@@ -100,10 +99,6 @@ $ci_event      = $last_ci_run['event'] ?? '—';
 $ci_sha        = substr($last_ci_run['sha'] ?? '', 0, 7) ?: '—';
 $ci_ts         = $last_ci_run['timestamp'] ?? '—';
 
-$medusa_status    = $medusa_run['status'] ?? '—';
-$medusa_next      = $medusa_run['next_step_title'] ?? '—';
-$medusa_applied   = count($medusa_run['applied_actions'] ?? []);
-$medusa_color     = $medusa_status === 'completed' ? '#22c55e' : ($medusa_status === 'error' ? '#ef4444' : '#f59e0b');
 
 // Trio IA Executor — fila de tarefas (root tem prioridade; logs/ como fallback)
 $tasks_queue_path = dirname(__DIR__) . '/tasks-queue.json';
@@ -153,7 +148,6 @@ $total_events = count($eha_log_lines);
         .ci-link { color: #60a5fa; text-decoration: none; font-size: .85rem; }
         .ci-link:hover { text-decoration: underline; }
         .section { border-top: 1px solid #1e293b; padding-top: 1rem; margin-top: .5rem; }
-        .medusa-badge { display: inline-block; padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; font-weight: 600; color: #fff; background: <?= $medusa_color ?>; }
         canvas { display: block; }
         .spark-row { display: flex; gap: 1rem; flex-wrap: wrap; }
         .spark-box { background: #1e293b; border-radius: .75rem; padding: 1rem; flex: 1; min-width: 200px; }
@@ -291,23 +285,6 @@ $total_events = count($eha_log_lines);
             <div class="card">
                 <div class="card-label">Timestamp</div>
                 <div class="card-value muted" style="font-size:.85rem"><?= htmlspecialchars($ci_ts) ?></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>Migração Medusa</h2>
-        <div style="margin-bottom:.75rem">
-            <span class="medusa-badge"><?= htmlspecialchars(strtoupper($medusa_status)) ?></span>
-        </div>
-        <div class="grid">
-            <div class="card" style="grid-column: span 2">
-                <div class="card-label">Próximo passo</div>
-                <div class="card-value" style="font-size:.95rem"><?= htmlspecialchars($medusa_next) ?></div>
-            </div>
-            <div class="card">
-                <div class="card-label">Ações aplicadas</div>
-                <div class="card-value ok"><?= (int)$medusa_applied ?></div>
             </div>
         </div>
     </div>

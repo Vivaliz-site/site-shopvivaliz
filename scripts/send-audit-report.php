@@ -64,7 +64,6 @@ $html = <<<'HTML'
 <p>Todos os 12 sistemas aguardam apenas a renovação do token:</p>
 <ul class="checklist">
     <li>Frete/Shipping (Melhor Envio) - Integração completa</li>
-    <li>Checkout Ponta-a-Ponta (Medusa) - Funcional</li>
     <li>Pagamentos (PIX, Cartão, WhatsApp) - Pronto</li>
     <li>ERP Sync Order Push - Aguarda token válido</li>
     <li>Status Webhook Retorno - Pronto para receber</li>
@@ -94,7 +93,6 @@ $html = <<<'HTML'
 <ul>
     <li><span class="pending">🔄 Token Renewal</span> - Codex renovando AGORA (< 10 min)</li>
     <li><span class="pending">🔄 Auditoria Paralela 7-Fases</span> - Workflow testando tudo simultaneamente</li>
-    <li><span class="pending">⏸️ Medusa Backend</span> - Pausado, aguardando retomada</li>
 </ul>
 
 <h3>⚡ PRÓXIMOS PASSOS (ORDEM DE EXECUÇÃO)</h3>

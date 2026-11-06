@@ -4,11 +4,11 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 5699
+- Arquivos versionados: 5641
 - Diretorios versionados: 684
 - Grupos de conteudo identico: 204
 - Grupos identicos que incluem codigo: 13
-- Nomes de funcao encontrados em mais de um arquivo: 737
+- Nomes de funcao encontrados em mais de um arquivo: 729
 - Arquivos em diretorios explicitamente legados: 1
 - Violacoes de dados operacionais versionados: 4
 
@@ -1296,13 +1296,13 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `storage/original/CONJ-10-RODIZIOS-35MM-GEL.jpg`
 - `storage/original/PRODUTO_341440908.jpg`
 
+### Git blob ID `66b2da737713584129fcd0cda935aa94448f369d`
+- `AGENTS.md`
+- `CLAUDE.md`
+
 ### Git blob ID `751a04d2f91922f3ef1510562505dcbb2a461521`
 - `.vinext/fonts/geist-mono-00e989178794/geist-mono-44745446.woff2`
 - `dist/client/assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-44745446.woff2`
-
-### Git blob ID `762aa30fadcc544099c9621d383925c3123aba8b`
-- `AGENTS.md`
-- `CLAUDE.md`
 
 ### Git blob ID `7ab581f7b347b642702d806e03391499013b6462`
 - `.vinext/fonts/geist-8ac0455e797f/geist-ff2310f5.woff2`
@@ -1426,7 +1426,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 
 - `$i`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `$t`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `__construct`: `admin/ai-image-studio/src/AiServices.php`, `admin/ai-image-studio/src/ImagePublisher.php`, `admin/ai-image-studio/src/OmnichannelImagePublisher.php`, `admin/ai-image-studio/src/OpenRouterImageClient.php`, `admin/catalog-optimization/src/CatalogPublisher.php`, `admin/catalog-optimization/src/TextAiServices.php`, `agents/project-director-agent.php`, `agents/v9.2.84/app/CatalogMetadataAgent.php`, `agents/v9.2.84/app/ConversionFunnelAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `api/liz-web-search.php`, `checkout-legacy/checkout-page-optimizer.php`, `claude/api/ProductOptimizer.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`, `config/database.php`, `core/ai/market/collector.php`, `core/ai/strategy/engine.php`, `core/config/ShopeeSecretsLoader.php`, `includes/OrderNotificationService.class.php`, `includes/PHPMailer/PHPMailer.php`, `includes/ai-squad-core.php`, `includes/amazon-margin/AuditCollector.php`, `includes/amazon-returns/Config.php`, `includes/amazon-returns/GmailApi.php`, `includes/amazon-returns/SafeTDecisionEngine.php`, `includes/amazon-returns/SpApi.php`, `includes/analytics-tracking.php`, `includes/blog-article-repository.php`, `includes/blog-comment-repository.php`, `includes/chatgpt-continuity/PendingNudgeStore.php`, `includes/infinitepay-gateway.php`, `includes/inventory-reservations.php`, `includes/liz-testimonial-moderator.php`, `includes/logger.php`, `includes/marina-maintenance/authorization-service.php`, `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`, `includes/marketplace/AmazonPublisher.php`, `includes/marketplace/MarketplaceRuntime.php`, `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `includes/marketplace/TinyPublisher.php`, `includes/mercadopago-gateway.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`, `includes/testimonials-repository.php`, `scripts/agent-heartbeat-monitor.php`, `scripts/agent-lock-manager.php`, `scripts/database-sandbox.php`, `scripts/disaster-recovery.php`, `scripts/incident-response.php`, `scripts/llm-knowledge-base.php`, `scripts/llm-log-analyzer.php`, `scripts/performance-optimizer.php`, `scripts/revenue-driven-queue.php`, `scripts/send-notifications.php`, `scripts/seo-generator.php`, `scripts/task-distribution-engine.php`, `scripts/test-shopee-connection.php`, `scripts/watchdog-health-check.php`, `src/Google/GoogleApiClient.php`, `src/Google/OAuthTokenProvider.php`, `tests/amazon-margin/ReadErrorPolicyTest.php`, `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-policy-test.php`, `tests/amazon-returns-program-regression-test.php`, `tests/amazon-returns-reliability-test.php`, `tests/amazon-returns-spapi-test.php`, `tests/catalog-generated-data-normalizer-test.php`, `workers/amazon-returns/daemon.php`, `workers/amazon-returns/gmail-ingest.php`, `workers/amazon-returns/reconcile.php`, `workers/amazon-returns/scheduler.php`
+- `__construct`: `admin/ai-image-studio/src/AiServices.php`, `admin/ai-image-studio/src/ImagePublisher.php`, `admin/ai-image-studio/src/OmnichannelImagePublisher.php`, `admin/ai-image-studio/src/OpenRouterImageClient.php`, `admin/catalog-optimization/src/CatalogPublisher.php`, `admin/catalog-optimization/src/TextAiServices.php`, `agents/project-director-agent.php`, `agents/v9.2.84/app/CatalogMetadataAgent.php`, `agents/v9.2.84/app/ConversionFunnelAgent.php`, `agents/v9.2.84/app/MediaMismatchAgent.php`, `agents/v9.2.84/app/MediaQualityAgent.php`, `api/liz-web-search.php`, `checkout-legacy/checkout-page-optimizer.php`, `claude/api/ProductOptimizer.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `config/database.php`, `core/ai/market/collector.php`, `core/ai/strategy/engine.php`, `core/config/ShopeeSecretsLoader.php`, `includes/OrderNotificationService.class.php`, `includes/PHPMailer/PHPMailer.php`, `includes/ai-squad-core.php`, `includes/amazon-margin/AuditCollector.php`, `includes/amazon-returns/Config.php`, `includes/amazon-returns/GmailApi.php`, `includes/amazon-returns/SafeTDecisionEngine.php`, `includes/amazon-returns/SpApi.php`, `includes/analytics-tracking.php`, `includes/blog-article-repository.php`, `includes/blog-comment-repository.php`, `includes/chatgpt-continuity/PendingNudgeStore.php`, `includes/infinitepay-gateway.php`, `includes/inventory-reservations.php`, `includes/liz-testimonial-moderator.php`, `includes/logger.php`, `includes/marina-maintenance/authorization-service.php`, `includes/marina-maintenance/broker-client.php`, `includes/marina-maintenance/signer-client.php`, `includes/marketplace/AmazonPublisher.php`, `includes/marketplace/MarketplaceRuntime.php`, `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `includes/marketplace/TinyPublisher.php`, `includes/mercadopago-gateway.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`, `includes/testimonials-repository.php`, `scripts/agent-heartbeat-monitor.php`, `scripts/agent-lock-manager.php`, `scripts/database-sandbox.php`, `scripts/disaster-recovery.php`, `scripts/incident-response.php`, `scripts/llm-knowledge-base.php`, `scripts/llm-log-analyzer.php`, `scripts/performance-optimizer.php`, `scripts/revenue-driven-queue.php`, `scripts/send-notifications.php`, `scripts/seo-generator.php`, `scripts/task-distribution-engine.php`, `scripts/test-shopee-connection.php`, `scripts/watchdog-health-check.php`, `src/Google/GoogleApiClient.php`, `src/Google/OAuthTokenProvider.php`, `tests/amazon-margin/ReadErrorPolicyTest.php`, `tests/amazon-returns-domain-test.php`, `tests/amazon-returns-policy-test.php`, `tests/amazon-returns-program-regression-test.php`, `tests/amazon-returns-reliability-test.php`, `tests/amazon-returns-spapi-test.php`, `tests/catalog-generated-data-normalizer-test.php`, `workers/amazon-returns/daemon.php`, `workers/amazon-returns/gmail-ingest.php`, `workers/amazon-returns/reconcile.php`, `workers/amazon-returns/scheduler.php`
 - `__destruct`: `checkout-legacy/checkout-page-optimizer.php`, `includes/PHPMailer/PHPMailer.php`
 - `_getClientHydrationContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `_getGlobalAccessors`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1565,7 +1565,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `d`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `D`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `de`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `decision`: `includes/amazon-returns/PolicyEngine.php`, `includes/amazon-returns/SafeTDecisionEngine.php`, `includes/liz-testimonial-moderator.php`
+- `decision`: `includes/amazon-margin/OlistUiCapture.php`, `includes/amazon-returns/PolicyEngine.php`, `includes/amazon-returns/SafeTDecisionEngine.php`, `includes/liz-testimonial-moderator.php`
 - `decodeJson`: `admin/ai-image-studio/src/AiServices.php`, `includes/blog-article-repository.php`
 - `decodePayload`: `includes/amazon-returns/Outbox.php`, `index.php`
 - `decodeProductPayload`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
@@ -1575,8 +1575,8 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `definitions`: `admin/assets/image-generation-workflow.js`, `includes/amazon-returns/PolicySeeder.php`
 - `delete`: `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`
 - `detect`: `api/autonomous/incident-manager.php`, `scripts/incident-response.php`
-- `detectAttributeType`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
 - `deterministicKey`: `includes/amazon-returns/EventStore.php`, `includes/amazon-returns/Outbox.php`
+- `diagnostic`: `admin/mercadolivre-margin.php`, `tests/ml-margin/MlMarginAdminSourceContractTest.php`
 - `digits`: `js/checkout-conversion-v6.js`, `js/checkout-shipping-v7.js`, `js/product-conversion-v5.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
 - `Dn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `dr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1613,7 +1613,6 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `expectedRequestFailureReason`: `scripts/ai-squad-ui-audit.mjs`, `scripts/production-runtime-parity.mjs`
 - `extractCatalogRows`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `extractIterator`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `extractKeywords`: `agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php`, `claude/api/sync-shopee-products.php`
 - `extractUrls`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
 - `fail`: `includes/amazon-margin/AuditStore.php`, `recuperar-carrinho.php`, `scripts/ai-squad-ui-audit.mjs`, `scripts/github-device-auth-delete-repo.mjs`, `scripts/production-runtime-parity.mjs`, `services/okx-trading-pilot/copy-mcp/copy-module.mjs`
 - `fatalError`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1646,10 +1645,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `ga4ClientIdFromCookie`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `ga4SessionIdFromCookies`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `gemini`: `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
-- `generateKeywords`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
 - `generateReport`: `scripts/agent-heartbeat-monitor.php`, `scripts/performance-optimizer.php`, `scripts/security-scanner.php`
-- `generateSchemaMarkup`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
-- `generateSEO`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
 - `get`: `core/config/ShopeeConfig.php`, `includes/amazon-returns/Config.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`
 - `getAgentMetrics`: `api/autonomous/health-monitor.php`, `scripts/metrics-proactive-monitor.php`
 - `getCart`: `carrinho.php`, `checkout.php`, `js/checkout-conversion-v6.js`, `public/dist/js/checkout-conversion-v6.ad497c56a1.min.js`
@@ -1772,7 +1768,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `leadChannel`: `js/shopvivaliz-google-events.js`, `public/dist/js/shopvivaliz-google-events.4434da0ae0.min.js`
 - `limit`: `admin/ai-image-studio/src/OmnichannelImagePublisher.php`, `admin/catalog-optimization/src/CatalogPublisher.php`, `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`, `includes/marketplace/TikTokPublisher.php`, `includes/marketplace/TinyPublisher.php`, `includes/query-builder.php`
 - `ln`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `load`: `admin/amazon-margin.php`, `admin/amazon-returns/index.php`, `admin/assets/image-generation-workflow.js`, `admin/connections.php`, `admin/monitor_agentes.php`, `core/config/ShopeeConfig.php`, `includes/amazon-margin/OlistAdsIndex.php`, `js/category-real-images-v52.js`, `js/privacy-consent-v1.js`, `js/public-experience-v1.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
+- `load`: `admin/amazon-margin.php`, `admin/amazon-returns/index.php`, `admin/assets/image-generation-workflow.js`, `admin/connections.php`, `admin/monitor_agentes.php`, `core/config/ShopeeConfig.php`, `includes/amazon-margin/OlistAdsIndex.php`, `includes/amazon-margin/OlistUiCapture.php`, `js/category-real-images-v52.js`, `js/privacy-consent-v1.js`, `js/public-experience-v1.js`, `public/dist/js/category-real-images-v52.2a917c4e2d.min.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `loadCandidates`: `admin/assets/catalog-optimization-workflow.js`, `admin/catalog-optimization/admin_catalog.php`
 - `loadCatalog`: `js/catalog.js`, `public/dist/js/catalog.4868fc16bf.min.js`
 - `loadCursor`: `includes/amazon-returns/ReturnsReport.php`, `workers/amazon-returns/gmail-ingest.php`
@@ -1790,9 +1786,9 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `log_info`: `scripts/fix-zero-price-products.php`, `scripts/migrate-is-admin-column.php`
 - `log_msg`: `olist/direct-sync.php`, `olist/download-images.php`, `olist/sync-agora.php`, `olist/sync-images-to-site.php`
 - `log_success`: `scripts/fix-zero-price-products.php`, `scripts/migrate-is-admin-column.php`
-- `log_sync`: `claude/api/olist/auto-sync.php`, `claude/api/sync-olist-products.php`
 - `logError`: `.ai/worker.js`, `api/autonomous/send-email.php`
 - `logRecoverableError`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `lookup`: `includes/amazon-margin/OlistAdsIndex.php`, `includes/amazon-margin/OlistUiCapture.php`
 - `lr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Lr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `lt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1801,7 +1797,6 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `m`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `main`: `.ai/main.js`, `ops/ai-squad/claude-bridge.mjs`, `scripts/amazon-returns/seller-central-adapter.mjs`, `scripts/amazon-returns/seller-central-bridge-worker.mjs`, `scripts/amazon-returns/seller-central-safe-t-read-worker.mjs`, `scripts/check-erp.js`, `scripts/tri-environment-sync.js`
 - `makeQuote`: `js/cart-shipping-v7.js`, `public/dist/js/cart-shipping-v7.306a5e85a9.min.js`
-- `makeRequest`: `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`
 - `mapChildren`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `mapIntoArray`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `markCategoryFallback`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
@@ -1846,9 +1841,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `openModal`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
 - `openrouter`: `includes/liz-blog-comment-responder.php`, `includes/liz-testimonial-moderator.php`
 - `optimize`: `admin/assets/catalog-optimization-workflow.js`, `admin/catalog-optimization/admin_catalog.php`, `claude/api/ProductOptimizer.php`
-- `optimizeDescription`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
-- `optimizeImages`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`, `scripts/performance-optimizer.php`
-- `optimizeTitle`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
+- `optimizeImages`: `claude/api/ProductOptimizer.php`, `scripts/performance-optimizer.php`
 - `Or`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `p`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `paidBridgeEnabled`: `ops/ai-squad/claude-bridge.mjs`, `ops/ai-squad/codex-bridge.mjs`
@@ -1866,6 +1859,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `patch`: `admin/assets/catalog-candidate-availability.js`, `includes/marketplace/AmazonPublisher.php`
 - `patchedPushState`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `patchedReplaceState`: `dist/server/index.js`, `dist/server/ssr/index.js`
+- `path`: `includes/amazon-margin/OlistAdsIndex.php`, `includes/amazon-margin/OlistUiCapture.php`
 - `pauseOnInteraction`: `js/auto-image-carousel.js`, `public/dist/js/auto-image-carousel.abb84f1a5f.min.js`
 - `pendingKey`: `checkout.php`, `tests/checkout-payment-retry-regression.cjs`
 - `performWork`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1904,7 +1898,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `qn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Qt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `qty`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
-- `quantity`: `includes/amazon-returns/PolicyEngine.php`, `includes/amazon-returns/ReturnsReport.php`
+- `quantity`: `includes/amazon-margin/KitCost.php`, `includes/amazon-returns/PolicyEngine.php`, `includes/amazon-returns/ReturnsReport.php`
 - `query`: `config/database.php`, `includes/query-builder.php`
 - `quote`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
 - `r`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1956,7 +1950,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `requireAsyncModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `requireModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `reset`: `includes/PHPMailer/SMTP.php`, `includes/logger.php`, `includes/query-builder.php`, `includes/rate-limiter.php`
-- `resolve`: `includes/amazon-margin/OlistAmazonOrderLink.php`, `includes/amazon-margin/ProductMatch.php`, `tests/catalog-search-order.test.cjs`, `tests/catalog-search-stock-race.test.cjs`
+- `resolve`: `includes/amazon-margin/KitCost.php`, `includes/amazon-margin/OlistAmazonOrderLink.php`, `includes/amazon-margin/ProductMatch.php`, `tests/catalog-search-order.test.cjs`, `tests/catalog-search-stock-race.test.cjs`
 - `resolveAuthorizationHeader`: `includes/amazon-returns/RemoteBridge.php`, `includes/remote-bridge-auth.php`
 - `resolveBlockedCycle`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `resolveItemId`: `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`
@@ -2086,12 +2080,10 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `svor_root`: `api/maintenance/opcache-reset.php`, `api/orders/opcache-reset.php`
 - `svPcv5Escape`: `js/product-conversion-v5.js`, `public/dist/js/product-conversion-v5.60a56e542a.min.js`
 - `svSafeImageUrl`: `carrinho.php`, `checkout.php`
-- `sync`: `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`
 - `syncBannerSpace`: `js/privacy-consent-v1.js`, `public/dist/js/privacy-consent-v1.6cf074c721.min.js`
 - `syncBottomUiOffset`: `js/public-experience-v1.js`, `public/dist/js/public-experience-v1.36049d7cf9.min.js`
 - `syncCommittedUrlStateFromLocation`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `syncPageState`: `js/catalog.js`, `js/visual-polish-v4.js`, `public/dist/js/catalog.4868fc16bf.min.js`, `public/dist/js/visual-polish-v4.50d71007db.min.js`
-- `syncProduct`: `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`
 - `syncQuote`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
 - `syncQuoteObject`: `js/checkout-shipping-v7.js`, `public/dist/js/checkout-shipping-v7.1724bbc566.min.js`
 - `syncShippingBusy`: `js/checkout-resilience-v1.js`, `public/dist/js/checkout-resilience-v1.ac74627798.min.js`
@@ -2322,5 +2314,5 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 ## Pastas paralelas
 
 - `automacoes/`: 1 arquivos. Comparar chamadas e fluxos antes de consolidar.
-- `automation/`: 21 arquivos. Comparar chamadas e fluxos antes de consolidar.
+- `automation/`: 19 arquivos. Comparar chamadas e fluxos antes de consolidar.
 - `automations/`: 2 arquivos. Comparar chamadas e fluxos antes de consolidar.
