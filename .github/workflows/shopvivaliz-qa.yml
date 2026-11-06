@@ -225,6 +225,16 @@ jobs:
           php tests/return-policy-public-statement-test.php
       - name: Olist v3 webhook authenticated and unsafe legacy retired
         run: php tests/olist-erp-webhook-entrypoint-test.php
+      - name: Amazon margin kit accounting and authenticated Olist product-tab evidence
+        run: |
+          set -Eeuo pipefail
+          php tests/amazon-margin/OlistProductTabCaptureTest.php
+          php tests/amazon-margin/OlistUiCaptureTest.php
+          php tests/amazon-margin/KitCostTest.php
+          php tests/amazon-margin/KitBomCostTest.php
+          php tests/amazon-margin/KitCostReportTest.php
+          php tests/amazon-margin/MarginMathTest.php
+          node --check scripts/amazon-margin/capture-olist-product-links.js
       - name: "Bloquear CSS wildcard de layout (ex: [class*=hero])"
         run: |
           PADRAO='\[class\s*\*=\s*"(hero|banner|section|page|layout|container)'
