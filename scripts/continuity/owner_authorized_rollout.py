@@ -38,10 +38,10 @@ GRANT_FIELDS = {
 class RolloutDenied(RuntimeError):
     pass
 
-def call(args: list[str], timeout: int) -> str:
+def call(args: list[str], timeout: int, *, env: dict[str, str] | None = None) -> str:
     """Do not echo sensitive stdout or stderr on a command failure."""
     result = subprocess.run(args, capture_output=True, text=True,
-                            timeout=timeout, check=False)
+                            timeout=timeout, check=False, env=env)
     if result.returncode != 0:
         raise RolloutDenied("subprocess_failed:" + Path(args[0]).name)
     return (result.stdout or "").strip()
@@ -103,6 +103,24 @@ def assert_owner_grant(release: Path, grant_pr: int, grant_head: str,
         if result != "OWNER_PR_GRANT=AUTHORIZED reason=owner_authorization_verified":
             raise RolloutDenied("owner_grant_not_authorized")
 
+def canonical_user_bus_env() -> dict[str, str]:
+    """Locate only the invoking ubuntu user's active systemd bus.
+
+    runuser/remote administrative shells do not inherit XDG_RUNTIME_DIR or
+    DBUS_SESSION_BUS_ADDRESS. The canonical installer sets these for itself;
+    the parent rollout must also pass them to its final health check.
+    """
+    uid = os.geteuid()
+    runtime = Path(f"/run/user/{uid}")
+    bus = runtime / "bus"
+    if not runtime.is_dir() or runtime.is_symlink() or not bus.is_socket():
+        raise RolloutDenied("canonical_user_bus_unavailable")
+    env = os.environ.copy()
+    env["XDG_RUNTIME_DIR"] = str(runtime)
+    env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={bus}"
+    return env
+
+
 def execute(release: Path, main_sha: str, grant_pr: int, grant_head: str,
             grant_merge: str) -> None:
     if (os.geteuid() == 0 or pwd.getpwuid(os.geteuid()).pw_name != "ubuntu"
@@ -147,7 +165,8 @@ def execute(release: Path, main_sha: str, grant_pr: int, grant_head: str,
                 INSTALLED_WORKER.read_bytes()).digest():
             raise RolloutDenied("bridge_worker_hash_mismatch")
         call(["systemctl", "--user", "is-active", "--quiet",
-              "shopvivaliz-chatgpt-continuity.service"], 20)
+              "shopvivaliz-chatgpt-continuity.service"], 20,
+             env=canonical_user_bus_env())
     finally:
         runtime_lock.release_runtime_lock(
             lease["lease_id"], lease["fencing_token"],
@@ -164,6 +183,12 @@ def main() -> int:
     try:
         execute(a.release_dir, a.main_sha, a.grant_pr,
                 a.grant_head_sha, a.grant_merge_sha)
+    except RolloutDenied as exc:
+        reason = str(exc)
+        if not re.fullmatch(r"[a-z0-9_:-]{1,100}", reason):
+            reason = "rollout_denied"
+        print("OWNER_ROLLOUT=DENIED reason=" + reason, file=sys.stderr)
+        return 1
     except Exception as exc:
         print("OWNER_ROLLOUT=DENIED reason=" + type(exc).__name__, file=sys.stderr)
         return 1
