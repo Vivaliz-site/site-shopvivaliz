@@ -81,3 +81,10 @@ Após o POST, o gateway exige que a resposta tenha o MLB solicitado, `state=SIMU
 
 **Aceite:** teste estático do gateway, lint PHP e JavaScript, validação do login real. O simulador completo só será considerado funcional quando a release do ML Pricing que contém a PR #82 for efetivamente publicada com o grant correto e for testada por navegação autenticada. O pacote read-only atual pinado no grant #3695 **não atende a esse contrato**; o site deve falhar fechado para ele.
 
+
+## Contra corrida de versões: rota de simulação exclusiva (06/11/2026)
+
+A negociação `GET /v1/health` é necessária, mas uma alteração de release entre o GET e o POST poderia redirecionar a simulação a uma API antiga. A fim de eliminar essa condição de corrida (TOCTOU), o gateway **não chama mais `POST /v1/pricing/quote` com `requested_price`**. Passa a chamar exclusivamente `POST /v1/pricing/preview`, endpoint novo da PR backend #82, inexistente na release antiga permitida no manifesto #3695. Assim, mesmo com troca de release após o health, a API antiga retorna 404 em vez de persistir a simulação no histórico de margens.
+
+A rota nova exige conta autenticada, mesmo escopo `pricing:read`, valor positivo explícito e retorna `state=SIMULATED`, `persisted=false`, `snapshot_id=null`; o gateway valida novamente a resposta. O botão não altera anúncio nem ERP. O teste de contrato da UI rejeita explicitamente o antigo caminho de simulação. Sem backend com essa rota, nenhum cálculo de simulação será liberado.
+
