@@ -859,6 +859,16 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
     }
     function writePendingPayment(value) { localStorage.setItem('shopvivaliz_pending_payment', JSON.stringify(value)); }
     function clearPendingPayment() { localStorage.removeItem('shopvivaliz_pending_payment'); }
+    // Preserve the cart and buyer draft until an authoritative payment-approved
+    // return. A gateway redirect is not a paid sale, and may fail or be abandoned.
+    function rememberCheckoutHandoff(orderNumber) {
+        try {
+            localStorage.setItem('shopvivaliz_checkout_handoff', JSON.stringify({
+                order_number: String(orderNumber || ''),
+                cart: localStorage.getItem('shopvivaliz_cart') || '[]'
+            }));
+        } catch (ignore) {}
+    }
 
     async function postJson(url, payload) {
         var response = await fetch(url, {
@@ -989,9 +999,8 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
+                rememberCheckoutHandoff(order.order_number);
                 window.location.assign(preference.checkout_url);
-                clearCheckoutFormDraft();
                 return;
             } else if (method === 'infinitepay') {
                 btn.textContent = 'Abrindo InfinitePay…';
@@ -999,9 +1008,8 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
+                rememberCheckoutHandoff(order.order_number);
                 window.location.assign(link.checkout_url);
-                clearCheckoutFormDraft();
                 return;
             } else {
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
