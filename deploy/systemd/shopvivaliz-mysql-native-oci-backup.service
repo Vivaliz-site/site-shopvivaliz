@@ -1,0 +1,16 @@
+[Unit]
+Description=ShopVivaliz verified native MySQL snapshot to OCI Object Storage (Marina)
+Wants=network-online.target
+After=network-online.target mysql.service
+Requires=mysql.service
+AssertPathExists=/home/ubuntu/.venvs/oci-cli/bin/oci
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/shopvivaliz-mysql-native-oci-backup
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=40min
