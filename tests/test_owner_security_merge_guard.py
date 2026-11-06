@@ -23,13 +23,13 @@ class SecurityMergeGuardTest(unittest.TestCase):
             }), encoding="utf-8")
             gh = root / "gh"
             gh.write_text(
-                '#!/bin/sh\\n'
-                'printf "%s\\\\n" "$*" >> "$STUB_GH_LOG"\\n'
-                'case "$*" in\\n'
-                '  "api user --jq .login") echo fredmourao-ai ;;\\n'
-                '  "api repos/Vivaliz-site/site-shopvivaliz/pulls/3725") cat "$STUB_GH_META" ;;\\n'
-                '  *) exit 93 ;;\\n'
-                'esac\\n',
+                '#!/bin/sh\n'
+                'printf "%s\\n" "$*" >> "$STUB_GH_LOG"\n'
+                'case "$*" in\n'
+                '  "api user --jq .login") echo fredmourao-ai ;;\n'
+                '  "api repos/Vivaliz-site/site-shopvivaliz/pulls/3725") cat "$STUB_GH_META" ;;\n'
+                '  *) exit 93 ;;\n'
+                'esac\n',
                 encoding="utf-8",
             )
             gh.chmod(0o755)
