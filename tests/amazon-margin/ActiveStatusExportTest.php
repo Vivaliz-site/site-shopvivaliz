@@ -36,4 +36,10 @@ if(!is_string($xml)||!str_contains($xml,'Ativo Amazon')||!str_contains($xml,'ACT
   ||str_contains($xml,'INACTIVE'))throw new RuntimeException('active rows not exported correctly');
 $pdf=SvAmazonMarginExport::pdf($only,'2026-11-04');
 if(!str_contains($pdf,'Ativos: 2'))throw new RuntimeException('PDF active count missing');
-echo "PASS active-only Excel/PDF scope, reference price, ERP diagnostics and null-margin safety\n";
+$adminUi=file_get_contents(dirname(__DIR__,2).'/admin/amazon-margin.php');
+if(!is_string($adminUi)
+  ||!str_contains($adminUi,'<strong>Amazon Classic</strong> não disponibiliza exportação de anúncios')
+  ||!str_contains($adminUi,'Produtos → editar → Anúncios')) {
+    throw new RuntimeException('Amazon Classic UI incorrectly requests unsupported ad export');
+}
+echo "PASS active-only Excel/PDF scope, ERP diagnostics, null-margin safety and Classic guidance\n";
