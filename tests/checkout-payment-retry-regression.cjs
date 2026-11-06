@@ -180,12 +180,12 @@ async function scenario(change, options = {}) {
     const end = approvedReturn.indexOf('<!-- /APPROVED_PAYMENT_HANDOFF_CART_RECONCILIATION_V1 -->', start);
     assert.ok(start > 0 && end > start, 'approved return reconciliation block must exist');
     const block = approvedReturn.slice(start, end);
-    assert.match(block, /if \\(\\$serverApproved && \\$orderNumber !== ''\\)/, 'only actual server-confirmed payments can clear cart');
+    assert.match(block, /if \(\$serverApproved && \$orderNumber !== ''\)/, 'only actual server-confirmed payments can clear cart');
     const begin = block.indexOf('<script>'), finish = block.lastIndexOf('</script>');
     assert.ok(begin >= 0 && finish > begin);
     let js = block.slice(begin + '<script>'.length, finish);
     const order = 'SV20261106123456789';
-    js = js.replace(/<\\?= json_encode\\(\\$orderNumber\\) \\?>/g, JSON.stringify(order));
+    js = js.replace(/<\?= json_encode\(\$orderNumber\) \?>/g, JSON.stringify(order));
     const cart = JSON.stringify([{sku:'FIXTURE-A',quantity:1,price:15.47}]);
     function attempt(pendingOrder, cartChanged) {
       const memory = new Map([
