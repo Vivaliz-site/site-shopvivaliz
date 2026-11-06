@@ -97,13 +97,24 @@ def is_backend_controller_only(paths: list[str]) -> bool:
     return mandatory.issubset(clean) and set(clean).issubset(BACKEND_CONTROLLER_FILES)
 
 
+def classify_bootstrap(paths: list[str]) -> tuple[bool, bool]:
+    """Return mutually exclusive (browser_only, backend_controller_only) flags.
+
+    Classifier self-repair files are in both allowlists so the backend
+    installer can self-heal, but restarting both services is redundant.
+    Backend-only wins whenever both gates match.
+    """
+    backend_controller_only = is_backend_controller_only(paths)
+    browser_only = is_browser_only(paths) and not backend_controller_only
+    return browser_only, backend_controller_only
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--github-output", type=Path)
     args = parser.parse_args()
     paths = sys.stdin.read().splitlines()
-    browser_only = is_browser_only(paths)
-    backend_controller_only = is_backend_controller_only(paths)
+    browser_only, backend_controller_only = classify_bootstrap(paths)
     if args.github_output:
         with args.github_output.open("a", encoding="utf-8") as output:
             output.write("browser_only=" + ("true" if browser_only else "false") + "\n")
