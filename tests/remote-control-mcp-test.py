@@ -252,6 +252,68 @@ class RemoteControlMcpTests(unittest.TestCase):
                 m.MARINA_HOST, "id", 20, None, marina_admin=True,
             )
 
+
+    def test_marina_dynamic_read_tools_use_approved_admin_transport(self):
+        cases = (
+            ("processes_list", {}),
+            ("file_read", {"path": "/etc/hostname", "max_bytes": 128}),
+            ("file_list", {"path": "/tmp"}),
+            ("logs_tail", {"path": "/etc/hostname", "lines": 3}),
+        )
+        with mock.patch.object(m, "marina_central_admin_grant_active", return_value=True), \
+             mock.patch.object(m, "marina_central_readonly_grant_active", return_value=False):
+            specs = {tool["name"]: tool for tool in m.tool_specs()}
+            for name, extra in cases:
+                with self.subTest(name=name), \
+                     mock.patch.object(m, "run_host_command", return_value={
+                         "host": m.MARINA_HOST, "exit_code": 0,
+                         "stdout": "safe\n", "stderr": "", "duration_ms": 1,
+                     }) as runner:
+                    self.assertIn(
+                        m.MARINA_HOST,
+                        specs[name]["inputSchema"]["properties"]["host"]["enum"],
+                    )
+                    result = m.execute_tool(name, {"host": m.MARINA_HOST, **extra})
+                    self.assertTrue(result["ok"])
+                    self.assertTrue(runner.call_args.kwargs["marina_admin"])
+                    self.assertFalse(runner.call_args.kwargs["recover_transport"])
+                    self.assertEqual(runner.call_args.args[0], m.MARINA_HOST)
+                    self.assertNotIn("sudo", runner.call_args.args[1])
+
+    def test_marina_dynamic_reads_not_advertised_with_readonly_only_grant(self):
+        names = ("processes_list", "file_read", "file_list", "logs_tail")
+        with mock.patch.object(m, "marina_central_admin_grant_active", return_value=False), \
+             mock.patch.object(m, "marina_central_readonly_grant_active", return_value=True):
+            specs = {tool["name"]: tool for tool in m.tool_specs()}
+            for name in names:
+                with self.subTest(name=name), mock.patch.object(m, "run_host_command") as runner:
+                    self.assertNotIn(
+                        m.MARINA_HOST,
+                        specs[name]["inputSchema"]["properties"]["host"]["enum"],
+                    )
+                    args = {"host": m.MARINA_HOST}
+                    if name != "processes_list":
+                        args["path"] = "/etc/hostname"
+                    with self.assertRaisesRegex(
+                        PermissionError, "marina_central_admin_route_not_approved"
+                    ):
+                        m.execute_tool(name, args)
+                    runner.assert_not_called()
+            # Fixed health and allowlisted status remain usable with readonly.
+            self.assertTrue(m.marina_central_readonly_grant_active())
+
+    def test_marina_admin_read_still_denies_sensitive_paths_before_execution(self):
+        with mock.patch.object(m, "marina_central_admin_grant_active", return_value=True), \
+             mock.patch.object(m, "run_host_command") as runner:
+            for name in ("file_read", "file_list", "logs_tail"):
+                with self.subTest(name=name):
+                    with self.assertRaisesRegex(PermissionError, "sensitive_path_denied"):
+                        m.execute_tool(name, {
+                            "host": m.MARINA_HOST,
+                            "path": "/home/ubuntu/.ssh/id_ed25519",
+                        })
+            runner.assert_not_called()
+
     def test_marina_durable_task_uses_privileged_invocation(self):
         key = Path(self.tmp.name) / "marina-key"
         known_hosts = Path(self.tmp.name) / "marina-known-hosts"
