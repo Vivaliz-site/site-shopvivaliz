@@ -55,6 +55,20 @@ try {
 $pdf=SvAmazonMarginExport::pdf($rows,'2026-11-06');
 kitReportAssert(str_starts_with($pdf,'%PDF-'),'valid PDF');
 kitReportAssert(str_contains($pdf,'kit completo'),'PDF must label bundle cost');
+kitReportAssert(str_contains($pdf,'Lucro por unidade vendida: R$ 12.99'),
+    'PDF must show per-unit/kit profit, not accumulated profit as one sale');
+kitReportAssert(str_contains($pdf,'Lucro acumulado: R$ 38.98'),
+    'PDF must show accumulated profit separately from unit price');
+kitReportAssert(str_contains($pdf,'Pecas por kit: 5'),
+    'PDF must disclose pieces in each sold kit');
+$many=array_fill(0,40,$rows[0]);
+$multiPage=SvAmazonMarginExport::pdf($many,'2026-11-06');
+kitReportAssert(substr_count($multiPage,'/Type /Page /Parent')===3,
+    '40 listings need exactly 3 pages at 17 rows per page');
+kitReportAssert(substr_count($multiPage,'Lucro por unidade vendida: R$ 12.99')===40,
+    'each PDF page/row must include the per-kit profit');
+kitReportAssert(substr_count($multiPage,'Lucro acumulado: R$ 38.98')===40,
+    'each PDF page/row must include period profit');
 $mismatch=$case;
 $mismatch['seller_sku']='KIT2C2SFBA50';
 $mismatch['erp_product_type']='K';
