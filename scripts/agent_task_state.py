@@ -1221,7 +1221,7 @@ def authorize_detached_route(task_id: str, *, expected_checkpoint_version: int,
 
 def _detached_route_checked(payload: dict[str, Any]) -> None:
     agent = str(payload.get("agent_id", "")).strip().lower()
-    if (str(payload.get("status", "")).strip() != "RUNNING"
+    if (str(payload.get("status", "")).strip() not in {"RUNNING", "READY_TO_COMPLETE"}
             or payload.get("execution_route") != "detached"
             or not agent.startswith(("claude", "gemini", "ollama", "codex"))
             or CHATGPT_AGENT_ID_RE.search(agent)
@@ -1239,7 +1239,7 @@ def claim_detached_recovery_ownership(task_id: str, *, owner_id: str,
     owner = str(owner_id).strip()
     if not owner:
         raise TaskStateError("detached recovery requires owner identity")
-    if not str(payload.get("next_action", "")).strip():
+    if str(payload.get("status", "")) == "RUNNING" and not str(payload.get("next_action", "")).strip():
         raise TaskStateError("detached task has no executable next_action")
     with _continuity_state_env():
         try:
