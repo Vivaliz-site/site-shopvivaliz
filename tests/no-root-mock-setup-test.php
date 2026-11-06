@@ -15,6 +15,17 @@ foreach ($forbiddenPaths as $path) {
     }
 }
 
+$legacyWebhook = $root . '/claude/api/medusa-webhook.php';
+if (is_file($legacyWebhook)) {
+    $webhookSource = file_get_contents($legacyWebhook);
+    if (!is_string($webhookSource)
+        || str_contains($webhookSource, 'test_eha_webhook_secret')
+        || preg_match('/http_response_code\\s*\\(\\s*503\\s*\\)/', $webhookSource) !== 1) {
+        fwrite(STDERR, "Retired Medusa webhook must reject missing credentials without a predictable default key\\n");
+        exit(1);
+    }
+}
+
 $rootScripts = glob($root . '/*.{sh,ps1}', GLOB_BRACE) ?: [];
 $forbiddenPatterns = [
     '/pk_live_default/i',

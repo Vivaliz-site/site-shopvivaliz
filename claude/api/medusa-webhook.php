@@ -14,7 +14,17 @@ header('Content-Type: application/json');
 header('X-Content-Type-Options: nosniff');
 
 // Variáveis de ambiente
-$secret = getenv('EHA_WEBHOOK_SECRET') ?: ($_ENV['EHA_WEBHOOK_SECRET'] ?? 'test_eha_webhook_secret');
+$secret = getenv('EHA_WEBHOOK_SECRET');
+if (!is_string($secret) || trim($secret) === '') {
+    $secret = $_ENV['EHA_WEBHOOK_SECRET'] ?? null;
+}
+// Fail closed while the retired Medusa endpoint has no dedicated signing secret.
+// A public, predictable test key must never be accepted in production.
+if (!is_string($secret) || trim($secret) === '') {
+    http_response_code(503);
+    echo json_encode(['error' => 'Webhook is not configured']);
+    exit;
+}
 $logDir = __DIR__ . '/../logs';
 
 // Criar diretório de logs se não existir
