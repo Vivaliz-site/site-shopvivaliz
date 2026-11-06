@@ -3,7 +3,7 @@ Description=ShopVivaliz verified native MySQL snapshot to OCI Object Storage (Ma
 Wants=network-online.target
 After=network-online.target mysql.service
 Requires=mysql.service
-ConditionPathExists=/home/ubuntu/.venvs/oci-cli/bin/oci
+AssertPathExists=/home/ubuntu/.venvs/oci-cli/bin/oci
 
 [Service]
 Type=oneshot
