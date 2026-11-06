@@ -29,6 +29,10 @@ PRIORITY_DOCS = (
     "docs/knowledge/README.md",
     "docs/knowledge/dev-agent-briefing.md",
     "docs/AGENTS.md",
+    "docs/HOST-ACCESS.md",
+    "docs/AGENT-MCP-REMOTE.md",
+    "docs/AGENT-REMOTE-ACCESS.md",
+    "docs/ai-agents-map.md",
     "docs/knowledge/claude-vm-bootstrap.md",
     "docs/knowledge/dev-chatgpt-bootstrap.md",
     ".claude/rules/ai-to-cli.md", ".github/AGENTS.md",
@@ -55,6 +59,10 @@ STALE_POLICY_PATTERNS = (
     r"Marina nao esta no MCP central",
     r"MCP central ainda inclui a origem excluida",
     r"MCP central ainda possui inventario antigo",
+    r"nao e executavel pelo MCP central",
+    r"nao esta presente na allowlist do MCP central",
+    r"hosts_list ainda inclui origem excluida",
+    r"Nao anunciar.*admin_command_run.*Marina",
 )
 
 def scan_mcp_routing_text(text: str) -> list[str]:

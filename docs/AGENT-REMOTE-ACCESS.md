@@ -1,3 +1,7 @@
+<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->
+> **Acesso MCP em 06/11/2026, revisado pelo protocolo V5:** ShopVivaliz Remote Control e Orquestrador aceitam os quatro hosts (always-free-arm-1787907847-26, Fred-Win, KOCEPSV, marina-a1-4c24g) quando o schema e grants reais da sessao autorizarem, com exit_code=0 em canarios administrativos da Marina. O MCP independente da Marina esta ativo localmente desde 04/11, mas autenticacao publica independente exige teste E2E proprio. A origem shopvivaliz-free-a1 foi excluida e jamais e alvo. Preservar MFA, RBAC, leases, branch protection, revisao humana e recusas da plataforma. Fonte atual: docs/ops/mcp-first-agent-execution-2026-11-05.md; historia: docs/knowledge/current-topology-and-access-2026-10-29.md.
+<!-- /MCP_ROUTE_CANONICAL_V5_20261106 -->
+
 # Acesso remoto canônico dos agentes
 
 Este arquivo é leitura obrigatória antes de qualquer tarefa que envolva VM, runtime, navegador, serviço, deploy, logs ou recuperação operacional.
@@ -11,7 +15,7 @@ Este arquivo é leitura obrigatória antes de qualquer tarefa que envolva VM, ru
 
 ## Ordem de acesso
 
-1. **Remote Control MCP:** rota operacional primaria **do backend/hosts allowlisted ativos**. Seu inventario em 2026-10-29 ainda exibe origem excluida e **nao inclui Marina**; nunca usar alias da origem para Marina. Para Marina, usar **RDC 1/2 direto** (online, ID descoberto pelo nome) ou SSH privado apenas apos autenticacao validada. MCP independente Marina permanece inativo. O controller canônico fica em `always-free-arm-1787907847-26` e o endpoint de controle permanece privado/loopback.
+1. O MCP central e Orquestrador anunciam quatro hosts, incluindo Marina (marina-a1-4c24g), com autorizacao dependente do schema/grants reais da sessao; o MCP independente esta ativo localmente e seu E2E publico e distinto. Nunca acessar shopvivaliz-free-a1.
 2. **SSH privado/Tailscale:** usar o usuário dedicado `shopvivaliz-agent` somente quando a operação não estiver disponível pelo Remote Control MCP ou quando o control plane estiver comprovadamente indisponível. SSH público direto, login root público e autenticação por senha continuam proibidos.
 3. **GitHub Actions/OCI Bastion:** fallback auditável para bootstrap, recuperação e reparo do próprio Remote Control MCP quando não houver rota privada utilizável.
 4. **GUI/validação visual:** usar o canal grafico autorizado por host (RDC direto para Marina quando apropriado, RustDesk self-hosted no fluxo backend). Navegador, Playwright/Selenium/CDP, MFA, CAPTCHA, consentimento ou validação visual continuam na backend `always-free-arm-1787907847-26`, nunca nos hosts Windows.

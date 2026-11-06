@@ -1,9 +1,13 @@
+<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->
+> **Acesso MCP em 06/11/2026, revisado pelo protocolo V5:** ShopVivaliz Remote Control e Orquestrador aceitam os quatro hosts (always-free-arm-1787907847-26, Fred-Win, KOCEPSV, marina-a1-4c24g) quando o schema e grants reais da sessao autorizarem, com exit_code=0 em canarios administrativos da Marina. O MCP independente da Marina esta ativo localmente desde 04/11, mas autenticacao publica independente exige teste E2E proprio. A origem shopvivaliz-free-a1 foi excluida e jamais e alvo. Preservar MFA, RBAC, leases, branch protection, revisao humana e recusas da plataforma. Fonte atual: docs/ops/mcp-first-agent-execution-2026-11-05.md; historia: docs/knowledge/current-topology-and-access-2026-10-29.md.
+<!-- /MCP_ROUTE_CANONICAL_V5_20261106 -->
+
 <!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
-> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+> **Snapshot de 29/10/2026, SUPERADO pela validacao 06/11/2026:** os relatos anteriores de Marina fora da allowlist ou MCP independente inativo descrevem apenas a data de 29/10. Usar schema e grants atuais do MCP central/Orquestrador (quatro hosts), MCP independente com autenticacao propria e nunca a VM excluida.
 <!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
 
 <!-- ACTIVE_MARINA_ROUTING_20261029 -->
-> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+> **Snapshot de 29/10/2026, SUPERADO pela validacao 06/11/2026:** os relatos anteriores de Marina fora da allowlist ou MCP independente inativo descrevem apenas a data de 29/10. Usar schema e grants atuais do MCP central/Orquestrador (quatro hosts), MCP independente com autenticacao propria e nunca a VM excluida.
 <!-- /ACTIVE_MARINA_ROUTING_20261029 -->
 
 # Remote Control MCP para agentes
@@ -24,7 +28,7 @@ Leia antes de operar:
 
 - controller central: `always-free-arm-1787907847-26` (OCI PRINCIPAL)
 - endpoint MCP: `127.0.0.1:5580`, privado/loopback
-- **producao web/deploy atual: `marina-a1-4c24g` (OCI ESPOSA)**; nao esta presente na allowlist do MCP central em 2026-10-29.
+- O MCP central e Orquestrador anunciam quatro hosts, incluindo Marina (marina-a1-4c24g), com autorizacao dependente do schema/grants reais da sessao; o MCP independente esta ativo localmente e seu E2E publico e distinto. Nunca acessar shopvivaliz-free-a1.
 - **origem aposentada:** `shopvivaliz-free-a1`; excluida segundo proprietario, SSH sem rota, jamais acionar via MCP.
 - Fred-Win: alcançado pelo controller pela rota privada documentada
 - KOCEPSV: alcançado pelo controller pela rota privada documentada quando houver evidência viva de disponibilidade
@@ -41,7 +45,7 @@ SSH público direto, root público, senha interativa e endpoint MCP público sã
 
 ## Atualizacao obrigatoria da topologia
 
-Consultar `docs/knowledge/current-topology-and-access-2026-10-29.md`, `marina-direct-mcp/README.md` e `docs/ops/marina-independent-secure-mcp-tunnel.md`. Nao anunciar `admin_command_run` na Marina pela controladora: ferramenta nao a aceita como host. Nao reutilizar secrets, hostname ou credenciais da controladora no MCP independente.
+- O MCP central e Orquestrador anunciam quatro hosts, incluindo Marina (marina-a1-4c24g), com autorizacao dependente do schema/grants reais da sessao; o MCP independente esta ativo localmente e seu E2E publico e distinto. Nunca acessar shopvivaliz-free-a1.
 
 ## Evidência obrigatória
 
