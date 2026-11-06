@@ -49,8 +49,9 @@ final class SvAmazonMarginOlistProductTabCapture
         foreach($raw['records'] as $id=>$record) {
             if(!is_array($record) || !ctype_digit((string)$id) || (int)$id<1
                 || (int)($record['product_id']??0)!==(int)$id
-                || trim((string)($record['erp_sku']??''))===''
-                || strlen((string)$record['erp_sku'])>120
+                || !is_string($record['erp_sku']??null)
+                || strlen($record['erp_sku'])>120
+                || ($record['erp_sku']==='' && !empty($record['bindings']??[]))
                 || ($record['url_path']??'')!=='/produtos#edit/'.$id
                 || !self::date((string)($record['observed_at']??''))
                 || !is_array($record['bindings']??null)
