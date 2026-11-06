@@ -31,7 +31,6 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/produtos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📦 Produtos</a>
                 <a href="/admin/pedidos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📋 Pedidos</a>
                 <a href="/admin/clientes.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">👥 Clientes</a>
-                <a href="/admin/admin-back.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🗂️ Legado</a>
                 <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
                 <a href="/admin/ai-provider-audit.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🧪 Auditoria IA</a>
                 <a href="/admin/buscador.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(37,99,235,0.35);">🔎 Buscador</a>
@@ -155,7 +154,7 @@ $codename = (string)($version['codename'] ?? '');
                     <li>Carregando status ML...</li>
                 </ul>
                 <div class="admin-link-list">
-                    <a class="btn btn-primary" href="/admin/mercadolivre">Painel ML</a>
+                    <a class="btn btn-primary" href="/admin/mercadolivre.php">Painel ML</a>
                     <a class="btn btn-secondary" href="/api/ml/login" target="_blank">Conectar OAuth</a>
                     <a class="btn btn-secondary" href="/api/ml/products" target="_blank">Produtos JSON</a>
                 </div>
@@ -210,8 +209,8 @@ $codename = (string)($version['codename'] ?? '');
                     </div>
                     <div class="admin-map-item">
                         <strong>Painéis técnicos</strong>
-                        <span>`/admin/monitor/`, `/admin/admin-back.php`, `/admin/menu-completo.php`</span>
-                        <small>Monitoramento central, legado e rotinas principais do admin.</small>
+                        <span>`/admin/monitor/`, `/admin/menu-completo.php`</span>
+                        <small>Monitoramento central e rotinas principais do admin.</small>
                     </div>
                     <div class="admin-map-item">
                         <strong>Pedidos e eventos</strong>
@@ -229,7 +228,6 @@ $codename = (string)($version['codename'] ?? '');
                 <a class="btn btn-secondary" href="/admin/ai-provider-audit.php" target="_blank" rel="noreferrer">Auditoria IA</a>
                 <a class="btn btn-secondary" href="/admin/buscador.php">Buscador</a>
                 <a class="btn btn-primary" href="/admin/squad-chat.php">Squad Chat</a>
-                <a class="btn btn-secondary" href="/admin/admin-back.php" target="_blank" rel="noreferrer">Legado</a>
                 <a class="btn btn-secondary" href="/api/catalog/products.php?limit=200" target="_blank" rel="noreferrer">Ver JSON</a>
             </div>
         </section>
