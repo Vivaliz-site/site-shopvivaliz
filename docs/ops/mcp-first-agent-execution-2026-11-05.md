@@ -17,6 +17,21 @@
 4. **Falha nao e fim:** se ocorrer timeout, rede ou canal desconectado, checar primeiro `task_status` e o estado da operacao para evitar duplicacao; reparar problema recuperavel sem contornar auth, lease ou RBAC. So depois usar a proxima rota **independentemente autorizada** (RDC, SSH privado, GUI etc.) quando necessaria. Um timeout do RDC, por si so, nao justifica encerrar sem testar MCP.
 5. **Validar resultado real:** test/readback e UI quando aplicavel. Nunca declarar `BLOCKED_EXTERNAL`, `AGUARDA OPERADOR` ou `NAO FOI POSSIVEL` apenas por erro de um canal enquanto o MCP administrativo adequado estiver disponivel sem tentativa. Nao inventar cobertura, sucesso ou autenticacao.
 
+## Tratamento de limite foreground e retomada duravel (2026-11-06)
+
+<!-- MCP_FOREGROUND_DURABLE_ROUTING_V1 -->
+**Regra executavel para todos os agentes:** `foreground_budget_exceeded_use_task_submit` e uma rejeicao do modo sincrono (`durable=false` com timeout acima do limite do adaptador, atualmente **5 segundos**). **Nao** e prova de senha ausente, plugin desativado, 403 de autorizacao ou limite mensal de tokens. Corrigir a **forma da chamada** em vez de encerrar o objetivo.
+
+1. Comando comprovadamente curto: `admin_command_run` com `timeout <= 5` e `durable=false`, quando a ferramenta e o grant dessa sessao permitirem.
+2. Operacao longa, incerta, administrativa ou que precise persistir: preferir **desde a primeira chamada** `task_submit(host, command, timeout, request_id)`. Usar `request_id` estavel para a mesma intencao, sem duplicar efeitos. A API pode tambem promover `admin_command_run(durable=true)` para fila; nao exigir execucao imediata.
+3. Se ocorrer exatamente `foreground_budget_exceeded_use_task_submit`, **e a chamada anterior tiver sido recusada antes de ser aceita**, submeter pela fila autorizada com a mesma intencao, sem mudar host/grant/autenticacao nem reexecutar comando ja iniciado. Se o retorno for timeout, desconexao ou `controller_response_indeterminate`, **nao** resubmeter cegamente: reconciliar `request_id`, `task_id` e auditoria primeiro.
+4. Apos o recibo `queued`, consultar `task_status` com verificacoes finitas ate estado terminal; exigir `state=succeeded`, `exit_code=0` **e readback especifico**. Recibo de fila, `running` ou timeout do chat nao significam conclusao. Persistir checkpoint e retomar na proxima execucao autorizada quando a tarefa nao puder ser acompanhada nesta sessao.
+5. `MCP_NOT_AUTHORIZED`, 401/403 ou recusa expressa da plataforma **nao** sao erros de foreground. Nao usar `task_submit` ou outro transporte para contornar negativa de seguranca; preservar MFA, RBAC, grants, leases e aprovacoes humanas.
+6. Permissao administrativa de **todas as ferramentas** no Admin Console, permissao de **execucao/confirmacao** da conta ChatGPT e **limite do transporte** sao controles distintos. Nao declarar falta de permissao por uma rejeicao foreground nem declarar `full_access` alterado sem readback oficial. Um 404 do gerenciador de permissao e falha desse controle, nao revogacao automatica das ferramentas MCP.
+
+**Evidencia E2E (06/11/2026):** no backend, os MCPs Central e Orquestrador executaram o mesmo teste inocuo de escrita/limpeza pela fila, `task_status.state=succeeded`, `exit_code=0`, `MCP_WRITE_PROBE=PASS`; tasks `492ac6e6-7230-4c3e-ba70-64daefe791e9` e `df200811-6277-438e-9f54-b6ca9978a4bc`. Esse teste comprova a rota de escrita, nao autorizacao universal para qualquer acao sensivel.
+<!-- /MCP_FOREGROUND_DURABLE_ROUTING_V1 -->
+
 ## Exemplo concreto (PrintNode no KOCEPSV)
 
 Se um agente precisar inspecionar, enviar ou verificar **uma etiqueta autorizada de teste** na fila `ZDesigner server 2`, deve **primeiro** usar o MCP ShopVivaliz central com o host `KOCEPSV`, por `task_submit`/`admin_command_run` ou outra acao especifica que esteja exposta. Em seguida consultar `task_status`, validar fila e eventos de impressao. RDC/GUI sao complementares se necessarios. Se um teste de controle grafico falhar por timeout, isso nao prova que a via MCP falhou. Testes nao devem reimprimir pedidos reais ou repetir jobs de resultado indeterminado.
