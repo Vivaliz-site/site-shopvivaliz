@@ -110,8 +110,12 @@ public static class ShopVivalizDesktopInput {
             if (-not [ShopVivalizDesktopInput]::SetCursorPos($absoluteX, $absoluteY)) {
                 throw 'desktop_cursor_move_failed'
             }
+            # Apps como Chromium/Edge precisam de um instante apos o movimento para resolver o alvo sob o cursor;
+            # sem isso o clique cai no elemento anterior e retorna ok sem efeito.
+            Start-Sleep -Milliseconds 150
             for ($i = 0; $i -lt $clicks; $i++) {
                 [ShopVivalizDesktopInput]::mouse_event([uint32]$flags[0], 0, 0, 0, [UIntPtr]::Zero)
+                Start-Sleep -Milliseconds 50
                 [ShopVivalizDesktopInput]::mouse_event([uint32]$flags[1], 0, 0, 0, [UIntPtr]::Zero)
                 Start-Sleep -Milliseconds 80
             }
