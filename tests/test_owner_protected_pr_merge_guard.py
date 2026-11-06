@@ -37,7 +37,7 @@ if any('/pulls/' in v for v in args):
     labels = [dict(name=x) for x in os.environ.get('LABELS', '').split(',') if x]
     print(json.dumps({'state':'open','draft':False, 'base':{'ref':'main'},
       'head':{'repo':{'full_name':'Vivaliz-site/site-shopvivaliz'}, 'sha':'a'*40},
-      'labels':labels}))
+      'labels':labels, 'requested_reviewers':[]}))
     sys.exit(0)
 sys.exit(2)
 '''
