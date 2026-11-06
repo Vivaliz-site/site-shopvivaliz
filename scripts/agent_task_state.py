@@ -923,6 +923,58 @@ def block_task(
 
 
 @_serialized_transition
+def obsolete_task(
+    task_id: str,
+    *,
+    authorized_by: str,
+    reason: str,
+    stale_after_hours: float = 72.0,
+) -> dict[str, Any]:
+    """Retire a stale, unowned checkpoint by explicit owner decision.
+
+    Uses the existing terminal BLOCKED_EXTERNAL state, so every consumer keeps
+    treating it as terminal and ``resume`` reopens it. It records who decided,
+    why and the last progress time instead of inventing attempted alternatives.
+    """
+    payload = _load(task_id)
+    if payload.get("status") not in NON_TERMINAL_STATES:
+        raise TaskStateError("only an active task can be retired as obsolete")
+    who = str(authorized_by).strip()
+    why = str(reason).strip()
+    if not who:
+        raise TaskStateError("obsolete requires authorized_by (the owner decision)")
+    if not why:
+        raise TaskStateError("obsolete requires a concrete reason")
+    last = None
+    raw_last = str(payload.get("updated_at") or payload.get("last_progress_at") or "").strip()
+    if raw_last:
+        try:
+            last = datetime.fromisoformat(raw_last.replace("Z", "+00:00"))
+        except ValueError:
+            last = None
+    if last is not None:
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600.0
+        if age_hours < stale_after_hours:
+            raise TaskStateError("task has recent progress; obsolete requires staleness of %.0fh" % stale_after_hours)
+    payload["status"] = "BLOCKED_EXTERNAL"
+    payload["next_action"] = ""
+    payload["blocker"] = {
+        "external": True,
+        "kind": "obsolete_by_owner",
+        "description": why,
+        "evidence": ["last_progress=%s" % (payload.get("updated_at") or "unknown")],
+        "alternatives_attempted": [],
+        "authorized_by": who,
+        "resume_condition": "Owner requests this task again; use resume with a concrete next_action",
+    }
+    _history(payload, "obsolete_by_owner", authorized_by=who, reason=why)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+@_serialized_transition
 def resume_task(task_id: str, *, next_action: str) -> dict[str, Any]:
     payload = _load(task_id)
     if payload.get("status") != "BLOCKED_EXTERNAL":
@@ -1299,6 +1351,12 @@ def _parser() -> argparse.ArgumentParser:
     block.add_argument("--alternative", action="append", required=True)
     block.add_argument("--resume-condition", required=True)
 
+    obsolete = sub.add_parser("obsolete")
+    obsolete.add_argument("--task", required=True)
+    obsolete.add_argument("--authorized-by", required=True)
+    obsolete.add_argument("--reason", required=True)
+    obsolete.add_argument("--stale-after-hours", type=float, default=72.0)
+
     resume = sub.add_parser("resume")
     resume.add_argument("--task", required=True)
     resume.add_argument("--next-action", required=True)
@@ -1371,6 +1429,11 @@ def main() -> int:
                 evidence=args.evidence,
                 alternatives=args.alternative,
                 resume_condition=args.resume_condition,
+            )
+        elif args.command == "obsolete":
+            payload = obsolete_task(
+                args.task, authorized_by=args.authorized_by, reason=args.reason,
+                stale_after_hours=args.stale_after_hours,
             )
         elif args.command == "resume":
             payload = resume_task(args.task, next_action=args.next_action)
