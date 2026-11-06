@@ -50,6 +50,43 @@ export class BrowserDriver {
     await this.page.goto(url,{waitUntil:'domcontentloaded',timeout:25000});
     return this.snapshot();
   }
+  async navigate(raw) {
+    return this.open(raw);
+  }
+  async back() {
+    if(!this.page)throw Error('browser_not_open');
+    await this.page.goBack({waitUntil:'domcontentloaded',timeout:15000});
+    return this.snapshot();
+  }
+  async forward() {
+    if(!this.page)throw Error('browser_not_open');
+    await this.page.goForward({waitUntil:'domcontentloaded',timeout:15000});
+    return this.snapshot();
+  }
+  async scroll(deltaY) {
+    if(!Number.isInteger(deltaY)||deltaY===0||Math.abs(deltaY)>2000)throw Error('invalid_scroll');
+    if(!this.page)throw Error('browser_not_open');
+    await this.page.mouse.wheel(0,deltaY);
+    return this.snapshot();
+  }
+  async fill(selector,value) {
+    if(typeof selector!=='string'||!selector.length||selector.length>500)throw Error('invalid_selector');
+    if(typeof value!=='string'||value.length>2000)throw Error('invalid_input');
+    if(!this.page)throw Error('browser_not_open');
+    const control=this.page.locator(selector).first();
+    const disallowed=await control.evaluate(node=>{
+      const tag=node.tagName.toLowerCase();
+      const type=(node.getAttribute('type')||'text').toLowerCase();
+      const attributes=['name','id','autocomplete','aria-label','placeholder'].map(name=>node.getAttribute(name)||'').join(' ').toLowerCase();
+      const sensitive=/password|passcode|passphrase|one.time.code|two.factor|2fa|otp|secret|token|cvv|cvc|security.code|card.number|credit.card|private.key/;
+      if(sensitive.test(attributes))return true;
+      if(tag==='input' && !['text','search','email','url','tel','number'].includes(type))return true;
+      return !(tag==='input'||tag==='textarea'||node.isContentEditable);
+    });
+    if(disallowed)throw Error('sensitive_field_requires_human_takeover');
+    await control.fill(value,{timeout:10000});
+    return this.snapshot();
+  }
   async snapshot() {
     if (!this.page)return {url:'',title:'',ready:false};
     return {url:sanitizedLocation(this.page.url()),title:(await this.page.title().catch(()=>'' )).slice(0,120),ready:true};
