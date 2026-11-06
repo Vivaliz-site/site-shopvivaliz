@@ -13,7 +13,7 @@ if (str_contains($page,'<option value="unmapped">Sem vínculo ERP</option>')) {
 if (!str_contains($page,'Produto relacionado ainda não identificado pela auditoria')) {
     throw new RuntimeException('cost display must not claim absence of ERP product');
 }
-if (!str_contains($page,'Produto ERP não identificado por EAN, SKU, pedido Amazon ou exportação atual Olist')) {
+if (!str_contains($page,'Produto ERP não identificado por EAN, SKU, pedido Amazon ou fonte atual Olist')) {
     throw new RuntimeException('diagnostics must cover all supported mapping sources');
 }
 echo "PASS unmapped ERP is an audit evidence gap, not absence of an Olist linked product\n";
