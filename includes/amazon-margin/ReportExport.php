@@ -20,7 +20,7 @@ final class SvAmazonMarginExport
             'erp_or_catalog_read_failed' => 'Falha consulta ERP/catalogo',
             'erp_identity_mismatch' => 'EAN/SKU divergentes',
             'price_or_cost_missing' => 'Preco efetivo ou custo ausente',
-            'kit_cost_unverified' => 'Custo do kit nao conciliado: conferir quantidade e componentes',
+            'kit_cost_unverified' => 'Custo do kit nao conciliado: conferir quantidade, composicao e divergencia de custos',
             'no_confirmed_sales' => 'Sem vendas conciliadas no periodo',
             'partial' => 'Conciliacao financeira parcial',
             'confirmed' => 'Conciliado',
@@ -38,6 +38,11 @@ final class SvAmazonMarginExport
             'Preco cadastro Amazon (R$)'=>self::num($row['listed_price'] ?? null),
             'Custo ERP por conjunto vendido (R$)'=>self::num($row['last_cost'] ?? null),
             'Custo base da peca no ERP (R$)'=>self::num($row['erp_base_cost'] ?? $row['last_cost'] ?? null),
+            'Custo registrado de kit no ERP (R$)'=>(($row['erp_product_type']??'')==='K')
+                ? self::num($row['erp_base_cost']??$row['last_cost']??null):null,
+            'Custo calculado pela composicao do kit (R$)'=>self::num($row['erp_kit_bom_cost']??null),
+            'Quantidade total de componentes do kit'=>isset($row['erp_kit_bom_total_units'])
+                ? (int)$row['erp_kit_bom_total_units']:null,
             'Pecas por unidade vendida'=>isset($row['kit_units_per_listing']) ? (int)$row['kit_units_per_listing'] : null,
             'Multiplicador de custo'=>isset($row['kit_cost_multiplier']) ? (int)$row['kit_cost_multiplier'] : null,
             'Metodo do custo por conjunto'=>(string)($row['kit_cost_basis']??''),
@@ -220,7 +225,8 @@ final class SvAmazonMarginExport
                 }
                 $content .= self::pdfText(389,$y,8,$showPrice);
                 $showCost=$get('Custo ERP por conjunto vendido (R$)');
-                if ($showCost==='-' && $row['Custo anterior verificado (R$)']!==null) {
+                if ($showCost==='-' && ($row['Situacao']??'')!=='kit_cost_unverified'
+                    && $row['Custo anterior verificado (R$)']!==null) {
                     $showCost=$get('Custo anterior verificado (R$)').'^';
                 }
                 $content .= self::pdfText(448,$y,8,$showCost);

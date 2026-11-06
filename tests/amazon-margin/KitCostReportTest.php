@@ -69,4 +69,29 @@ kitReportAssert(substr_count($multiPage,'Lucro por unidade vendida: R$ 12.99')==
     'each PDF page/row must include the per-kit profit');
 kitReportAssert(substr_count($multiPage,'Lucro acumulado: R$ 38.98')===40,
     'each PDF page/row must include period profit');
+$mismatch=$case;
+$mismatch['seller_sku']='KIT2C2SFBA50';
+$mismatch['erp_product_type']='K';
+$mismatch['status']='kit_cost_unverified';
+$mismatch['last_cost']=null;
+$mismatch['erp_base_cost']=33.08;
+$mismatch['erp_kit_bom_cost']=14.94;
+$mismatch['erp_kit_bom_total_units']=4;
+$mismatch['kit_cost_issue']='kit_registered_cost_disagrees_with_component_costs';
+$mismatch['profit_cents']=0;
+$mismatch['margin_weighted_bps']=null;
+$mismatch['prior_cost_reference']=['cost'=>33.08,'verified_run_id'=>8,
+    'cost_date'=>'2026-07-31'];
+$bad=SvAmazonMarginExport::rows(['rows'=>[$mismatch]])[0];
+kitReportAssert($bad['Custo ERP por conjunto vendido (R$)']===null,
+    'BOM mismatch must not publish historical cost as current');
+kitReportAssert($bad['Custo registrado de kit no ERP (R$)']===33.08
+    && $bad['Custo calculado pela composicao do kit (R$)']===14.94,
+    'Excel must preserve both incongruent values');
+kitReportAssert($bad['Lucro por unidade vendida (R$)']===null
+    && $bad['Lucro acumulado do periodo (R$)']===null,
+    'historical margin cannot be certified');
+$badPdf=SvAmazonMarginExport::pdf([$bad],'2026-11-06');
+kitReportAssert(!str_contains($badPdf,'33.08'),
+    'PDF historical kit cost fallback must be suppressed for mismatches');
 echo "PASS kit costs and per-sale vs accumulated profit in XLSX/PDF; no unverifiable profit\n";
