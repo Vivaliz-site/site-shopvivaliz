@@ -21,6 +21,40 @@ OBSOLETE_PHRASES = (
 )
 
 
+PRIORITY_DOCS = (
+    "AGENTS.md", "CLAUDE.md", "GEMINI.md",
+    "docs/knowledge/agent-rules.md",
+    "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+    "docs/knowledge/host-access.md",
+    ".claude/rules/ai-to-cli.md", ".github/AGENTS.md",
+    ".github/copilot-instructions.md", ".github/instructions/ai-to-cli.instructions.md",
+    ".codex/agents/shopvivaliz-devops.md",
+    ".windsurf/rules/ai-to-cli.md", ".windsurf/rules/nonstop-continuity.md",
+    ".cursor/rules/ai-to-cli.mdc", ".cursor/rules/nonstop-continuity.mdc",
+)
+STALE_POLICY_PATTERNS = (
+    r"MCP central DESATUALIZADO",
+    r"MCP independente Marina NAO APTO",
+    r"Marina segue fora da allowlist MCP central",
+    r"Marina permanece fora do MCP central",
+    r"MCP central ainda nao inclui Marina",
+    r"MCP central ainda aponta ao legado",
+    r"somente backend, Fred-Win e KOCEPSV",
+    r"MCP independente Marina permanece inativo",
+    r"central.*nao inclui Marina",
+    r"INATIVOS/NAO CONECTADOS",
+    r"o MCP central ainda anuncia a origem",
+)
+
+def scan_mcp_routing_text(text: str) -> list[str]:
+    """Same full-document scanner for live instructions and mutation regression."""
+    import re
+    return [
+        rule for rule in STALE_POLICY_PATTERNS
+        if re.search(rule, text, flags=re.IGNORECASE)
+    ]
+
+
 class McpAgentMigrationRoutingTests(unittest.TestCase):
     def test_mcp_first_runbook_announces_all_four_live_hosts(self):
         runbook = DOC.read_text(encoding="utf-8")
@@ -61,54 +95,32 @@ class McpAgentMigrationRoutingTests(unittest.TestCase):
 
 
     def test_every_priority_agent_instruction_is_current(self):
-        """Independent-review P1: the old top-12k check missed stale active guidance."""
-        import re
-        paths = (
-            "AGENTS.md", "CLAUDE.md", "GEMINI.md",
-            "docs/knowledge/agent-rules.md",
-            "docs/knowledge/atendimento-chatgpt-bootstrap.md",
-            "docs/knowledge/host-access.md",
-            ".claude/rules/ai-to-cli.md", ".github/AGENTS.md",
-            ".github/copilot-instructions.md",
-            ".github/instructions/ai-to-cli.instructions.md",
-            ".codex/agents/shopvivaliz-devops.md",
-            ".windsurf/rules/ai-to-cli.md",
-            ".windsurf/rules/nonstop-continuity.md",
-        )
-        stale = (
-            r"MCP central DESATUALIZADO",
-            r"MCP independente Marina NAO APTO",
-            r"Marina segue fora da allowlist MCP central",
-            r"Marina permanece fora do MCP central",
-            r"MCP central ainda nao inclui Marina",
-            r"MCP central ainda aponta ao legado",
-            r"somente backend, Fred-Win e KOCEPSV",
-            r"MCP independente Marina permanece inativo",
-            r"central.*nao inclui Marina",
-        )
-        patterns = [re.compile(s, re.IGNORECASE) for s in stale]
-        for name in paths:
+        """External V5 review: scan ALL content of every mandatory agent entrypoint."""
+        for name in PRIORITY_DOCS:
             with self.subTest(path=name):
                 text = (ROOT / name).read_text(encoding="utf-8")
                 self.assertEqual(
                     text.count("<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->"), 1,
-                    "active instructions must have exactly one current route authority",
+                    "current route authority must be unique and explicit",
                 )
+                if name.endswith(".mdc"):
+                    self.assertTrue(text.startswith("---" + chr(10)))
                 self.assertIn("marina-a1-4c24g", text)
                 self.assertIn("MFA", text)
                 self.assertIn("RBAC", text)
-                for pattern in patterns:
-                    self.assertIsNone(
-                        pattern.search(text),
-                        f"stale claim elsewhere in {name}: {pattern.pattern}",
-                    )
+                self.assertEqual(
+                    scan_mcp_routing_text(text), [],
+                    f"stale policy found in {name}",
+                )
 
-    def test_false_green_regression_detects_mutated_stale_claim(self):
-        """An auditor must fail if a stale line is reintroduced after 12k bytes."""
-        import re
-        mutated = "A" * 13000 + "MCP central DESATUALIZADO"
-        self.assertIsNotNone(
-            re.compile("MCP central DESATUALIZADO", re.IGNORECASE).search(mutated)
+    def test_mutation_guard_uses_real_full_document_scanner(self):
+        """P2 repair: mutation exercises exactly the code path used for actual scans."""
+        source = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertEqual(scan_mcp_routing_text(source), [])
+        self.assertIn(
+            "MCP central DESATUALIZADO",
+            scan_mcp_routing_text(source + "\\n" + ("X" * 13000) + "MCP central DESATUALIZADO")
+            [0],
         )
 
 if __name__ == "__main__":
