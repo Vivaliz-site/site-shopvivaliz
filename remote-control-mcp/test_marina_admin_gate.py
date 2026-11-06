@@ -145,6 +145,26 @@ class MarinaAdminGateTests(unittest.TestCase):
                 })
             enqueue.assert_not_called()
 
+    def test_detached_marina_worker_gets_only_nonsecret_grant_marker(self) -> None:
+        # A transient systemd worker does not inherit the MCP service drop-in.
+        # The marker itself never replaces the protected grant attestation.
+        marker = "--property=Environment=SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED=approved-v1"
+        with mock.patch.object(server, "load_task", return_value={"host": server.MARINA_HOST}), \
+             mock.patch.object(server.subprocess, "run", return_value=mock.Mock(returncode=0)) as start:
+            server.launch_task_service("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa", 15)
+        argv = start.call_args.args[0]
+        self.assertIn(marker, argv)
+        self.assertLess(argv.index(marker), argv.index("--"))
+        self.assertNotIn("shopvivaliz-free-a1", " ".join(argv))
+
+    def test_non_marina_worker_never_receives_marina_admin_marker(self) -> None:
+        marker = "--property=Environment=SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED=approved-v1"
+        for host in (server.CONTROLLER_BACKEND_HOST, "Fred-Win", "KOCEPSV"):
+            with self.subTest(host=host), \
+                 mock.patch.object(server, "load_task", return_value={"host": host}), \
+                 mock.patch.object(server.subprocess, "run", return_value=mock.Mock(returncode=0)) as start:
+                server.launch_task_service("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 10)
+                self.assertNotIn(marker, start.call_args.args[0])
     def test_admin_flag_rejected_for_other_hosts(self) -> None:
         with self.assertRaises(ValueError):
             server.run_host_command("Fred-Win", "echo hi", marina_admin=True)
