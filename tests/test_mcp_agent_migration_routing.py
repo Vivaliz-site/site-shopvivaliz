@@ -26,6 +26,8 @@ PRIORITY_DOCS = (
     "docs/knowledge/agent-rules.md",
     "docs/knowledge/atendimento-chatgpt-bootstrap.md",
     "docs/knowledge/host-access.md",
+    "docs/knowledge/claude-vm-bootstrap.md",
+    "docs/knowledge/dev-chatgpt-bootstrap.md",
     ".claude/rules/ai-to-cli.md", ".github/AGENTS.md",
     ".github/copilot-instructions.md", ".github/instructions/ai-to-cli.instructions.md",
     ".codex/agents/shopvivaliz-devops.md",
@@ -44,6 +46,9 @@ STALE_POLICY_PATTERNS = (
     r"central.*nao inclui Marina",
     r"INATIVOS/NAO CONECTADOS",
     r"o MCP central ainda anuncia a origem",
+    r"origem excluida ainda aparece",
+    r"nao.*para Marina: hosts_list",
+    r"a allowlist MCP central ainda inclui",
 )
 
 def scan_mcp_routing_text(text: str) -> list[str]:
@@ -122,6 +127,15 @@ class McpAgentMigrationRoutingTests(unittest.TestCase):
             scan_mcp_routing_text(source + "\\n" + ("X" * 13000) + "MCP central DESATUALIZADO")
             [0],
         )
+
+    def test_all_live_bootstraps_are_discovered(self):
+        """New mandatory bootstrap files must not silently bypass the V5 scanner."""
+        discovered = {
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "docs/knowledge").glob("*bootstrap*.md")
+        }
+        self.assertTrue(discovered)
+        self.assertTrue(discovered.issubset(set(PRIORITY_DOCS)))
 
 if __name__ == "__main__":
     unittest.main()

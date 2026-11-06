@@ -71,7 +71,7 @@ Para o contexto complementar da conta Atendimento, consultar `docs/knowledge/pro
 
 ## Rota de operação
 
-1. Backend: ShopVivaliz Remote Control MCP para hosts **validos de sua allowlist**; a origem excluida ainda aparece, e Marina **nao** aparece nesse MCP.
+1. MCP central e Orquestrador: usar nos quatro hosts autorizados (backend, Fred-Win, KOCEPSV e Marina), conferindo schema, grant e estado real. O host legado foi excluido e nao aparece na lista atual.
 2. Marina: MCP central e Orquestrador aceitam marina-a1-4c24g com schema/grants autorizados e canario exit_code=0; MCP independente tem autenticacao publica nao certificada; RDC/SSH sao alternativas independentes autorizadas, nunca forma de contornar recusa.
 3. GitHub Actions/OCI Bastion somente para bootstrap/recovery.
 4. Navegador operacional roda na VM de backend; não usar navegador dos hosts Windows nem Opera Connector para tarefas ShopVivaliz.

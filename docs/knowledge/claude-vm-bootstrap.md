@@ -1,9 +1,13 @@
+<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->
+> **Rota operacional revalidada em 06/11/2026:** ShopVivaliz Remote Control e Orquestrador anunciam backend (always-free-arm-1787907847-26), Fred-Win, KOCEPSV e Marina (marina-a1-4c24g) com grants/schema verificados por sessao. admin_command_run/task_submit na Marina responderam exit_code=0. O MCP independente da Marina esta ativo localmente desde 04/11, mas a rota publica autenticada precisa de E2E proprio. Nao acessar shopvivaliz-free-a1. Preservar MFA, RBAC, leases, branch protection, revisao humana e recusas da plataforma. Fontes: docs/ops/mcp-first-agent-execution-2026-11-05.md; inventario historico docs/knowledge/current-topology-and-access-2026-10-29.md.
+<!-- /MCP_ROUTE_CANONICAL_V5_20261106 -->
+
 <!-- RUNTIME_SOURCE_ROUTES_V2_20261029 -->
-> **Runtime comprovado em 2026-10-29 (prevalece sobre snapshots anteriores):** MCP central sem `shopvivaliz-free-a1`; `hosts_list` = backend + Fred-Win + KOCEPSV, `host_health` confirmado. Marina nao esta no MCP central e seu MCP OpenAI independente segue inativo. O tunel privado de aplicacao MEI-MG para Marina esta ativo com health HTTP 200, nao equivale ao MCP OpenAI. PR #3395 bloqueou 20 jobs antigos. Controller 24x7 ainda `NAO_APTO` por checkpoints/lease, runner MEI `mei-ci-a1` ainda offline. Rotas atuais e evidencias: `docs/knowledge/current-topology-and-access-2026-10-29.md`.
+> **Historico de 29/10/2026, substituido pela validacao de 06/11/2026:** as antigas restricoes no MCP central e no MCP independente nao sao mais instrucao operacional. Consultar schemas e grants atuais; quatro hosts no MCP central e Orquestrador, incluindo Marina, sem host excluido. E2E publico do independente exige prova distinta.
 <!-- /RUNTIME_SOURCE_ROUTES_V2_20261029 -->
 
 <!-- ACTIVE_MARINA_ROUTING_20261029 -->
-> **Obrigatório para todo agente em 2026-10-29:** ver `docs/knowledge/current-topology-and-access-2026-10-29.md` e `docs/knowledge/host-access.md` no `main`. **Marina (`marina-a1-4c24g`/OCI ESPOSA) = site/deploy/banco/workers, RDC direto comprovado; backend (`always-free-arm-1787907847-26`/OCI PRINCIPAL) = MCP central/controller/browser.** `shopvivaliz-free-a1` foi excluída: não é alvo e não deve ser recriada. A allowlist MCP central ainda inclui o nome antigo e não inclui Marina. O MCP independente Marina e seu túnel estão inativos; cloudflared ativo não equivale a MCP registrado. Não redirecionar aliases, não utilizar scripts/workflows legados contra origem; exigir identidade, direitos, lease e prova específicos antes de cada execução.
+> **Historico de 29/10/2026, substituido pela validacao de 06/11/2026:** as antigas restricoes no MCP central e no MCP independente nao sao mais instrucao operacional. Consultar schemas e grants atuais; quatro hosts no MCP central e Orquestrador, incluindo Marina, sem host excluido. E2E publico do independente exige prova distinta.
 <!-- /ACTIVE_MARINA_ROUTING_20261029 -->
 
 # Claude VM — bootstrap operacional global
@@ -35,8 +39,8 @@ Use a fonte canônica `docs/knowledge/host-access.md` antes de qualquer operaç�
 
 ## Ordem de acesso remoto do Claude
 
-1. **Remote Control MCP** e primeira rota para o backend e hosts validos na sua allowlist, **nao** para Marina: hosts_list ainda divulga origem excluida.
-2. Para **Marina**, usar RDC 1/2 direto com descoberta do device e identidade validada; SSH privado/Tailscale somente quando autenticado e autorizado. MCP Marina independente inativo/nao registrado; Cloudflare admin ativo nao prova MCP.
+1. **Remote Control MCP / Orquestrador:** primeira rota MCP nos quatro hosts, inclusive Marina, se schema, grant e lease da sessao autorizarem; validar com chamada real.
+2. **Marina:** MCP central operacional com canario exit_code=0; MCP independente ativo localmente com autenticacao publica separada a validar. RDC e SSH privados sao rotas independentes autorizadas, jamais para contornar negativa.
 3. Use **GitHub Actions/OCI Bastion** para bootstrap, recovery ou reparo do MCP.
 4. Use **RustDesk** para GUI. Navegador de agente continua exclusivamente na backend.
 
