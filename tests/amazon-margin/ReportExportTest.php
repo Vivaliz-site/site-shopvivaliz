@@ -13,7 +13,7 @@ $rows = [
 ];
 $data = SvAmazonMarginExport::rows(['rows'=>$rows],[]);
 if (count($data)!==2) throw new Exception('all rows');
-if ($data[0]['Preco medio efetivo das vendas (R$)']!==75.0
+if ($data[0]['Receita bruta media por unidade (R$)']!==75.0
     || $data[0]['Receita bruta das unidades conciliadas (R$)']!==675.0) {
     throw new Exception('report must preserve actual financial gross, distinct from current offer');
 }
@@ -29,15 +29,19 @@ if (!is_string($sheet) || !str_contains($sheet,'armastrafba2') || !str_contains(
 $xml=simplexml_load_string($sheet);
 if (!$xml) throw new Exception('xlsx xml');
 if (!str_contains($sheet,'12.78')) throw new Exception('margin output');
-if (!str_contains($sheet,'Preco medio efetivo das vendas (R$)')
+if (!str_contains($sheet,'Receita bruta media por unidade (R$)')
     || !str_contains($sheet,'Receita bruta das unidades conciliadas (R$)'))
     throw new Exception('realized gross columns missing');
 $zip->close();unlink($tmp);
 $p=SvAmazonMarginExport::pdf($data,'2026-11-03');
 if (!str_starts_with($p,'%PDF-1.4') || !str_contains($p,'%%EOF') || !str_contains($p,'1 0 obj')) throw new Exception('pdf invalid');
 if (strlen($p)<1500) throw new Exception('pdf too small');
-if (!str_contains($p,'Preco medio efetivo nas vendas: R$ 75'))
+if (!str_contains($p,'Receita bruta media/unidade: R$ 75'))
     throw new Exception('pdf must distinguish actual price from current offer price');
 if (!str_contains($p,'(Unid. conf.) Tj ET') || str_contains($p,'(Vendas) Tj ET')) throw new Exception('pdf header must label confirmed units, not sales');
 if (!str_contains($p,'(9) Tj ET') || !str_contains($p,'(12) Tj ET')) throw new Exception('pdf confirmed unit quantities missing');
+if (str_contains($sheet,'Preco medio efetivo das vendas')
+    || str_contains($p,'Preco medio efetivo nas vendas')) {
+    throw new Exception('Gross including shipping cannot be presented as product price');
+}
 echo "PASS margin exports: XLSX file/worksheet/data + PDF header/footer + selection\n";

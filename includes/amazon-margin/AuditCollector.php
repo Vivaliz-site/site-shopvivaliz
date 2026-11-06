@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MarginMath.php';
+require_once __DIR__ . '/DbaOrderGroup.php';
 require_once __DIR__ . '/KitCost.php';
 require_once __DIR__ . '/ProductMatch.php';
 require_once __DIR__ . '/RateLimitPolicy.php';
@@ -646,11 +647,25 @@ final class SvAmazonMarginCollector
                 $row['status']='fulfillment_unverified';$rows[]=$row;continue;
             }
             $row['program'] = $isFba ? 'FBA_ONSITE' : 'DBA_CANDIDATE';
+            // MfnPostageFee is posted once per ORDER_ID, even when Amazon
+            // emits multiple Shipment item rows for the SAME Seller SKU.
+            // Filter the period first so historic identity-only orders cannot
+            // leak into today's financial reconciliation.
+            $shipments=array_values(array_filter(
+                $fin['shipments'][$sku]??[],
+                static fn(array $shipment):bool =>
+                    SvAmazonMarginOlistOrderLink::inFinancialWindow(
+                        (string)($shipment['posted_at']??''),$postedAfter)
+            ));
+            if ($isMerchant) {
+                $shipments=SvAmazonMarginDbaOrderGroup::combine($shipments);
+            }
             $margin = [];
             $totalProfit = 0;
             $totalGross = 0;
             $feesAssessedByOrder = [];
-            foreach (($fin['shipments'][$sku] ?? []) as $shipment) {
+            foreach ($shipments as $shipment) {
+                $sourceRows=(int)($shipment['source_rows']??1);
                 // Older orders are identity evidence ONLY, not financial results.
                 if (!SvAmazonMarginOlistOrderLink::inFinancialWindow((string)($shipment['posted_at']??''),$postedAfter))continue;
                 $order = $shipment['order'];
@@ -659,7 +674,7 @@ final class SvAmazonMarginCollector
                 if ($isMerchant) {
                     try { $dba = $this->orderIsDba($order); }
                     catch (Throwable $e) { $dba = null; }
-                    if ($dba !== true) { $row['pending_sales']++;continue; }
+                    if ($dba !== true) { $row['pending_sales']+=$sourceRows;continue; }
                     $row['program']='DBA';
                     $onlySku = count($fin['order_skus'][$order] ?? [])===1;
                     $isFirst = !isset($feesAssessedByOrder[$order]);
@@ -683,9 +698,9 @@ final class SvAmazonMarginCollector
                     $margin[] = $calc['margin_bps'];
                     $totalProfit += $calc['profit_cents'];
                     $totalGross += $calc['gross_cents'];
-                    $row['confirmed_sales']++;
+                    $row['confirmed_sales']+=$sourceRows;
                     $row['confirmed_units'] += $shipment['quantity'];
-                } else $row['pending_sales']++;
+                } else $row['pending_sales']+=$sourceRows;
             }
             if ($margin) {
                 $row['margin_min_bps']=min($margin);
