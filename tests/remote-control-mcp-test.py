@@ -3625,6 +3625,29 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertIn("runner-output", status["stdout"])
         self.assertTrue((m.task_result_dir(task_id) / "result.json").is_file())
 
+    def test_durable_preexecution_permission_denial_is_terminal_without_retry(self):
+        """A denied privilege check must never flood systemd with requeues."""
+        task_id = self.submit(command="printf should-not-execute")["task_id"]
+        self.claim(task_id)
+        with (
+            mock.patch.object(
+                m, "privileged_invocation",
+                side_effect=PermissionError("marina_central_admin_route_not_approved")
+            ),
+            mock.patch.object(m.subprocess, "Popen") as spawn,
+        ):
+            self.assertEqual(m.run_task_entrypoint(task_id), 1)
+        spawn.assert_not_called()
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "failed")
+        self.assertEqual(status["exit_code"], 77)
+        self.assertEqual(status["recovery_note"], "authorization_denied_before_execution")
+        self.assertIsNone(status["execution_started_at"])
+        self.assertTrue((m.task_result_dir(task_id) / "result.json").is_file())
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_tasks(), [])
+        self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["state"], "failed")
+
     def test_runner_retries_once_after_reverse_ssh_recovery(self):
         task_id = m.execute_tool("task_submit", {
             "host": "KOCEPSV",
