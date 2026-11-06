@@ -165,6 +165,31 @@ class DetachedTaskHandoffTests(unittest.TestCase):
         self.assertEqual(result.returncode, 76)
         self.assertIn("durable resume ownership metadata missing", result.stderr)
 
+    def test_real_detached_worker_advances_existing_checkpoint_under_lease(self):
+        original = self.task()
+        self.authorize(original)
+        self.assertEqual(watchdog.run_once(runtime_dir=self.runtime, proactive=True)["dispatched"], 1)
+        cli = Path(__file__).resolve().parents[1] / "scripts" / "agent_task_state.py"
+        worker = self.runtime / "worker.sh"
+        worker.write_text(
+            "#!/bin/bash\n"
+            f"python3 '{cli}' progress --task real-source-task "
+            "--next-action 'Validate corrected integration with UI evidence' "
+            "--evidence 'bounded deterministic recovery regression' > /dev/null\n",
+            encoding="utf-8",
+        )
+        result = dispatcher.run_once(
+            runtime_dir=self.runtime, project_dir=self.runtime,
+            executor=["bash", str(worker)], timeout_seconds=8,
+        )
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
+        after = state.load_task("real-source-task")
+        self.assertEqual(after["agent_id"], "claude-sonnet-5-5")
+        self.assertEqual(after["execution_route"], "detached")
+        self.assertEqual(after["next_action"], "Validate corrected integration with UI evidence")
+        self.assertEqual(after.get("status"), "RUNNING")
+
     def test_detached_dispatcher_does_not_require_fictitious_browser_binding(self):
         source = self.task()
         self.authorize(source)
