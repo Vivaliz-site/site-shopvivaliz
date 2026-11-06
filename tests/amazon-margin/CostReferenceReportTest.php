@@ -14,7 +14,7 @@ $rows=[[
 ]];
 $data=SvAmazonMarginExport::rows(['rows'=>$rows]);
 $r=$data[0];
-if ($r['Custo ERP (R$)']!==null || $r['Custo anterior verificado (R$)']!==83.0
+if ($r['Custo ERP por conjunto vendido (R$)']!==null || $r['Custo anterior verificado (R$)']!==83.0
     || $r['Auditoria custo anterior']!==3 || $r['Margem ponderada (%)']!==null) {
     throw new RuntimeException('historical cost incorrectly treated as current or margin');
 }

@@ -6,13 +6,25 @@ $rows = [
  ['seller_sku'=>'armastrafba2','erp_sku'=>'A21','asin'=>'B08T6GQM2N','program'=>'FBA_ONSITE',
   'price'=>78.99,'realized_unit_price'=>75.0,'realized_sale_gross_cents'=>67500,
   'last_cost'=>37.27,'confirmed_units'=>9,'pending_sales'=>0,'margin_weighted_bps'=>1278,
-  'margin_min_bps'=>1278,'profit_cents'=>9081,'last_cost_date'=>'2026-09-17','status'=>'confirmed'],
+  'margin_min_bps'=>1278,'profit_cents'=>9081,'last_cost_date'=>'2026-09-17','status'=>'confirmed',
+  'current_margin_bps'=>850,'current_profit_cents'=>6714,'current_commission_cents'=>8689,
+  'current_logistics_cents'=>675,'current_tax_cents'=>11059,'current_weight_kg'=>0.85,
+  'current_dimensional_kg'=>1.2,'current_billable_kg'=>1.22,
+  'current_margin_status'=>'estimated','current_package_source'=>'AMAZON_CATALOG_PACKAGE'],
  ['seller_sku'=>'1C7Q-LKVS-KOPL','erp_sku'=>'TAJ/AS*BR1-NOVO','asin'=>'B0BM514NX7','program'=>'DBA',
   'price'=>71.91,'last_cost'=>42.90,'confirmed_units'=>12,'pending_sales'=>1,'margin_weighted_bps'=>445,
-  'margin_min_bps'=>445,'profit_cents'=>3840,'last_cost_date'=>'2026-09-07','status'=>'partial'],
+  'margin_min_bps'=>445,'profit_cents'=>3840,'last_cost_date'=>'2026-09-07','status'=>'partial',
+  'current_margin_bps'=>783,'current_margin_status'=>'estimated_program_unverified'],
 ];
 $data = SvAmazonMarginExport::rows(['rows'=>$rows],[]);
 if (count($data)!==2) throw new Exception('all rows');
+if (abs(($data[0]['Margem atual estimada (%)']??-1)-8.50)>0.0001
+    || ($data[0]['Comissao Amazon atual (R$)']??null)!==86.89
+    || ($data[0]['Logistica atual (R$)']??null)!==6.75
+    || ($data[0]['Peso tarifavel (kg)']??null)!==1.22
+    || ($data[0]['Situacao margem atual']??'')!=='estimated')
+    throw new Exception('current price margin breakdown must be exported');
+
 if ($data[0]['Receita bruta media por unidade (R$)']!==75.0
     || $data[0]['Receita bruta das unidades conciliadas (R$)']!==675.0) {
     throw new Exception('report must preserve actual financial gross, distinct from current offer');
@@ -29,6 +41,7 @@ if (!is_string($sheet) || !str_contains($sheet,'armastrafba2') || !str_contains(
 $xml=simplexml_load_string($sheet);
 if (!$xml) throw new Exception('xlsx xml');
 if (!str_contains($sheet,'12.78')) throw new Exception('margin output');
+if (!str_contains($sheet,'Margem atual estimada (%)') || !str_contains($sheet,'Comissao Amazon atual (R$)')) throw new Exception('new XLSX current margin columns missing');
 if (!str_contains($sheet,'Receita bruta media por unidade (R$)')
     || !str_contains($sheet,'Receita bruta das unidades conciliadas (R$)'))
     throw new Exception('realized gross columns missing');
@@ -38,6 +51,8 @@ if (!str_starts_with($p,'%PDF-1.4') || !str_contains($p,'%%EOF') || !str_contain
 if (strlen($p)<1500) throw new Exception('pdf too small');
 if (!str_contains($p,'Receita bruta media/unidade: R$ 75'))
     throw new Exception('pdf must distinguish actual price from current offer price');
+if (!str_contains($p,'(Marg. atual) Tj ET')) throw new Exception('PDF must mark projected current margin');
+if (!str_contains($p,'RESSALVA: DBA presumido')) throw new Exception('PDF must show unverified DBA projection caveat');
 if (!str_contains($p,'(Unid. conf.) Tj ET') || str_contains($p,'(Vendas) Tj ET')) throw new Exception('pdf header must label confirmed units, not sales');
 if (!str_contains($p,'(9) Tj ET') || !str_contains($p,'(12) Tj ET')) throw new Exception('pdf confirmed unit quantities missing');
 if (str_contains($sheet,'Preco medio efetivo das vendas')
