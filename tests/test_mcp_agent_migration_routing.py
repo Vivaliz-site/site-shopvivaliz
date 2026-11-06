@@ -68,9 +68,12 @@ STALE_POLICY_PATTERNS = (
 def scan_mcp_routing_text(text: str) -> list[str]:
     """Same full-document scanner for live instructions and mutation regression."""
     import re
+    # Normalize Markdown emphasis and code spans; stale claims cannot hide
+    # in bold or inline code formatting.
+    normalized = text.replace(chr(96), "").replace("*", "")
     return [
         rule for rule in STALE_POLICY_PATTERNS
-        if re.search(rule, text, flags=re.IGNORECASE)
+        if re.search(rule, normalized, flags=re.IGNORECASE)
     ]
 
 
@@ -150,6 +153,19 @@ class McpAgentMigrationRoutingTests(unittest.TestCase):
         }
         self.assertTrue(discovered)
         self.assertTrue(discovered.issubset(set(PRIORITY_DOCS)))
+
+    def test_md_formatted_stale_claim_triggers_live_scanner(self):
+        """External reviewer P2: Markdown punctuation cannot hide stale claims."""
+        corrupted = "1. **Remote Control MCP**; " + chr(96) + "hosts_list" + chr(96) + " ainda inclui origem excluida"
+        self.assertIn(
+            "hosts_list ainda inclui origem excluida",
+            scan_mcp_routing_text(corrupted),
+        )
+        corrupted = "Marina **nao** e executavel pelo MCP central"
+        self.assertIn(
+            "nao e executavel pelo MCP central",
+            scan_mcp_routing_text(corrupted),
+        )
 
     def test_all_scoped_agent_rules_are_discovered(self):
         """Future AGENTS.md additions must enter the full-document V5 scanner."""

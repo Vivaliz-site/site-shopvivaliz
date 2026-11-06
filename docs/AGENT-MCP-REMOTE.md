@@ -36,7 +36,7 @@ Leia antes de operar:
 
 ## Ordem operacional
 
-1. **Remote Control MCP** para backend e hosts allowlisted **ativos**; `hosts_list` ainda inclui origem excluida e nao inclui Marina. Na Marina, **RDC 1/2 direto** foi verificado em 2026-10-29; o MCP proprio Marina e tunnel-client OpenAI continuam inativos e sem conexao comprovada. `shopvivaliz-cloudflared-admin.service` ativo nao significa MCP pronto.
+1. **Remote Control MCP e Orquestrador:** rota MCP prioritaria nos quatro hosts incluindo Marina, condicionada ao schema e grant vivo; E2E privado comprovado com exit_code=0. O MCP independente e complementar com autenticacao propria, sem declaracao de E2E publico nesta auditoria. RDC/SSH sao rotas autorizadas de contingencia, nao meios de contornar recusa.
 2. **SSH privado/Tailscale** com identidade dedicada somente quando a operação necessária não estiver exposta pelo MCP ou quando o controller estiver comprovadamente indisponível.
 3. **GitHub Actions/OCI Bastion** para bootstrap, recovery ou reparo do próprio control plane.
 4. **RustDesk** para GUI/validação visual. Browser de agente continua na backend.

@@ -29,7 +29,7 @@ Este arquivo é um runbook local e **não contém segredos**. A fonte central ma
 - O MCP central e Orquestrador anunciam quatro hosts, incluindo Marina (marina-a1-4c24g), com autorizacao dependente do schema/grants reais da sessao; o MCP independente esta ativo localmente e seu E2E publico e distinto. Nunca acessar shopvivaliz-free-a1.
 - O MCP central e Orquestrador anunciam quatro hosts, incluindo Marina (marina-a1-4c24g), com autorizacao dependente do schema/grants reais da sessao; o MCP independente esta ativo localmente e seu E2E publico e distinto. Nunca acessar shopvivaliz-free-a1.
 
-- Backend/controller: bootstrap verificado via MCP. Marina e o alvo web, mas **nao** e executavel pelo MCP central.
+- Backend/controller: bootstrap verificado via MCP. Marina e o alvo web e pode ser administrada pelo MCP central/Orquestrador quando o schema e os grants da sessao autorizarem, com canarios de identidade exit_code=0.
 - Fred-Win `127.0.0.1:2222`: evidência recente de PASS.
 - KOCEPSV `127.0.0.1:2223`: **rota canônica, ainda não comprovada operacionalmente**. Tratar como indisponível até um teste fresco comprovar a porta e a identidade administrativa.
 - Etapas posteriores do Remote Control MCP (E2E 4 hosts, tarefa durável independente de GitHub e integração final com ChatGPT) não devem ser declaradas concluídas sem evidência nova.
