@@ -2727,10 +2727,28 @@ def execute_tool(
             [str(item) for item in durable_command], int(args.get('lease_ttl_seconds', 90)),
             _submitter=submitter)
     if name == "hosts_list":
+        # Advertise effective permissions, not only the transport registered
+        # in the static HOSTS table. Both grants are checked again by each
+        # individual tool before a remote operation can be executed.
+        marina_readonly = marina_central_readonly_grant_active()
+        marina_admin = marina_central_admin_grant_active()
+        marina_caps = (
+            (["marina_readonly"] if marina_readonly else [])
+            + ([MARINA_ADMIN_CAPABILITY] if marina_admin else [])
+        )
         return {"hosts": [
             {"name": n, **cfg, **(
-                {"route_enabled": marina_central_readonly_grant_active()}
-                if n == MARINA_HOST else {}
+                {
+                    "transport": "private_ssh_pinned" if marina_admin else cfg["transport"],
+                    "capability": (
+                        MARINA_ADMIN_CAPABILITY if marina_admin else
+                        "marina_readonly" if marina_readonly else "owner_grant_required"
+                    ),
+                    "capabilities": marina_caps,
+                    "route_enabled": bool(marina_caps),
+                    "read_only_enabled": marina_readonly,
+                    "admin_enabled": marina_admin,
+                } if n == MARINA_HOST else {}
             )}
             for n, cfg in HOSTS.items()
         ]}
@@ -2938,7 +2956,7 @@ TOOLS = [
         "ticket": {"type": "object"},
         "signature_b64": {"type": "string", "maxLength": 128},
     }, False, True),
-    ("hosts_list", "List approved hosts including Marina as a separately gated private read-only candidate; retired VMs are excluded.", {}, True, False),
+    ("hosts_list", "List active hosts and Marina's separately verified read-only and administrative capabilities; retired VMs are excluded.", {}, True, False),
     ("marina_host_health", "Read Marina identity through fixed owner-approved private route. No caller-selected host and no permission without a valid owner grant.", {}, True, False),
     ("marina_service_status", "Inspect an allowlisted Marina systemd unit through pinned owner-approved private route, never a caller-selected host.", {"service": {"type": "string", "enum": sorted(MARINA_READONLY_SERVICES)}}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
