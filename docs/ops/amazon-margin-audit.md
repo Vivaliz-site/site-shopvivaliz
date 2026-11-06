@@ -140,8 +140,13 @@ do ERP e não identificam as modalidades logísticas FBA Onsite/DBA da Amazon.
 
 Fluxo autorizado, somente leitura comercial:
 
-1. No ERP, exportar os anúncios de cada integração e importar os arquivos
-   **originais, sem renomear**, XLS, XLSX ou CSV (máximo cinco arquivos por importação).
+1. Apenas nas integrações que disponibilizam exportação de anúncios no ERP,
+   exportar e importar os arquivos **originais, sem renomear**, XLS, XLSX ou CSV
+   (máximo cinco por importação). A integração **Amazon FBA Classic não permite
+   importar ou exportar anúncios no Olist**; conferir seus vínculos pelo
+   produto → aba **Anúncios** e pelos pedidos importados. Para **Amazon Onsite**,
+   verificar a opção de exportação na conta antes de solicitá-la. Referência:
+   https://ajuda.olist.com/pt_BR/amazon/como-integrar-o-erp-com-a-amazon-fba-classic
    O nome original de exportação deve conter data/hora, interpretadas no fuso de
    São Paulo; um nome renomeado não equivale a prova de exportação recente.
 2. O endpoint administrativo POST exige sessão admin, CSRF válido, até 10 MB por
