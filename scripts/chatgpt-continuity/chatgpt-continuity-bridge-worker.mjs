@@ -2617,18 +2617,16 @@ async function recoverableFailureReason(cdp) {
     'continuity-additional-checks-probe',
   )) return 'additional_checks';
 
-  if (await currentConversationSurfaceContains(
-    cdp,
-    ['stopped thinking', 'parou de pensar'],
-    'continuity-stopped-thinking-probe',
-  )) return 'stopped_thinking';
-
+  // Current-turn interrupted transport is more specific than the thinking label.
   if (await currentConversationSurfaceContains(
     cdp,
     ['streaming interrupted', 'transmissão interrompida', 'transmissao interrompida'],
     'continuity-streaming-interrupted-probe',
   )) return 'streaming_interrupted';
 
+  // A generic "Parou de pensar" label can coexist with a request timeout.
+  // Prefer the concrete cause so retry decisions and diagnostics do not hide
+  // the platform deadline failure observed in Portuguese iOS conversations.
   if (await currentConversationSurfaceContains(
     cdp,
     [
@@ -2639,6 +2637,12 @@ async function recoverableFailureReason(cdp) {
     ],
     'continuity-request-timeout-probe',
   )) return 'request_timeout';
+
+  if (await currentConversationSurfaceContains(
+    cdp,
+    ['stopped thinking', 'parou de pensar'],
+    'continuity-stopped-thinking-probe',
+  )) return 'stopped_thinking';
 
   return 'generation_error';
 }
