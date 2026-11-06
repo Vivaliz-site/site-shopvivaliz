@@ -55,4 +55,10 @@ try {
 $pdf=SvAmazonMarginExport::pdf($rows,'2026-11-06');
 kitReportAssert(str_starts_with($pdf,'%PDF-'),'valid PDF');
 kitReportAssert(str_contains($pdf,'kit completo'),'PDF must label bundle cost');
+kitReportAssert(str_contains($pdf,'Lucro por unidade vendida: R$ 12.99'),
+    'PDF must show per-unit/kit profit, not accumulated profit as one sale');
+kitReportAssert(str_contains($pdf,'Lucro acumulado: R$ 38.98'),
+    'PDF must show accumulated profit separately from unit price');
+kitReportAssert(str_contains($pdf,'Pecas por kit: 5'),
+    'PDF must disclose pieces in each sold kit');
 echo "PASS kit costs and per-sale vs accumulated profit in XLSX/PDF; no unverifiable profit\n";
