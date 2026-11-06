@@ -538,7 +538,9 @@ def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bo
     created_at = _parse_utc(str(state.get("created_at", "")))
     if created_at is None:
         return False
-    if (datetime.now(timezone.utc) - created_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
+    updated_at = _parse_utc(str(state.get("updated_at", "")))
+    last_activity = max(created_at, updated_at) if updated_at is not None else created_at
+    if (datetime.now(timezone.utc) - last_activity).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
         return False
     if str(request.get("task_id", "")).strip() != str(state.get("task_id", "")).strip():
         return False

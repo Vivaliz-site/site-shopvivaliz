@@ -312,7 +312,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(second["in_flight"], 1)
         self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 1)
 
-    def test_task_older_than_ten_days_cannot_create_execution_record_after_recent_update(self) -> None:
+    def test_task_older_than_ten_days_can_resume_after_recent_verified_update(self) -> None:
         dispatcher = load_dispatcher()
         fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
         original_datetime = dispatcher.datetime
@@ -332,8 +332,8 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         finally:
             dispatcher.datetime = original_datetime
 
-        self.assertEqual(result["launched"], 0)
-        self.assertEqual(list(self.runtime.glob("_resume-execution-*.json")), [])
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 1)
 
     def test_task_at_ten_day_cutoff_keeps_current_boundary_semantics(self) -> None:
         dispatcher = load_dispatcher()

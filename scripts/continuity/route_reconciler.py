@@ -85,7 +85,13 @@ def reconcile(runtime_dir: Path, *, now: datetime | None = None) -> dict[str, in
             if not isinstance(payload, dict) or payload.get("status") != "RUNNING":
                 continue
             created = _utc(payload.get("created_at"))
-            if created is None or created < current - timedelta(days=LOOKBACK_DAYS):
+            updated = _utc(payload.get("updated_at"))
+            last_activity = (
+                max(created, updated)
+                if created is not None and updated is not None
+                else created
+            )
+            if last_activity is None or last_activity < current - timedelta(days=LOOKBACK_DAYS):
                 summary["skipped_stale"] += 1
                 continue
             task_id = str(payload.get("task_id", "")).strip()

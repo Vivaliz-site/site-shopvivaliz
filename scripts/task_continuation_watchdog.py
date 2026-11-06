@@ -134,16 +134,23 @@ def _run_once_locked(
         if created is None:
             skipped_invalid_timestamp += 1
             continue
-        if created < lookback_cutoff:
+        status = str(payload.get("status", "")).strip()
+        updated = _parse_time(payload.get("updated_at"))
+        # Only recent activity of active work extends its recovery window.
+        last_activity = (
+            max(created, updated)
+            if status in {"RUNNING", "READY_TO_COMPLETE"} and updated is not None
+            else created
+        )
+        if last_activity < lookback_cutoff:
             skipped_outside_lookback += 1
             continue
         scanned += 1
 
-        updated = _parse_time(payload.get("updated_at"))
         if updated is None:
             skipped_invalid_timestamp += 1
             continue
-        if str(payload.get("status", "")).strip() != "RUNNING":
+        if status != "RUNNING":
             continue
 
         next_action = str(payload.get("next_action", "")).strip()
