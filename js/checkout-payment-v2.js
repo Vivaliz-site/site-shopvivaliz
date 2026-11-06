@@ -1,12 +1,14 @@
 (function () {
   'use strict';
 
+  // A canonical gtag call already writes to dataLayer. Never send the same event twice.
   function push(eventName, params) {
     params = params || {};
     window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push(Object.assign({ event: eventName }, params));
     if (typeof window.gtag === 'function') {
       window.gtag('event', eventName, params);
+    } else {
+      window.dataLayer.push(Object.assign({ event: eventName }, params));
     }
   }
 
@@ -56,22 +58,7 @@
     }
   }
 
-  function bindPaymentAnalytics() {
-    var form = document.getElementById('checkout-form');
-    if (!form || form.dataset.paymentAnalyticsBound === '1') return;
-    form.dataset.paymentAnalyticsBound = '1';
-    form.addEventListener('submit', function () {
-      var selected = form.querySelector('input[name="payment_method"]:checked');
-      var items = cartItems();
-      push('add_payment_info', {
-        currency: 'BRL',
-        value: total(items),
-        payment_type: selected ? selected.value : 'unknown',
-        items: items
-      });
-    }, true);
-  }
-
+  // Checkout milestones are emitted once by shopvivaliz-google-events.js.
   function preventPrematurePurchaseEvents() {
     // Purchase and Ads revenue conversions are valid only after the payment
     // webhook reports approval. Checkout creation and boleto issuance are
@@ -98,7 +85,6 @@
     if ((window.location.pathname.replace(/\/+$/, '') || '/') !== '/checkout') return;
     addBoletoOption();
     preventPrematurePurchaseEvents();
-    bindPaymentAnalytics();
   }
 
   if (document.readyState === 'loading') {
