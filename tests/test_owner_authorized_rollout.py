@@ -1,6 +1,7 @@
 """Negative authorization, stale SHA, exact grant and fencing regressions."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -69,6 +70,27 @@ class OwnerRolloutSafetyTests(unittest.TestCase):
                 self.assertEqual(called.call_count, 1)
                 self.assertIn("controller-recovery-with-lease.py", str(called.call_args.args[0]))
 
+    def test_missing_ubuntu_user_bus_fails_closed(self):
+        with patch.object(roll.os, "geteuid", return_value=1001), \
+             patch.object(roll.Path, "is_dir", return_value=True), \
+             patch.object(roll.Path, "is_symlink", return_value=False), \
+             patch.object(roll.Path, "is_socket", return_value=False):
+            with self.assertRaisesRegex(roll.RolloutDenied, "canonical_user_bus_unavailable"):
+                roll.canonical_user_bus_env()
+
+    def test_user_bus_environment_uses_exact_invoking_user_and_not_stale_shell(self):
+        with patch.object(roll.os, "geteuid", return_value=1001), \
+             patch.object(roll.Path, "is_dir", return_value=True), \
+             patch.object(roll.Path, "is_symlink", return_value=False), \
+             patch.object(roll.Path, "is_socket", return_value=True), \
+             patch.dict(os.environ, {
+                 "XDG_RUNTIME_DIR": "/run/user/other",
+                 "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/other/bus",
+             }):
+            value = roll.canonical_user_bus_env()
+            self.assertEqual(value["XDG_RUNTIME_DIR"], "/run/user/1001")
+            self.assertEqual(value["DBUS_SESSION_BUS_ADDRESS"], "unix:path=/run/user/1001/bus")
+
     def test_success_has_separate_fenced_bridge_lease_and_checks_worker(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -82,9 +104,15 @@ class OwnerRolloutSafetyTests(unittest.TestCase):
             with self.base_patches()[0], self.base_patches()[1], self.base_patches()[2], \
                  patch.object(roll, "assert_exact_main"), patch.object(roll, "assert_owner_grant"), \
                  patch.object(roll, "INSTALLED_LOCK", root), patch.object(roll, "INSTALLED_WORKER", installed), \
-                 patch.dict(sys.modules, {"runtime_lock": module}), patch.object(roll, "call") as called:
+                 patch.dict(sys.modules, {"runtime_lock": module}), \
+                 patch.object(roll, "canonical_user_bus_env", return_value={
+                     "XDG_RUNTIME_DIR": "/run/user/1001",
+                     "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1001/bus",
+                 }), patch.object(roll, "call") as called:
                 roll.execute(release, SHA, 3502, PR_HEAD, PR_MERGE)
                 self.assertEqual(called.call_count, 3)
+                self.assertEqual(called.call_args.args[0][:2], ["systemctl", "--user"])
+                self.assertEqual(called.call_args.kwargs["env"]["XDG_RUNTIME_DIR"], "/run/user/1001")
                 self.assertEqual(module.assert_runtime_lock.call_args.args[2], "continuity_bridge_install")
                 self.assertEqual(module.release_runtime_lock.call_args.args[:2], ("unique-lease", 44))
 
