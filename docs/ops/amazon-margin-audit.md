@@ -26,6 +26,14 @@ margem = lucro / receita_bruta_transacao
 
 O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete do cliente e reembolsos/ajustes de frete incluídos no próprio lançamento. Não deduzir essas linhas novamente.
 
+### Conciliação DBA por pedido com múltiplas remessas (06/11/2026)
+
+**RED real da API Amazon e snapshot #12:** 15 SKUs DBA BUYABLE continuam `partial`. Os lançamentos Finances 30 dias possuem 38 `MfnPostageFee`, sem pedidos com Seller SKUs mistos nesses casos; **10 dos 15** tinham 100% de seus pedidos com `MfnPostageFee` presente e programas DBA já aceitos na auditoria, mas cada pedido foi dividido em duas ou mais linhas `Shipment`. O coletor debitava o frete uma única vez na primeira linha e marcava artificialmente as linhas seguintes como `pending_sales`, por isso tratava remessas conciliáveis como parciais. Não somar dois fretes e não tratar ausência de frete como frete zero.
+
+**Correção P1 preparatória:** agrupar somente as remessas **do período financeiro** por `ORDER_ID` quando o modo atual é DBA; sem ID, linhas permanecem isoladas. Somar quantidades, repasses e bases brutas em **centavos**, aplicar o `MfnPostageFee` do pedido uma única vez e considerar as remessas confirmadas somente se a Amazon Orders confirmar `DELIVERY_BY_AMAZON`, `order_skus` indicar exatamente um Seller SKU e a tarifa existir. Preservar `confirmed_sales` como contagem das linhas Shipment originais e `confirmed_units` como unidades físicas. Descartar certificação se qualquer linha financeira do grupo não puder ser conciliada. Os 5 SKUs com pedidos **sem** postagem continuam parciais até lançamento real; não estimar postagem.
+
+Arquivo `includes/amazon-margin/DbaOrderGroup.php`; regressão `tests/amazon-margin/DbaOrderGroupTest.php`. Exigir nova auditoria completa, teste real por grupo e validação UI/PDF/XLSX **somente após merge/deploy autorizado**, sem alterar preços/custos. O relatório #12 permanece imutável.
+
 ### Retificação financeira P1 — valor efetivamente vendido versus preço vigente (06/11/2026)
 
 **Defeito RED reproduzido com a conta Amazon real:** em 547 itens Shipment do período recente, 54 tinham `OurPricePrincipal` por unidade diferente do preço **atual** da Listings/Pricing. Casos: `R9-O6PX-YBXA` teve venda por R$ 112,97 enquanto o anúncio mostrava R$ 159,00; `C08BR` apresentou R$ 1.417,79 na transação versus R$ 1.549,00 no cadastro atual; `TTO-BR-FBA` teve R$ 39,00 versus R$ 42,00. Aplicar 14% de imposto sobre o **preço atual** e dividir o lucro pelo mesmo valor produzia margem histórica enganosa, mesmo com repasse Amazon correto.
