@@ -4,6 +4,8 @@ import gzip
 import hashlib
 import importlib.util
 import json
+import os
+import zlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -21,7 +23,7 @@ class MysqlOffsiteBackupTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.archive = self.root / "mysql-all-test.sql.gz"
-        self.data = b"-- MySQL dump 10.13\nCREATE TABLE test (id int);\n" + bytes(range(256)) * 110
+        self.data = b"-- MySQL dump 10.13\nCREATE TABLE test (id int);\n" + os.urandom(25000)
         with gzip.open(self.archive, "wb", compresslevel=1) as stream:
             stream.write(self.data)
         self.assertGreater(self.archive.stat().st_size, backup.MIN_ARCHIVE_BYTES)
@@ -37,7 +39,7 @@ class MysqlOffsiteBackupTests(unittest.TestCase):
         content = bytearray(self.archive.read_bytes())
         content[110] ^= 0x7F
         self.archive.write_bytes(content)
-        with self.assertRaises((OSError, EOFError, gzip.BadGzipFile, UnicodeDecodeError)):
+        with self.assertRaises((OSError, EOFError, zlib.error)):
             backup.verify_gzip(self.archive)
 
     def _fake_oci(self, files):
