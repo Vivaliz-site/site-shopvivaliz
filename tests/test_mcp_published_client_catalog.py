@@ -89,6 +89,30 @@ class PublishedMcpCatalogTests(unittest.TestCase):
             with self.assertRaises(m.CatalogError):
                 m.read_catalog(Path(tmp) / "not_exported.json")
 
+    def test_all_agent_entrypoints_advertise_effective_client_state(self):
+        paths = (
+            "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+            "docs/knowledge/dev-chatgpt-bootstrap.md",
+            "docs/knowledge/host-access.md",
+            "docs/knowledge/README.md",
+            "docs/knowledge/agent-rules.md",
+            "docs/knowledge/chatgpt-access-parity.md",
+            "docs/ops/mcp-central-marina-dual-route-2026-11-01.md",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                text = (ROOT / path).read_text(encoding="utf-8")
+                first = text[:2100]
+                self.assertIn("<!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->", first)
+                self.assertIn("CHATGPT_CLIENT_CATALOG_APTO=NAO_COMPROVADO", first)
+                self.assertIn("mcp-client-catalog-publication-2026-11-06.md", first)
+                self.assertIn("shopvivaliz-free-a1", first)
+        runbook = (ROOT / "docs/ops/mcp-client-catalog-publication-2026-11-06.md").read_text(
+            encoding="utf-8")
+        self.assertIn("--server /tmp/mcp-server-tools.json", runbook)
+        self.assertIn("--client /tmp/mcp-client-tools.json", runbook)
+        self.assertIn("nao", runbook.lower())
+
     def test_no_server_inventory_can_certify_missing_client(self):
         self.assertNotEqual(m.compare(self.server, None), [])
         self.assertNotEqual(m.compare(None, self.client), [])
