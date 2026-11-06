@@ -311,3 +311,49 @@ A documentação canônica de preços `docs/knowledge/pricing-integrity.md` esta
 5. Nunca alterar outros SKUs por implicação silenciosa, nem declarar sucesso antes de verificar Amazon, ERP e site.
 
 **Nesta fase o painel contém simulação rotulada como hipotética, sem botão de publicação real.**
+
+
+## Vínculo independente por aba Anúncios dos produtos Olist (06/11/2026)
+
+A conta Olist possui **três integrações Amazon separadas**, comprovadas nas opções
+da UI autenticada: Amazon `27473`, Amazon Onsite `27478` e Amazon Classic
+`27482`. A aba **Cadastros → Produtos → editar produto → Anúncios** contém,
+para cada produto do ERP, entradas `mapeamentoProdutosEcommerce[n]` com
+`idProdutoEcommerce` (Seller SKU), `idEcommerce`, `situacao`, `status` e
+identificador do vínculo. Essa evidência é **diferente** da tela `/anuncios`,
+de um arquivo XLS exportado e dos preços/custos retornados pela API.
+
+O método de aquisição é somente leitura comercial: obter o conjunto integral de
+**produtos ativos na API oficial Olist V3**, abrir individualmente cada formulário
+na sessão autenticada existente, conferir `input[name=id]`, inspecionar os campos
+de anúncio sem clicar em `salvar` e registrar capturas de tela da aba Anúncios
+para todos os produtos com anúncios-alvo anteriormente não identificados.
+Em 06/11/2026, a API informou **202 produtos ativos**, em três páginas de
+100, 100 e 2 produtos. Trata-se de contagem observada, não parâmetro fixo.
+
+O coletor de evidência está em
+`scripts/amazon-margin/capture-olist-product-links.js`; aceita lotes
+sequenciais de até 25 produtos e grava checkpoints privados em
+`/home/ubuntu/.shopvivaliz/runtime/amazon-margin/`. É necessário executar
+o browser no contexto autorizado da Marina e da sessão Olist já autenticada.
+Pode receber os caminhos de entrada/saída através das variáveis
+`SV_AMAZON_OLIST_PRODUCT_TABS_INPUT` e
+`SV_AMAZON_OLIST_PRODUCT_TABS_OUTPUT`. Não guardar credenciais nos arquivos
+nem incluir HTML bruto, PII ou custos da tela em relatório.
+
+O `SvAmazonMarginOlistProductTabCapture` só lê o índice canônico
+`olist-product-links-current.json` depois de comprovar integralidade
+(`records` para **todos** os produtos ativos, sem falhas), modo de arquivo
+privado, `source=OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI`, Seller SKU exato,
+integração e vínculo ativos, screenshot PNG privativo e hash SHA-256. A prova
+expira após 48 horas. Vários produtos Olist reivindicando um mesmo Seller SKU
+são ambiguidade, **não uma escolha por título**. O ID e o SKU de destino devem
+ser idênticos aos da API V3 corrente, com produto ativo e custo do histórico
+oficial, antes de qualquer margem ser certificada. Divergência frente a
+outro vínculo confirmado por pedido, EAN, exportação ou UI implica suspensão
+da certificação até conciliação; não sobrescrever o dado anterior.
+
+Nenhum preço, vínculo, imposto, custo oficial ou anúncio Amazon/Olist é
+alterado durante a captura ou a importação. Os demais gates de kit, BOM,
+FBA Onsite e frete DBA permanecem obrigatórios. A auditoria da interface
+e das exportações PDF/XLSX continua necessária após qualquer deploy.

@@ -10,6 +10,7 @@ require_once __DIR__ . '/ReadErrorPolicy.php';
 require_once __DIR__ . '/OlistAmazonOrderLink.php';
 require_once __DIR__ . '/OlistAdsIndex.php';
 require_once __DIR__ . '/OlistUiCapture.php';
+require_once __DIR__ . '/OlistProductTabCapture.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -364,6 +365,10 @@ final class SvAmazonMarginCollector
         // A present but corrupt capture is a hard read failure: publishing
         // new certified costs without its conflict evidence is unsafe.
         $uiCapture=SvAmazonMarginOlistUiCapture::load();
+        // Different evidence source: Olist product-edit -> Anuncios exact links.
+        // A present, incomplete or corrupt active-product census must abort
+        // instead of silently certifying older contradictory costs.
+        $productTabCapture=SvAmazonMarginOlistProductTabCapture::load();
         $this->note('reading_transactions');
         // Order-to-product identity may predate the 30-day margin window.
         // Fetch 90 days once, but calculate money ONLY for postedAfter sales.
@@ -502,6 +507,55 @@ final class SvAmazonMarginCollector
                         'erp_sku'=>$uiLink['candidate_erp_sku']??null,
                         'observed_at'=>$uiLink['observed_at']??null,
                         'source'=>'OLIST_ERP_AUTHENTICATED_UI_CAPTURE'];
+                }
+                // The product edit's authenticated Anuncios tab is separate
+                // from Olist's /anuncios listing and XLS exports. Accept only
+                // complete, screenshot-verified, 48h-fresh associations whose
+                // ERP SKU and ID still match the LIVE official V3 index/detail.
+                // In an existing Olist UI conflict, this is corroboration
+                // only: a second UI cannot silently clear a disputed link.
+                $productTabLink=SvAmazonMarginOlistProductTabCapture::lookup(
+                    $productTabCapture,(string)$sku,$this->productsBySku);
+                if (!empty($row['erp_ui_conflict'])) {
+                    if (($productTabLink['status']??'absent')!=='absent')
+                        $row['erp_product_tab_crosscheck_pending']=true;
+                } else {
+                    $productTabDecision=SvAmazonMarginOlistUiCapture::decision(
+                        $link,$prod,$productTabLink);
+                    if ($productTabDecision==='hold') {
+                        $row['erp_ui_conflict']='olist_product_tab_identity_conflict';
+                        $row['erp_ui_candidate_sku']=$productTabLink['erp_sku']
+                            ??$productTabLink['candidate_erp_sku']??null;
+                        $row['erp_product_tab_observed_at']=$productTabLink['observed_at']
+                            ??($productTabCapture['observed_at']??null);
+                        $link=['status'=>'ambiguous_erp','id'=>null,'method'=>null,
+                            'reason'=>'olist_product_tab_conflicts_with_other_identity_evidence'];
+                        $prod=null;
+                    } elseif ($productTabDecision==='use_ui') {
+                        $candidate=$this->product((int)$productTabLink['id']);
+                        if (!$candidate['active']
+                            || (string)$candidate['erp_sku']!==(string)$productTabLink['erp_sku']) {
+                            $link=['status'=>'ambiguous_erp','id'=>null,'method'=>null,
+                                'reason'=>'olist_product_tab_sku_or_activation_changed'];
+                            $prod=null;
+                        } else {
+                            $prod=$candidate;
+                            $link=$productTabLink;
+                            $row['erp_integration']=$productTabLink['integration'];
+                            $row['erp_product_tab_observed_at']=$productTabLink['observed_at'];
+                            $row['erp_product_tab_verified']=true;
+                            $row['erp_gtin_differs_from_amazon']=($ean!==null&&$ean!==''
+                                &&(string)$candidate['erp_gtin']!==$ean);
+                        }
+                    } elseif ($productTabDecision==='verified_same') {
+                        $row['erp_product_tab_observed_at']=$productTabLink['observed_at'];
+                        $row['erp_product_tab_verified']=true;
+                    } elseif ($productTabDecision==='reference_only') {
+                        $row['erp_historical_product_tab_candidate']=[
+                            'erp_sku'=>$productTabLink['candidate_erp_sku']??null,
+                            'observed_at'=>$productTabLink['observed_at']??null,
+                            'source'=>'OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI'];
+                    }
                 }
                 $row['erp_match_method']=$link['method'];
                 $row['erp_mapping_reason']=$link['reason'];
@@ -652,7 +706,8 @@ final class SvAmazonMarginCollector
             'scope'=>$selectedSkus?'selected':'all',
             'sources'=>['AMAZON_SPAPI_LISTINGS','AMAZON_SPAPI_PRICING',
                 'AMAZON_SPAPI_FINANCES','AMAZON_SPAPI_ORDERS','OLIST_TINY_V3','OLIST_V3_AMAZON_ORDER_ID_JOIN','OLIST_ERP_ANUNCIOS_EXPORT',
-                'OLIST_PRODUCT_TYPE_AND_AMAZON_LISTING_KIT_QUANTITY'],
+                'OLIST_PRODUCT_TYPE_AND_AMAZON_LISTING_KIT_QUANTITY',
+                'OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI'],
             'tax_bps'=>$taxBps,
             'offer_count'=>count($rows),
             'warnings'=>$this->warnings,
