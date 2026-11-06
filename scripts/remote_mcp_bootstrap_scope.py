@@ -53,6 +53,10 @@ def is_browser_only(paths: list[str]) -> bool:
 # A narrowly scoped backend-only MCP upgrade never touches production/Windows.
 BACKEND_CONTROLLER_FILES = frozenset({
     "remote-control-mcp/server.py",
+    # CI and grant regression files may accompany a backend-only handler fix.
+    # Keep these narrow: a standalone workflow/test change does not deploy.
+    "remote-control-mcp/test_marina_admin_gate.py",
+    ".github/workflows/remote-control-mcp-ci.yml",
     "remote-control-mcp/SPEC.md",
     "scripts/continuity/checkpoint_update_atomic.py",
     "tests/test_orquestrador_atomic_checkpoint.py",
