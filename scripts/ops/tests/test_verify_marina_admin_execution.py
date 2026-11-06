@@ -10,7 +10,7 @@ spec.loader.exec_module(module)
 class TestReceipt(unittest.TestCase):
     def setUp(self):
         self.good = dict(host="marina-a1-4c24g", command="hostname -s; id -un",
-                         state="completed", exit_code=0,
+                         state="completed", ok=True, exit_code=0,
                          stdout="marina-a1-4c24g\nubuntu\n", audit_id="example")
     def test_pass(self):
         self.assertIsNone(module.verify(self.good))
