@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MarginMath.php';
+require_once __DIR__ . '/KitCost.php';
 require_once __DIR__ . '/ProductMatch.php';
 require_once __DIR__ . '/RateLimitPolicy.php';
 require_once __DIR__ . '/OlistQuotaPolicy.php';
@@ -259,6 +260,9 @@ final class SvAmazonMarginCollector
             'last_cost'=>isset($cost['precoCusto']) ? (float)$cost['precoCusto'] : null,
             'last_cost_date'=>$cost['data'] ?? null,
             'last_cost_source'=>'OLIST_TINY_V3_PRODUCT_COST_HISTORY',
+            'erp_product_type'=>(string)($p['tipo']??''),
+            'erp_description'=>(string)($p['descricao']??''),
+            'erp_kit_component_count'=>is_array($p['kit']??null) ? count($p['kit']) : 0,
         ];
     }
 
@@ -513,6 +517,32 @@ final class SvAmazonMarginCollector
                 continue;
             }
 
+            // A listed Amazon offer may contain several units of an ERP
+            // simple component. Multiply that VERIFIED component cost by
+            // the package count before calculating taxes, COGS and profit.
+            // ERP 'K' kit costs already refer to the complete kit: never
+            // multiply those by their BOM quantity again. Inconclusive
+            // pack identity must not publish a misleading certified margin.
+            $unitCost=SvAmazonMarginKitCost::resolve(
+                (string)($row['title']??''),$row);
+            $row['erp_base_cost']=$unitCost['base_cost'];
+            $row['kit_units_per_listing']=$unitCost['quantity'];
+            $row['kit_cost_multiplier']=$unitCost['multiplier'];
+            $row['kit_cost_basis']=$unitCost['basis'];
+            if ($unitCost['status']!=='confirmed'
+                && $unitCost['basis']!=='MISSING_ERP_COST') {
+                $row['last_cost']=null;
+                $row['status']='kit_cost_unverified';
+                $row['kit_cost_issue']=$unitCost['reason'];
+                $rows[]=$row;
+                continue;
+            }
+            if($unitCost['status']==='confirmed') {
+                $row['last_cost']=$unitCost['cost'];
+                if ($unitCost['multiplier']>1) {
+                    $row['last_cost_source']='OLIST_TINY_V3_COMPONENT_COST_X_VERIFIED_AMAZON_PACK_UNITS';
+                }
+            }
             if ($row['price']===null || $row['last_cost']===null) {
                 $row['status']='price_or_cost_missing';$rows[]=$row;continue;
             }
@@ -591,7 +621,8 @@ final class SvAmazonMarginCollector
             'period_from'=>$postedAfter,
             'scope'=>$selectedSkus?'selected':'all',
             'sources'=>['AMAZON_SPAPI_LISTINGS','AMAZON_SPAPI_PRICING',
-                'AMAZON_SPAPI_FINANCES','AMAZON_SPAPI_ORDERS','OLIST_TINY_V3','OLIST_V3_AMAZON_ORDER_ID_JOIN','OLIST_ERP_ANUNCIOS_EXPORT'],
+                'AMAZON_SPAPI_FINANCES','AMAZON_SPAPI_ORDERS','OLIST_TINY_V3','OLIST_V3_AMAZON_ORDER_ID_JOIN','OLIST_ERP_ANUNCIOS_EXPORT',
+                'OLIST_PRODUCT_TYPE_AND_AMAZON_LISTING_KIT_QUANTITY'],
             'tax_bps'=>$taxBps,
             'offer_count'=>count($rows),
             'warnings'=>$this->warnings,
