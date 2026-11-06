@@ -35,9 +35,9 @@ final class SvAmazonMarginOlistProductTabCapture
         $raw=json_decode((string)file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
         if (!is_array($raw) || ($raw['schema']??null)!==1
             || ($raw['source']??'')!=='OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI'
-            || ($raw['active_count']??null)!==count($raw['records']??[])
-            || ($raw['active_count']??0)<1 || ($raw['active_count']??0)>10000
             || !is_array($raw['records']??null)
+            || ($raw['active_count']??null)!==count($raw['records'])
+            || ($raw['active_count']??0)<1 || ($raw['active_count']??0)>10000
             || !is_array($raw['errors']??null) || $raw['errors']!==[]
             || ($raw['channels']??null)!==self::CHANNELS
             || !self::date((string)($raw['input_observed_at']??''))
@@ -82,7 +82,7 @@ final class SvAmazonMarginOlistProductTabCapture
             }
             foreach($record['bindings'] as $binding) {
                 if(!is_array($binding)
-                    || !in_array((string)($binding['channel_id']??''),array_keys(self::CHANNELS),true)
+                    || !array_key_exists((string)($binding['channel_id']??''),self::CHANNELS)
                     || (string)($binding['channel']??'')!==
                         self::CHANNELS[(string)$binding['channel_id']]
                     || !preg_match('/^[1-9][0-9]*$/',(string)($binding['mapping_id']??''))
