@@ -52,8 +52,13 @@ using System.Runtime.InteropServices;
 public static class ShopVivalizDesktopInput {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 }
 "@
+    # Sem isto o processo e DPI-unaware: SetCursorPos escala as coordenadas pelo DPI (175% no Fred-Win), enquanto
+    # VirtualScreen/screenshot sao fisicos. O clique pedido em (x,y) caia em (1.75x,1.75y) e o MCP respondia ok sem efeito.
+    try { [void][ShopVivalizDesktopInput]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { [void][ShopVivalizDesktopInput]::SetProcessDPIAware() }
 
     if (-not $RequestPath -or -not (Test-Path -LiteralPath $RequestPath)) {
         throw 'request_path_missing'
