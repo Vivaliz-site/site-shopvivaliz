@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -117,6 +118,52 @@ class DetachedTaskHandoffTests(unittest.TestCase):
                 fencing_token=claimed["runtime_fencing_token"],
                 checkpoint_version=claimed["recovery_checkpoint_version"],
             )
+
+    def test_shell_rejects_forged_detached_metadata_before_any_provider(self):
+        original = self.task()
+        self.authorize(original)
+        prompt = self.runtime / "instructions.txt"
+        prompt.write_text("test only", encoding="utf-8")
+        env = dict(os.environ)
+        env.update({
+            "SHOPVIVALIZ_AGENT_TASK_STATE_DIR": str(self.runtime),
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_EXECUTION_ROUTE": "detached",
+            "SHOPVIVALIZ_TASK_ID": "real-source-task",
+            "SHOPVIVALIZ_RESUME_OWNER_ID": "forged",
+            "SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID": "invalid-lease",
+            "SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN": "77",
+            "SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION": "77",
+        })
+        script = Path(__file__).resolve().parents[1] / "scripts" / "autonomous-provider-failover.sh"
+        result = subprocess.run(
+            ["bash", str(script), str(prompt)], cwd=self.runtime, env=env,
+            capture_output=True, text=True, timeout=6, check=False,
+        )
+        self.assertEqual(result.returncode, 76)
+        self.assertIn("detached task lease verification failed", result.stderr)
+
+    def test_shell_does_not_weaken_bound_chatgpt_gate(self):
+        prompt = self.runtime / "instructions.txt"
+        prompt.write_text("test only", encoding="utf-8")
+        env = dict(os.environ)
+        env.update({
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_EXECUTION_ROUTE": "chatgpt",
+            "SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION": "2",
+            "SHOPVIVALIZ_RESUME_OWNER_ID": "test",
+            "SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID": "fake",
+            "SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN": "1",
+        })
+        script = Path(__file__).resolve().parents[1] / "scripts" / "autonomous-provider-failover.sh"
+        result = subprocess.run(
+            ["bash", str(script), str(prompt)], cwd=self.runtime, env=env,
+            capture_output=True, text=True, timeout=6, check=False,
+        )
+        self.assertEqual(result.returncode, 76)
+        self.assertIn("durable resume ownership metadata missing", result.stderr)
 
     def test_detached_dispatcher_does_not_require_fictitious_browser_binding(self):
         source = self.task()
