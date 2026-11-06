@@ -278,7 +278,7 @@ final class SvAmazonMarginExport
                 }
                 if($i%2===1)$content.="0.54 w 27 ".($y-23)." m 813 ".($y-23)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; receita bruta media inclui frete/descontos. Custo = kit completo por venda.');
+            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; ^ Custo historico nao certificado; custo = kit completo por venda.');
             $content .= self::pdfText(27,12,8,'Margem atual = estimativa no preco vigente; margens historicas e detalhamento disponiveis no Excel.');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
