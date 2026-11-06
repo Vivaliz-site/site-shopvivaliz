@@ -214,7 +214,7 @@ final class SvAmazonMarginExport
             $content .= self::pdfText(389,510,9,'Preco');
             $content .= self::pdfText(448,510,9,'Custo');
             $content .= self::pdfText(509,510,9,'Margem');
-            $content .= self::pdfText(568,510,9,'Vendas');
+            $content .= self::pdfText(568,510,9,'Unid. conf.');
             $content .= self::pdfText(627,510,9,'Situacao');
             $content .= "0.72 w 27 504 m 813 504 l S\n";
             foreach($group as $i=>$row){
