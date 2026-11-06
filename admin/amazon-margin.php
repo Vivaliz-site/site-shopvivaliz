@@ -353,11 +353,15 @@ function render(){
      (r.erp_match_method==='OLIST_AMAZON_ORDER'?'<span class="cell-note">Vínculo por '+Number(r.erp_order_evidence_count||0)+' pedido(s) Amazon/Olist</span>':'')+
      (r.erp_match_method==='OLIST_ADS_EXPORT'?'<span class="cell-note">Vínculo por exportação Olist recente, validado contra o produto ERP ativo em '+escapeHtml(r.erp_export_observed_at||'')+'</span>':'')+
      (r.erp_match_method==='OLIST_AUTHENTICATED_UI'?'<span class="cell-note">Vínculo pela interface autenticada de anúncios Olist, produto ativo confirmado na API em '+escapeHtml(r.erp_ui_observed_at||'')+'</span>':'')+
+     (r.erp_match_method==='OLIST_AUTHENTICATED_PRODUCT_TAB_UI'?'<span class="cell-note">Vínculo exato pela aba Anúncios do produto Olist, produto ativo confirmado na API V3 em '+escapeHtml(r.erp_product_tab_observed_at||'')+'</span>':'')+
+     (r.erp_product_tab_verified&&r.erp_match_method!=='OLIST_AUTHENTICATED_PRODUCT_TAB_UI'?'<span class="cell-note">Vínculo corroborado também na aba Anúncios do produto Olist</span>':'')+
+     (r.erp_product_tab_crosscheck_pending?'<span class="cell-note warn">Aba Anúncios do produto consultada; divergência anterior ainda requer conciliação</span>':'')+
      (r.erp_ui_verified_same_product?'<span class="cell-note">Anúncio confirmado na interface atual Olist</span>':'')+
      (r.erp_ui_conflict?'<span class="cell-note warn">CONFLITO ERP: interface atual indica '+escapeHtml(r.erp_ui_candidate_sku||'sem SKU')+'. Custo e margem bloqueados até conciliação.</span>':'')+
      (r.erp_historical_ui_candidate?'<span class="cell-note warn">Captura antiga da interface Olist, SKU candidato '+escapeHtml(r.erp_historical_ui_candidate.erp_sku||'')+'; sem certificação.</span>':'')+
+     (r.erp_historical_product_tab_candidate?'<span class="cell-note warn">Aba Anúncios do produto Olist histórica: SKU candidato '+escapeHtml(r.erp_historical_product_tab_candidate.erp_sku||'')+'. Não certifica custo atual.</span>':'')+
      (r.erp_historical_candidate?'<span class="cell-note warn">Exportação histórica: SKU candidato '+escapeHtml(r.erp_historical_candidate.erp_sku||'')+' ('+escapeHtml(r.erp_historical_candidate.observed_at||'')+'). Sem custo confirmado neste vínculo.</span>':'')+
-     (r.erp_gtin_differs_from_amazon?'<span class="cell-note warn">GTIN do anúncio difere do ERP; vínculo conferido via pedido</span>':'')+'</td>'
+     (r.erp_gtin_differs_from_amazon?'<span class="cell-note warn">GTIN do anúncio difere do ERP; vínculo conferido pela fonte de identidade indicada acima</span>':'')+'</td>'
    +'<td>'+escapeHtml(programLabel(r))+'</td>'
    +'<td><span class="pill">'+(active?'Ativo · BUYABLE':'Sem oferta ativa')+'</span></td>'
    +'<td class="right">'+priceMarkup(r)+'</td>'
