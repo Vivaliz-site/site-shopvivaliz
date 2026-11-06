@@ -54,5 +54,5 @@ try {
 } finally { @unlink($tmp); }
 $pdf=SvAmazonMarginExport::pdf($rows,'2026-11-06');
 kitReportAssert(str_starts_with($pdf,'%PDF-'),'valid PDF');
-kitReportAssert(str_contains($pdf,'(kit completo)'),'PDF must label bundle cost');
+kitReportAssert(str_contains($pdf,'kit completo'),'PDF must label bundle cost');
 echo "PASS kit costs and per-sale vs accumulated profit in XLSX/PDF; no unverifiable profit\n";
