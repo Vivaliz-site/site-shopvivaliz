@@ -6,8 +6,9 @@ SERVER_SOURCE="${2:-}"
 UNIT_SOURCE="${3:-}"
 AGENT_TASK_STATE_SOURCE="${4:-}"
 CONTINUITY_SOURCE_DIR="${5:-}"
-# Runtime mutations must require leases/fencing unless an operator explicitly opts out.
-SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}
+# Decisao do dono (2026-11-06): o bloqueio de escrita por lease/fencing nao foi aprovado por ele.
+# Escrita do MCP fica liberada por padrao; o handoff duravel so liga se o operador optar explicitamente (=1).
+SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}
 HOST="$(hostname)"
 BACKEND_HOST="always-free-arm-1787907847-26"
 STATE_DIR="/var/lib/shopvivaliz-remote-control"
