@@ -1,0 +1,24 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3727,
+  "resource": "mcp:controller:detached-continuity",
+  "principal": "shopvivaliz-continuity-controller",
+  "host": "always-free-arm-1787907847-26",
+  "capabilities": [
+    "task_detached_resume"
+  ],
+  "operation": "authorize_detached_resume",
+  "target_repository": "Vivaliz-site/site-shopvivaliz",
+  "target_task_id": "v5-cert-marina-20261106",
+  "source_agent_id": "claude-sonnet-5-5",
+  "source_pr_number": 3725,
+  "source_merge_sha": "cb4eb873e1caf32b47106b256ed0c6356f12e373",
+  "requires_exact_task_checkpoint_version": true,
+  "requires_immutable_release": true,
+  "requires_free_runtime_lock": true,
+  "requires_fencing": true,
+  "requires_real_progress_and_v5_e2e": true,
+  "one_use": true,
+  "expires_at_utc": "2026-11-13T00:00:00Z"
+}
