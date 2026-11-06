@@ -118,6 +118,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   <section class="card">
     <h2>Anúncios Amazon</h2>
     <p class="note">O filtro de ativos considera anúncios com status <strong>BUYABLE</strong> na Amazon. Anúncios só DISCOVERABLE não estão com oferta comprável. A auditoria completa continua verificando todo o catálogo, independente deste filtro.</p>
+    <p class="note"><strong>Preço e custo são por unidade VENDIDA</strong> (kit completo, quando aplicável). O lucro por unidade vendida é separado do <strong>lucro total acumulado</strong> nas vendas conciliadas. Produtos simples vendidos como kit usam custo da peça multiplicado pela quantidade confirmada no anúncio; kits cadastrados no ERP não são multiplicados novamente.</p>
     <p class="note" id="prior-cost-indicator" hidden></p>
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
@@ -129,8 +130,8 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     </div>
     <div class="table-scroller">
       <table>
-        <thead><tr><th><input id="select-page" type="checkbox" aria-label="Selecionar página"></th><th>SKU Amazon</th><th>Produto ERP</th><th>Modalidade</th><th>Status Amazon</th><th class="right">Preço</th><th class="right">Custo</th><th class="right">Vendas</th><th class="right">Margem</th><th>Diagnóstico</th><th>Ações</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="11">Carregando…</td></tr></tbody>
+        <thead><tr><th><input id="select-page" type="checkbox" aria-label="Selecionar página"></th><th>SKU Amazon</th><th>Produto ERP</th><th>Modalidade</th><th>Status Amazon</th><th class="right">Preço</th><th class="right">Custo</th><th class="right">Vendas</th><th class="right">Margem</th><th class="right">Lucro/unidade vendida</th><th class="right">Lucro total do período</th><th>Diagnóstico</th><th>Ações</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="13">Carregando…</td></tr></tbody>
       </table>
     </div>
     <div class="controls" style="margin-top:12px"><span id="count" class="muted small"></span><button id="more" type="button" hidden>Mostrar mais</button></div>
@@ -251,7 +252,7 @@ function filterMatch(r,s){
  if(s==='unmapped')return r.status==='unmapped_erp';
  if(s==='no_sales')return r.status==='no_confirmed_sales';
  if(s==='no_price')return r.price===null||r.price===undefined;
- if(s==='erp_error')return ['erp_or_catalog_read_failed','ambiguous_erp','erp_identity_mismatch'].includes(r.status);
+ if(s==='erp_error')return ['erp_or_catalog_read_failed','ambiguous_erp','erp_identity_mismatch','kit_cost_unverified'].includes(r.status);
  return true;
 }
 function filtered(){
@@ -271,6 +272,7 @@ const reasonText={
  erp_or_catalog_read_failed:'Falha de consulta ao ERP ou catálogo Amazon',
  erp_identity_mismatch:'Identificação de produto divergente entre Amazon e ERP',
  price_or_cost_missing:'Preço efetivo ou custo de aquisição indisponível',
+ kit_cost_unverified:'Quantidade ou composição do kit sem prova suficiente; margem bloqueada',
  price_divergence:'Preço da oferta divergente do cadastro',
  fulfillment_unverified:'Modalidade logística não identificada',
  no_confirmed_sales:'Sem vendas financeiras conciliadas no período',
@@ -282,8 +284,15 @@ function priceMarkup(r){
  return '—<span class="cell-note warn">Preço não disponível</span>';
 }
 function costMarkup(r){
- if(r.last_cost!==null&&r.last_cost!==undefined)
-  return price(r.last_cost)+(r.last_cost_date?'<span class="cell-note">Custo de '+escapeHtml(r.last_cost_date)+'</span>':'');
+ if(r.last_cost!==null&&r.last_cost!==undefined) {
+  const multiplier=Number(r.kit_cost_multiplier||1);
+  const desc=multiplier>1
+   ?'<span class="cell-note">Peça '+price(r.erp_base_cost)+' × '+multiplier+' unidades = custo do kit completo</span>'
+   :r.kit_cost_basis==='ERP_COMPLETE_KIT_COST'
+    ?'<span class="cell-note">Custo do kit completo cadastrado no Olist, sem multiplicar duas vezes</span>'
+    :'<span class="cell-note">Custo por unidade vendida</span>';
+  return price(r.last_cost)+desc+(r.last_cost_date?'<span class="cell-note">Custo de '+escapeHtml(r.last_cost_date)+'</span>':'');
+ }
  const prior=r.prior_cost_reference;
  if(prior&&Number.isFinite(Number(prior.cost))&&Number(prior.cost)>0) {
   return price(prior.cost)+'<span class="cell-note warn">Último custo verificado em auditoria #'+
@@ -292,7 +301,8 @@ function costMarkup(r){
  }
  return '—<span class="cell-note warn">'+(r.status==='unmapped_erp'?'Produto relacionado ainda não identificado pela auditoria':
    r.status==='ambiguous_erp'?'Vínculo ERP ambíguo':
-   r.status==='erp_or_catalog_read_failed'?'Consulta ERP falhou':'Custo não identificado')+'</span>';
+   r.status==='erp_or_catalog_read_failed'?'Consulta ERP falhou':
+   r.status==='kit_cost_unverified'?'Quantidade/composição do kit não comprovada':'Custo não identificado')+'</span>';
 }
 function refreshMetrics(){
  const active=data.filter(isActive).length;
@@ -343,11 +353,13 @@ function render(){
    +'<td><span class="pill">'+(active?'Ativo · BUYABLE':'Sem oferta ativa')+'</span></td>'
    +'<td class="right">'+priceMarkup(r)+'</td>'
    +'<td class="right">'+costMarkup(r)+'</td>'
-   +'<td class="right">'+Number(r.confirmed_sales||0)+(r.confirmed_sales?'':'<span class="cell-note">0 conciliadas</span>')+'</td>'
+   +'<td class="right">'+Number(r.confirmed_sales||0)+'<span class="cell-note">'+Number(r.confirmed_units||0)+' unidade(s) vendida(s)</span></td>'
    +'<td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+marginText+'</td>'
+   +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined&&Number(r.confirmed_units||0)>0?price(Number(r.profit_cents||0)/100/Number(r.confirmed_units)):'—')+'</td>'
+   +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined?price(Number(r.profit_cents||0)/100):'—')+(r.status==='partial'?'<span class="cell-note warn">Parcial</span>':'')+'</td>'
    +'<td><span class="pill">'+escapeHtml(diag)+'</span></td>'
    +'<td><button type="button" data-sim="'+escapeHtml(sku)+'" '+(simOk?'':'disabled title="Precisa de preço e margem calculada"')+'>Simular</button></td></tr>';
- }).join('')||'<tr><td colspan="11">Nenhum anúncio corresponde aos filtros. Desmarque Somente ativos para consultar os demais.</td></tr>';
+ }).join('')||'<tr><td colspan="13">Nenhum anúncio corresponde aos filtros. Desmarque Somente ativos para consultar os demais.</td></tr>';
  el('count').textContent=displayed.length+' anúncio(s) encontrados neste filtro; '+subset.length+' exibidos.';
  el('more').hidden=shown>=displayed.length;
  el('select-page').checked=subset.length>0&&subset.every(r=>selected.has(String(r.seller_sku??'')));

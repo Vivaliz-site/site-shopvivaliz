@@ -30,13 +30,13 @@ $confirmed=[
 $rows=SvAmazonMarginExport::rows(['rows'=>[$conflict,$confirmed]]);
 verifyUiReport(count($rows)===2,'both listings preserved');
 verifyUiReport($rows[0]['Divergencia UI Olist']==='Sim','conflict label missing');
-verifyUiReport($rows[0]['Custo ERP (R$)']===null,'conflicted cost must be null');
+verifyUiReport($rows[0]['Custo ERP por conjunto vendido (R$)']===null,'conflicted cost must be null');
 verifyUiReport($rows[0]['Margem ponderada (%)']===null,'conflicted margin must be null');
 verifyUiReport(str_contains($rows[0]['Diagnostico'],'custo/margem bloqueados'),'conflict diagnosis absent');
 verifyUiReport($rows[0]['Produto sugerido pela UI Olist']==='ERP-NEW','audit trace candidate missing');
 verifyUiReport($rows[1]['Divergencia UI Olist']==='Nao','verified identity must not be marked conflicting');
 verifyUiReport($rows[1]['Fonte do vinculo']==='OLIST_AUTHENTICATED_UI','source should not masquerade as XLS');
-verifyUiReport($rows[1]['Custo ERP (R$)']===12.34,'certified cost should remain');
+verifyUiReport($rows[1]['Custo ERP por conjunto vendido (R$)']===12.34,'certified cost should remain');
 verifyUiReport($rows[1]['Margem ponderada (%)']===15.0,'certified margin should remain');
 $xlsx=SvAmazonMarginExport::xlsx($rows);
 $tmp=tempnam(sys_get_temp_dir(),'sv-ui-report-');

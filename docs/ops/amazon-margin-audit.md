@@ -31,6 +31,66 @@ O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete
 - **Devoluções:** não agregadas automaticamente à margem de venda unitária nesta fase. Conciliação de reembolsos, frete reverso, campanhas e demais custos fora do lançamento serão adicionados em etapa de rentabilidade completa.
 - Status `partial` ou `unverified` não pode ser anunciado como margem certificada. Imposto inicial é 14%, variável `SV_AMAZON_MARGIN_TAX_BPS=1400`.
 
+## Custo por KIT e distinção entre lucro unitário/acumulado (06/11/2026)
+
+**Defeito reproduzido:** a auditoria anterior utilizava `precoCusto` de um
+produto ERP **simples** como custo de uma venda Amazon composta por várias
+peças, produzindo margens artificialmente altas. Exemplo validado nas telas
+reais Amazon/Olist e no run #8: o Seller SKU `KIT5ROD35CFREIOFBA` anuncia
+**5** rodízios, mas estava associado no Olist a `1C7Q-LKUU-0BA3`
+(`tipo=S`, custo **R$ 3,01 por peça**), de modo que o custo correto da
+**unidade comercial Amazon** é **5 × R$ 3,01 = R$ 15,05**. O ERP também
+possui a mesma referência como kit próprio `tipo=K` a **R$ 15,05**.
+
+Outras verificações independentes: `ROD6FBA` e `IA-YWLG-2L3K`
+anunciam **6** unidades, produto simples Olist custa R$ 4,03; custo
+do conjunto **R$ 24,18** (há cadastro tipo K com esse custo).
+`KITVEDFBA` anuncia **2** vedantes, produto simples custa R$ 10;
+custo total **R$ 20** (há kit tipo K com esse custo).
+`FN-WXV1-QWDV` anuncia **4** rodízios, custo simples R$ 10, conjunto
+R$ 40 (há kit tipo K com esse custo).
+
+**Regra obrigatória por Seller SKU (não consolidar por ASIN):**
+
+1. `titulo_anuncio` na Amazon determina **quantidade explícita** de
+   peças por conjunto: "Kit 5...", "Kit com 4...", "6 UN" etc.
+   Não interpretar milímetros, centímetros, dimensões, preço ou números
+   apenas presentes no Seller SKU como quantidade.
+2. Consultar `GET /produtos/{id}` (API Olist v3) para distinguir
+   `tipo=K` (custo do kit completo) de `tipo=S` (produto simples).
+   Se `tipo=K`, a composição está no campo `kit[].produto/quantidade`;
+   o histórico do preço de custo já se refere a **uma unidade do kit**
+   e não pode ser multiplicado novamente.
+3. Se `tipo=S` e o produto do ERP representa **uma peça**, mas o
+   anúncio contém N peças idênticas, usar
+   `custo_anuncio = arredondar_centavos(custo_peca × N)`. O valor
+   do custo consultado no ERP fica preservado em `erp_base_cost`;
+   o custo da unidade comercial vai para `last_cost`.
+4. Se o produto ERP já representa um conjunto com a mesma quantidade,
+   **não multiplicar duas vezes**. Em caso de quantidades conflitantes,
+   peças heterogêneas sem ficha de composição ou tipo não verificado,
+   sinalizar `kit_cost_unverified` e deixar **custo, lucro e margem
+   não certificados**. Não preencher valores por estimativa de título.
+5. Quantidade de kits vendidos é `confirmed_units` obtida da Amazon
+   Finances (pode ser maior que `confirmed_sales` em pedidos de múltiplas
+   unidades). Fórmula de custo do período:
+   `COGS = custo_anuncio × confirmed_units`.
+   **Lucro unitário médio** =
+   `profit_cents / confirmed_units`.
+   **Lucro acumulado** = `profit_cents / 100`.
+   Nunca confrontar lucro acumulado de muitas vendas com preço de uma peça.
+6. Conservar o cálculo das taxas FBA Onsite/DBA, dedução de
+   `MfnPostageFee` por pedido e impostos de 14% sem cobrança duplicada.
+   O resultado continua parcial quando houver transações pendentes.
+
+Testes: `KitCostTest.php`, `KitCostReportTest.php`,
+`MarginMathTest.php`, `ReportExportTest.php` e regressões de
+vínculo ERP. Exigir rerun read-only na produção e validação real do
+painel/PDF/XLSX antes de divulgar nova margem certificada. Relatório
+anterior #8 permanece histórico, **não deve ser tratado como margem
+atualizada para kits**. Nenhuma escrita de preços da Amazon/ERP é
+realizada por este patch.
+
 ## Indicador de anúncio ativo e campos sem valor
 
 - **Ativo** é definido pelo estado **BUYABLE** retornado em `summaries[].status` da Amazon Listings. `DISCOVERABLE` sem `BUYABLE` não é uma oferta comprável. O painel abre com **Somente ativos** habilitado; pode ser desmarcado para auditar visualmente todos os registros.
