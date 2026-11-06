@@ -109,10 +109,13 @@ export class TakeoverController {
     if(this.now()>s.expiresAt)error('handoff_expired_reissue_required');
     return s;
   }
-  async humanFrame(id,capability) {
+  async humanFrame(id,capability,includeOrigin=false) {
     return this._exclusive(async()=>{
       this._human(id,capability);
-      return this.driver.screenshot();
+      const frame=await this.driver.screenshot();
+      if(!includeOrigin)return frame;
+      const location=this.driver.snapshot?await this.driver.snapshot():{};
+      return {frame,origin:location.url||''};
     });
   }
   async humanAction(id,capability,action,input={}) {
