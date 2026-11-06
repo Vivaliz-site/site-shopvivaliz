@@ -312,6 +312,20 @@ def _require_current_resume(payload: dict[str, Any]) -> None:
     if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") != "1":
         return
     if os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip() == "1":
+        if os.getenv("SHOPVIVALIZ_RESUME_EXECUTION_ROUTE", "chatgpt").strip() == "detached":
+            if payload.get("execution_route") != "detached":
+                raise TaskStateError("detached resume route does not match task source")
+            try:
+                verify_detached_recovery_ownership(
+                    str(payload.get("task_id", "")),
+                    owner_id=os.getenv("SHOPVIVALIZ_RESUME_OWNER_ID", ""),
+                    lease_id=os.getenv("SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID", ""),
+                    fencing_token=int(os.getenv("SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN", "0")),
+                    checkpoint_version=int(os.getenv("SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION", "0")),
+                )
+            except (ValueError, TypeError) as exc:
+                raise TaskStateError("invalid detached recovery ownership metadata") from exc
+            return
         required = {
             "owner_id": os.getenv("SHOPVIVALIZ_RESUME_OWNER_ID", "").strip(),
             "conversation_id": os.getenv("SHOPVIVALIZ_RESUME_CONVERSATION_ID", "").strip(),
