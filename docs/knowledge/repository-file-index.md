@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5641 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -1540,7 +1540,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `RESUMO_EXECUTIVO.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `RESUMO_EXECUTIVO.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `RODAR-AGORA.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `RODAR_AGORA.ps1` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `ROTEIRO-TESTES-MANUAL-BROWSER.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `RUN-DASHBOARD.ps1` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `RUN-ORCHESTRATOR.ps1` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -1613,7 +1612,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `TEST-AGENT-ACCESS.sh` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `TEST-CHAT-WEBHOOK.md` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `TEST-SUMMARY.md` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `TESTAR_AGORA.ps1` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `TESTAR_CHECKOUT_AGORA.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `TESTAR_IMAGENS_REAIS.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `TESTE-CHAT-ANTES-DEPLOY.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2027,8 +2025,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `automation/eha/reports/last_run.json` | Automacao - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `automation/eha/reports/last_status.txt` | Automacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `automation/eha/reports/last_validation.json` | Automacao - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
-| `automation/eha/reports/medusa-last-run.json` | Automacao - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
-| `automation/eha/reports/medusa-run-history.jsonl` | Automacao - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `automation/eha/reports/run_history.jsonl` | Automacao - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `automation/eha/run.php` | Automacao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `automation/eha/validator.php` | Automacao - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2069,7 +2065,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `claude/api/catalog/products.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/get-tasks.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/health.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `claude/api/medusa-webhook.php` | Suporte, configuracao ou artefato de projeto - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
 | `claude/api/melhorenvio/diagnostic.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/monitor/api.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/monitor/chat-history.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2083,7 +2078,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `claude/api/olist/auto-sync.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/olist/diagnostic-full.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/olist/diagnostic.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `claude/api/olist/webhook.php` | Suporte, configuracao ou artefato de projeto - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
 | `claude/api/pipeline/master-autonomo.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/pipeline/v12-execucao-global.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/pipeline/v13-estrategia-autonoma.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2101,8 +2095,6 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `claude/api/shopee/validar-imagens.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/simple-agent-chat-hybrid.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/status.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `claude/api/sync-olist-products.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `claude/api/sync-shopee-products.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/tiktok-integration/.gitignore` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `claude/api/tiktok-integration/API_REFERENCE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `claude/api/tiktok-integration/README.md` | Suporte, configuracao ou artefato de projeto - Documentacao de projeto. | ativo ou ainda nao classificado como legado |
@@ -2549,8 +2541,10 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `docs/ops/mcp-first-agent-execution-2026-11-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/mcp-live-tool-inventory-2026-11-05.json` | Documentacao - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `docs/ops/mcp-rdc-capability-parity-2026-11-01.json` | Documentacao - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
+| `docs/ops/medusa-retirement-2026-11-06.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/merge-queue-required-ci-preflight-2026-11-02.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/ml-margin-audit-admin-ui.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/ops/ml-pricing-readonly-activation-2026-11-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/oci-dual-account-access.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/oci-marina-migration-v5-20261017.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/owner-oneclick-merge-queue-2026-11-02.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2602,86 +2596,17 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `docs/status-task-043-shopee-readiness-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-task-048-product-pages-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-workflows-actions.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-23-fredwin-desktop-commander-24h.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-23-vm-desktop-commander-24h.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-24-desktop-commander-three-host-control-plane.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-25-host-cleanup-implementation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-27-ai-conflict-resolver.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-29-google-ads-optimization-intelligence-phase1.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-29-two-a1-recovery-master.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-08-30-repository-workflow-governance-remediation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-01-agent-completion-governance.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-01-amazon-returns-safet.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-02-amazon-returns-final-gates.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-06-ml-pricing-api-actual-orders.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-06-ml-pricing-api-foundation-estimated.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-06-ml-pricing-api-implementation-master.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-06-ml-pricing-api-promotions-estimated.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-06-ml-pricing-api-reconciliation-hardening.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-06-ml-pricing-api-self-review.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-06-shopvivaliz-sales-critical-fixes.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-11-blog-quality-implementation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-11-sitewide-audit-implementation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-12-codex-four-host-failover.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-12-liz-policy-recovery-unification.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-13-codex-native-profile-fallback-safety-amendment.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-13-codex-native-profile-fallback.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-13-codex-shared-session-store.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-13-oci-two-vm-rebalance.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-13-product-video-sync-stage1.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-14-production-runtime-hardening.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-16-agent-host-bootstrap-global.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-16-product-video-dual-source-marketplaces.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-17-extreme-audit-runtime-parity.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-23-buscador-gemini-audit-contract.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-26-ci-performance-monitor-1000-cap-fix.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-26-ci-performance-monitor.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-27-actions-high-impact-optimization.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-09-27-detached-continuity-e2e-gate-v7.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-03-chatgpt-structure-optimization.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-03-continuity-cooldown-followup.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-04-audit-v5-process-privacy.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-04-fred-chatgpt-continuity-stability.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-04-ga4-safe-validation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-04-retired-gtm-tracking.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-05-chatgpt-durable-handoff-architecture.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-05-detached-continuation-worker.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-05-functional-audit-privacy.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-05-gui-input-privacy.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-05-rustdesk-desktop-control.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/2026-10-05-worktree-cleanup-safety.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/plans/2026-10-23-marina-maintenance-authorization-screen.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/plans/2026-10-25-marina-safe-readiness.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/plans/2026-11-01-marina-admin-route.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/plans/2026-11-01-mcp-admin-cross-repository-parity.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/plans/2026-11-02-marina-broker-client.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/plans/README-ml-pricing-api-v1.md` | Documentacao - Documentacao de projeto. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-08-23-desktop-commander-three-host-control-plane-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-08-23-fredwin-desktop-commander-24h-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-08-23-vm-desktop-commander-24h-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-08-24-host-cleanup-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-08-27-ai-conflict-resolver-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-08-29-google-ads-optimization-intelligence-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-08-30-repository-governance-workflow-debt-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-01-amazon-returns-safet-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-06-ml-pricing-api-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-06-shopvivaliz-zero-sales-audit-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-11-blog-sitewide-quality-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-11-liz-policy-recovery-unification-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-12-codex-four-host-failover-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-13-codex-native-profile-fallback-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-13-codex-shared-session-store-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-13-oci-two-vm-rebalance-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-13-product-video-sync-stage1-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-09-16-product-video-dual-source-marketplaces-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-10-03-chatgpt-structure-optimization.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-10-05-chatgpt-durable-handoff-architecture-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-10-05-detached-continuation-worker-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `docs/superpowers/specs/2026-10-05-rustdesk-desktop-control-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `docs/superpowers/plans/2026-11-05-mcp-gui-write-access.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/specs/2026-10-23-marina-maintenance-authorization-screen-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/specs/2026-10-25-marina-safe-readiness-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/specs/2026-11-01-marina-admin-route-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `docs/superpowers/specs/2026-11-01-mcp-admin-cross-repository-parity.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `docs/superpowers/specs/2026-11-05-mcp-gui-write-access-design.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `docs/task-042-cro-audit.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/task-047-seo-automation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/task-048-product-pages.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2902,11 +2827,13 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `includes/ai-squad-core.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/AuditCollector.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/AuditStore.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `includes/amazon-margin/KitCost.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/MarginMath.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/OlistAdsImport.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/OlistAdsIndex.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/OlistAmazonOrderLink.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/OlistQuotaPolicy.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `includes/amazon-margin/OlistUiCapture.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/PriorCostReference.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/ProductMatch.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/amazon-margin/RateLimitPolicy.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2971,6 +2898,7 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `includes/ga4-order-conversion.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/google-ads-order-conversion.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/google-ads-refresh.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `includes/google-oauth-private-pending.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/google-search-console-issue-classifier.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/google-shopping-feed-utils.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/head-analytics.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -4083,6 +4011,7 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `scripts/ops/activate-mcp-central-marina-readonly.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/activate_owner_merge_queue_ruleset.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/authorize-chatgpt-plugin-permissions-lease.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/ops/authorize-kocepsv-gui-validation-lease.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/cloudflare-admin-preflight.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/owner_approved_merge_queue.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/request_owner_pr_review.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4399,6 +4328,9 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `security/owner-approvals/3620.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `security/owner-approvals/3670.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `security/owner-approvals/3673.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
+| `security/owner-approvals/3695.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
+| `security/owner-approvals/3702.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
+| `security/owner-approvals/3705.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `security/requests/amazon-safet-d45-scoped-20261102.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `security/requests/amazon-safet-post3556-five-cases-20261105.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `security/requests/continuity-3501.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -5636,6 +5568,9 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/amazon-margin/AuditQueueTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/CostReferenceReportTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/FinanceFeeWindowTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/amazon-margin/KitBomCostTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/amazon-margin/KitCostReportTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/amazon-margin/KitCostTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/MarginMathTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/NumericSellerSkuTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/OlistAdsImportTest.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -5643,6 +5578,8 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/amazon-margin/OlistAmazonOrderLinkTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/OlistQuotaPolicyTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/OlistQuotaQueueTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/amazon-margin/OlistUiCaptureTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/amazon-margin/OlistUiReportConflictTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/OrderLinkReportTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/PriorCostReferenceTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/amazon-margin/ProductMatchTest.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6048,6 +5985,7 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/test_actions_high_impact_performance_contract.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_activate_mcp_central_marina_admin.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_admin_identity_smoke_resolver.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_admin_index_links_resolve.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_agent_clone_lifecycle.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_agent_docs_gate.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_agent_operations_docs_scope.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6124,6 +6062,7 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/test_delete_superseded_solange_workflow.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_deploy_production_script.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_deployment_closure_guard.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_desktop_native_bridge_hosts.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_dev_aux_adoption_deploy.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_ecommerce_excellence_credential_literals.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_ecommerce_excellence_deploy_wait_retry.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6164,6 +6103,7 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/test_install_marina_edge_smoke_timer.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_integration.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_issue_comment_router.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_kocepsv_gui_validation_lease.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_mandatory_agent_checklist.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_manifest_byte_parity_sync.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_marina_admin_route.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6215,6 +6155,7 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/test_mercadolivre_proactive_renewer.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_mercadopago_provider_runtime_workflow.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_mercadopago_runtime_propagation.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_merge_group_continuity_scope.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_merge_group_required_checks.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_merge_runtime_credential_scope.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_merge_runtime_credential_shopee_scope.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6307,6 +6248,7 @@ Gerado deterministicamente a partir de 5699 arquivos versionados no indice Git. 
 | `tests/test_task_resume_dispatcher.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_task_resume_queue.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_task_resume_worker.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_task_state_obsolete.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_token_reference_audit.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_token_renewer.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_token_renewer_unprivileged_atomic_write.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
