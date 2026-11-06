@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily verified native MySQL backup to OCI (Marina)
+
+[Timer]
+OnCalendar=*-*-* 03:25:00 UTC
+RandomizedDelaySec=10min
+AccuracySec=1min
+Persistent=true
+Unit=shopvivaliz-mysql-native-oci-backup.service
+
+[Install]
+WantedBy=timers.target
