@@ -67,9 +67,9 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   <div class="alert">Primeira fase: <strong>auditoria e relatórios somente leitura</strong>. Alterações de preço serão liberadas apenas após validação da sincronização individual Amazon/ERP e do impacto no site.</div>
   <div class="cards">
     <div class="card metric"><span id="n-total-label">Anúncios ativos</span><strong id="n-total">—</strong><small id="n-total-context">—</small></div>
-    <div class="card metric"><span>Margem confirmada abaixo de 10%</span><strong class="danger" id="n-risk">—</strong></div>
-    <div class="card metric"><span>Margem confirmada ≥10%</span><strong class="positive" id="n-good">—</strong></div>
-    <div class="card metric"><span>Pendentes / parciais</span><strong class="warning" id="n-pending">—</strong><small id="n-partial-context">—</small></div>
+    <div class="card metric"><span>Margem atual estimada abaixo de 10%</span><strong class="danger" id="n-risk">—</strong></div>
+    <div class="card metric"><span>Margem atual estimada ≥10%</span><strong class="positive" id="n-good">—</strong></div>
+    <div class="card metric"><span>Margem atual pendente</span><strong class="warning" id="n-pending">—</strong><small id="n-partial-context">—</small></div>
   </div>
   <section class="card" id="audit-live" role="status" aria-live="polite">
     <div class="controls" style="justify-content:space-between">
@@ -123,21 +123,22 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   <section class="card">
     <h2>Anúncios Amazon</h2>
     <p class="note">O filtro de ativos considera anúncios com status <strong>BUYABLE</strong> na Amazon. Anúncios só DISCOVERABLE não estão com oferta comprável. A auditoria completa continua verificando todo o catálogo, independente deste filtro.</p>
+    <p class="note"><strong>Margem atual (estimada):</strong> considera o preço vigente do SKU, custo ERP do kit completo, imposto configurado, comissão cotada para o preço atual pela Amazon e tarifa FBA Onsite/DBA por peso real/cúbico. Sem preço, custo, peso, comissão ou origem aplicável, a margem fica pendente. Divergências e modalidades presumidas são sinalizadas; a margem histórica fica separada.</p>
     <p class="note"><strong>Margem realizada:</strong> calculada com a receita bruta de cada venda realmente conciliada na Amazon Finances (produto + frete cobrado ao cliente − promoções de frete/descontos), não com o preço atual do anúncio. O valor principal de cada anúncio é o <strong>preço vigente</strong>; quando houver vendas conciliadas, mostramos separadamente a <strong>receita bruta média por unidade</strong>, que pode incluir frete cobrado ao comprador e descontos; ela não é o preço isolado do produto. A comissão já está no repasse financeiro, sem dedução dupla. Sem venda conciliada, não há margem realizada.</p>
     <p class="note"><strong>Preço e custo são por unidade VENDIDA</strong> (kit completo, quando aplicável). O lucro por unidade vendida é separado do <strong>lucro total acumulado</strong> nas vendas conciliadas. Produtos simples vendidos como kit usam custo da peça multiplicado pela quantidade confirmada no anúncio; kits cadastrados no ERP não são multiplicados novamente.</p>
     <p class="note" id="prior-cost-indicator" hidden></p>
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
-      <select id="status"><option value="">Todos os resultados</option><option value="low">Confirmada abaixo de 10%</option><option value="healthy">Confirmada ≥10%</option><option value="pending">Pendente ou parcial</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
+      <select id="status"><option value="">Todos os resultados</option><option value="current_low10">Margem atual estimada abaixo de 10%</option><option value="current_pending">Margem atual pendente</option><option value="low">Confirmada abaixo de 10%</option><option value="healthy">Confirmada ≥10%</option><option value="pending">Pendente ou parcial</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
       <label class="filter-active" for="only-active"><input type="checkbox" id="only-active" checked> Somente ativos <span id="active-count" class="small muted"></span></label>
       <button type="button" id="select-visible">Selecionar visíveis</button>
       <button type="button" id="clear-selected">Limpar seleção</button>
     </div>
     <div class="table-scroller">
       <table>
-        <thead><tr><th><input id="select-page" type="checkbox" aria-label="Selecionar página"></th><th>SKU Amazon</th><th>Produto ERP</th><th>Modalidade</th><th>Status Amazon</th><th class="right">Preço</th><th class="right">Custo</th><th class="right">Vendas</th><th class="right">Margem</th><th class="right">Lucro/unidade vendida</th><th class="right">Lucro total do período</th><th>Diagnóstico</th><th>Ações</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="13">Carregando…</td></tr></tbody>
+        <thead><tr><th><input id="select-page" type="checkbox" aria-label="Selecionar página"></th><th>SKU Amazon</th><th>Produto ERP</th><th>Modalidade</th><th>Status Amazon</th><th class="right">Preço</th><th class="right">Custo</th><th class="right">Vendas</th><th class="right">Margem atual (est.)</th><th class="right">Margem histórica</th><th class="right">Lucro/unidade vendida</th><th class="right">Lucro total do período</th><th>Diagnóstico</th><th>Ações</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="14">Carregando…</td></tr></tbody>
       </table>
     </div>
     <div class="controls" style="margin-top:12px"><span id="count" class="muted small"></span><button id="more" type="button" hidden>Mostrar mais</button></div>
@@ -164,7 +165,8 @@ let lastRunId=null, submitBusy=false, pollBusy=false, activeAll=false;
 const stageLabels={
  queued:'Na fila',starting:'Iniciando',loading_listings:'Localizando anúncios Amazon',
  loading_prices:'Consultando preços Amazon',mapping_erp_products:'Vinculando produtos Olist/Tiny',
- reading_transactions:'Conciliando tarifas e fretes',calculating_margins:'Calculando margens',
+ reading_transactions:'Conciliando tarifas e fretes',calculating_margins:'Calculando margens históricas',
+  quoting_current_fees:'Cotando comissões atuais Amazon',
  saving_report:'Salvando relatório',waiting_amazon_quota:'Aguardando liberação da cota Amazon',
  waiting_olist_quota:'Aguardando liberação da cota Olist/Tiny',
  retry_pending:'Aguardando nova tentativa',completed:'Concluída',coalesced:'Solicitação repetida',
@@ -256,6 +258,8 @@ function refreshSelection(){
 }
 function filterMatch(r,s){
  if(s==='')return true;
+ if(s==='current_low10')return r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&Number(r.current_margin_bps)<1000;
+ if(s==='current_pending')return r.current_margin_bps===null||r.current_margin_bps===undefined;
  if(s==='low'||s==='healthy'||s==='pending')return state(r)===s;
  if(s==='unmapped')return r.status==='unmapped_erp';
  if(s==='no_sales')return r.status==='no_confirmed_sales';
@@ -331,8 +335,8 @@ function costMarkup(r){
 function refreshMetrics(){
  const active=data.filter(isActive).length;
  const base=el('only-active').checked?data.filter(isActive):data;
- const healthy=base.filter(r=>state(r)==='healthy').length;
- const low=base.filter(r=>state(r)==='low').length;
+ const healthy=base.filter(r=>r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&Number(r.current_margin_bps)>=1000).length;
+ const low=base.filter(r=>r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&Number(r.current_margin_bps)<1000).length;
  el('n-total-label').textContent=el('only-active').checked?'Anúncios ativos':'Anúncios cadastrados';
  el('n-total').textContent=base.length;
  el('n-total-context').textContent=active+' ativos de '+data.length+' no catálogo';
@@ -340,7 +344,7 @@ function refreshMetrics(){
  el('n-risk').textContent=low;
  el('n-good').textContent=healthy;
  el('n-pending').textContent=base.length-low-healthy;
- el('n-partial-context').textContent=base.filter(r=>r.status==='partial').length+' com conciliação parcial';
+ el('n-partial-context').textContent=base.filter(r=>['estimated_dimension_conflict','estimated_program_unverified'].includes(r.current_margin_status)).length+' projeções com ressalvas';
  const fallback=base.filter(r=>r.last_cost===null&&r.status!=='kit_cost_unverified'
    &&r.prior_cost_reference?.cost>0).length;
  const indicator=el('prior-cost-indicator');
@@ -349,7 +353,7 @@ function refreshMetrics(){
 }
 function render(){
  refreshMetrics();
- displayed=filtered();
+ displayed=filtered().sort((a,b)=>(a.current_margin_bps??Number.MAX_SAFE_INTEGER)-(b.current_margin_bps??Number.MAX_SAFE_INTEGER));
  const subset=displayed.slice(0,shown);
  el('rows').innerHTML=subset.map(r=>{
   const sku=String(r.seller_sku??'');
@@ -361,6 +365,17 @@ function render(){
   const marginText=r.margin_weighted_bps===null||r.margin_weighted_bps===undefined
    ?'—<span class="cell-note warn">Margem não apurada</span>'
    :margin(r.margin_weighted_bps)+(r.status==='partial'?'<span class="cell-note warn">Conciliação parcial</span>':'');
+  const currentStatus=String(r.current_margin_status||'not_calculated');
+  const currentVerified=r.current_margin_bps!==null&&r.current_margin_bps!==undefined;
+  const currentDetail=currentVerified
+   ?'<span class="cell-note">Lucro atual: '+price(Number(r.current_profit_cents||0)/100)+'</span>'+
+     '<span class="cell-note">Comissão: '+price(Number(r.current_commission_cents||0)/100)+' · logística: '+price(Number(r.current_logistics_cents||0)/100)+'</span>'+
+     '<span class="cell-note">Impostos: '+price(Number(r.current_tax_cents||0)/100)+' · custo conjunto: '+price(r.last_cost)+'</span>'+
+     (r.current_billable_kg?'<span class="cell-note">Peso tarifável: '+Number(r.current_billable_kg).toFixed(2)+' kg</span>':'')+
+     (currentStatus==='estimated_dimension_conflict'?'<span class="cell-note warn">Medidas Amazon x ERP divergentes</span>':'')+
+     (currentStatus==='estimated_program_unverified'?'<span class="cell-note warn">DBA presumido — conferir programa</span>':'')
+   :'<span class="cell-note warn">Pendente: '+escapeHtml(currentStatus.replaceAll('_',' '))+'</span>';
+  const currentText=(currentVerified?margin(r.current_margin_bps):'—')+currentDetail;
   const simOk=canSimulate(r);
   return '<tr><td><input type="checkbox" class="row-check" data-sku="'+escapeHtml(sku)+'" '+(chosen?'checked':'')+' aria-label="Selecionar '+escapeHtml(sku)+'"></td>'
    +'<td><strong><code>'+escapeHtml(sku)+'</code></strong><span class="cell-note">'+escapeHtml((r.title||'').slice(0,95))+'</span></td>'
@@ -384,12 +399,13 @@ function render(){
    +'<td class="right">'+priceMarkup(r)+'</td>'
    +'<td class="right">'+costMarkup(r)+'</td>'
    +'<td class="right">'+Number(r.confirmed_sales||0)+'<span class="cell-note">'+Number(r.confirmed_units||0)+' unidade(s) vendida(s)</span></td>'
+   +'<td class="right '+(currentVerified?(r.current_margin_bps<1000?'danger':'positive'):'warning')+'">'+currentText+'</td>'
    +'<td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+marginText+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined&&Number(r.confirmed_units||0)>0?price(Number(r.profit_cents||0)/100/Number(r.confirmed_units)):'—')+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined?price(Number(r.profit_cents||0)/100):'—')+(r.status==='partial'?'<span class="cell-note warn">Parcial</span>':'')+'</td>'
    +'<td><span class="pill">'+escapeHtml(diag)+'</span></td>'
    +'<td><button type="button" data-sim="'+escapeHtml(sku)+'" '+(simOk?'':'disabled title="Exige margem confirmada com preço efetivo e vendas conciliadas"')+'>Simular</button></td></tr>';
- }).join('')||'<tr><td colspan="13">Nenhum anúncio corresponde aos filtros. Desmarque Somente ativos para consultar os demais.</td></tr>';
+ }).join('')||'<tr><td colspan="14">Nenhum anúncio corresponde aos filtros. Desmarque Somente ativos para consultar os demais.</td></tr>';
  el('count').textContent=displayed.length+' anúncio(s) encontrados neste filtro; '+subset.length+' exibidos.';
  el('more').hidden=shown>=displayed.length;
  el('select-page').checked=subset.length>0&&subset.every(r=>selected.has(String(r.seller_sku??'')));
@@ -413,7 +429,7 @@ async function load({quiet=false}={}){
   if(!quiet)el('feedback').textContent='Relatório consultado. O andamento das novas auditorias aparece acima.';
  }catch(e){
   showError(e);
-  if(!data.length)el('rows').innerHTML='<tr><td colspan="11">Não foi possível consultar o relatório. Verifique o erro acima.</td></tr>';
+  if(!data.length)el('rows').innerHTML='<tr><td colspan="14">Não foi possível consultar o relatório. Verifique o erro acima.</td></tr>';
  }
 }
 async function requestRun(scope){
