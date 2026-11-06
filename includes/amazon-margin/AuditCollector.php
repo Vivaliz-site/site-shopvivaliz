@@ -313,6 +313,9 @@ final class SvAmazonMarginCollector
                         'order'=>$order, 'quantity'=>$qty,
                         'posted_at'=>(string)($t['postedDate'] ?? ''),
                         'net_amount'=>(float)($item['totalAmount']['currencyAmount'] ?? 0),
+                        // Authoritative sale gross, including buyer-paid shipping
+                        // net of shipping/promo rebates, not today's listing price.
+                        'sale_gross_cents'=>SvAmazonMarginMath::transactionGrossCents($item),
                     ];
                 }
             }
@@ -388,7 +391,9 @@ final class SvAmazonMarginCollector
             $row += ['ean'=>null, 'erp_id'=>null, 'erp_sku'=>null,'last_cost'=>null,
                 'last_cost_date'=>null,'margin_min_bps'=>null,'margin_max_bps'=>null,
                 'margin_weighted_bps'=>null,'confirmed_sales'=>0,'pending_sales'=>0,
-                'confirmed_units'=>0,'profit_cents'=>0,'status'=>'unverified'];
+                'confirmed_units'=>0,'profit_cents'=>0,
+                'realized_sale_gross_cents'=>null,'realized_unit_price'=>null,
+                'status'=>'unverified'];
             $asin = $row['asin'];
             try {
                 $ean = $this->ean($asin);
@@ -671,6 +676,7 @@ final class SvAmazonMarginCollector
                     'sku'=>$sku,'program'=>$isFba?'FBA_ONSITE':'DBA',
                     'price'=>$row['price'],'cost'=>$row['last_cost'],
                     'quantity'=>$shipment['quantity'],'shipment_total'=>$shipment['net_amount'],
+                    'sale_gross_cents'=>$shipment['sale_gross_cents']??null,
                     'postage_total'=>$postage,'postage_confirmed'=>$confirmed,'tax_bps'=>$taxBps,
                 ]);
                 if ($calc['status']==='confirmed') {
@@ -686,6 +692,9 @@ final class SvAmazonMarginCollector
                 $row['margin_max_bps']=max($margin);
                 $row['margin_weighted_bps']=(int)round($totalProfit*10000/$totalGross);
                 $row['profit_cents']=$totalProfit;
+                $row['realized_sale_gross_cents']=$totalGross;
+                $row['realized_unit_price']=round($totalGross/100/$row['confirmed_units'],2);
+                $row['financial_gross_source']='AMAZON_FINANCES_PRODUCT_CHARGES_PLUS_NET_SHIPPING';
                 $row['status']= $row['pending_sales'] ? 'partial' : 'confirmed';
                 $row['below_10_pct']=$row['margin_min_bps']<1000;
             } else {

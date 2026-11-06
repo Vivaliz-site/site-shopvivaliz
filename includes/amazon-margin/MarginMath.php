@@ -19,8 +19,48 @@ final class SvAmazonMarginMath
     }
 
     /**
+     * Brazil Finances v2024 Shipment item: transactional gross BEFORE Amazon
+     * fees is ProductCharges + Shipping + PromoRebates (top level only).
+     * ProductCharges already contains nested principal components; do NOT
+     * add children again. Shipping promotions commonly cancel customer
+     * freight, while DBA can contain genuine buyer-paid shipping.
+     *
+     * Validate BRL, known breakdown types and actual item total so a new
+     * Amazon fee category cannot silently corrupt a certified margin.
+     * @return int|null Financially verified gross in BRL cents.
+     */
+    public static function transactionGrossCents(array $item): ?int
+    {
+        $lines=$item['breakdowns']??null;
+        $total=$item['totalAmount']??null;
+        if (!is_array($lines) || $lines===[] || !is_array($total)
+            || ($total['currencyCode']??'')!=='BRL') return null;
+        $net=self::cents($total['currencyAmount']??null);
+        if ($net===null) return null;
+        $totals=['ProductCharges'=>0,'Shipping'=>0,'PromoRebates'=>0,'AmazonFees'=>0];
+        $hasProductCharge=false;
+        foreach ($lines as $b) {
+            if (!is_array($b)) return null;
+            $kind=(string)($b['breakdownType']??'');
+            $money=$b['breakdownAmount']??null;
+            if (!array_key_exists($kind,$totals) || !is_array($money)
+                || ($money['currencyCode']??'')!=='BRL') return null;
+            $cents=self::cents($money['currencyAmount']??null);
+            if ($cents===null) return null;
+            $totals[$kind]+=$cents;
+            if ($kind==='ProductCharges') $hasProductCharge=true;
+        }
+        $gross=$totals['ProductCharges']+$totals['Shipping']+$totals['PromoRebates'];
+        if (!$hasProductCharge || $totals['ProductCharges']<=0
+            || $totals['Shipping']<0 || $totals['PromoRebates']>0
+            || $totals['AmazonFees']>0 || $gross<=0
+            || abs($gross+$totals['AmazonFees']-$net)>1) return null;
+        return $gross;
+    }
+
+    /**
      * @param array{sku:string,price:mixed,cost:mixed,quantity:int,shipment_total:mixed,program:string,
-     *               postage_total?:mixed,postage_confirmed?:bool,tax_bps?:int} $line
+     *               postage_total?:mixed,postage_confirmed?:bool,tax_bps?:int,sale_gross_cents?:?int} $line
      * @return array<string,mixed>
      */
     public static function calculate(array $line): array
@@ -32,10 +72,13 @@ final class SvAmazonMarginMath
         $cost = self::cents($line['cost'] ?? null);
         $shipment = self::cents($line['shipment_total'] ?? null);
         $taxBps = (int)($line['tax_bps'] ?? 1400);
+        $hasSaleGross=array_key_exists('sale_gross_cents',$line);
+        $saleGross=$hasSaleGross ? $line['sale_gross_cents'] : null;
         if ($sku === '' || !in_array($program, ['FBA_ONSITE', 'DBA'], true)
             || $quantity < 1 || $quantity > 100000 || $price === null || $price <= 0
             || $cost === null || $cost <= 0 || $shipment === null
-            || $taxBps < 0 || $taxBps > 10000) {
+            || $taxBps < 0 || $taxBps > 10000
+            || ($hasSaleGross && (!is_int($saleGross) || $saleGross<=0))) {
             return ['status' => 'unverified', 'reason' => 'missing_or_invalid_financial_evidence', 'sku' => $sku];
         }
 
@@ -47,7 +90,9 @@ final class SvAmazonMarginMath
             return ['status' => 'unverified', 'reason' => 'invalid_postage_charge', 'sku' => $sku];
         }
 
-        $gross = $price * $quantity;
+        // The live listing price is NOT necessarily the historical sale price.
+        // Production collector supplies verified item gross from Finances.
+        $gross = $hasSaleGross ? $saleGross : $price * $quantity;
         $tax = (int)round($gross * $taxBps / 10000, 0, PHP_ROUND_HALF_UP);
         $cogs = $cost * $quantity;
         $profit = $shipment + $postage - $cogs - $tax;

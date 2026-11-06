@@ -16,14 +16,24 @@
 ## Fórmula de margem confirmada
 
 ```text
+receita_bruta_transacao = ProductCharges + Shipping + PromoRebates (FINANCES/Shipment; cada tipo somente no nivel superior)
 receita_liquida_transacao = item.totalAmount (FINANCES/Shipment)
 postagem_DBA = soma ServiceFee MfnPostageFee associada ao ORDER_ID (negativa)
-impostos = round(preco_unitario * quantidade * aliquota, 2)
+impostos = round(receita_bruta_transacao * aliquota, 2)
 lucro = receita_liquida_transacao + postagem_DBA - custo_unitario * quantidade - impostos
-margem = lucro / (preco_unitario * quantidade)
+margem = lucro / receita_bruta_transacao
 ```
 
 O `item.totalAmount` **já inclui** comissão, tecnologia, logística FBA, frete do cliente e reembolsos/ajustes de frete incluídos no próprio lançamento. Não deduzir essas linhas novamente.
+
+### Retificação financeira P1 — valor efetivamente vendido versus preço vigente (06/11/2026)
+
+**Defeito RED reproduzido com a conta Amazon real:** em 547 itens Shipment do período recente, 54 tinham `OurPricePrincipal` por unidade diferente do preço **atual** da Listings/Pricing. Casos: `R9-O6PX-YBXA` teve venda por R$ 112,97 enquanto o anúncio mostrava R$ 159,00; `C08BR` apresentou R$ 1.417,79 na transação versus R$ 1.549,00 no cadastro atual; `TTO-BR-FBA` teve R$ 39,00 versus R$ 42,00. Aplicar 14% de imposto sobre o **preço atual** e dividir o lucro pelo mesmo valor produzia margem histórica enganosa, mesmo com repasse Amazon correto.
+
+**Novo contrato:** para cada linha Shipment, calcular em centavos a receita bruta **da transação original** a partir dos valores de topo `ProductCharges + Shipping + PromoRebates`. Frete cobrado ao comprador compõe a base; frete promocional subsidiado normalmente cancela a respectiva cobrança (não duplicar); `AmazonFees` é abatida uma única vez porque já está em `item.totalAmount`. A taxa DBA `MfnPostageFee` permanece separada e exige associação inequívoca por pedido. Aceitar somente BRL e valores positivos conciliados, com `sum(breakdowns de topo) == item.totalAmount` (tolerância máxima 1 centavo). Tipo de breakdown desconhecido, moeda divergente, soma inconsistente ou receita não confirmada tornam a **venda pendente** em vez de usar o preço atual como substituto.
+
+A `price` do SKU continua sendo **preço vigente do anúncio** e não serve de base de imposto/margem histórica. O coletor grava `realized_sale_gross_cents`, `realized_unit_price` e proveniência para linhas confirmadas ou parcialmente conciliadas; painel, PDF e XLSX distinguem o preço atual do preço médio realmente vendido. Se não houve vendas financeiramente conciliadas, **a margem realizada não existe**; projeções futuras precisam de estimativa de taxas separada, não passar por confirmadas. Testes obrigatórios `MarginMathTest.php`, `ReportExportTest.php` e regressões DBA/FBA/kit, seguidos de **novo run completo e E2E UI real**. O snapshot histórico #11 é imutável, mas suas margens antigas não podem ser republicadas como valores atuais pós-correção.
+
 
 - **FBA Onsite:** `item.totalAmount` menos custo e imposto; nenhum FBA clássico como fonte de tarifa.
 - **DBA:** somente confirmar quando o pedido indicar `DELIVERY_BY_AMAZON`, houver `MfnPostageFee` conciliada e a atribuição ao Seller SKU for inequívoca. Se não houver tarifa conciliada, manter `pending_postage` / `partial`; não assumir que ausência de débito significa frete grátis.
