@@ -35,7 +35,7 @@ final class SvAmazonMarginExport
             'Status Amazon'=>is_array($status)?implode(',',$status):'',
             'Canal'=>(string)($row['program'] ?? $row['fulfillment_channel'] ?? ''),
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
-            'Preco medio efetivo das vendas (R$)'=>self::num($row['realized_unit_price'] ?? null),
+            'Receita bruta media por unidade (R$)'=>self::num($row['realized_unit_price'] ?? null),
             'Receita bruta das unidades conciliadas (R$)'=>isset($row['realized_sale_gross_cents'])
                 ? round((int)$row['realized_sale_gross_cents']/100,2):null,
             'Preco cadastro Amazon (R$)'=>self::num($row['listed_price'] ?? null),
@@ -257,14 +257,14 @@ final class SvAmazonMarginExport
                 if ($pieces!=='-') {
                     $content .= self::pdfText(650,$y-11,7,'Pecas por kit: '.$pieces);
                 }
-                $realized=$get('Preco medio efetivo das vendas (R$)');
+                $realized=$get('Receita bruta media por unidade (R$)');
                 if ($realized!=='-') {
                     $content .= self::pdfText(191,$y-20,7,
-                        'Preco medio efetivo nas vendas: R$ '.$realized);
+                        'Receita bruta media/unidade: R$ '.$realized);
                 }
                 if($i%2===1)$content.="0.54 w 27 ".($y-23)." m 813 ".($y-23)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; preco medio = transacionado. Custo = kit completo por venda. * Cadastral. ^ Historico.');
+            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; receita bruta media inclui frete/descontos. Custo = kit completo por venda.');
             $content .= self::pdfText(27,12,8,'Margem e imposto usam receita bruta das transacoes conciliadas (incluindo frete pago, liquido de descontos).');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
