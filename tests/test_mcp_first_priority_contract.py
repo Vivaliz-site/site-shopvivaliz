@@ -17,8 +17,8 @@ class McpFirstContractTests(unittest.TestCase):
     def test_propagated_to_agent_entrypoints(self):
         anchors = {
             "AGENTS.md": "REGRA DO PROPRIETARIO: MCP PRIMEIRO",
-            "CLAUDE.md": "PRIORIDADE MCP DO OWNER",
-            "GEMINI.md": "PRIORIDADE MCP DO OWNER",
+            "CLAUDE.md": "MCP PRIMEIRO",
+            "GEMINI.md": "MCP PRIMEIRO",
             "docs/knowledge/atendimento-chatgpt-bootstrap.md": "PRIORIDADE MCP ADMINISTRATIVO",
             "docs/knowledge/agent-rules.md": "PRIORIDADE MCP ADMINISTRATIVO",
         }

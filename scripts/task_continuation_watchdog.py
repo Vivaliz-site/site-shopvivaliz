@@ -136,13 +136,9 @@ def _run_once_locked(
             continue
         status = str(payload.get("status", "")).strip()
         updated = _parse_time(payload.get("updated_at"))
-        # Only recent activity of active work extends its recovery window.
-        last_activity = (
-            max(created, updated)
-            if status in {"RUNNING", "READY_TO_COMPLETE"} and updated is not None
-            else created
-        )
-        if last_activity < lookback_cutoff:
+        # A recent progress update does not renew an old task's original
+        # authorization for automatic replay. Preserve it for manual triage.
+        if created < lookback_cutoff:
             skipped_outside_lookback += 1
             continue
         scanned += 1

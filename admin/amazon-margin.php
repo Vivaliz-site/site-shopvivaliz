@@ -144,9 +144,9 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <div class="controls" style="margin-top:12px"><span id="count" class="muted small"></span><button id="more" type="button" hidden>Mostrar mais</button></div>
   </section>
   <section class="card" id="simulator" hidden>
-    <h2>Simulação de preço</h2>
-    <p class="note">Esta prévia não modifica ERP nem Amazon. Recalcula os impostos usando a taxa configurada, mas mantém as demais tarifas absolutas da última amostra. Pode mudar a comissão e a faixa logística; o resultado <strong>não é margem confirmada</strong>.</p>
-    <div class="controls"><strong id="sim-name"></strong><label for="sim-price">Novo preço (R$)</label><input type="number" id="sim-price" step="0.01" min="0.01"><button id="sim-calc" type="button">Simular</button><button type="button" id="sim-close">Fechar</button></div>
+    <h2>Simulação de receita bruta (não é atualização de preço)</h2>
+    <p class="note">Esta prévia não modifica ERP nem Amazon. Informe a receita bruta hipotética por unidade (produto + frete cobrado ao cliente − promoções). O valor inicial é a receita bruta realmente observada nas vendas, que pode diferir do preço atual do anúncio. A simulação ajusta somente os impostos e mantém as demais tarifas históricas fixas. Comissões, frete e faixas logísticas podem mudar: o resultado <strong>não é margem certificada nem prévia de preço para publicação</strong>.</p>
+    <div class="controls"><strong id="sim-name"></strong><label for="sim-price">Receita bruta hipotética/unidade (R$)</label><input type="number" id="sim-price" step="0.01" min="0.01"><button id="sim-calc" type="button">Simular</button><button type="button" id="sim-close">Fechar</button></div>
     <p id="sim-result" role="status"></p>
   </section>
   <section class="card">
@@ -246,7 +246,8 @@ function isActive(r){return Array.isArray(r.amazon_status)&&r.amazon_status.incl
 function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'MERCHANT':'UNKNOWN');}
 function programLabel(r){const p=program(r);return p==='FBA_ONSITE'?'FBA Onsite':p==='DBA'?'DBA':p==='DBA_CANDIDATE'||p==='MERCHANT'?'Envio vendedor':p==='UNKNOWN'?'Não identificado':p;}
 function state(r){if(r.status!=='confirmed'||r.margin_weighted_bps===null||r.margin_weighted_bps===undefined)return 'pending';return r.margin_weighted_bps<1000?'low':'healthy';}
-function canSimulate(r){return r.status==='confirmed'&&Number(r.confirmed_units||0)>0&&r.price!==null&&r.price!==undefined&&Number.isFinite(Number(r.price))&&Number(r.price)>0&&r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined;}
+function canSimulate(r){return r.status==='confirmed'&&Number(r.confirmed_units||0)>0&&Number(r.realized_sale_gross_cents)>0&&r.profit_cents!==null&&r.profit_cents!==undefined&&Number.isFinite(Number(r.profit_cents))&&r.price!==null&&r.price!==undefined&&Number.isFinite(Number(r.price))&&Number(r.price)>0&&r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined;}
+function simulateGross(r,targetGross,taxBps){if(!canSimulate(r))return null;const units=Number(r.confirmed_units),baseGross=Number(r.realized_sale_gross_cents)/100/units,baseProfit=Number(r.profit_cents)/100/units,rate=Number(taxBps)/10000;if(!Number.isFinite(targetGross)||targetGross<=0||!Number.isFinite(baseGross)||baseGross<=0||!Number.isFinite(baseProfit)||!Number.isFinite(rate)||rate<0||rate>1)return null;const profit=baseProfit+(targetGross-baseGross)*(1-rate);return {profit,margin:100*profit/targetGross};}
 function selectionVisible(){const current=new Set(displayed.map(r=>String(r.seller_sku)));return [...selected].filter(s=>current.has(s));}
 function refreshSelection(){
  const visible=selectionVisible(),hidden=selected.size-visible.length;
@@ -521,12 +522,10 @@ el('clear-selected').onclick=()=>{selected.clear();render();};
 el('select-page').onchange=e=>{displayed.slice(0,shown).forEach(r=>e.target.checked?selected.add(String(r.seller_sku)):selected.delete(String(r.seller_sku)));render();};
 el('more').onclick=()=>{shown+=75;render();};
 el('rows').addEventListener('change',e=>{const s=e.target.getAttribute('data-sku');if(!s)return;e.target.checked?selected.add(s):selected.delete(s);refreshSelection();});
-el('rows').addEventListener('click',e=>{const button=e.target.closest('[data-sim]');if(!button)return;currentSim=data.find(r=>r.seller_sku===button.dataset.sim);if(!currentSim||!canSimulate(currentSim))return;el('sim-name').textContent=currentSim.seller_sku;el('sim-price').value=currentSim.price||'';el('sim-result').textContent='';el('simulator').hidden=false;el('simulator').scrollIntoView({behavior:'smooth'});});
+el('rows').addEventListener('click',e=>{const button=e.target.closest('[data-sim]');if(!button)return;currentSim=data.find(r=>r.seller_sku===button.dataset.sim);if(!currentSim||!canSimulate(currentSim))return;el('sim-name').textContent=currentSim.seller_sku;el('sim-price').value=(Number(currentSim.realized_sale_gross_cents)/100/Number(currentSim.confirmed_units)).toFixed(2);el('sim-result').textContent='';el('simulator').hidden=false;el('simulator').scrollIntoView({behavior:'smooth'});});
 el('sim-close').onclick=()=>{el('simulator').hidden=true;currentSim=null;};
-el('sim-calc').onclick=()=>{if(!currentSim||!canSimulate(currentSim))return;const next=Number(el('sim-price').value),old=Number(currentSim.price),oldMargin=currentSim.margin_weighted_bps;if(!Number.isFinite(next)||next<=0||!old||oldMargin===null||oldMargin===undefined){el('sim-result').textContent='Preço inválido ou margem histórica indisponível.';return;}
- const approximateProfit=old*oldMargin/10000+(next-old)*(1-taxBps/10000);
- const estimate=100*approximateProfit/next;
- el('sim-result').textContent='Margem hipotética: '+estimate.toFixed(2).replace('.',',')+'% · Lucro hipotético: '+price(approximateProfit)+' por unidade. NÃO publicar a partir desta simulação; comissão e tarifas precisam ser recalculadas.';
+el('sim-calc').onclick=()=>{if(!currentSim||!canSimulate(currentSim))return;const targetGross=Number(el('sim-price').value),estimate=simulateGross(currentSim,targetGross,taxBps);if(!estimate){el('sim-result').textContent='Receita inválida ou resultado financeiro histórico insuficiente.';return;}
+ el('sim-result').textContent='Margem hipotética sobre receita bruta: '+estimate.margin.toFixed(2).replace('.',',')+'% · Lucro hipotético: '+price(estimate.profit)+' por unidade. NÃO publicar a partir desta simulação; comissão, frete e demais tarifas precisam ser recalculados para o novo preço da oferta.';
 };
 load();
 loadImportStatus();

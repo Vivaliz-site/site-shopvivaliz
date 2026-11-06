@@ -68,18 +68,29 @@ class KocepsvGuiValidationLeaseTests(unittest.TestCase):
         self.assertEqual(300, m.TTL)
         self.assertEqual("shopvivaliz-central-mcp", m.PRINCIPAL)
 
-    def test_repository_grant_file_is_exactly_the_approved_scope(self):
+    def test_repository_grants_match_the_exact_owner_approved_scope(self):
+        # Both P2 grants were individually owner-approved and have been consumed.
+        # 3705 explicitly re-authorized a second one-use attempt after 3702.
+        # Freeze the known grant IDs here: a third grant (or any widened scope)
+        # must fail CI and receive its own formal owner approval/test update.
         found = []
         for path in sorted((ROOT / "security" / "owner-approvals").glob("*.json")):
             data = json.loads(path.read_text(encoding="utf-8"))
             if data.get("resource") == m.RESOURCE:
                 found.append((path, data))
-        self.assertEqual(1, len(found), "exactly one approved grant for the KOCEPSV GUI validation resource")
-        path, on_disk = found[0]
-        self.assertEqual(f"{on_disk['pr_number']}.json", path.name)
-        expected = dict(grant(), pr_number=on_disk["pr_number"])
-        self.assertEqual(expected, on_disk)
-        self.assertEqual("https://shopvivaliz.com.br", on_disk["target_origin"])
+        self.assertEqual(
+            {3702, 3705}, {data.get("pr_number") for _, data in found},
+            "unexpected KOCEPSV GUI grant; review its explicit P2 authority",
+        )
+        self.assertEqual(2, len(found), "duplicate PR IDs cannot hide an extra grant")
+        for path, on_disk in found:
+            with self.subTest(grant_path=path.name):
+                self.assertEqual(f"{on_disk['pr_number']}.json", path.name)
+                expected = dict(grant(), pr_number=on_disk["pr_number"])
+                self.assertEqual(expected, on_disk)
+                self.assertTrue(on_disk["one_use"])
+                self.assertEqual(300, on_disk["ttl_seconds"])
+                self.assertEqual("https://shopvivaliz.com.br", on_disk["target_origin"])
 
     def test_pr_reviewed_and_merged_can_pass_read_only_proof(self):
         with patch.object(m, "github_json", side_effect=fake_api(grant())), \

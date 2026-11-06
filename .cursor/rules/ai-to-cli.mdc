@@ -2,6 +2,10 @@
 alwaysApply: true
 ---
 
+<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->
+> **Rota MCP atual (06/11/2026):** Central ShopVivaliz e Orquestrador podem executar na Marina (marina-a1-4c24g) quando schema/grant da sessao autorizam, junto com backend (always-free-arm-1787907847-26), Fred-Win e KOCEPSV. Nao usar shopvivaliz-free-a1. Verificar status real, MFA, RBAC e leases. Referencia historica: docs/knowledge/current-topology-and-access-2026-10-29.md; fonte vigente: docs/ops/mcp-first-agent-execution-2026-11-05.md.
+<!-- /MCP_ROUTE_CANONICAL_V5_20261106 -->
+
 # Protocolo IA-to-CLI obrigatório
 
 Antes de qualquer alteração, leia e siga integralmente `AI-TO-CLI-PROTOCOL.md`. Esta regra é sempre ativa, complementa as regras específicas do projeto e não pode ser usada para enfraquecê-las.

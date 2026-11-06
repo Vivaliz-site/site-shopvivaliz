@@ -50,15 +50,25 @@ function Invoke-Worker {
 using System;
 using System.Runtime.InteropServices;
 public static class ShopVivalizDesktopInput {
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
+    public struct PhysicalPoint { public int X; public int Y; }
+    [DllImport("user32.dll", SetLastError = true)] public static extern bool SetPhysicalCursorPos(int X, int Y);
+    [DllImport("user32.dll", SetLastError = true)] public static extern bool GetPhysicalCursorPos(out PhysicalPoint point);
+    public static bool IsPhysicalCursorAt(int x, int y) {
+        PhysicalPoint cursor;
+        return GetPhysicalCursorPos(out cursor) && Math.Abs(cursor.X - x) <= 1 && Math.Abs(cursor.Y - y) <= 1;
+    }
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
     [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 }
 "@
-    # Sem isto o processo e DPI-unaware: SetCursorPos escala as coordenadas pelo DPI (175% no Fred-Win), enquanto
-    # VirtualScreen/screenshot sao fisicos. O clique pedido em (x,y) caia em (1.75x,1.75y) e o MCP respondia ok sem efeito.
-    try { [void][ShopVivalizDesktopInput]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { [void][ShopVivalizDesktopInput]::SetProcessDPIAware() }
+    # An API can return FALSE without throwing (e.g. DPI context already set).
+    # Mouse input below always uses physical screen pixels, irrespective of DPI.
+    $dpiAware = $false
+    try { $dpiAware = [ShopVivalizDesktopInput]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { }
+    if (-not $dpiAware) {
+        try { [void][ShopVivalizDesktopInput]::SetProcessDPIAware() } catch { }
+    }
 
     if (-not $RequestPath -or -not (Test-Path -LiteralPath $RequestPath)) {
         throw 'request_path_missing'
@@ -112,12 +122,14 @@ public static class ShopVivalizDesktopInput {
             }
             $absoluteX = $bounds.Left + $x
             $absoluteY = $bounds.Top + $y
-            if (-not [ShopVivalizDesktopInput]::SetCursorPos($absoluteX, $absoluteY)) {
+            if (-not [ShopVivalizDesktopInput]::SetPhysicalCursorPos($absoluteX, $absoluteY)) {
                 throw 'desktop_cursor_move_failed'
             }
-            # Apps como Chromium/Edge precisam de um instante apos o movimento para resolver o alvo sob o cursor;
-            # sem isso o clique cai no elemento anterior e retorna ok sem efeito.
+            # Chromium/Edge needs time to resolve the new target before the mouse button.
             Start-Sleep -Milliseconds 150
+            if (-not [ShopVivalizDesktopInput]::IsPhysicalCursorAt($absoluteX, $absoluteY)) {
+                throw 'desktop_cursor_position_mismatch'
+            }
             for ($i = 0; $i -lt $clicks; $i++) {
                 [ShopVivalizDesktopInput]::mouse_event([uint32]$flags[0], 0, 0, 0, [UIntPtr]::Zero)
                 Start-Sleep -Milliseconds 50

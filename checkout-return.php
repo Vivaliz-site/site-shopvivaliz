@@ -208,6 +208,33 @@ if ($shouldRetryConfirmation) {
         </div>
     </section>
 </main>
+<!-- APPROVED_PAYMENT_HANDOFF_CART_RECONCILIATION_V1 -->
+<?php if ($serverApproved && $orderNumber !== ''): ?>
+<script>
+// The return URL is untrusted: execute only after the server confirmed payment.
+// Never discard a new cart or another payment attempt created in parallel tabs.
+(function () {
+  try {
+    var approvedOrder = <?= json_encode($orderNumber) ?>;
+    var pending = JSON.parse(localStorage.getItem('shopvivaliz_pending_payment') || 'null');
+    var handoff = JSON.parse(localStorage.getItem('shopvivaliz_checkout_handoff') || 'null');
+    if (!pending || !handoff
+      || pending.order_number !== approvedOrder || handoff.order_number !== approvedOrder
+      || typeof handoff.cart !== 'string') return;
+    var currentCart = localStorage.getItem('shopvivaliz_cart') || '[]';
+    localStorage.removeItem('shopvivaliz_pending_payment');
+    localStorage.removeItem('shopvivaliz_checkout_handoff');
+    if (currentCart !== handoff.cart) return;
+    localStorage.removeItem('shopvivaliz_cart');
+    localStorage.removeItem('shopvivaliz_shipping_quote');
+    localStorage.removeItem('shopvivaliz_coupon');
+    localStorage.removeItem('shopvivaliz_checkout_form');
+    window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: [] } }));
+  } catch (ignore) {}
+})();
+</script>
+<?php endif; ?>
+<!-- /APPROVED_PAYMENT_HANDOFF_CART_RECONCILIATION_V1 -->
 <?php if ($serverApproved && $orderItems !== []): ?>
 <script>
 window.addEventListener('load', () => {
