@@ -32,6 +32,32 @@ function surface({ history = 'Previous reply', completedTurn = '', tail = '', ro
 export async function runThinkingFailedTests({ errorBannerPresent, recoverableFailureReason, sendContinueMessage }) {
   const failures = [];
   const cases = [
+    ['iOS Portuguese request deadline overrides the generic stopped-thinking label', async () => {
+      const cdp = surface({
+        history: 'Prior completed product report',
+        tail: 'Parou de pensar\\nEsgotou-se o tempo limite da solicitação.\\nRepetir',
+      });
+      assert.equal(await errorBannerPresent(cdp), true);
+      assert.equal(await recoverableFailureReason(cdp), 'request_timeout');
+    }],
+    ['iOS interrupted transmission remains pending instead of becoming success', async () => {
+      const cdp = surface({
+        history: 'Previous successful step',
+        tail: 'Transmissão interrompida. Aguardando a mensagem completa...',
+      });
+      assert.equal(await errorBannerPresent(cdp), true);
+      assert.equal(await recoverableFailureReason(cdp), 'streaming_interrupted');
+    }],
+    ['a previous timed-out turn quoted in history must not trigger current recovery', async () => {
+      const cdp = surface({
+        history: 'A screenshot said Esgotou-se o tempo limite da solicitação.',
+        completedTurn: 'A new completed answer',
+        tail: 'Now the normal next step is ready',
+        roles: false,
+      });
+      assert.equal(await errorBannerPresent(cdp), false);
+      assert.equal(await recoverableFailureReason(cdp), '');
+    }],
     ['current Portuguese ConversationDetailError is a recoverable banner', async () => {
       const cdp = surface({ tail: 'A operação não pode ser concluída. (APICore.ConversationDetailError.DetailError erro 1.)' });
       assert.equal(await errorBannerPresent(cdp), true);
