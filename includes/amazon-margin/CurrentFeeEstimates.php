@@ -41,6 +41,30 @@ final class SvAmazonCurrentFeeEstimates
     }
 
     /**
+     * Retry ONLY the read-only Amazon Product Fees quote POST after HTTP 429.
+     * Never apply this retry to commerce writes. Backoff is bounded and tests
+     * inject a no-sleep callback to verify the exact number of attempts.
+     */
+    public static function retryQuoteOnQuota(callable $request,?callable $pause=null): array
+    {
+        $delays=[0,2500000,6000000,15000000];
+        foreach($delays as $attempt=>$delay){
+            if($attempt>0){
+                if($pause!==null)$pause($delay);
+                else usleep($delay);
+            }
+            try{
+                $response=$request();
+                if(!is_array($response))throw new UnexpectedValueException('fee_quote_invalid_response');
+                return $response;
+            }catch(SvMarketplaceException $e){
+                if($e->httpStatus!==429 || $attempt===count($delays)-1)throw $e;
+            }
+        }
+        throw new LogicException('fee_quote_unreachable');
+    }
+
+    /**
      * @return array<string, array{commission_cents:int,price_cents:int}>
      */
     public static function quote(SvAmazonClient $amazon,array $rows,string $marketplace,?callable $progress=null):array
@@ -63,7 +87,7 @@ final class SvAmazonCurrentFeeEstimates
         }
         $prices=array_values($candidates);
         $result=[];$done=0;
-        foreach(array_chunk($prices,20) as $batch){
+        foreach(array_chunk($prices,5) as $batch){
             $requests=[];
             foreach($batch as $p){
                 $requests[]=[
@@ -77,7 +101,7 @@ final class SvAmazonCurrentFeeEstimates
                     ]
                 ];
             }
-            $response=$amazon->request('POST','/products/fees/v0/feesEstimate',[],$requests);
+            $response=self::retryQuoteOnQuota(static fn():array=>$amazon->request('POST','/products/fees/v0/feesEstimate',[],$requests));
             if($response['status']!==200)throw new RuntimeException('amazon_current_fee_quote_http');
             $items=$response['data'];
             if(!array_is_list($items))throw new RuntimeException('amazon_current_fee_quote_not_list');

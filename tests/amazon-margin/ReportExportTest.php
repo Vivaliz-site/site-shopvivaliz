@@ -13,7 +13,8 @@ $rows = [
   'current_margin_status'=>'estimated','current_package_source'=>'AMAZON_CATALOG_PACKAGE'],
  ['seller_sku'=>'1C7Q-LKVS-KOPL','erp_sku'=>'TAJ/AS*BR1-NOVO','asin'=>'B0BM514NX7','program'=>'DBA',
   'price'=>71.91,'last_cost'=>42.90,'confirmed_units'=>12,'pending_sales'=>1,'margin_weighted_bps'=>445,
-  'margin_min_bps'=>445,'profit_cents'=>3840,'last_cost_date'=>'2026-09-07','status'=>'partial'],
+  'margin_min_bps'=>445,'profit_cents'=>3840,'last_cost_date'=>'2026-09-07','status'=>'partial',
+  'current_margin_bps'=>783,'current_margin_status'=>'estimated_program_unverified'],
 ];
 $data = SvAmazonMarginExport::rows(['rows'=>$rows],[]);
 if (count($data)!==2) throw new Exception('all rows');
@@ -51,6 +52,7 @@ if (strlen($p)<1500) throw new Exception('pdf too small');
 if (!str_contains($p,'Receita bruta media/unidade: R$ 75'))
     throw new Exception('pdf must distinguish actual price from current offer price');
 if (!str_contains($p,'(Marg. atual) Tj ET')) throw new Exception('PDF must mark projected current margin');
+if (!str_contains($p,'RESSALVA: DBA presumido')) throw new Exception('PDF must show unverified DBA projection caveat');
 if (!str_contains($p,'(Unid. conf.) Tj ET') || str_contains($p,'(Vendas) Tj ET')) throw new Exception('pdf header must label confirmed units, not sales');
 if (!str_contains($p,'(9) Tj ET') || !str_contains($p,'(12) Tj ET')) throw new Exception('pdf confirmed unit quantities missing');
 if (str_contains($sheet,'Preco medio efetivo das vendas')

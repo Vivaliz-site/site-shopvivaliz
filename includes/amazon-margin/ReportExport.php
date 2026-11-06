@@ -254,6 +254,13 @@ final class SvAmazonMarginExport
                 $content .= self::pdfText(509,$y,8,$get('Margem atual estimada (%)'));
                 $content .= self::pdfText(568,$y,8,$get('Unidades confirmadas'));
                 $state=(($row['Ativo Amazon']??'')==='Sim'?'Ativo: ':'Inativo: ').$get('Situacao');
+                // Projected margins with physical/program uncertainty must
+                // carry their warning in PDF, not just the Excel diagnostic.
+                $currentStatus=$get('Situacao margem atual');
+                if($currentStatus==='estimated_dimension_conflict')
+                    $state='RESSALVA: medidas divergentes';
+                elseif($currentStatus==='estimated_program_unverified')
+                    $state='RESSALVA: DBA presumido';
                 if (($row['Divergencia UI Olist']??'Nao')==='Sim')
                     $state='DIVERGENCIA UI OLIST (nao certificado)';
                 $content .= self::pdfText(627,$y,8,mb_strimwidth($state,0,35,'...'));
