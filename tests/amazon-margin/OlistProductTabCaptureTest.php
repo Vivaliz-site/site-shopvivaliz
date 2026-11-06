@@ -113,6 +113,25 @@ try {
         assertProductTab($ex->getMessage()==='olist_product_tab_capture_incomplete_or_invalid',
             'new source cannot pretend to be official export');
     }
+    $unkeyed=$base;
+    $unkeyed['active_count']=3;
+    $unkeyed['records']['103']=[
+        'product_id'=>103,'erp_sku'=>'',
+        'url_path'=>'/produtos#edit/103',
+        'observed_at'=>'2026-11-06T04:17:00.000Z',
+        'bindings'=>[],
+    ];
+    $write($unkeyed);
+    assertProductTab(SvAmazonMarginOlistProductTabCapture::load($path)['active_count']===3,
+        'active Olist option placeholder without SKU or ads counts in census');
+    $unkeyed['records']['103']['bindings']=$base['records']['102']['bindings'];
+    $write($unkeyed);
+    try {SvAmazonMarginOlistProductTabCapture::load($path);
+        throw new RuntimeException('unkeyed product ad accepted');}
+    catch(RuntimeException $ex) {
+        assertProductTab($ex->getMessage()==='olist_product_tab_record_invalid',
+            'unkeyed ERP product can never certify an Amazon link');
+    }
     $write($base);
     file_put_contents($image,'tampered');
     try {SvAmazonMarginOlistProductTabCapture::load($path);
