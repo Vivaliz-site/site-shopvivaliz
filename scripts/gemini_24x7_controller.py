@@ -181,6 +181,7 @@ def _completion_sweep(
         "active": 0,
         "bound_conversations": 0,
         "unbound_active": 0,
+        "detached_active": 0,
         "ready": 0,
         "completed": 0,
         "requeued": 0,
@@ -223,8 +224,11 @@ def _completion_sweep(
 
             summary["active"] += 1
             conversation_id = str(payload.get("conversation_id", "")).strip()
+            detached = payload.get("execution_route") == "detached"
             if conversation_id:
                 summary["bound_conversations"] += 1
+            elif detached:
+                summary["detached_active"] += 1
             else:
                 summary["unbound_active"] += 1
 
@@ -238,7 +242,22 @@ def _completion_sweep(
                 continue
 
             recovery_owner = ""
-            if durable_handoff_enabled and conversation_id:
+            detached_owner = False
+            if durable_handoff_enabled and detached:
+                recovery_owner = f"controller-terminalize:{task_id}"
+                detached_owner = True
+                try:
+                    task_state.claim_detached_recovery_ownership(
+                        task_id, owner_id=recovery_owner, ttl_seconds=60
+                    )
+                except task_state.TaskStateError as exc:
+                    if "lock busy" in str(exc).lower() or "already held" in str(exc).lower():
+                        summary["deferred_ownership_busy"] += 1
+                    else:
+                        summary["failed"] += 1
+                    recovery_owner = ""
+                    continue
+            elif durable_handoff_enabled and conversation_id:
                 browser_session = str(payload.get("browser_session", "")).strip()
                 if browser_session not in {"dev", "atendimento", "fred"}:
                     # Never bypass the single-writer contract merely to move a
@@ -284,11 +303,16 @@ def _completion_sweep(
             finally:
                 if recovery_owner:
                     try:
-                        task_state.release_recovery_ownership(
-                            task_id,
-                            owner_id=recovery_owner,
-                            reason="controller_terminalization_finished",
-                        )
+                        if detached_owner:
+                            task_state.release_detached_recovery_ownership(
+                                task_id, owner_id=recovery_owner,
+                                reason="controller_terminalization_finished",
+                            )
+                        else:
+                            task_state.release_recovery_ownership(
+                                task_id, owner_id=recovery_owner,
+                                reason="controller_terminalization_finished",
+                            )
                     except task_state.TaskStateError:
                         # The terminal transition is already durable. A stale
                         # release is forensic noise, not permission to undo it.
