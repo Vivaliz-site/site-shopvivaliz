@@ -1177,6 +1177,16 @@ def launch_task_service(task_id: str, timeout: int) -> None:
         "--property=Restart=no", f"--property=RuntimeMaxSec={int(timeout) + 30}s", "--",
         "/usr/bin/python3", "/opt/shopvivaliz-remote-control/server.py", "--run-task", task_id,
     ]
+    # systemd-run starts an independent transient unit; it does not inherit
+    # the MCP daemon's Environment= drop-in. Pass the non-secret Marina
+    # feature marker only to the already-authorized Marina worker. The worker
+    # must still revalidate the owner-signed, root-owned 0600 attestation,
+    # capability and expiry before constructing any SSH command.
+    if str(load_task(task_id)["host"]) == MARINA_HOST:
+        args.insert(
+            args.index("--"),
+            "--property=Environment=SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED=approved-v1",
+        )
     completed = subprocess.run(args, text=True, capture_output=True, check=False)
     if completed.returncode != 0 and not systemd_unit_is_active(unit):
         raise RuntimeError(redact_text(completed.stderr or "task_service_launch_failed"))
