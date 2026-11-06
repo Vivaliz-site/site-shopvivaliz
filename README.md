@@ -2,19 +2,14 @@
 
 Código-fonte do e-commerce ShopVivaliz e de suas integrações, rotinas de qualidade e agentes assistidos por IA.
 
-## Direção de plataforma
+## Plataforma oficial
 
-O projeto está evoluindo para uma base pronta com **MedusaJS** como backend principal, mantendo o stack PHP atual durante a transição.
+A loja ShopVivaliz utiliza a aplicacao PHP/MySQL em producao, com integracoes
+ERP Olist/Tiny API v3, marketplaces, checkout e servicos independentes. Alteracoes
+na arquitetura de producao exigem implementacao, testes e validacao do release real.
 
-### Arquitetura alvo
-
-- **Backend:** MedusaJS
-- **Frontend:** Next.js Commerce
-- **Banco:** PostgreSQL
-- **Cache/fila:** Redis
-- **Integrações:** Olist, Tiny e marketplaces
-
-Veja o plano em [`docs/medusa-migracao-roadmap.md`](docs/medusa-migracao-roadmap.md).
+O webhook canonico do ERP e /api/olist/webhook.php. Os adaptadores e paineis
+da plataforma paralela aposentada nao fazem parte do runtime ou dos planos ativos.
 
 ## Agentes e automações
 
@@ -69,12 +64,6 @@ Consulte [`AUTONOMOUS_TRIO_GUIDE.md`](AUTONOMOUS_TRIO_GUIDE.md) para o contrato 
 - **IA:** Anthropic, OpenAI e Google Gemini quando configurados
 - **Automação:** GitHub Actions e serviços explicitamente documentados
 - **Qualidade:** lint, testes de regressão, auditoria de secrets e evidência
-
-## Backend Medusa em desenvolvimento
-
-Há um backend headless MedusaJS + storefront Next.js em `claude/medusa/apps/`, integrado ao site PHP legado via webhook (`claude/api/medusa-webhook.php`) e à sincronização Olist/Tiny ERP. Ainda não está em produção.
-
-Leia [`claude/medusa/README.md`](claude/medusa/README.md) e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md).
 
 ## 🧠 Knowledge Base
 

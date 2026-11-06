@@ -181,7 +181,7 @@ if command -v php &> /dev/null; then
                 ((PHP_INVALID++))
             fi
         fi
-    done < <(find . -name "*.php" -not -path "./medusa/*" -not -path "./vendor/*" 2>/dev/null)
+    done < <(find . -name "*.php" -not -path "./vendor/*" 2>/dev/null)
 else
     log_warning "PHP não disponível - pulando validação de sintaxe"
 fi
@@ -213,7 +213,7 @@ if command -v python3 &> /dev/null; then
                 ((PY_INVALID++))
             fi
         fi
-    done < <(find . -name "*.py" -not -path "./medusa/*" -not -path "./venv/*" 2>/dev/null)
+    done < <(find . -name "*.py" -not -path "./venv/*" 2>/dev/null)
 else
     log_warning "Python3 não disponível - pulando validação de sintaxe"
 fi

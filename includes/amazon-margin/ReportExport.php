@@ -190,7 +190,7 @@ final class SvAmazonMarginExport
     /** @param list<array<string,string|int|float|null>> $data */
     public static function pdf(array $data, string $date): string
     {
-        $groups = array_chunk($data,23);
+        $groups = array_chunk($data,17);
         if (!$groups) $groups=[[]];
         $fontId=3;
         $objects=[];
@@ -214,7 +214,7 @@ final class SvAmazonMarginExport
             $content .= self::pdfText(627,510,9,'Situacao');
             $content .= "0.72 w 27 504 m 813 504 l S\n";
             foreach($group as $i=>$row){
-                $y=487-$i*19;
+                $y=483-$i*26;
                 $get=static fn(string $k):string => (string)($row[$k]??'-');
                 $content .= self::pdfText(27,$y,8,mb_strimwidth($get('SKU Amazon'),0,28,'...'));
                 $content .= self::pdfText(191,$y,8,mb_strimwidth($get('Produto ERP'),0,15,'...'));
@@ -236,10 +236,24 @@ final class SvAmazonMarginExport
                 if (($row['Divergencia UI Olist']??'Nao')==='Sim')
                     $state='DIVERGENCIA UI OLIST (nao certificado)';
                 $content .= self::pdfText(627,$y,8,mb_strimwidth($state,0,35,'...'));
-                if($i%2===1)$content.="0.86 w 27 ".($y-7)." m 813 ".($y-7)." l S\n";
+                // A second line makes the comparison unit-vs-period explicit:
+                // the first-line price and cost both refer to ONE sold kit.
+                // Period profit may exceed the price of one kit, because it
+                // includes all financially confirmed sold units.
+                $profitPerUnit=$get('Lucro por unidade vendida (R$)');
+                $profitPeriod=$get('Lucro acumulado do periodo (R$)');
+                $content .= self::pdfText(191,$y-11,7,'Lucro por unidade vendida: '.
+                    ($profitPerUnit==='-'?'-':'R$ '.$profitPerUnit));
+                $content .= self::pdfText(427,$y-11,7,'Lucro acumulado: '.
+                    ($profitPeriod==='-'?'-':'R$ '.$profitPeriod));
+                $pieces=$get('Pecas por unidade vendida');
+                if ($pieces!=='-') {
+                    $content .= self::pdfText(650,$y-11,7,'Pecas por kit: '.$pieces);
+                }
+                if($i%2===1)$content.="0.54 w 27 ".($y-15)." m 813 ".($y-15)." l S\n";
             }
             $content .= self::pdfText(27,24,8,'Preco e custo por unidade VENDIDA (kit completo). * Preco cadastral. ^ Custo historico.');
-            $content .= self::pdfText(27,12,8,'Lucro por unidade e lucro acumulado constam separadamente no Excel.');
+            $content .= self::pdfText(27,12,8,'Lucro por unidade e lucro acumulado constam neste PDF e no Excel; periodo = todas as unidades conciliadas.');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
             $objects[$pg]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 '.$fontId.' 0 R >> >> /Contents '.$ct.' 0 R >>';

@@ -65,7 +65,6 @@ $html = <<<HTML
 <h3>✅ SISTEMAS OK (Prontos quando token funcionar)</h3>
 <ul>
   <li>Frete (Melhor Envio) - Completo</li>
-  <li>Checkout (Medusa) - Ponta-a-ponta</li>
   <li>Pagamentos - Infraestrutura</li>
   <li>Autenticação (Google OAuth) - Real</li>
   <li>CSRF Protection - 256-bit</li>
