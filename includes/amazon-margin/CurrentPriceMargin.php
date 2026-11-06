@@ -129,9 +129,12 @@ final class SvAmazonCurrentPriceMargin
         $price=self::positive($row['price']??null);
         $cost=self::positive($row['last_cost']??null);
         $program=(string)($row['program']??'');
+        $programAssumed=$program==='DBA_CANDIDATE';
+        if($programAssumed)$program='DBA';
         if(!in_array($program,['FBA_ONSITE','DBA'],true)){
             $out['current_margin_status']='program_unverified';return $out;
         }
+        $out['current_program_assumed']=$programAssumed;
         if($price===null){$out['current_margin_status']='price_missing';return $out;}
         if($cost===null){$out['current_margin_status']='cost_or_kit_unverified';return $out;}
         $p=(int)round($price*100);
@@ -158,8 +161,9 @@ final class SvAmazonCurrentPriceMargin
         if(is_array($amazon)&&is_array($erp)){
             $aa=self::billable($amazon);$bb=self::billable($erp);
             if($aa!==null&&$bb!==null){
-                $out['current_package_conflict']=abs($aa['billable_kg']-$bb['billable_kg'])
-                    >max(0.2,0.05*$aa['billable_kg']);
+                $out['current_package_conflict']=
+                    abs($aa['billable_kg']-$bb['billable_kg']) > max(0.2,0.05*$aa['billable_kg'])
+                    || abs($aa['actual_kg']-$bb['actual_kg']) > max(0.2,0.05*$aa['actual_kg']);
             }
         }
         if($weight!==null&&!$weight['eligible']){
@@ -178,8 +182,8 @@ final class SvAmazonCurrentPriceMargin
         $out['current_wms_cents']=0;
         $out['current_profit_cents']=$profit;
         $out['current_margin_bps']=(int)round($profit*10000/$p,0,PHP_ROUND_HALF_UP);
-        $out['current_margin_status']=$out['current_package_conflict']
-            ?'estimated_dimension_conflict':'estimated';
+        $out['current_margin_status']=$programAssumed?'estimated_program_unverified'
+            :($out['current_package_conflict']?'estimated_dimension_conflict':'estimated');
         return $out;
     }
 }
