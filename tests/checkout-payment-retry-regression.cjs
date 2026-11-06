@@ -49,6 +49,7 @@ async function scenario(change, options = {}) {
   };
   let coupon = { code: 'TEST10', amount: 4.22 };
   const items = [{ sku: 'FIXTURE-A', quantity: 1, price: 15.47 }, { sku: 'FIXTURE-B', quantity: 1, price: 28 }];
+  memory.set('shopvivaliz_cart', JSON.stringify(items));
   const shipping = { total: 13.58, option: { id: 'fixture-shipping' }, cep: '01310100', quote_id: 'fixture-quote', expires_at: 2000000000 };
   const context = {
     console, URLSearchParams, TextEncoder,
@@ -161,10 +162,62 @@ async function scenario(change, options = {}) {
     assert.equal(result.payments.length, 0);
     assert.match(result.status.textContent, /total inválido/);
   });
-  await check('Gateway failure keeps checkout form draft; successful handoff clears it', async () => {
+  await check('Gateway redirect retains cart and draft for failed-payment recovery', async () => {
     const result = await scenario();
-    assert.equal(result.draftAfterFailure, true, 'gateway failure must preserve draft for retry');
-    assert.equal(result.memory.has('shopvivaliz_checkout_form'), false, 'successful redirect handoff must clear draft');
+    assert.equal(result.draftAfterFailure, true, 'gateway creation failure must preserve form');
+    assert.equal(result.redirects.length, 1, 'provider handoff was attempted');
+    assert.equal(result.memory.has('shopvivaliz_checkout_form'), true, 'redirect must not discard buyer form before approved payment');
+    assert.equal(result.memory.has('shopvivaliz_pending_payment'), true, 'retry must retain the existing order and session');
+    assert.equal(result.memory.has('shopvivaliz_cart'), true, 'provider failure must not produce an empty checkout');
+    const handoff = JSON.parse(result.memory.get('shopvivaliz_checkout_handoff'));
+    assert.equal(handoff.order_number, 'SV-FIXTURE-1');
+    assert.equal(handoff.cart, result.memory.get('shopvivaliz_cart'));
+    assert.equal(JSON.stringify(handoff).includes('fixture@example.invalid'), false, 'handoff metadata cannot include identity');
+  });
+  await check('Approved return reconciles only the matching outstanding payment and unchanged cart', async () => {
+    const approvedReturn = fs.readFileSync(path.join(root, 'checkout-return.php'), 'utf8');
+    const start = approvedReturn.indexOf('<!-- APPROVED_PAYMENT_HANDOFF_CART_RECONCILIATION_V1 -->');
+    const end = approvedReturn.indexOf('<!-- /APPROVED_PAYMENT_HANDOFF_CART_RECONCILIATION_V1 -->', start);
+    assert.ok(start > 0 && end > start, 'approved return reconciliation block must exist');
+    const block = approvedReturn.slice(start, end);
+    assert.match(block, /if \\(\\$serverApproved && \\$orderNumber !== ''\\)/, 'only actual server-confirmed payments can clear cart');
+    const begin = block.indexOf('<script>'), finish = block.lastIndexOf('</script>');
+    assert.ok(begin >= 0 && finish > begin);
+    let js = block.slice(begin + '<script>'.length, finish);
+    const order = 'SV20261106123456789';
+    js = js.replace(/<\\?= json_encode\\(\\$orderNumber\\) \\?>/g, JSON.stringify(order));
+    const cart = JSON.stringify([{sku:'FIXTURE-A',quantity:1,price:15.47}]);
+    function attempt(pendingOrder, cartChanged) {
+      const memory = new Map([
+        ['shopvivaliz_pending_payment',JSON.stringify({order_number:pendingOrder,key:'fixture-key'})],
+        ['shopvivaliz_checkout_handoff',JSON.stringify({order_number:order,cart})],
+        ['shopvivaliz_cart',cartChanged ? '[{"sku":"NEW-CART"}]' : cart],
+        ['shopvivaliz_checkout_form','fixture-draft'],
+        ['shopvivaliz_shipping_quote','fixture-shipping'],
+        ['shopvivaliz_coupon','fixture-coupon'],
+      ]);
+      let notices=0;
+      const ctx = {
+        window:{dispatchEvent(){notices++;}},
+        localStorage:{getItem(k){return memory.get(k)||null},removeItem(k){memory.delete(k)}},
+        CustomEvent:class {constructor(name,data){this.name=name;this.detail=data.detail;}},
+      };
+      vm.runInNewContext(js,ctx);
+      return {memory,notices};
+    }
+    const confirmed=attempt(order,false);
+    for(const key of ['shopvivaliz_cart','shopvivaliz_pending_payment','shopvivaliz_checkout_handoff','shopvivaliz_checkout_form','shopvivaliz_shipping_quote','shopvivaliz_coupon']) {
+      assert.equal(confirmed.memory.has(key),false,'confirmed identical cart clears '+key);
+    }
+    assert.equal(confirmed.notices,1);
+    const unrelated=attempt('SV20261106999999999',false);
+    assert.equal(unrelated.memory.has('shopvivaliz_cart'),true);
+    assert.equal(unrelated.memory.has('shopvivaliz_pending_payment'),true);
+    assert.equal(unrelated.notices,0);
+    const changed=attempt(order,true);
+    assert.equal(changed.memory.has('shopvivaliz_cart'),true,'new cart must remain');
+    assert.equal(changed.memory.has('shopvivaliz_pending_payment'),false,'approved order session must be retired');
+    assert.equal(changed.notices,0);
   });
   await check('Preflight failures preserve checkout form draft', async () => {
     for (const option of [{cryptoUnavailable:true},{invalidTotal:true}]) {
@@ -172,6 +225,6 @@ async function scenario(change, options = {}) {
       assert.equal(result.draftAfterFailure, true, 'preflight failure must preserve draft');
     }
   });
-  console.log(JSON.stringify({ tests: 17, failures }));
+  console.log(JSON.stringify({ tests: 18, failures }));
   process.exitCode = failures ? 1 : 0;
 })().catch(error => { console.error(error.stack); process.exitCode = 2; });
