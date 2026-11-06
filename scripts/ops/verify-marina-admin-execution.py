@@ -9,7 +9,7 @@ def verify(r):
         return "unexpected_host"
     if r.get("command") != "hostname -s; id -un":
         return "unexpected_command"
-    if r.get("state") != "completed" or r.get("exit_code") != 0:
+    if r.get("ok") is not True or r.get("exit_code") != 0:
         return "admin_execution_denied_or_failed"
     if r.get("stdout", "").strip().splitlines() != ["marina-a1-4c24g", "ubuntu"]:
         return "unexpected_output"
