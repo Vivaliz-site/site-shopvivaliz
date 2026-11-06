@@ -65,9 +65,9 @@ final class SvAmazonMarginExport
             'Vendas pendentes'=>(int)($row['pending_sales'] ?? 0),
             'Margem ponderada (%)'=>$margin===null ? null : round($margin/100, 2),
             'Margem minima (%)'=>isset($row['margin_min_bps']) ? round($row['margin_min_bps']/100,2) : null,
-            'Lucro por unidade vendida (R$)'=>(isset($row['margin_weighted_bps']) && (int)($row['confirmed_units']??0)>0)
+            'Lucro por unidade vendida (R$)'=>(isset($row['margin_weighted_bps'],$row['profit_cents']) && (int)($row['confirmed_units']??0)>0)
                 ? round(((int)$row['profit_cents'])/100/(int)$row['confirmed_units'],2):null,
-            'Lucro acumulado do periodo (R$)'=>isset($row['margin_weighted_bps'])
+            'Lucro acumulado do periodo (R$)'=>isset($row['margin_weighted_bps'],$row['profit_cents'])
                 ? round(((int)$row['profit_cents'])/100,2) : null,
             'Data ultimo custo'=>(string)($row['last_cost_date'] ?? ''),
             'Situacao'=>(string)($row['status'] ?? 'unverified'),
