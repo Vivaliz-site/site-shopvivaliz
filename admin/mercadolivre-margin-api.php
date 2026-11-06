@@ -182,7 +182,10 @@ if ($action === 'listings') {
         svmlm_fail('INVALID_PREVIEW_INPUT');
     }
     svmlm_require_nonpersistent_preview($token);
-    $path = '/v1/pricing/quote';
+    // This endpoint does not exist in the legacy release that persisted
+    // hypothetical requested_price values. Even a deployment race after
+    // capability probing cannot mutate the historic financial ledger.
+    $path = '/v1/pricing/preview';
     $body = json_encode([
         'account_id' => $account,
         'item_id' => $payload['item_id'],

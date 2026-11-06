@@ -75,13 +75,19 @@ $checks = [
         && str_contains($page, 'td.textContent='),
     'price simulation uses only the existing quote endpoint and server account binding' =>
         str_contains($api, "\$writeActions = ['start', 'resume', 'preview'];")
-        && str_contains($api, "'/v1/pricing/quote'")
+        && str_contains($api, "'/v1/pricing/preview'")
+        && !str_contains($api, "'/v1/pricing/quote'")
         && str_contains($api, "'requested_price' => \$payload['requested_price']")
         && str_contains($api, "'account_id' => \$account")
         && str_contains($api, "'quantity' => 1")
         && str_contains($api, "array_diff(array_keys(\$payload), ['item_id', 'requested_price'])")
         && str_contains($page, "request('preview',{method:'POST'")
         && str_contains($page, "quote.sources?.price?.origin!=='REQUESTED_PRICE'"),
+    'what-if route does not exist in legacy price-writeback backend' =>
+        str_contains($api, "'/v1/pricing/preview'")
+        && !str_contains($api, "'/v1/pricing/quote'")
+        && str_contains($api, 'simulated-no-')
+        && str_contains($api, 'ledger-v1'),
     'price preview refuses older backend before posting what-if financial data' =>
         str_contains($api, "svmlm_require_nonpersistent_preview(\$token);")
         && str_contains($api, "svmlm_upstream('/v1/health', 'GET', null, \$token)")
