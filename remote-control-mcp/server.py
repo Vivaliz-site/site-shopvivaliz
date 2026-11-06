@@ -1500,7 +1500,8 @@ def marina_readonly_ssh_invocation(command: str) -> list[str]:
 def marina_admin_ssh_invocation(command: str) -> list[str]:
     # Owner-grant gated, inline-only administrative command as ubuntu, never a
     # root shell. Caveat for reviewers: ubuntu holds passwordless sudo, so the
-    # command text can still escalate. Durable jobs stay off (quota 0).
+    # command text can still escalate. Durable admin jobs are independently
+    # grant-gated and limited to one per Marina host.
     if not marina_central_admin_grant_active():
         raise PermissionError("marina_central_admin_route_not_approved")
     if (not isinstance(command, str) or not command.strip()
@@ -2612,7 +2613,11 @@ def execute_tool(
         readonly_tools = {"processes_list", "file_read", "file_list", "logs_tail"}
         admin_tools = {"service_action", "admin_command_run", "task_submit"}
         if name in readonly_tools:
-            if not marina_central_readonly_grant_active():
+            # Read tools may use either a read-only grant or the already
+            # approved administrative grant. Dynamic read commands require
+            # the admin transport; fixed health/status retain read-only SSH.
+            if not (marina_central_readonly_grant_active()
+                    or marina_central_admin_grant_active()):
                 raise PermissionError("marina_central_read_only_requires_owner_grant")
         elif name in admin_tools:
             if not marina_central_admin_grant_active():
@@ -2892,7 +2897,11 @@ def execute_tool(
     if name == "host_health":
         result = run_host_command(str(host), health_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "processes_list":
-        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check, recover_transport=False)
+        result = run_host_command(
+            str(host), processes_command(platform), timeout, cancel_check,
+            recover_transport=False,
+            marina_admin=(host == MARINA_HOST and marina_central_admin_grant_active()),
+        )
     elif name == "service_status":
         command = (
             marina_readonly_service_command(args.get("service"))
@@ -2918,11 +2927,25 @@ def execute_tool(
             str(host), service_cmd, timeout, cancel_check, **service_kwargs,
         )
     elif name == "file_read":
-        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check, recover_transport=False)
+        result = run_host_command(
+            str(host), file_read_command(platform, str(args.get("path") or ""),
+                                          int(args.get("max_bytes", 65536))),
+            timeout, cancel_check, recover_transport=False,
+            marina_admin=(host == MARINA_HOST and marina_central_admin_grant_active()),
+        )
     elif name == "file_list":
-        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check, recover_transport=False)
+        result = run_host_command(
+            str(host), file_list_command(platform, str(args.get("path") or "")),
+            timeout, cancel_check, recover_transport=False,
+            marina_admin=(host == MARINA_HOST and marina_central_admin_grant_active()),
+        )
     elif name == "logs_tail":
-        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check, recover_transport=False)
+        result = run_host_command(
+            str(host), logs_tail_command(platform, str(args.get("path") or ""),
+                                          int(args.get("lines", 100))),
+            timeout, cancel_check, recover_transport=False,
+            marina_admin=(host == MARINA_HOST and marina_central_admin_grant_active()),
+        )
     elif name == "admin_command_run":
         command = str(args.get("command") or "")
         if not command.strip():
@@ -3019,7 +3042,10 @@ def tool_specs() -> list[dict[str, Any]]:
             "logs_tail", "admin_command_run", "task_submit",
         } and "host" in schema_props:
             if name in {"processes_list", "file_read", "file_list", "logs_tail"}:
-                allowed_hosts = list(HOSTS) if marina_central_readonly_grant_active() else [
+                allowed_hosts = list(HOSTS) if (
+                    marina_central_readonly_grant_active() or
+                    marina_central_admin_grant_active()
+                ) else [
                     host for host in HOSTS if host != MARINA_HOST
                 ]
             else:
