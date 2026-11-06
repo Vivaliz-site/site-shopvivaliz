@@ -94,8 +94,8 @@ class RemoteControlMcpTests(unittest.TestCase):
              ["marina_readonly", m.MARINA_ADMIN_CAPABILITY]),
         )
         for readonly, admin, transport, capability, capabilities in cases:
-            with self.subTest(readonly=readonly, admin=admin), \\
-                 mock.patch.object(m, "marina_central_readonly_grant_active", return_value=readonly), \\
+            with self.subTest(readonly=readonly, admin=admin), \
+                 mock.patch.object(m, "marina_central_readonly_grant_active", return_value=readonly), \
                  mock.patch.object(m, "marina_central_admin_grant_active", return_value=admin):
                 listed = m.execute_tool("hosts_list", {})["hosts"]
                 marina = next(item for item in listed if item["name"] == m.MARINA_HOST)
