@@ -9,8 +9,8 @@ const crypto = require('crypto');
 const { chromium } = require('/home/ubuntu/amazon-returns-deploy/shared/olist-erp-browser/runtime/node_modules/playwright-core');
 
 const ROOT = '/home/ubuntu/.shopvivaliz/runtime/amazon-margin';
-const INPUT = path.join(ROOT, 'product-tab-audit-input-active-all-20261106.json');
-const OUTDIR = path.join(ROOT, 'product-tabs-scan-20261106');
+const INPUT = path.join(ROOT, 'product-tab-input-v3-frozen-r9-20261106.json');
+const OUTDIR = path.join(ROOT, 'product-tabs-scan-v3-20261106');
 const EVIDENCE = path.join(ROOT, 'evidence');
 const VALID_INTEGRATIONS = new Map([['27473', 'Amazon'], ['27478', 'Amazon Onsite'], ['27482', 'Amazon Classic']]);
 
@@ -35,7 +35,7 @@ async function main() {
         fail('active_catalog_input_not_private');
     }
     const input = JSON.parse(fs.readFileSync(INPUT, 'utf8'));
-    if (input.source !== 'OLIST_ERP_AUTHENTICATED_PRODUCTS_UI_ALL_ACTIVE'
+    if (input.source !== 'OLIST_V3_CURRENT_ACTIVE_PRODUCTS'
         || input.active_total !== 202
         || input.product_ids?.length !== 202
         || input.target_seller_skus?.length !== 61
@@ -100,7 +100,7 @@ async function main() {
                     const displayed=await page.locator('body').innerText();
                     if (found.some(x=>!displayed.includes(x.sku)))fail('seller_sku_not_visible_in_real_olist_tab');
                     const stamp=new Date().toISOString().slice(0,10).replace(/-/g,'');
-                    const basename='olist-product-tabs-'+id+'-'+stamp+'.png';
+                    const basename='olist-product-tabs-v3-'+id+'-'+stamp+'.png';
                     const file=path.join(EVIDENCE,basename);
                     if (fs.existsSync(file))fail('product_screenshot_already_exists');
                     await page.screenshot({path:file,fullPage:true});
