@@ -133,7 +133,7 @@ def _bound_session_authenticated(session: str) -> bool:
         return False
 
 
-def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any]) -> dict[str, Any] | None:
+def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any], *, timeout_seconds: int = 900) -> dict[str, Any] | None:
     if not _durable_handoff_enabled():
         return state
     task_id = str(state.get("task_id", "")).strip()
@@ -149,7 +149,8 @@ def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: d
             continuity_state.RUNTIME_DIR = Path(runtime_dir)
             return continuity_state.claim_detached_recovery_ownership(
                 task_id, owner_id=owner_id, ttl_seconds=max(
-                    30, int(os.getenv("SHOPVIVALIZ_RESUME_OWNERSHIP_TTL_SECONDS", "900"))
+                    30, int(timeout_seconds) + 120,
+                    int(os.getenv("SHOPVIVALIZ_RESUME_OWNERSHIP_TTL_SECONDS", "900"))
                 )
             )
         finally:
@@ -940,7 +941,7 @@ def run_once(
                 continue
 
             try:
-                claimed_state = _claim_resume_ownership(runtime, state, request)
+                claimed_state = _claim_resume_ownership(runtime, state, request, timeout_seconds=timeout_seconds)
             except continuity_state.TaskStateError as exc:
                 message = str(exc).strip().lower()
                 ownership_busy = (
