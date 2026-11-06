@@ -117,7 +117,10 @@ function summarize(data) {
         }, channels);
         if (pageData.form_id !== key) throw Error('erp_product_form_identity_mismatch');
         const sku = String(input.products[key]?.sku || '');
-        if (!sku) throw Error('official_v3_product_sku_missing');
+        // Olist can keep active option-placeholder products with no ERP SKU.
+        // Complete the census only when such a record has ZERO Amazon links;
+        // it can never identify or certify an Amazon Seller SKU.
+        if (!sku && pageData.bindings.length) throw Error('unkeyed_erp_product_has_amazon_links');
         const record = {
           product_id: Number(key),
           erp_sku: sku,
