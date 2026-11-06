@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MarginMath.php';
+require_once __DIR__ . '/CurrentPriceMargin.php';
+require_once __DIR__ . '/CurrentFeeEstimates.php';
 require_once __DIR__ . '/DbaOrderGroup.php';
 require_once __DIR__ . '/KitCost.php';
 require_once __DIR__ . '/ProductMatch.php';
@@ -24,6 +26,7 @@ final class SvAmazonMarginCollector
     private array $productsBySku = [];
     private array $productDetails = [];
     private array $eanByAsin = [];
+    private array $packageByAsin = [];
     private array $programByOrder = [];
     private array $warnings = [];
     private $onProgress = null;
@@ -228,8 +231,10 @@ final class SvAmazonMarginCollector
         if ($asin === '') return null;
         if (array_key_exists($asin,$this->eanByAsin)) return $this->eanByAsin[$asin];
         $res = $this->a('GET','/catalog/2022-04-01/items/'.rawurlencode($asin),[
-            'marketplaceIds'=>$this->marketplace,'includedData'=>'identifiers',
+            'marketplaceIds'=>$this->marketplace,'includedData'=>'identifiers,attributes',
         ]);
+        $this->packageByAsin[$asin]=SvAmazonCurrentPriceMargin::amazonPackage(
+            is_array($res['attributes']??null)?$res['attributes']:[]);
         $codes=[];
         foreach (($res['identifiers'] ?? []) as $group) {
             foreach (($group['identifiers'] ?? []) as $v) {
@@ -264,6 +269,8 @@ final class SvAmazonMarginCollector
             'last_cost_source'=>'OLIST_TINY_V3_PRODUCT_COST_HISTORY',
             'erp_product_type'=>(string)($p['tipo']??''),
             'erp_description'=>(string)($p['descricao']??''),
+            'erp_package'=>SvAmazonCurrentPriceMargin::erpPackage(
+                is_array($p['dimensoes']??null)?$p['dimensoes']:[]),
             'erp_kit_component_count'=>is_array($p['kit']??null) ? count($p['kit']) : 0,
             'erp_kit_components'=>is_array($p['kit']??null)
                 ? array_map(static fn($c):array=>[
@@ -399,6 +406,7 @@ final class SvAmazonMarginCollector
             try {
                 $ean = $this->ean($asin);
                 $row['ean'] = $ean;
+                $row['amazon_package']=$this->packageByAsin[$asin]??null;
                 // The catalog GTIN alone does not identify the *ERP-linked*
                 // product of an Amazon offer. A user may publish Amazon with
                 // another GTIN and link it to a valid SKU in one of the three
@@ -719,6 +727,18 @@ final class SvAmazonMarginCollector
             $rows[]=$row;
         }
 
+        // Keep transactional margins untouched; quote a second, explicitly
+        // estimated current-price metric even when there were no recent sales.
+        $this->note('quoting_current_fees',0,count($rows));
+        $feeQuotes=SvAmazonCurrentFeeEstimates::quote($this->amazon,$rows,$this->marketplace,
+            fn(int $done,int $total)=>$this->note('quoting_current_fees',$done,$total));
+        $region=trim((string)(getenv('SV_AMAZON_DBA_ORIGIN_REGION')?:''));
+        foreach($rows as &$pricedRow){
+            $sku=(string)($pricedRow['seller_sku']??'');
+            $pricedRow+=SvAmazonCurrentPriceMargin::calculate($pricedRow,
+                $feeQuotes[$sku]??null,$taxBps,$region!==''?$region:null);
+        }
+        unset($pricedRow);
         $this->note('saving_report',count($rows),count($listings));
         usort($rows, static function($a,$b): int {
             $ap=$a['margin_min_bps']??PHP_INT_MAX;$bp=$b['margin_min_bps']??PHP_INT_MAX;
