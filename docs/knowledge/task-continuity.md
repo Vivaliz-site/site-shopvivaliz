@@ -11,6 +11,43 @@ Protecoes do GitHub, MFA, RBAC, segredos, gates comerciais e aprovacoes humanas 
 <!-- /MANDATORY_AGENT_CHECKLIST_V1 -->
 
 
+<!-- DETACHED_PROVENANCE_V1 -->
+## Continuidade de tarefas de outros agentes (sem conversa ChatGPT)
+
+O checkpoint de uma tarefa Claude/Gemini/Ollama/Codex sem `conversation_id` **nao e**
+uma conversa ChatGPT. A controladora nao pode atribuir uma conversa aleatoria,
+nem usar o nudge da conta Dev/Atendimento para esse objetivo.
+
+Somente apos uma **autorizacao por tarefa** com versao CAS exata, o operador
+pode solicitar que o executor desacoplado ja existente a continue por um
+worker finito, com `runtime_lock` exclusivo e token de fencing:
+
+```sh
+python3 scripts/agent_task_state.py show --task TAREFA
+python3 scripts/agent_task_state.py authorize-detached \
+  --task TAREFA --expected-checkpoint-version VERSAO \
+  --authorized-by REFERENCIA_DA_APROVACAO \
+  --reason "Retomar este checkpoint de origem nao ChatGPT sem vinculo de navegador"
+```
+
+A transicao preserva `agent_id`, `task_id`, checklist, historia e `next_action`,
+atualiza a versao e gera novo fingerprint para a fila. **Nao** libera
+permissoes de sistema/marketplace, nao assina revisao humana e nao concede
+acesso a browser: chamadas especificas preservam seus gates originais.
+O programa de fallback valida o mesmo task_id, owner, versao e runtime
+lease/fencing por `verify-detached-lease` antes de executar qualquer provedor.
+Apenas tarefas explicitamente marcadas `execution_route=detached` usam a
+fila de CLI; novas tarefas nao recebem este modo automaticamente.
+
+A ausencia de opt-in deixa o checkpoint RUNNING e sinaliza origem nao
+comprovada. A simples mudanca de rota, o retorno do provedor ou o status
+`in_progress` **nao** provam continuidade: exigir alteracao material do
+checkpoint e E2E de funcionalidade; auditoria V5 exige ainda revisor
+independente e `AUDIT_VERDICT=APTO`. Manter a janela antirreprocessamento
+de 10 dias separada do estado da tarefa, nao eliminar dados antigos.
+
+<!-- /DETACHED_PROVENANCE_V1 -->
+
 <!-- CONTINUITY_ATOMIC_ROUTING_V1 -->
 ## Registro atomico de tarefa e conversa
 
