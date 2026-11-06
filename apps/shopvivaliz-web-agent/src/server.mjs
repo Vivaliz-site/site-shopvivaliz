@@ -102,14 +102,14 @@ export function createServer({controller=new TakeoverController(new BrowserDrive
     const m=/^\/human\/([a-f0-9-]{36})\/(frame|action|release)$/.exec(pathname);
     if(!m||!validId(m[1]))return sendJson(res,404,{error:'not_found'},common);
     const id=m[1],operation=m[2];
-    const cors={'access-control-allow-origin':'*','access-control-allow-headers':'Authorization, Content-Type','access-control-allow-methods':'GET, POST, OPTIONS','vary':'Origin','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
+    const cors={'access-control-allow-origin':'*','access-control-allow-headers':'Authorization, Content-Type','access-control-allow-methods':'GET, POST, OPTIONS','access-control-expose-headers':'X-ShopVivaliz-Site-Origin','vary':'Origin','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
     if(req.method==='OPTIONS'){res.writeHead(204,cors);return res.end();}
     if(!permit(id,200))return sendJson(res,429,{error:'rate_limited'},cors);
     const supplied=(req.headers.authorization||'').replace(/^Bearer /i,'');
     try{
       if(operation==='frame'&&req.method==='GET'){
-        const frame=await controller.humanFrame(id,supplied);
-        res.writeHead(200,{'content-type':'image/jpeg','content-length':frame.length,...cors});return res.end(frame);
+        const {frame,origin}=await controller.humanFrame(id,supplied,true);
+        res.writeHead(200,{'content-type':'image/jpeg','content-length':frame.length,'X-ShopVivaliz-Site-Origin':origin,...cors});return res.end(frame);
       }
       if(operation==='action'&&req.method==='POST'){
         const v=await readJson(req,2048);
