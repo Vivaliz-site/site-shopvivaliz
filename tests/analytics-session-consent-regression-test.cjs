@@ -36,4 +36,36 @@ check('Stored GA identity is not reused after browser cookies disappear',()=>{co
 check('Essential-only choice clears the saved GA identity immediately',()=>{const app=browser(baseCookie,{'sv_funnel_client_v1':'123456789.1700000000|2222222222'});vm.runInContext(privacySource,app.context);app.window.ShopVivalizPrivacy.essentialOnly();assert.equal(app.saved.has('sv_funnel_client_v1'),false);app.push();assert.equal(app.beacons.length,0);});
 check('Resetting consent clears the saved GA identity before reloading',()=>{const app=browser(baseCookie,{'sv_funnel_client_v1':'123456789.1700000000|2222222222'});vm.runInContext(privacySource,app.context);app.window.ShopVivalizPrivacy.reset();assert.equal(app.saved.has('sv_funnel_client_v1'),false);assert.equal(app.window.reloaded,true);});
 check('First-party non-GA fallback remains valid after browser cookies disappear',()=>{const app=browser('sv_privacy_consent=accepted',{'sv_funnel_client_v1':'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'});app.push();assert.equal(app.beacons[0].client_id,'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');});
+
+const paymentSource = fs.readFileSync(path.join(root, 'js/checkout-payment-v2.js'), 'utf8');
+function paymentBrowser(withGtag) {
+  let submitHandlers = 0;
+  const dataLayer = [];
+  const form = { dataset: {}, addEventListener(type) { if (type === 'submit') submitHandlers++; }, querySelector() { return null; } };
+  const paymentDoc = {
+    readyState: 'complete',
+    querySelector() { return null; },
+    getElementById(id) { return id === 'checkout-form' ? form : null; },
+  };
+  const paymentWindow = { location: { pathname: '/checkout' }, dataLayer };
+  if (withGtag) paymentWindow.gtag = (...args) => dataLayer.push(args);
+  vm.runInNewContext(paymentSource, {window: paymentWindow, document: paymentDoc, localStorage: {getItem: () => null}}, {timeout: 1000});
+  return {window: paymentWindow, dataLayer, submitHandlers};
+}
+check('Checkout payment wrapper must not bind a second submit handler', () => {
+  const ctx = paymentBrowser(true);
+  assert.equal(ctx.submitHandlers, 0, 'shopvivaliz-google-events.js is the sole add_payment_info source');
+  assert.match(eventsSource, /pushOnce\('add_payment_info_checkout', 'add_payment_info'/);
+  ctx.window.triggerGooglePurchaseEvent('SVTEST', 5, []);
+  assert.equal(ctx.dataLayer.length, 1, 'gtag must produce exactly one dataLayer entry');
+  assert.equal(ctx.dataLayer[0][1], 'order_created');
+  assert.equal(ctx.dataLayer.some(item => item[1] === 'purchase'), false);
+});
+check('Pending Ads wrapper uses only one dataLayer fallback when gtag is absent', () => {
+  const ctx = paymentBrowser(false);
+  ctx.window.triggerGoogleAdsConversion('SVTEST', 5);
+  assert.equal(ctx.dataLayer.length, 1);
+  assert.equal(ctx.dataLayer[0].event, 'ads_conversion_pending_payment');
+});
+
 process.exitCode=failures?1:0;
