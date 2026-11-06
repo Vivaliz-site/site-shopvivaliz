@@ -111,7 +111,7 @@ class PublishedMcpCatalogTests(unittest.TestCase):
             encoding="utf-8")
         self.assertIn("--server /tmp/mcp-server-tools.json", runbook)
         self.assertIn("--client /tmp/mcp-client-tools.json", runbook)
-        self.assertIn("nao", runbook.lower())
+        self.assertIn("não", runbook.lower())
 
     def test_no_server_inventory_can_certify_missing_client(self):
         self.assertNotEqual(m.compare(self.server, None), [])
