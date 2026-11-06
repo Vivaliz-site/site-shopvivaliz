@@ -72,6 +72,27 @@ function svtpp_build_payload(array $product): array
 }
 
 /**
+ * Evita PUT /produtos/{id} com o objeto aninhado 'precos' parcial.
+ * O impacto exato da omissao do campo precoCusto na API Tiny v3 ainda nao
+ * foi certificado. Nao afirmar que isso causou o incidente de 06/10.
+ * O registro editorial sem objeto 'precos' continua permitido.
+ */
+function svtpp_price_payload_includes_nonzero_cost(array $payload): bool
+{
+    if (!array_key_exists('precos', $payload)) {
+        return true;
+    }
+
+    $prices = $payload['precos'];
+    if (!is_array($prices)) {
+        return false;
+    }
+
+    $cost = $prices['precoCusto'] ?? null;
+    return is_numeric($cost) && is_finite((float)$cost) && (float)$cost > 0;
+}
+
+/**
  * @return array{ok: bool, status: int, error: string}
  */
 function svtpp_push_product_update(int $tinyProductId, array $product): array
@@ -92,6 +113,9 @@ function svtpp_push_product_update(int $tinyProductId, array $product): array
     }
 
     $payload = svtpp_build_payload($product);
+    if (!svtpp_price_payload_includes_nonzero_cost($payload)) {
+        return ['ok' => false, 'status' => 0, 'error' => 'preco_custo_nao_confirmado_para_put_produto'];
+    }
     $res = svtop_tiny_request('PUT', "/produtos/{$tinyProductId}", $token, $payload);
 
     if ($res['status'] === 204 || $res['status'] === 200) {
