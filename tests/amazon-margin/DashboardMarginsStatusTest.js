@@ -32,8 +32,11 @@ assert.deepEqual(Array.from(rows, canSimulate), [true,true,true,false,false,fals
 assert.equal(rows.filter(r=>state(r)==='low').length,2);
 assert.equal(rows.filter(r=>state(r)==='healthy').length,2);
 assert.equal(rows.filter(r=>state(r)==='pending').length,4);
-assert.match(page, /Margem confirmada abaixo de 10%/);
-assert.match(page, /Pendentes \/ parciais/);
+assert.match(page, /Margem atual estimada abaixo de 9%/);
+assert.match(page, /Confirmada abaixo de 10%/);
+assert.match(page, /Pendente ou parcial/);
+assert.match(page, /value="current_low9"/);
+assert.match(page, /value="current_pending"/);
 assert.match(page, /n-partial-context/);
 assert.match(page, /const simOk=canSimulate\(r\)/);
 assert.match(page, /if\(!currentSim\|\|!canSimulate\(currentSim\)\)return/);
