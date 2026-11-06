@@ -41,6 +41,9 @@ def test_merged_browser_health_patch_does_not_trigger_four_host_bootstrap():
         "remote-control-browser-mcp/server.py",
         "tests/remote-control-browser-mcp-test.py",
         "docs/knowledge/chatgpt-access-parity.md",
+        "docs/superpowers/plans/2026-11-05-mcp-gui-write-access.md",
+        "docs/superpowers/specs/2026-11-05-mcp-gui-write-access-design.md",
+        "remote-control-mcp/SPEC.md",
     ])
     assert not scope.is_browser_only([
         "remote-control-browser-mcp/server.py",

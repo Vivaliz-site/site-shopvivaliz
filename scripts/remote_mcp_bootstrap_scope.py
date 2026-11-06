@@ -11,8 +11,13 @@ import sys
 from pathlib import Path
 
 # Only changes confined to this surface can safely avoid Windows/prod setup.
-BROWSER_PREFIXES = ("remote-control-browser-mcp/",)
+BROWSER_PREFIXES = (
+    "remote-control-browser-mcp/",
+    "docs/superpowers/plans/",
+    "docs/superpowers/specs/",
+)
 BROWSER_FILES = frozenset({
+    "remote-control-mcp/SPEC.md",
     "scripts/setup-remote-control-browser-mcp.sh",
     "scripts/setup-shopvivaliz-display-recovery.sh",
     "scripts/shopvivaliz-xvfb99-prepare.sh",
