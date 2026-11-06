@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-31T04:47:42.014Z",
+  "generated_at": "2026-11-06T18:46:37.442Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -82,9 +82,9 @@
       "source_bytes": 826
     },
     "/js/checkout-payment-v2.js": {
-      "file": "/public/dist/js/checkout-payment-v2.044ed391b0.min.js",
-      "bytes": 3116,
-      "source_bytes": 3771
+      "file": "/public/dist/js/checkout-payment-v2.822cf85846.min.js",
+      "bytes": 2614,
+      "source_bytes": 3354
     },
     "/js/checkout-resilience-v1.js": {
       "file": "/public/dist/js/checkout-resilience-v1.ac74627798.min.js",

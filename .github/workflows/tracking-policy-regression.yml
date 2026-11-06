@@ -19,6 +19,11 @@ on:
       - 'tests/mercadopago-payment-tests.php'
       - 'tests/infinitepay-approved-order-flow-test.php'
       - 'js/shopvivaliz-google-events.js'
+      - 'js/checkout-payment-v2.js'
+      - 'public/dist/asset-manifest.json'
+      - 'public/dist/js/**'
+      - 'scripts/build-assets.mjs'
+      - 'tests/asset-source-dist-parity-test.php'
       - 'js/privacy-consent-v1.js'
       - 'tests/analytics-session-consent-regression-test.cjs'
       - 'tests/test_continuity_active_progress_lookback.py'
@@ -86,6 +91,11 @@ on:
       - 'tests/mercadopago-payment-tests.php'
       - 'tests/infinitepay-approved-order-flow-test.php'
       - 'js/shopvivaliz-google-events.js'
+      - 'js/checkout-payment-v2.js'
+      - 'public/dist/asset-manifest.json'
+      - 'public/dist/js/**'
+      - 'scripts/build-assets.mjs'
+      - 'tests/asset-source-dist-parity-test.php'
       - 'js/privacy-consent-v1.js'
       - 'tests/analytics-session-consent-regression-test.cjs'
       - 'tests/test_continuity_active_progress_lookback.py'
@@ -174,6 +184,7 @@ jobs:
           php tests/infinitepay-approved-order-flow-test.php
           php tests/ga4-order-identity-consent-test.php
           php tests/google-ads-attribution-and-cro-test.php
+          php tests/asset-source-dist-parity-test.php
           node tests/analytics-session-consent-regression-test.cjs
           node tests/product-buy-now-runtime.test.cjs
           php tests/google-ads-v5-regression-test.php
