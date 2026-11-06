@@ -61,4 +61,12 @@ kitReportAssert(str_contains($pdf,'Lucro acumulado: R$ 38.98'),
     'PDF must show accumulated profit separately from unit price');
 kitReportAssert(str_contains($pdf,'Pecas por kit: 5'),
     'PDF must disclose pieces in each sold kit');
+$many=array_fill(0,40,$rows[0]);
+$multiPage=SvAmazonMarginExport::pdf($many,'2026-11-06');
+kitReportAssert(substr_count($multiPage,'/Type /Page /Parent')===3,
+    '40 listings need exactly 3 pages at 17 rows per page');
+kitReportAssert(substr_count($multiPage,'Lucro por unidade vendida: R$ 12.99')===40,
+    'each PDF page/row must include the per-kit profit');
+kitReportAssert(substr_count($multiPage,'Lucro acumulado: R$ 38.98')===40,
+    'each PDF page/row must include period profit');
 echo "PASS kit costs and per-sale vs accumulated profit in XLSX/PDF; no unverifiable profit\n";
