@@ -28,4 +28,6 @@ $zip->close();unlink($tmp);
 $p=SvAmazonMarginExport::pdf($data,'2026-11-03');
 if (!str_starts_with($p,'%PDF-1.4') || !str_contains($p,'%%EOF') || !str_contains($p,'1 0 obj')) throw new Exception('pdf invalid');
 if (strlen($p)<1500) throw new Exception('pdf too small');
+if (!str_contains($p,'(Unid. conf.) Tj ET') || str_contains($p,'(Vendas) Tj ET')) throw new Exception('pdf header must label confirmed units, not sales');
+if (!str_contains($p,'(9) Tj ET') || !str_contains($p,'(12) Tj ET')) throw new Exception('pdf confirmed unit quantities missing');
 echo "PASS margin exports: XLSX file/worksheet/data + PDF header/footer + selection\n";

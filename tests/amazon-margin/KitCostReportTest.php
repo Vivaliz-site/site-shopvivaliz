@@ -55,6 +55,11 @@ try {
 $pdf=SvAmazonMarginExport::pdf($rows,'2026-11-06');
 kitReportAssert(str_starts_with($pdf,'%PDF-'),'valid PDF');
 kitReportAssert(str_contains($pdf,'kit completo'),'PDF must label bundle cost');
+kitReportAssert(str_contains($pdf,'(Unid. conf.) Tj ET')
+    && !str_contains($pdf,'(Vendas) Tj ET'),
+    'PDF must label confirmed units, not order or sale count');
+kitReportAssert(str_contains($pdf,'(3) Tj ET'),
+    'PDF must render three confirmed units even when there are two orders');
 kitReportAssert(str_contains($pdf,'Lucro por unidade vendida: R$ 12.99'),
     'PDF must show per-unit/kit profit, not accumulated profit as one sale');
 kitReportAssert(str_contains($pdf,'Lucro acumulado: R$ 38.98'),
