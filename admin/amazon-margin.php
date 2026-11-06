@@ -67,9 +67,9 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   <div class="alert">Primeira fase: <strong>auditoria e relatórios somente leitura</strong>. Alterações de preço serão liberadas apenas após validação da sincronização individual Amazon/ERP e do impacto no site.</div>
   <div class="cards">
     <div class="card metric"><span id="n-total-label">Anúncios ativos</span><strong id="n-total">—</strong><small id="n-total-context">—</small></div>
-    <div class="card metric"><span>Abaixo de 10%</span><strong class="danger" id="n-risk">—</strong></div>
+    <div class="card metric"><span>Margem confirmada abaixo de 10%</span><strong class="danger" id="n-risk">—</strong></div>
     <div class="card metric"><span>Margem confirmada ≥10%</span><strong class="positive" id="n-good">—</strong></div>
-    <div class="card metric"><span>Pendentes / sem confirmação</span><strong class="warning" id="n-pending">—</strong></div>
+    <div class="card metric"><span>Pendentes / parciais</span><strong class="warning" id="n-pending">—</strong><small id="n-partial-context">—</small></div>
   </div>
   <section class="card" id="audit-live" role="status" aria-live="polite">
     <div class="controls" style="justify-content:space-between">
@@ -128,7 +128,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
-      <select id="status"><option value="">Todos os resultados</option><option value="low">Abaixo de 10%</option><option value="healthy">≥ 10%</option><option value="pending">Margem não apurada</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
+      <select id="status"><option value="">Todos os resultados</option><option value="low">Confirmada abaixo de 10%</option><option value="healthy">Confirmada ≥10%</option><option value="pending">Pendente ou parcial</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
       <label class="filter-active" for="only-active"><input type="checkbox" id="only-active" checked> Somente ativos <span id="active-count" class="small muted"></span></label>
       <button type="button" id="select-visible">Selecionar visíveis</button>
       <button type="button" id="clear-selected">Limpar seleção</button>
@@ -242,7 +242,8 @@ const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{mi
 function isActive(r){return Array.isArray(r.amazon_status)&&r.amazon_status.includes('BUYABLE');}
 function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'MERCHANT':'UNKNOWN');}
 function programLabel(r){const p=program(r);return p==='FBA_ONSITE'?'FBA Onsite':p==='DBA'?'DBA':p==='DBA_CANDIDATE'||p==='MERCHANT'?'Envio vendedor':p==='UNKNOWN'?'Não identificado':p;}
-function state(r){if(r.margin_min_bps===null||r.margin_min_bps===undefined)return 'pending';return r.margin_min_bps<1000?'low':'healthy';}
+function state(r){if(r.status!=='confirmed'||r.margin_weighted_bps===null||r.margin_weighted_bps===undefined)return 'pending';return r.margin_weighted_bps<1000?'low':'healthy';}
+function canSimulate(r){return r.status==='confirmed'&&Number(r.confirmed_units||0)>0&&r.price!==null&&r.price!==undefined&&Number.isFinite(Number(r.price))&&Number(r.price)>0&&r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined;}
 function selectionVisible(){const current=new Set(displayed.map(r=>String(r.seller_sku)));return [...selected].filter(s=>current.has(s));}
 function refreshSelection(){
  const visible=selectionVisible(),hidden=selected.size-visible.length;
@@ -329,6 +330,7 @@ function refreshMetrics(){
  el('n-risk').textContent=low;
  el('n-good').textContent=healthy;
  el('n-pending').textContent=base.length-low-healthy;
+ el('n-partial-context').textContent=base.filter(r=>r.status==='partial').length+' com conciliação parcial';
  const fallback=base.filter(r=>r.last_cost===null&&r.status!=='kit_cost_unverified'
    &&r.prior_cost_reference?.cost>0).length;
  const indicator=el('prior-cost-indicator');
@@ -349,7 +351,7 @@ function render(){
   const marginText=r.margin_weighted_bps===null||r.margin_weighted_bps===undefined
    ?'—<span class="cell-note warn">Margem não apurada</span>'
    :margin(r.margin_weighted_bps)+(r.status==='partial'?'<span class="cell-note warn">Conciliação parcial</span>':'');
-  const simOk=r.price!==null&&r.price!==undefined&&r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined;
+  const simOk=canSimulate(r);
   return '<tr><td><input type="checkbox" class="row-check" data-sku="'+escapeHtml(sku)+'" '+(chosen?'checked':'')+' aria-label="Selecionar '+escapeHtml(sku)+'"></td>'
    +'<td><strong><code>'+escapeHtml(sku)+'</code></strong><span class="cell-note">'+escapeHtml((r.title||'').slice(0,95))+'</span></td>'
    +'<td>'+escapeHtml(r.erp_sku||'—')+'<span class="cell-note">ASIN '+escapeHtml(r.asin||'—')+'</span>'+
@@ -376,7 +378,7 @@ function render(){
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined&&Number(r.confirmed_units||0)>0?price(Number(r.profit_cents||0)/100/Number(r.confirmed_units)):'—')+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined?price(Number(r.profit_cents||0)/100):'—')+(r.status==='partial'?'<span class="cell-note warn">Parcial</span>':'')+'</td>'
    +'<td><span class="pill">'+escapeHtml(diag)+'</span></td>'
-   +'<td><button type="button" data-sim="'+escapeHtml(sku)+'" '+(simOk?'':'disabled title="Precisa de preço e margem calculada"')+'>Simular</button></td></tr>';
+   +'<td><button type="button" data-sim="'+escapeHtml(sku)+'" '+(simOk?'':'disabled title="Exige margem confirmada com preço efetivo e vendas conciliadas"')+'>Simular</button></td></tr>';
  }).join('')||'<tr><td colspan="13">Nenhum anúncio corresponde aos filtros. Desmarque Somente ativos para consultar os demais.</td></tr>';
  el('count').textContent=displayed.length+' anúncio(s) encontrados neste filtro; '+subset.length+' exibidos.';
  el('more').hidden=shown>=displayed.length;
@@ -494,9 +496,9 @@ el('clear-selected').onclick=()=>{selected.clear();render();};
 el('select-page').onchange=e=>{displayed.slice(0,shown).forEach(r=>e.target.checked?selected.add(String(r.seller_sku)):selected.delete(String(r.seller_sku)));render();};
 el('more').onclick=()=>{shown+=75;render();};
 el('rows').addEventListener('change',e=>{const s=e.target.getAttribute('data-sku');if(!s)return;e.target.checked?selected.add(s):selected.delete(s);refreshSelection();});
-el('rows').addEventListener('click',e=>{const button=e.target.closest('[data-sim]');if(!button)return;currentSim=data.find(r=>r.seller_sku===button.dataset.sim);if(!currentSim)return;el('sim-name').textContent=currentSim.seller_sku;el('sim-price').value=currentSim.price||'';el('sim-result').textContent='';el('simulator').hidden=false;el('simulator').scrollIntoView({behavior:'smooth'});});
+el('rows').addEventListener('click',e=>{const button=e.target.closest('[data-sim]');if(!button)return;currentSim=data.find(r=>r.seller_sku===button.dataset.sim);if(!currentSim||!canSimulate(currentSim))return;el('sim-name').textContent=currentSim.seller_sku;el('sim-price').value=currentSim.price||'';el('sim-result').textContent='';el('simulator').hidden=false;el('simulator').scrollIntoView({behavior:'smooth'});});
 el('sim-close').onclick=()=>{el('simulator').hidden=true;currentSim=null;};
-el('sim-calc').onclick=()=>{if(!currentSim)return;const next=Number(el('sim-price').value),old=Number(currentSim.price),oldMargin=currentSim.margin_weighted_bps;if(!Number.isFinite(next)||next<=0||!old||oldMargin===null||oldMargin===undefined){el('sim-result').textContent='Preço inválido ou margem histórica indisponível.';return;}
+el('sim-calc').onclick=()=>{if(!currentSim||!canSimulate(currentSim))return;const next=Number(el('sim-price').value),old=Number(currentSim.price),oldMargin=currentSim.margin_weighted_bps;if(!Number.isFinite(next)||next<=0||!old||oldMargin===null||oldMargin===undefined){el('sim-result').textContent='Preço inválido ou margem histórica indisponível.';return;}
  const approximateProfit=old*oldMargin/10000+(next-old)*(1-taxBps/10000);
  const estimate=100*approximateProfit/next;
  el('sim-result').textContent='Margem hipotética: '+estimate.toFixed(2).replace('.',',')+'% · Lucro hipotético: '+price(approximateProfit)+' por unidade. NÃO publicar a partir desta simulação; comissão e tarifas precisam ser recalculadas.';

@@ -234,6 +234,7 @@ jobs:
           php tests/amazon-margin/KitBomCostTest.php
           php tests/amazon-margin/KitCostReportTest.php
           php tests/amazon-margin/MarginMathTest.php
+          node tests/amazon-margin/DashboardMarginsStatusTest.js
           node --check scripts/amazon-margin/capture-olist-product-links.js
       - name: "Bloquear CSS wildcard de layout (ex: [class*=hero])"
         run: |
