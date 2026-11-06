@@ -35,6 +35,9 @@ final class SvAmazonMarginExport
             'Status Amazon'=>is_array($status)?implode(',',$status):'',
             'Canal'=>(string)($row['program'] ?? $row['fulfillment_channel'] ?? ''),
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
+            'Preco medio efetivo das vendas (R$)'=>self::num($row['realized_unit_price'] ?? null),
+            'Receita bruta das unidades conciliadas (R$)'=>isset($row['realized_sale_gross_cents'])
+                ? round((int)$row['realized_sale_gross_cents']/100,2):null,
             'Preco cadastro Amazon (R$)'=>self::num($row['listed_price'] ?? null),
             'Custo ERP por conjunto vendido (R$)'=>self::num($row['last_cost'] ?? null),
             'Custo base da peca no ERP (R$)'=>self::num($row['erp_base_cost'] ?? $row['last_cost'] ?? null),
@@ -254,10 +257,15 @@ final class SvAmazonMarginExport
                 if ($pieces!=='-') {
                     $content .= self::pdfText(650,$y-11,7,'Pecas por kit: '.$pieces);
                 }
-                if($i%2===1)$content.="0.54 w 27 ".($y-15)." m 813 ".($y-15)." l S\n";
+                $realized=$get('Preco medio efetivo das vendas (R$)');
+                if ($realized!=='-') {
+                    $content .= self::pdfText(191,$y-20,7,
+                        'Preco medio efetivo nas vendas: R$ '.$realized);
+                }
+                if($i%2===1)$content.="0.54 w 27 ".($y-23)." m 813 ".($y-23)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'Preco e custo por unidade VENDIDA (kit completo). * Preco cadastral. ^ Custo historico.');
-            $content .= self::pdfText(27,12,8,'Lucro por unidade e lucro acumulado constam neste PDF e no Excel; periodo = todas as unidades conciliadas.');
+            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; preco medio = transacionado. Custo = conjunto/kit. * Cadastral. ^ Historico.');
+            $content .= self::pdfText(27,12,8,'Margem e imposto usam receita bruta das transacoes conciliadas (incluindo frete pago, liquido de descontos).');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;
             $objects[$pg]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 '.$fontId.' 0 R >> >> /Contents '.$ct.' 0 R >>';
