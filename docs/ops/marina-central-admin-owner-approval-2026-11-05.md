@@ -20,3 +20,34 @@ A capacidade pedida admite shell administrativo no host de producao pelo transpo
 Desabilitar somente a flag de administracao central e retirar/revogar a atestacao administrativa por operador oficial; manter o grant de leitura #3478 e o MCP independente. Reverter o release versionado do MCP central se necessario. Sem aprovacao formal e smoke real, status `AWAITING_APPROVAL` e **nao** `CONCLUIDO`.
 
 Esta proposta nao instala nem ativa privilegios antes da decisao humana.
+
+## Correcao do contrato do MCP browser 5581 (2026-11-06)
+
+A rota administrativa central via endpoint base 5580 ja tem o grant P2 aprovado
+na PR #3670; o navegador MCP de porta 5581 herda os schemas e handlers do mesmo
+servidor central, mas roda em outra unit systemd. O diagnostico anterior ao
+reparo mostrou SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED=approved-v1 apenas
+na unit base; a unit browser mantinha somente a flag de leitura. Isso fazia o
+adaptador stdio do Claude (que prefere 5581) anunciar ferramentas administrativas
+sem Marina, embora o 5580 pudesse anuncia-la.
+
+O script scripts/ops/activate-mcp-central-marina-admin.py aceita
+repair-browser --pr 3670 para corrigir SOMENTE a propagacao da flag ao
+servico browser. A operacao continua condicionada a grant imutavel validado
+na API GitHub, estado de atestacao administrativa local com permissao 0600,
+flag da unit base exatamente aprovada, codigo instalado correspondente ao
+main, host/identidade corretos e destino de drop-in confiavel. Nao cria
+novo grant, tunel, segredo, principal nem muda a unit base ou Chrome.
+O reparo e idempotente, verifica o ambiente do processo browser depois do
+restart e reverte apenas o novo drop-in em caso de falha. O caminho de
+ativacao original passa a habilitar tambem o browser; revogacao remove
+ambas as flags administrativas e preserva o grant read-only.
+
+Aceite adicional obrigatorio: tools/list autenticado em 5581 e 5580
+devem exibir a mesma lista de hosts admin, incluindo Marina; chamada
+administrativa canario em Marina deve responder pelo 5581 e continuar
+autorizada pelo grant; verificar readback e que outros hosts e MCP
+independente nao sofreram regressao. O snapshot ja aberto do app ChatGPT
+pode continuar com schema antigo ate a republicacao/atualizacao oficial
+do catalogo do app. Nao declarar paridade em agentes so por systemctl
+verde ou por hosts_list.

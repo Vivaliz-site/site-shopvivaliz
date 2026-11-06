@@ -131,8 +131,35 @@ class MarinaAdminGateTests(unittest.TestCase):
         _write_grant(self.admin_grant, [server.MARINA_ADMIN_CAPABILITY], merger="some-agent-account")
         self.assertFalse(server.marina_central_admin_grant_active())
 
-    def test_marina_durable_jobs_stay_disabled(self) -> None:
-        self.assertEqual(server.HOST_DURABLE_LIMITS[server.MARINA_HOST], 0)
+    def test_marina_durable_jobs_remain_grant_gated(self) -> None:
+        # An admin-scoped task may run one at a time only after a live owner grant.
+        # A nonzero queue limit alone is never permission to submit work.
+        self.assertEqual(server.HOST_DURABLE_LIMITS[server.MARINA_HOST], 1)
+        with mock.patch.object(server, "marina_central_admin_grant_active", return_value=False):
+            with self.assertRaises(PermissionError):
+                server.execute_tool("task_submit", {
+                    "host": server.MARINA_HOST, "command": "true", "timeout": 5,
+                })
+
+    def test_hosts_list_reports_actual_marina_grants(self) -> None:
+        for readonly, admin in ((False, False), (True, False),
+                                (False, True), (True, True)):
+            with self.subTest(readonly=readonly, admin=admin), \
+                 mock.patch.object(server, "marina_central_readonly_grant_active",
+                                   return_value=readonly), \
+                 mock.patch.object(server, "marina_central_admin_grant_active",
+                                   return_value=admin):
+                hosts = server.execute_tool("hosts_list", {})["hosts"]
+                marina = next(h for h in hosts if h["name"] == server.MARINA_HOST)
+                self.assertEqual(marina["route_enabled"], readonly or admin)
+                self.assertEqual(marina["readonly_route_enabled"], readonly)
+                self.assertEqual(marina["admin_route_enabled"], admin)
+                self.assertEqual(marina["transport"],
+                                 "private_ssh" if admin else "private_ssh_read_only")
+                self.assertEqual("admin_command_run" in marina["grant_enabled_tools"],
+                                 admin)
+                self.assertEqual("file_read" in marina["grant_enabled_tools"],
+                                 readonly)
 
     def test_admin_flag_rejected_for_other_hosts(self) -> None:
         with self.assertRaises(ValueError):

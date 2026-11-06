@@ -66,3 +66,23 @@ never share a graphical session, Chrome profile, or target window.
 This boundary is mandatory because sharing `:99` previously allowed unrelated
 Google/Tiny automation to repurpose the continuity browser and invalidate its
 authenticated ChatGPT session.
+
+
+## Paridade dos schemas administrativos 5580/5581
+
+O adaptador stdio privilegia 5581 e so utiliza 5580 em caso de recusa
+de conexao claramente anterior a aceitacao da requisicao. O wrapper
+remote-control-browser-mcp/server.py herda BASE_TOOL_SPECS() do
+remote-control-mcp/server.py: nao se deve supor que os dois processos
+anunciam as mesmas ferramentas quando as units systemd possuem flags
+de concessao divergentes.
+
+A capacidade marina_admin_command requer a mesma concessao P2 e o
+mesmo arquivo de atestacao administrativa protegido no backend. A
+implantacao do grant na unit 5580 nao configura automaticamente a unit
+5581. O procedimento canonico de reparo com verificacao e rollback esta
+em docs/ops/marina-central-admin-owner-approval-2026-11-05.md.
+Verificar tools/list de cada endpoint e o contrato publicado no cliente
+apos o reparo, sem imprimir segredos ou emprestar identidades. O catalogo
+ja carregado no ChatGPT e um snapshot independente e pode exigir a
+atualizacao oficial do app.

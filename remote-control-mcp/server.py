@@ -2727,9 +2727,25 @@ def execute_tool(
             [str(item) for item in durable_command], int(args.get('lease_ttl_seconds', 90)),
             _submitter=submitter)
     if name == "hosts_list":
+        # Describe the effective *server-side* grants, rather than the
+        # historical transport label. Client catalog publication is separate.
+        marina_readonly = marina_central_readonly_grant_active()
+        marina_admin = marina_central_admin_grant_active()
+        marina_tools = (
+            (["host_health", "service_status", "processes_list",
+              "file_read", "file_list", "logs_tail"] if marina_readonly else [])
+            + (["admin_command_run", "service_action", "task_submit"]
+               if marina_admin else [])
+        )
         return {"hosts": [
             {"name": n, **cfg, **(
-                {"route_enabled": marina_central_readonly_grant_active()}
+                {
+                    "transport": "private_ssh" if marina_admin else "private_ssh_read_only",
+                    "route_enabled": marina_readonly or marina_admin,
+                    "readonly_route_enabled": marina_readonly,
+                    "admin_route_enabled": marina_admin,
+                    "grant_enabled_tools": marina_tools,
+                }
                 if n == MARINA_HOST else {}
             )}
             for n, cfg in HOSTS.items()

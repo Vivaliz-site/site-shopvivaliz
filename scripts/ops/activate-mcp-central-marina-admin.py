@@ -15,7 +15,9 @@ import json
 import os
 from pathlib import Path
 import socket
+import stat
 import subprocess
+import time
 import sys
 from datetime import datetime, timezone
 
@@ -28,6 +30,8 @@ ActivationDenied = base.ActivationDenied
 CAPABILITY = "marina_admin_command"
 ADMIN_STATE = base.STATE_DIR / "marina-central-admin-owner-grant.json"
 ADMIN_DROPIN = Path("/etc/systemd/system/shopvivaliz-remote-control-mcp.service.d/93-marina-admin-grant.conf")
+ADMIN_BROWSER_DROPIN = Path("/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d/93-marina-admin-grant.conf")
+BROWSER_SERVICE = base.BROWSER_SERVICE
 ADMIN_FLAG_TEXT = "[Service]\nEnvironment=SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED=approved-v1\n"
 
 
@@ -112,9 +116,103 @@ def preflight(pr_number: int) -> dict:
     return grant_proof(pr_number, base.gh_token())
 
 
+def verify_current_admin_state(attestation: dict) -> None:
+    """Require the exact already-merged and attested admin PR, not just a flag."""
+    if ADMIN_STATE.is_symlink():
+        raise ActivationDenied("admin_attestation_symlink_forbidden")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(ADMIN_STATE, flags)
+        with os.fdopen(fd, "r", encoding="utf-8") as source:
+            meta = os.fstat(source.fileno())
+            uid = os.geteuid() if hasattr(os, "geteuid") else meta.st_uid
+            if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != uid or
+                    meta.st_mode & 0o077 or meta.st_nlink != 1 or
+                    meta.st_size < 1 or meta.st_size > 4096):
+                raise ActivationDenied("admin_attestation_metadata_invalid")
+            current = json.load(source)
+    except (OSError, ValueError, TypeError, UnicodeError) as exc:
+        raise ActivationDenied("admin_attestation_unavailable") from exc
+    if current != attestation:
+        raise ActivationDenied("admin_attestation_not_exact_approved_pr")
+    try:
+        meta = ADMIN_DROPIN.lstat()
+        uid = os.geteuid() if hasattr(os, "geteuid") else meta.st_uid
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != uid or
+                meta.st_mode & 0o022 or meta.st_nlink != 1 or
+                ADMIN_DROPIN.read_text() != ADMIN_FLAG_TEXT):
+            raise ActivationDenied("base_admin_flag_not_approved")
+    except OSError as exc:
+        raise ActivationDenied("base_admin_flag_missing") from exc
+
+
+def validate_browser_dropin_target() -> None:
+    """Never repair a service drop-in through a symlink or untrusted directory."""
+    parent = ADMIN_BROWSER_DROPIN.parent
+    if parent.is_symlink():
+        raise ActivationDenied("browser_admin_unit_dir_symlink_forbidden")
+    if parent.exists():
+        meta = parent.lstat()
+        uid = os.geteuid() if hasattr(os, "geteuid") else meta.st_uid
+        if (not stat.S_ISDIR(meta.st_mode) or meta.st_uid != uid or
+                meta.st_mode & 0o022):
+            raise ActivationDenied("browser_admin_unit_dir_not_trusted")
+    if ADMIN_BROWSER_DROPIN.is_symlink():
+        raise ActivationDenied("browser_admin_dropin_symlink_forbidden")
+
+
+def restart_browser_and_verify(*, expected_enabled: bool = True) -> None:
+    """Restart only the browser MCP; verify the effective process environment."""
+    base.run(["systemctl", "daemon-reload"])
+    base.run(["systemctl", "restart", BROWSER_SERVICE])
+    for _ in range(20):
+        try:
+            base.run(["curl", "--fail", "--silent", "--show-error", "--max-time", "2",
+                      "http://127.0.0.1:5581/health"])
+            expected = "0" if expected_enabled else "1"
+            shell_check = (
+                "pid=$(/usr/bin/systemctl show " + BROWSER_SERVICE +
+                " --property=MainPID --value); "
+                "test \"$pid\" -gt 1; "
+                "if /usr/bin/tr '\\0' '\\n' < \"/proc/$pid/environ\" | "
+                "/usr/bin/grep -qx 'SHOPVIVALIZ_MARINA_CENTRAL_ADMIN_ENABLED=approved-v1'; "
+                "then test " + expected + " -eq 0; "
+                "else test " + expected + " -eq 1; fi"
+            )
+            base.run(["/usr/bin/bash", "-c", shell_check])
+            return
+        except ActivationDenied:
+            time.sleep(0.5)
+    raise ActivationDenied("browser_admin_flag_not_effective")
+
+
+def repair_browser_admin(attestation: dict) -> bool:
+    """Propagate only the preexisting owner-approved admin grant to MCP 5581."""
+    verify_current_admin_state(attestation)
+    validate_browser_dropin_target()
+    if ADMIN_BROWSER_DROPIN.exists():
+        meta = ADMIN_BROWSER_DROPIN.lstat()
+        uid = os.geteuid() if hasattr(os, "geteuid") else meta.st_uid
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != uid or
+                meta.st_mode & 0o022 or meta.st_nlink != 1 or
+                ADMIN_BROWSER_DROPIN.read_text() != ADMIN_FLAG_TEXT):
+            raise ActivationDenied("unexpected_existing_browser_admin_grant")
+        restart_browser_and_verify()
+        return False
+    base.write_private(ADMIN_BROWSER_DROPIN, ADMIN_FLAG_TEXT)
+    ADMIN_BROWSER_DROPIN.chmod(0o644)
+    try:
+        restart_browser_and_verify()
+    except Exception:
+        ADMIN_BROWSER_DROPIN.unlink(missing_ok=True)
+        restart_browser_and_verify(expected_enabled=False)
+        raise
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["preflight", "activate", "revoke"])
+    parser.add_argument("action", choices=["preflight", "activate", "revoke", "repair-browser"])
     parser.add_argument("--pr", type=int, default=None,
                         help="Exact merged owner grant PR; required for preflight/activate")
     args = parser.parse_args()
@@ -124,8 +222,10 @@ def main() -> int:
                 raise ActivationDenied("operator_must_be_root_on_backend")
             # Local revocation needs no GitHub access; only the admin route is removed.
             ADMIN_DROPIN.unlink(missing_ok=True)
+            ADMIN_BROWSER_DROPIN.unlink(missing_ok=True)
             ADMIN_STATE.unlink(missing_ok=True)
             base.restart_and_verify()
+            restart_browser_and_verify(expected_enabled=False)
             print("CENTRAL_MARINA_ADMIN_REVOKED=PASS")
             return 0
         if args.pr is None or args.pr <= 0:
@@ -134,17 +234,29 @@ def main() -> int:
         if args.action == "preflight":
             print("CENTRAL_MARINA_ADMIN_PREFLIGHT=PASS no_runtime_change=true")
             return 0
-        if ADMIN_STATE.exists() or ADMIN_STATE.is_symlink() or ADMIN_DROPIN.exists() or ADMIN_DROPIN.is_symlink():
+        if args.action == "repair-browser":
+            created = repair_browser_admin(attestation)
+            print("CENTRAL_MARINA_ADMIN_BROWSER_REPAIR=PASS already_configured=" + str(not created).lower())
+            return 0
+        if (ADMIN_STATE.exists() or ADMIN_STATE.is_symlink() or
+                ADMIN_DROPIN.exists() or ADMIN_DROPIN.is_symlink() or
+                ADMIN_BROWSER_DROPIN.exists() or ADMIN_BROWSER_DROPIN.is_symlink()):
             raise ActivationDenied("existing_admin_grant_requires_explicit_revocation")
+        validate_browser_dropin_target()
         base.write_private(ADMIN_STATE, json.dumps(attestation, sort_keys=True) + "\n")
         try:
             base.write_private(ADMIN_DROPIN, ADMIN_FLAG_TEXT)
             ADMIN_DROPIN.chmod(0o644)
+            base.write_private(ADMIN_BROWSER_DROPIN, ADMIN_FLAG_TEXT)
+            ADMIN_BROWSER_DROPIN.chmod(0o644)
             base.restart_and_verify()
+            restart_browser_and_verify()
         except Exception:
             ADMIN_DROPIN.unlink(missing_ok=True)
+            ADMIN_BROWSER_DROPIN.unlink(missing_ok=True)
             ADMIN_STATE.unlink(missing_ok=True)
             base.restart_and_verify()
+            restart_browser_and_verify(expected_enabled=False)
             raise
         print("CENTRAL_MARINA_ADMIN_INSTALLED=PASS")
         return 0
