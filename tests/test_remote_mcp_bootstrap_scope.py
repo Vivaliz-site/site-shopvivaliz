@@ -124,6 +124,28 @@ def test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap():
     assert not scope.is_backend_controller_only(["../remote-control-mcp/server.py"])
 
 
+
+def test_marina_grant_worker_pr_3739_reaches_backend_installer():
+    # RED in production: merge of #3739 modified precisely these three files,
+    # yet scope=FULL, so all install jobs were skipped on push main.
+    changed = [
+        ".github/workflows/remote-control-mcp-ci.yml",
+        "remote-control-mcp/server.py",
+        "remote-control-mcp/test_marina_admin_gate.py",
+    ]
+    assert scope.is_backend_controller_only(changed)
+    assert not scope.is_browser_only(changed)
+    # A test or CI change alone is not permission to restart the MCP.
+    assert not scope.is_backend_controller_only([
+        ".github/workflows/remote-control-mcp-ci.yml",
+        "remote-control-mcp/test_marina_admin_gate.py",
+    ])
+    assert not scope.is_backend_controller_only([
+        "remote-control-mcp/server.py",
+        "deploy/systemd/shopvivaliz-remote-control-mcp.service",
+    ])
+
+
 def test_code_only_installer_leaves_config_and_other_hosts_untouched():
     script = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
     narrow = script.split("install_controller_code_only() {", 1)[1].split("\ninstall_target() {", 1)[0]
@@ -163,6 +185,7 @@ if __name__ == "__main__":
     test_merged_browser_health_patch_does_not_trigger_four_host_bootstrap()
     test_controller_or_windows_changes_still_require_four_host_bootstrap()
     test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap()
+    test_marina_grant_worker_pr_3739_reaches_backend_installer()
     test_code_only_installer_leaves_config_and_other_hosts_untouched()
     test_empty_or_untrusted_diff_fails_closed()
     test_workflow_disables_retired_full_bootstrap_and_keeps_backend_only()
