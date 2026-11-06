@@ -26,6 +26,7 @@ PRIORITY_DOCS = (
     "docs/knowledge/agent-rules.md",
     "docs/knowledge/atendimento-chatgpt-bootstrap.md",
     "docs/knowledge/host-access.md",
+    "docs/knowledge/README.md",
     "docs/knowledge/claude-vm-bootstrap.md",
     "docs/knowledge/dev-chatgpt-bootstrap.md",
     ".claude/rules/ai-to-cli.md", ".github/AGENTS.md",

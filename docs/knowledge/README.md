@@ -1,3 +1,7 @@
+<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->
+> **Fonte atual da Knowledge Base (06/11/2026):** MCP central e Orquestrador com backend (always-free-arm-1787907847-26), Fred-Win, KOCEPSV e marina-a1-4c24g, sob schemas/grants reais e canarios exit_code=0. O MCP independente Marina esta ativo localmente, com E2E publico ainda nao certificado. shopvivaliz-free-a1 esta excluida; nunca acessa-la. Preservar MFA, RBAC, leases, branch protection, revisao humana e recusas explicitas. Fontes: docs/ops/mcp-first-agent-execution-2026-11-05.md, docs/ops/mcp-client-catalog-publication-2026-11-06.md; inventario historico docs/knowledge/current-topology-and-access-2026-10-29.md.
+<!-- /MCP_ROUTE_CANONICAL_V5_20261106 -->
+
 <!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->
 > **ESTADO COMPROVADO EM 06/11/2026 — CHATGPT MCP NATIVO:** os clientes **ShopVivaliz Remote Control** e **ShopVivaliz Remote Control - Orquestrador** agora expoem `marina-a1-4c24g` nos `inputSchema.host.enum` das ferramentas `admin_command_run`, `task_submit` e `service_action`. Os enums desses seis contratos anunciam somente `always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e `marina-a1-4c24g`, sem a VM excluida `shopvivaliz-free-a1`. **CHATGPT_CLIENT_ADMIN_COMMAND_PARITY=APTO_NESTA_SESSAO; CLIENT_TOOL_SCHEMA_3_OPERACOES=APTO_NESTA_SESSAO; PARIDADE_TOTAL_MCP_RDC=NAO_CERTIFICADA.**
 > **TESTE REAL VIA MCP NATIVO (sem SSH/RDC):** `admin_command_run(host="marina-a1-4c24g", command="hostname -s; id -un", timeout=5)` retornou `exit_code=0` e `marina-a1-4c24g / ubuntu` nos dois apps. Evidencias: Central audit_id `9571c723-f6d6-4dce-a2f6-5bdeff286def`, Orquestrador audit_id `8436a1dc-a386-4804-b600-f7f2cc89ee04`. A divergencia de catalogo anteriormente documentada **nao se reproduz nesta sessao**.
@@ -11,7 +15,7 @@
 <!-- /CURRENT_TWO_VM_AND_RECOVERY_GATE_20261031 -->
 
 <!-- LIVE_TOPOLOGY_MCP_RECONCILED_V2 -->
-**Atualizacao operacional (2026-10-29):** a VM excluida saiu do MCP central em producao (PRs #3391/#3392); vinte jobs antigos foram bloqueados (PR #3395); o tunel SSH do MEI para Marina respondeu HTTP 200. Nao confundir o tunel MEI com o MCP OpenAI independente ainda sem registro. Consulte a pagina `current-topology-and-access-2026-10-29.md` para os estados verdadeiros e os gates pendentes.
+**Registro historico de 29/10/2026 (superado em 06/11/2026):** a VM excluida saiu do catalogo central, e o MCP independente da Marina ainda nao tinha registro demonstrado naquela data. Em 06/11 o MCP central e Orquestrador anunciam quatro hosts, incluindo Marina, com canarios administrativos exit_code=0. O MCP independente esta ativo localmente desde 04/11, mas seu E2E publico autenticado exige prova especifica. O tunel MEI e distinto dos dois MCPs. Consultar docs/ops/mcp-first-agent-execution-2026-11-05.md e schemas/grants vivos.
 <!-- /LIVE_TOPOLOGY_MCP_RECONCILED_V2 -->
 
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
@@ -47,7 +51,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 ## Documentos principais
 
-- [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md) — **inventario operacional apos exclusao da VM origem: Marina web/deploy, backend PRINCIPAL, rotas RDC/SSH/OCI, MCP central corrigido sem origem e MCP independente Marina inativo; prova e limites do runtime em 2026-10-29.**
+- [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md) — **inventario operacional apos exclusao da VM origem: Marina web/deploy, backend PRINCIPAL, rotas RDC/SSH/OCI, snapshot historico 29/10 de MCP central e independente, sem autoridade operacional atual; ver MCP_ROUTE_CANONICAL_V5_20261106 e o runtime de 06/11.**
 - [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts e acesso; Remote Control MCP é a rota operacional primária, com SSH privado/Tailscale e OCI Bastion/GitHub apenas nas condições documentadas.**
 - [`claude-vm-bootstrap.md`](claude-vm-bootstrap.md) — memória global do Claude na VM: projetos, hosts, navegador na VM, pesquisa técnica atual na web, segurança e fluxo de entrega.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
