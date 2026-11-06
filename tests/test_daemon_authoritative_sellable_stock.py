@@ -72,6 +72,30 @@ class ERPSellableStockTest(unittest.TestCase):
         self.assertEqual(38.9, products[0]["precos"]["preco"])
         self.assertEqual(991, products[0]["_price_list_id"])
 
+    def test_retry_recovers_transient_erp_stock_outage_without_stale_inventory(self):
+        """A short ERP 429 must not turn a verified in-stock landing into a false OOS page."""
+        previous = catalog_row(stock=729)
+        calls = []
+
+        def briefly_throttled(path, token, **kwargs):
+            calls.append(path)
+            if len(calls) == 1:
+                raise RuntimeError("API request failed for estoque/342902508: HTTP Error 429")
+            return {"disponivel": 729, "saldo": 729}
+
+        with patch.object(daemon, "load_previous_cache", return_value={"342902508": previous}), \
+             patch.object(daemon, "detail_cache_is_fresh", return_value=True), \
+             patch.object(daemon, "api_get", side_effect=briefly_throttled):
+            products, failures = daemon.enrich_products(
+                [{"id": 342902508, "dataAlteracao": "2026-10-30"}], "fake-token", workers=1
+            )
+        self.assertEqual(0, failures)
+        self.assertEqual(["estoque/342902508", "estoque/342902508"], calls)
+        self.assertEqual(729, products[0]["estoque_disponivel"])
+        self.assertEqual({"quantidade": 729}, products[0]["estoque"])
+        self.assertNotIn("_stock_sync_status", products[0])
+        self.assertIn("_stock_synced_at", products[0])
+
     def test_new_detail_must_not_republish_physical_reserved_inventory(self):
         def api(path, token, **kwargs):
             if path == "produtos/342902508":
