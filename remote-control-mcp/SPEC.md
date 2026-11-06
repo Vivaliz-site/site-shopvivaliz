@@ -181,7 +181,7 @@ O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open
 
 No `Fred-Win`, o wrapper usa o reverse SSH canônico para invocar `scripts/shopvivaliz-native-desktop-bridge.ps1`. O dispatcher recebe a requisição JSON por stdin e executa um worker efêmero na sessão Windows interativa, permitindo screenshot, mouse e teclado sem transportar senha RustDesk e sem depender do registro cloud do Remote Desktop Commander. Texto digitado não entra em argv nem no audit.
 
-No `KOCEPSV`, a rota permanece RustDesk/X11. IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` participam do lock de mutação runtime, mas não do gate de conversa ChatGPT.
+No `KOCEPSV`, a rota permanece RustDesk/X11. IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` não exigem lease manual de mutação runtime nem gate de conversa ChatGPT: a superfície continua protegida pela autenticação do MCP, allowlist de host, limites gráficos, auditoria e serialização do worker. Os gates de runtime para operações administrativas, autenticação de contas e mutações do navegador base permanecem ativos.
 
 
 ## Orquestrador checkpoint metadata update (2026-10-11)

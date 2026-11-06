@@ -1867,8 +1867,6 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
         return browser_dom_inspect(args, cancel_check=cancel_check)
     if name == "browser.click":
         return browser_click_index(args, cancel_check=cancel_check)
-    if name in {"desktop_open", "desktop_click", "desktop_type"}:
-        base._assert_runtime_mutation(name, args)
     if name == "desktop_health":
         return desktop_health(args)
     if name == "desktop_open":
