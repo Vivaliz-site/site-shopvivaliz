@@ -60,7 +60,13 @@ R$ 40 (há kit tipo K com esse custo).
    `tipo=K` (custo do kit completo) de `tipo=S` (produto simples).
    Se `tipo=K`, a composição está no campo `kit[].produto/quantidade`;
    o histórico do preço de custo já se refere a **uma unidade do kit**
-   e não pode ser multiplicado novamente.
+   e não pode ser multiplicado novamente. **Antes de certificar** esse
+   custo histórico, buscar os custos positivos atuais de **cada componente**
+   por ID Olist V3 e comparar `soma(custo_unitario × quantidade)`.
+   Se a soma não corresponder ao custo registrado do kit, expor os dois
+   valores e manter a margem **não certificada**; não optar
+   automaticamente pelo menor custo, pois podem existir frete,
+   embalagens ou taxas de aquisição não registrados na composição.
 3. Se `tipo=S` e o produto do ERP representa **uma peça**, mas o
    anúncio contém N peças idênticas, usar
    `custo_anuncio = arredondar_centavos(custo_peca × N)`. O valor
@@ -83,7 +89,20 @@ R$ 40 (há kit tipo K com esse custo).
    `MfnPostageFee` por pedido e impostos de 14% sem cobrança duplicada.
    O resultado continua parcial quando houver transações pendentes.
 
-Testes: `KitCostTest.php`, `KitCostReportTest.php`,
+**Achado real 06/11/2026, novo caso irmão da P1:** os produtos K
+`KIT-RODIZIOS-50MM-GEL` e `KIT-RODIZIOS-SOPRANO-50MM-FREIO`
+têm **exatamente os mesmos componentes do ERP** (ID 344671209, 2 peças
+a R$ 4,03; ID 344670767, 2 peças a R$ 3,44), cuja soma corresponde a
+R$ 14,94. O primeiro possui **custo de kit registrado de R$ 33,08**,
+enquanto o segundo registra R$ 14,94. Essa divergência
+de **R$ 18,14** não pode ser ocultada nem convertida em margem
+certificada sem reconciliar os encargos ou corrigir a origem no ERP.
+O sistema registra `erp_kit_bom_cost`,
+`erp_base_cost` (custo histórico) e `kit_cost_issue`;
+no relatório financeiro mantém custo/margem **nulos** e a evidência
+dos valores divergentes. Nenhuma escrita comercial é feita.
+
+Testes: `KitBomCostTest.php`, `KitCostTest.php`, `KitCostReportTest.php`,
 `MarginMathTest.php`, `ReportExportTest.php` e regressões de
 vínculo ERP. Exigir rerun read-only na produção e validação real do
 painel/PDF/XLSX antes de divulgar nova margem certificada. Relatório
