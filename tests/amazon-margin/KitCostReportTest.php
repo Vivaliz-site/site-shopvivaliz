@@ -94,4 +94,38 @@ kitReportAssert($bad['Lucro por unidade vendida (R$)']===null
 $badPdf=SvAmazonMarginExport::pdf([$bad],'2026-11-06');
 kitReportAssert(!str_contains($badPdf,'33.08'),
     'PDF historical kit cost fallback must be suppressed for mismatches');
+$productTab=$case;
+$productTab['erp_match_method']='OLIST_AUTHENTICATED_PRODUCT_TAB_UI';
+$productTab['erp_product_tab_observed_at']='2026-11-06T05:20:00.000Z';
+$productTab['erp_product_tab_verified']=true;
+$productTab['erp_integration']='Amazon Onsite';
+$productTabReport=SvAmazonMarginExport::rows(['rows'=>[$productTab]])[0];
+kitReportAssert($productTabReport['Fonte do vinculo']==='OLIST_AUTHENTICATED_PRODUCT_TAB_UI'
+    && $productTabReport['Aba Anuncios do produto Olist validada em']
+        ==='2026-11-06T05:20:00.000Z'
+    && $productTabReport['Vinculo confirmado pela aba Anuncios Olist']==='Sim',
+    'verified Olist product-tab evidence must be visible in Excel source columns');
+$productTabXlsx=SvAmazonMarginExport::xlsx([$productTabReport]);
+$productTabTmp=tempnam(sys_get_temp_dir(),'sv-prod-tab-xlsx-');
+file_put_contents($productTabTmp,$productTabXlsx);
+try {
+    $zip=new ZipArchive();
+    kitReportAssert($zip->open($productTabTmp)===true,'product tab XLSX ZIP');
+    $sheet=(string)$zip->getFromName('xl/worksheets/sheet1.xml');
+    $zip->close();
+    kitReportAssert(str_contains($sheet,'Aba Anuncios do produto Olist validada em')
+        && str_contains($sheet,'OLIST_AUTHENTICATED_PRODUCT_TAB_UI'),
+        'product-tab source and date are present in actual XLSX bytes');
+} finally { @unlink($productTabTmp); }
+$pendingTab=$productTab;
+$pendingTab['erp_product_tab_crosscheck_pending']=true;
+$pendingTab['erp_historical_product_tab_candidate']=['erp_sku'=>'ERP-LEGACY'];
+$pendingTab['status']='ambiguous_erp';
+$pendingTab['margin_weighted_bps']=null;
+$pendingTab['last_cost']=null;
+$blockedTab=SvAmazonMarginExport::rows(['rows'=>[$pendingTab]])[0];
+kitReportAssert($blockedTab['Reconciliacao pendente na aba de produto Olist']==='Sim'
+    && $blockedTab['Candidato historico aba produto Olist']==='ERP-LEGACY'
+    && $blockedTab['Lucro por unidade vendida (R$)']===null,
+    'product-tab conflicts preserve evidence without certifying cost or profit');
 echo "PASS kit costs and per-sale vs accumulated profit in XLSX/PDF; no unverifiable profit\n";
