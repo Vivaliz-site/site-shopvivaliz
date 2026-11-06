@@ -212,7 +212,12 @@ def _completion_sweep(
                 if is_active:
                     summary["active_invalid_timestamp"] += 1
                 continue
-            if created < lookback_cutoff:
+            # A task may predate the bounded history window yet still be
+            # progressing. Use its latest recorded activity for active work;
+            # stale active work remains visible as degraded, not silently green.
+            updated = _parse_utc(payload.get("updated_at")) if is_active else None
+            last_activity = max(created, updated) if updated is not None else created
+            if last_activity < lookback_cutoff:
                 summary["skipped_outside_lookback"] += 1
                 if is_active:
                     summary["active_outside_lookback"] += 1
