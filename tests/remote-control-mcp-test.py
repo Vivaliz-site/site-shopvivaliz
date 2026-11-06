@@ -109,7 +109,7 @@ class RemoteControlMcpTests(unittest.TestCase):
                 admin_hosts = specs["admin_command_run"]["inputSchema"]["properties"]["host"]["enum"]
                 self.assertEqual(m.MARINA_HOST in admin_hosts, admin)
                 readonly_hosts = specs["file_read"]["inputSchema"]["properties"]["host"]["enum"]
-                self.assertEqual(m.MARINA_HOST in readonly_hosts, readonly)
+                self.assertEqual(m.MARINA_HOST in readonly_hosts, admin)
                 self.assertNotIn("shopvivaliz-free-a1", {item["name"] for item in listed})
 
     def test_retired_source_rejected_before_network_or_mutation(self):
