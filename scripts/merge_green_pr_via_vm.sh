@@ -48,6 +48,15 @@ fi
 if jq -e '[.labels[].name] | any(. == "no-auto-merge" or . == "blocked-by-runtime-lease" or . == "blocked-external")' <<<"$meta" >/dev/null; then
   fail 'PR has an explicit autonomous merge hold'
 fi
+# A named pending owner review is a mandatory hold even if an agent omitted
+# the no-auto-merge label/security request file. Never make that reviewer vanish
+# by merging before the human can submit an APPROVED review.
+if ! jq -e '(.requested_reviewers | type) == "array"' <<<"$meta" >/dev/null; then
+  fail 'PR requested reviewers unavailable: refusing autonomous merge'
+fi
+if jq -e '[.requested_reviewers[].login] | any(. == "shopvivaliz-human")' <<<"$meta" >/dev/null; then
+  fail 'owner human review is pending: refusing autonomous merge'
+fi
 changed_files="$(technical_gh api --paginate "repos/${repo}/pulls/${pr_number}/files?per_page=100" --jq '.[].filename')" || fail 'PR files unavailable: refusing autonomous merge'
 [[ -n "$changed_files" ]] || fail 'PR changed files empty: refusing autonomous merge'
 while IFS= read -r path; do
