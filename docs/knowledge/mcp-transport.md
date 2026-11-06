@@ -29,6 +29,32 @@ request is accepted. Neither endpoint is exposed publicly by this change.
 - The adapter does not remove inline process-group cancellation, resource limits,
   explicit `task_cancel`, token authentication, host restrictions or access gates.
 
+## Failure classification and durable continuation (2026-11-06)
+
+The **5-second foreground budget** is a synchronous adapter contract, not
+ChatGPT account authorization. In particular, an explicit
+`admin_command_run(durable=false, timeout=8)` returns
+`foreground_budget_exceeded_use_task_submit` without running the command.
+Call the **existing** `task_submit` with a stable `request_id` and then
+`task_status` until terminal; require `state=succeeded`, `exit_code=0`
+and task-specific readback. This is not a permission escalation or an
+alternate transport to evade a provider denial.
+
+A `controller_response_indeterminate`, connection loss after acceptance or
+unknown submission state is **different**: reconcile `request_id` and audit
+records before any retry to prevent duplicate operations. A 401/403,
+MFA/RBAC denial or explicit platform refusal must **not** be resubmitted
+under another tool.
+
+The workspace Admin Console may separately mark an app **Allow all tools**
+while the user-level app execution/approval setting reports **Allow low-risk
+actions**. These are distinct policy surfaces; neither one changes the
+adapter's bounded synchronous budget. A `404 Action not found` from the
+provider's permissions-update tool does not prove the existing MCP tools
+stopped working, and must not be represented as a successful permission edit.
+See [MCP-first operational contract](../ops/mcp-first-agent-execution-2026-11-05.md)
+for the required agent flow.
+
 ## Verification boundaries
 
 `tests/test_claude_mcp_stdio_transport.py` covers routing, preserved limits,
