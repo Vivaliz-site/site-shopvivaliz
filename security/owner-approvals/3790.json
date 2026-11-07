@@ -1,0 +1,68 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3790,
+  "resource": "amazon:our-price-and-olist-list-991:br",
+  "principal": "fredmourao-ai",
+  "capabilities": [
+    "amazon_sale_price_exact_seller_skus_oneoff",
+    "olist_tiny_991_exception_price_exact_product_ids_oneoff"
+  ],
+  "operation": "amazon_erp_991_sale_price_margin_floor_10pct_batchA_20261107",
+  "marketplace_id": "A2Q3Y263D00KWC",
+  "currency": "BRL",
+  "erp_price_list_id": 991,
+  "allowed_seller_skus": [
+    "F12CASTANHOFBA",
+    "ASSLIMFBA",
+    "TAJ/AS*BR1",
+    "1C7Q-LKVS-KOPL"
+  ],
+  "exact_sale_price_cents_by_seller_sku": {
+    "F12CASTANHOFBA": 2528,
+    "ASSLIMFBA": 7639,
+    "TAJ/AS*BR1": 7639,
+    "1C7Q-LKVS-KOPL": 7639
+  },
+  "exact_erp_991_exception_price_cents_by_product_id": {
+    "341484398": 7639,
+    "353697660": 2528
+  },
+  "maximum_affected_skus": 4,
+  "maximum_affected_erp_products": 2,
+  "require_target_price_quoted_with_official_amazon_product_fees_api": true,
+  "require_verified_projected_margin_bps_at_least": 1000,
+  "require_erp_mapping_cost_and_kit_validation": true,
+  "require_preflight_authoritative_current_prices": true,
+  "require_exact_unchanged_seller_sku": true,
+  "require_olist_991_official_exception_write_capability": true,
+  "require_no_additional_product_or_sku_effects": true,
+  "require_site_catalog_cart_checkout_impact_validation": true,
+  "require_amazon_product_type_definition_schema": true,
+  "require_preserve_other_offer_attributes": true,
+  "require_lease_and_fencing": true,
+  "require_compensating_rollback_plan": true,
+  "require_dedupe_and_rate_limit": true,
+  "require_readback_amazon_erp_site": true,
+  "block_if_fee_quote_or_price_differs_from_authorized_target": true,
+  "block_if_external_provider_refuses": true,
+  "require_pr_approved_by": "shopvivaliz-human",
+  "require_exact_approved_head_sha": true,
+  "require_native_merge_queue": true,
+  "one_use": true,
+  "commercial_write_disabled_until_approved": true,
+  "exclude_other_skus": true,
+  "exclude_erp_catalog_inventory_refunds_ads_and_promotion_rules": true,
+  "execution_host": "marina-a1-4c24g",
+  "execution_channel": "ShopVivaliz Remote Control MCP",
+  "expires_at_utc": "2026-11-10T23:59:00Z",
+  "evidence_issue": 3788,
+  "note": "Apos GET Amazon Pricing real 3 dos 4 SKUs do ERP 362847505 retornaram PRICING_OFFERS_EMPTY; TODOS os quatro desse produto ficam EXCLUIDOS deste grant para evitar alteracao implicita do ERP e ofertas nao certificadas. Quatro SKUs restantes possuem EFFECTIVE_OFFER e Amazon Product Fees quote real no target: margens estimadas 1001 bps com tarifas anteriores, revalidar tarifas e PUT ERP 991 antes de escrever. Sem novo HEAD/revisao se valores mudarem.",
+  "require_amazon_pricing_effective_offer_before_write": true,
+  "excluded_not_currently_price_certified_skus": [
+    "ABRA-PERF-FBA",
+    "8F-QXBC-MINT",
+    "RH-6WBD-NY54"
+  ],
+  "excluded_shared_erp_with_uncertified_offer_product_id": 362847505
+}
