@@ -5,6 +5,7 @@ require_once __DIR__ . '/MarginMath.php';
 require_once __DIR__ . '/FinancialStatus.php';
 require_once __DIR__ . '/CurrentPriceMargin.php';
 require_once __DIR__ . '/CurrentFeeEstimates.php';
+require_once __DIR__ . '/HistoricalFulfillment.php';
 require_once __DIR__ . '/DbaOrderGroup.php';
 require_once __DIR__ . '/KitCost.php';
 require_once __DIR__ . '/ProductMatch.php';
@@ -402,17 +403,45 @@ final class SvAmazonMarginCollector
         throw new RuntimeException('finance_pagination_incomplete');
     }
 
-    private function orderIsDba(string $order): ?bool
+    /** Read only official Amazon Orders v2026 fulfillment; cache per order. */
+    private function orderEvidence(string $order): ?array
     {
         if ($order === '') return null;
-        if (array_key_exists($order,$this->programByOrder)) return $this->programByOrder[$order];
-        $res = $this->a('GET','/orders/2026-01-01/orders/'.rawurlencode($order),['includedData'=>'FULFILLMENT']);
-        $o = $res['order'] ?? $res['payload'] ?? $res;
-        $programs = $o['programs'] ?? [];
-        $yes = is_array($programs) ? in_array('DELIVERY_BY_AMAZON',$programs,true) : false;
-        $this->programByOrder[$order] = $yes;
+        if (array_key_exists($order,$this->programByOrder)) {
+            return $this->programByOrder[$order];
+        }
+        $data=$this->a('GET','/orders/2026-01-01/orders/'.rawurlencode($order),
+            ['includedData'=>'FULFILLMENT']);
+        $evidence=SvAmazonMarginHistoricalFulfillment::fromOrder($data);
+        $this->programByOrder[$order]=$evidence;
         usleep(280000);
-        return $yes;
+        return $evidence;
+    }
+
+    private function orderIsDba(string $order): ?bool
+    {
+        $evidence=$this->orderEvidence($order);
+        return $evidence===null ? null : $evidence['is_dba'];
+    }
+
+    /**
+     * Do not substitute the last observed offer channel when Pricing becomes
+     * empty: only independently verified in-period Orders may classify history.
+     */
+    private function historicalChannel(array $shipments): ?string
+    {
+        $orders=[];
+        $seen=[];
+        foreach ($shipments as $shipment) {
+            $id=(string)($shipment['order']??'');
+            if ($id==='' || !empty($seen[$id]) && $seen[$id] === 'missing') return null;
+            if (isset($seen[$id])) continue;
+            $evidence=$this->orderEvidence($id);
+            if ($evidence===null) return null;
+            $seen[$id]='seen';
+            $orders[]=$evidence;
+        }
+        return SvAmazonMarginHistoricalFulfillment::resolve($orders);
     }
 
     /** @param list<string> $selectedSkus */
@@ -470,6 +499,13 @@ final class SvAmazonMarginCollector
                 'confirmed_units'=>0,'profit_cents'=>0,
                 'realized_sale_gross_cents'=>null,'realized_unit_price'=>null,
                 'status'=>'unverified'];
+            // Historical financial reconciliation must survive a Seller Flex
+            // removal from BUYABLE: the same period's shipments still exist.
+            $recentShipments=array_values(array_filter(
+                $fin['shipments'][$sku]??[],
+                static fn(array $s):bool => SvAmazonMarginOlistOrderLink::inFinancialWindow(
+                    (string)($s['posted_at']??''),$postedAfter)
+            ));
             $asin = $row['asin'];
             try {
                 $ean = $this->ean($asin);
@@ -495,7 +531,8 @@ final class SvAmazonMarginCollector
                     }
                 }
                 if ($link['status']!=='mapped'
-                    && in_array('BUYABLE',$row['amazon_status']??[],true)
+                    && (in_array('BUYABLE',$row['amazon_status']??[],true)
+                        || $recentShipments!==[])
                     && !empty($fin['shipments'][$sku])) {
                     $orderLink = SvAmazonMarginOlistOrderLink::resolve(
                         (string)$sku,$fin['shipments'][$sku],$fin['order_skus'],
@@ -709,30 +746,39 @@ final class SvAmazonMarginCollector
                     $row['last_cost_source']='OLIST_TINY_V3_COMPONENT_COST_X_VERIFIED_AMAZON_PACK_UNITS';
                 }
             }
-            if ($row['price']===null || $row['last_cost']===null) {
+            if ($row['last_cost']===null || ($row['price']===null && $recentShipments===[])) {
                 $row['status']='price_or_cost_missing';$rows[]=$row;continue;
             }
             if (!empty($row['price_divergence'])) {
                 $row['status']='price_divergence';$rows[]=$row;continue;
             }
 
+            $shipments=$recentShipments;
             $channel = $row['fulfillment_channel'];
+            if (!in_array($channel,['AMAZON','MERCHANT'],true)
+                && $shipments!==[]) {
+                $historicalChannel=$this->historicalChannel($shipments);
+                if ($historicalChannel!==null) {
+                    $channel=$historicalChannel;
+                    $row['historical_fulfillment_source']='AMAZON_ORDERS_V2026_FULFILLMENT';
+                }
+            }
             $isFba = $channel==='AMAZON';
             $isMerchant = $channel==='MERCHANT';
             if (!$isFba && !$isMerchant) {
-                $row['status']='fulfillment_unverified';$rows[]=$row;continue;
+                // There are shipments, but no verified current or historical
+                // fulfillment program. Do not relabel them "no sales".
+                if ($shipments!==[]) {
+                    $row['pending_sales']=array_sum(array_map(
+                        static fn(array $s):int=>(int)($s['source_rows']??1),$shipments));
+                    $row['status']='pending_financial_reconciliation';
+                } else $row['status']='fulfillment_unverified';
+                $rows[]=$row;
+                continue;
             }
             $row['program'] = $isFba ? 'FBA_ONSITE' : 'DBA_CANDIDATE';
-            // MfnPostageFee is posted once per ORDER_ID, even when Amazon
-            // emits multiple Shipment item rows for the SAME Seller SKU.
-            // Filter the period first so historic identity-only orders cannot
-            // leak into today's financial reconciliation.
-            $shipments=array_values(array_filter(
-                $fin['shipments'][$sku]??[],
-                static fn(array $shipment):bool =>
-                    SvAmazonMarginOlistOrderLink::inFinancialWindow(
-                        (string)($shipment['posted_at']??''),$postedAfter)
-            ));
+            // DBA postage is debited once per order (not per Shipment row).
+            // Only financial-window rows are passed to the calculation.
             if ($isMerchant) {
                 $shipments=SvAmazonMarginDbaOrderGroup::combine($shipments);
             }
@@ -749,7 +795,10 @@ final class SvAmazonMarginCollector
                 $confirmed = false;
                 if ($isMerchant) {
                     try { $dba = $this->orderIsDba($order); }
-                    catch (Throwable $e) { $dba = null; }
+                    catch (Throwable $e) {
+                        if (SvAmazonMarginReadErrorPolicy::mustAbortAudit($e)) throw $e;
+                        $dba = null;
+                    }
                     if ($dba !== true) { $row['pending_sales']+=$sourceRows;continue; }
                     $row['program']='DBA';
                     $onlySku = count($fin['order_skus'][$order] ?? [])===1;
