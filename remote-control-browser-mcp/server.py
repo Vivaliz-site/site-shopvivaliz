@@ -1517,6 +1517,13 @@ async function connect(url){
     return ws;
   }catch(e){try{ws.close()}catch{}throw e;}
 }
+function usableSessionIdentity(data, expectedEmail) {
+  // NextAuth can retain user.email after refresh fails. An error means
+  // this is not a usable authenticated session, even if a user is present.
+  if (data?.error) return {present:false, match:false};
+  const actual=String(data?.user?.email||"").trim().toLowerCase();
+  return {present:Boolean(actual), match:actual===expectedEmail};
+}
 async function identity(tab){
   let ws;
   try{
@@ -1526,8 +1533,8 @@ async function identity(tab){
       "if(location.origin!=='https://chatgpt.com')return {http:0,present:false,match:false};" +
       "const r=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(1800)});" +
       "if(!r.ok)return {http:r.status,present:false,match:false};" +
-      "const d=await r.json();const e=String(d?.user?.email||'').trim().toLowerCase();" +
-      "return {http:r.status,present:Boolean(e),match:e===" + JSON.stringify(email) + "};" +
+      "const d=await r.json();const v=(" + usableSessionIdentity.toString() + ")(d," + JSON.stringify(email) + ");" +
+      "return {http:r.status,present:v.present,match:v.match};" +
       "}catch{return {http:0,present:false,match:false}}})()";
     const v=await c.evaluate(expr);
     return {http:Number(v?.http)||0,present:v?.present===true,match:v?.match===true};
