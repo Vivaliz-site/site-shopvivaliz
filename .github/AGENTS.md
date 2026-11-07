@@ -3,15 +3,13 @@
 <!-- /MCP_ROUTE_CANONICAL_V5_20261106 -->
 
 <!-- MANDATORY_AGENT_CHECKLIST_V1 -->
-## Checklist transacional obrigatorio: todos os agentes e todas as IAs
+## Checklist proporcional: sem bloqueio global para tarefas rotineiras
 
-A cada tarefa material, consultar e atualizar o checklist duravel ANTES de agir, DEPOIS de cada etapa e ANTES de escolher a proxima acao. Esta regra vale para ChatGPT/Gepeto, Codex, Claude, Gemini, Copilot, workers e subagentes. A sessao ou o controlador nao substituem a responsabilidade de cada agente em executar a proxima etapa permitida.
+**Revisao por determinacao do proprietario (06/11/2026):** foi revogada a obrigatoriedade universal de planejar e certificar um checklist a cada etapa, introduzida em 31/10/2026. A ausencia de `plan-checklist` nao pode impedir `record_progress`, retomada, correcao, teste ou conclusao de tarefas P0/P1 que ja possuam autorizacao. Um checkpoint duravel e uma proxima acao concreta continuam suficientes para registrar o trabalho; nao criar processo de aprovacao por subcomando.
 
-Usar o registro canonico `scripts/agent_task_state.py`: iniciar o checkpoint com identidade/autorizacao reais; `plan-checklist --task ID --step "..." --step "..."` antes de qualquer progresso; `next-step --task ID` para consultar o item aberto; `check-step --task ID --step-id N --evidence "prova concreta" --verification "validacao independente"` ao completar CADA item; `add-checklist-step` para nova descoberta sem apagar etapas ja comprovadas. Somente passar ao proximo item depois de verificar a conclusao do anterior. `ready` e `complete` nao substituem testes finais, E2E/UI, gates, deploy e merge.
+`scripts/agent_task_state.py` deixa de injetar automaticamente um checklist exigivel em novos checkpoints do runtime canonico. Checkpoints anteriores com lista **vazia** nao ficam presos por um plano nunca iniciado. Para trabalhos que precisam de checklist formal, o executor pode ativar `SHOPVIVALIZ_REQUIRE_AGENT_CHECKLIST=1` no escopo do fluxo e usar `plan-checklist`, `next-step`, `check-step` e `add-checklist-step`. Se ja existem etapas planejadas, suas evidencias e integridade continuam obrigatorias para encerrar; nao apagar nem certificar etapas sem comprovacao.
 
-Checklists iniciados nao podem ser sobrescritos para apagar pendencias, pular etapas, inventar provas, ou transformar bloqueios em conclusoes. Nos novos checkpoints do runtime canonico a falta de plano ou de qualquer item comprovado bloqueia `READY_TO_COMPLETE` e `CONCLUIDO`. Checkpoints legados exigem migracao explicita, preservando historico, leases, ownership, next_action e prova existente; nao criar tarefa duplicada. Falhas de ferramenta exigem rota alternativa autorizada e estado aberto, nao falsificacao de check. Todos os repositorios/agentes devem adotar o mesmo contrato ou um mecanismo equivalente com testes negativos; documento presente sozinho nao certifica adesao operacional.
-
-Protecoes do GitHub, MFA, RBAC, segredos, gates comerciais e aprovacoes humanas continuam vigentes. Registro de check nao prova, por si, o comportamento real: confirmar os resultados nos sistemas alvo e nos certificadores independentes aplicaveis.
+Essa desburocratizacao nao autoriza falso sucesso nem remove controles independentes: identidade, MFA, RBAC, segredos, lease/fencing, aprovacoes humanas formalmente necessarias, branch protection, gates de operacoes comerciais, CI e validacao funcional/E2E pertinente. Nenhum controle novo deve ser imposto sem aprovacao do proprietario.
 <!-- /MANDATORY_AGENT_CHECKLIST_V1 -->
 
 ## Regra universal de continuidade e esgotamento de rotas — todos os agentes e repositorios (2026-10-31)
