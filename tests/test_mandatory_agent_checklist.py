@@ -204,5 +204,23 @@ class MandatoryPolicyTests(unittest.TestCase):
         self.assertTrue(any("Missing checklist state invariant" in error for error in policy.validate(self.root)))
 
 
+    def test_current_main_entrypoints_do_not_reintroduce_implicit_material_checklist(self):
+        # A mirrored owner policy once said "one durable checklist per
+        # material task", which contradicted the opt-in runtime fix. The
+        # global wording must be unambiguous for independent agents.
+        for path in ("AGENTS.md", "CLAUDE.md", "docs/knowledge/agent-rules.md"):
+            with self.subTest(path=path):
+                text = (ROOT / path).read_text(encoding="utf-8")
+                self.assertIn("checklist formal e opcional", text)
+                self.assertIn("sua ausencia nao impede registrar progresso", text)
+                self.assertNotIn(
+                    "um checklist duravel por tarefa material (nao por subcomando)", text
+                )
+        self.assertEqual(
+            (ROOT / "AGENTS.md").read_bytes(),
+            (ROOT / "CLAUDE.md").read_bytes(),
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

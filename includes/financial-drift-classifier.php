@@ -66,3 +66,42 @@ function svfd_classify(array $order, array $payment, array $erp): string
     }
     return 'pending';
 }
+
+
+/**
+ * Classify report completeness separately from any already verified anomaly.
+ *
+ * In particular, an ERP HTTP 429 must never turn a previous discrepancy
+ * into an apparent clean financial reconciliation. The report is diagnostic;
+ * exit=2 means a partial inspection, not a commercial permission gate.
+ */
+function svfd_report_verdict(array $summary): array
+{
+    $siteOrders = (int)($summary['site_orders'] ?? 0);
+    $candidates = (int)($summary['payment_candidates'] ?? 0);
+    $providerVerified = (int)($summary['provider_verified'] ?? 0);
+    $erpVerified = (int)($summary['erp_verified'] ?? 0);
+    $rateLimited = (int)($summary['erp_rate_limited'] ?? 0) > 0;
+    $complete = $siteOrders > 0
+        && $candidates > 0
+        && $providerVerified === $candidates
+        && $erpVerified === $candidates
+        && (int)($summary['api_errors'] ?? 0) === 0
+        && (int)($summary['mysql_unavailable'] ?? 0) === 0
+        && (int)($summary['unverified'] ?? 0) === 0
+        && (int)($summary['erp_checks_skipped_rate_limit'] ?? 0) === 0
+        && !$rateLimited;
+
+    $p0 = (int)($summary['discrepancy'] ?? 0) > 0
+        || (int)($summary['mysql_missing_evidence'] ?? 0) > 0;
+
+    return [
+        'status' => $p0
+            ? 'P0_FINANCIAL_DRIFT_FOUND'
+            : ($complete ? 'NO_VERIFIED_DRIFT_IN_SCANNED_ORDERS' : 'INCOMPLETE_EVIDENCE'),
+        'evidence_complete' => $complete,
+        'coverage_limited' => (int)($summary['without_provider_id'] ?? 0) > 0,
+        'reason' => $rateLimited ? 'ERP_RATE_LIMITED' : ($complete ? 'NONE' : 'PARTIAL_OR_UNAVAILABLE_EVIDENCE'),
+        'exit_code' => $complete ? 0 : 2,
+    ];
+}

@@ -5,17 +5,40 @@ function svote_normalize_payment_status(string $status): string
 {
     $status = strtolower(trim($status));
     return match ($status) {
-        'approved', 'payment_approved' => 'approved',
+        'approved', 'payment_approved', 'pagamento_aprovado' => 'approved',
         'cancelled', 'canceled', 'rejected', 'failed', 'payment_failed', 'payment_cancelled' => 'failed',
         'refunded', 'chargeback', 'payment_refunded', 'payment_chargeback' => 'refunded',
         default => 'pending',
     };
 }
 
+/**
+ * Olist/Tiny API v3 returns numeric situacao values, not human-readable names.
+ * Keep the financial mismatch classification aligned with docs/TINY-ERP-API-V3.md.
+ * This is a pure classifier: it never updates the provider, order or ERP.
+ */
+function svote_normalize_erp_state(string $state): string
+{
+    $state = strtolower(trim($state));
+    return match ($state) {
+        '0', 'aberta', 'aberto' => 'open',
+        '1', 'faturada', 'faturado' => 'invoiced',
+        '2', 'cancelada', 'cancelado' => 'cancelled',
+        '3', 'aprovada', 'aprovado' => 'approved',
+        '4', 'preparando envio', 'preparando_envio' => 'preparing',
+        '5', 'enviada', 'enviado' => 'sent',
+        '6', 'entregue' => 'delivered',
+        '7', 'pronto envio', 'pronto_envio', 'pronto_para_enviar' => 'ready_to_ship',
+        '8', 'dados incompletos', 'dados_incompletos' => 'incomplete',
+        '9', 'nao entregue', 'não entregue', 'nao_entregue', 'não_entregue' => 'not_delivered',
+        default => $state,
+    };
+}
+
 function svote_reconciliation_state(string $paymentStatus, string $erpState): string
 {
     $payment = svote_normalize_payment_status($paymentStatus);
-    $erp = strtolower(trim($erpState));
+    $erp = svote_normalize_erp_state($erpState);
 
     if ($payment !== 'approved') {
         return in_array($erp, ['cancelled', 'canceled', 'not_delivered'], true) ? 'matched' : 'pending';
