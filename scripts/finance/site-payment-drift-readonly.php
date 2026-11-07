@@ -35,6 +35,9 @@ $summary = [
     'mysql_missing_evidence' => 0,
     'mysql_unavailable' => 0,
     'api_errors' => 0,
+    'erp_rate_limited' => 0,
+    'erp_checks_skipped_rate_limit' => 0,
+    'http_status_counts' => [],
 ];
 
 $mpToken = svmp_env('MERCADOPAGO_ACCESS_TOKEN');
@@ -75,6 +78,7 @@ try {
 }
 
 $seen = [];
+$erpRateLimited = false;
 foreach (array_keys($paths) as $path) {
     $order = json_decode((string)file_get_contents($path), true);
     if (!is_array($order) || !str_starts_with((string)($order['source'] ?? ''), 'site_checkout')) {
@@ -107,13 +111,28 @@ foreach (array_keys($paths) as $path) {
     }
     $summary['payment_candidates']++;
 
+    // A shared-account 429 means additional requests in this run would
+    // increase contention with other ERP workers. Do not retry or flood it.
+    if ($erpRateLimited) {
+        $summary['erp_checks_skipped_rate_limit']++;
+        continue;
+    }
+
     try {
         // Both paths are GET; no provider or ERP business mutations.
         $payment = svmp_api_request('GET', '/v1/payments/' . rawurlencode($paymentId), $mpToken);
         $summary['provider_verified']++;
         $erpResponse = svtop_tiny_get_order($erpId, $erpToken);
-        if ((int)($erpResponse['status'] ?? 0) !== 200) {
+        $erpHttpStatus = (int)($erpResponse['status'] ?? 0);
+        if ($erpHttpStatus !== 200) {
             $summary['api_errors']++;
+            $httpKey = (string)$erpHttpStatus;
+            $summary['http_status_counts'][$httpKey] =
+                (int)($summary['http_status_counts'][$httpKey] ?? 0) + 1;
+            if ($erpHttpStatus === 429) {
+                $summary['erp_rate_limited']++;
+                $erpRateLimited = true;
+            }
             continue;
         }
         $body = is_array($erpResponse['json'] ?? null) ? $erpResponse['json'] : [];
@@ -149,11 +168,15 @@ foreach (array_keys($paths) as $path) {
     }
 }
 
-if ($summary['discrepancy'] > 0 || $summary['mysql_missing_evidence'] > 0) {
-    $status = 'P0_FINANCIAL_DRIFT_FOUND';
-} elseif ($summary['api_errors'] > 0 || $summary['mysql_unavailable'] > 0) {
-    $status = 'INCOMPLETE_EVIDENCE';
-} else {
-    $status = 'NO_VERIFIED_DRIFT_IN_SCANNED_ORDERS';
-}
-echo json_encode(['status' => $status, 'summary' => $summary], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
+$verdict = svfd_report_verdict($summary);
+echo json_encode([
+    'status' => $verdict['status'],
+    'evidence_complete' => $verdict['evidence_complete'],
+    'coverage_limited' => $verdict['coverage_limited'],
+    'reason' => $verdict['reason'],
+    'summary' => $summary,
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
+
+// Exit nonzero only when evidence is incomplete, not merely because a
+// known financial discrepancy exists. No new commerce or CI authorization.
+exit($verdict['exit_code']);
