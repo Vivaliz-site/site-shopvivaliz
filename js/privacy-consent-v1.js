@@ -119,6 +119,13 @@
     save(value);
     updateConsent(value === 'accepted');
     removeBanner();
+    // Signal to the in-page funnel collector after consent is persisted.
+    // No replay for essential-only; no synthetic purchase events.
+    if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('shopvivaliz:privacy-consent-changed', {
+        detail: { value: value }
+      }));
+    }
   }
 
   function render() {
