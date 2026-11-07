@@ -107,7 +107,7 @@ def is_backend_browser_combined(paths: list[str]) -> bool:
     clean = [path.strip() for path in paths]
     if not clean or len(clean) != len(set(clean)):
         return False
-    if any(not name or name.startswith("/") or "\\\\" in name
+    if any(not name or name.startswith("/") or "\\" in name
            or ".." in name.split("/") for name in clean):
         return False
     changed = set(clean)
