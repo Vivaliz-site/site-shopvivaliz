@@ -57,6 +57,17 @@ function svfra_approved_payment(array $payment, string $orderNumber, float $orde
  * provider search. An incomplete search page or multiple matches are
  * inconclusive: never select an arbitrary payment or label it real revenue.
  */
+/**
+ * A live-mode approved, exact-reference, unrefunded payment with no ERP order
+ * ID is a confirmed integration gap, not a completed or delivered sale.
+ */
+function svfra_approved_payment_without_erp(array $payment, string $number, float $total, string $erpId): bool
+{
+    return trim($erpId) === ''
+        && ($payment['live_mode'] ?? null) === true
+        && svfra_approved_payment($payment, $number, $total);
+}
+
 function svfra_search_payment_id(array $response, string $number, float $total): ?string
 {
     $results = $response['results'] ?? null;
@@ -125,6 +136,7 @@ function svfra_audit_live(int $limit): int
         'orders_considered' => 0,
         'provider_verified_approved' => 0,
         'erp_discrepancy' => 0,
+        'provider_approved_without_erp' => 0,
         'erp_matched' => 0,
         'erp_pending' => 0,
         'unverified_provider' => 0,
@@ -151,8 +163,7 @@ function svfra_audit_live(int $limit): int
     try {
         $stmt = $pdo->prepare("SELECT order_number, order_total, order_status, payment_provider_id, olist_order_id
             FROM orders
-            WHERE olist_order_id IS NOT NULL AND olist_order_id <> ''
-              AND (order_status = 'pagamento_aprovado' OR payment_provider_status = 'approved')
+            WHERE (order_status = 'pagamento_aprovado' OR payment_provider_status = 'approved')
             ORDER BY updated_at DESC LIMIT :max_rows");
         $stmt->bindValue(':max_rows', $limit, PDO::PARAM_INT);
         $stmt->execute();
@@ -170,7 +181,7 @@ function svfra_audit_live(int $limit): int
         $stats['orders_considered']++;
         $number = trim((string)($row['order_number'] ?? ''));
         $erpId = trim((string)($row['olist_order_id'] ?? ''));
-        if (!svmp_order_number_is_valid($number) || $erpId === '') {
+        if (!svmp_order_number_is_valid($number)) {
             $stats['unverified_provider']++;
             continue;
         }
@@ -239,6 +250,17 @@ function svfra_audit_live(int $limit): int
         }
         $stats['provider_verified_approved']++;
 
+        // Payment proof does not imply fulfilment. An empty ERP order link
+        // is audited independently without issuing any ERP API request.
+        if ($erpId === '') {
+            if (svfra_approved_payment_without_erp($payment, $number, $total, $erpId)) {
+                $stats['provider_approved_without_erp']++;
+            } else {
+                $stats['unverified_provider']++;
+            }
+            continue;
+        }
+
         try {
             $erp = svtop_tiny_get_order($erpId, $olistToken);
             $erpStatus = svfra_erp_status($erp);
@@ -270,12 +292,14 @@ function svfra_audit_live(int $limit): int
         || $stats['unverified_provider'] > 0 || $stats['provider_lookup_error'] > 0
         || $stats['erp_lookup_error'] > 0 || $stats['erp_reference_unverified'] > 0
         || $stats['test_provenance_unknown'] > 0 || $stats['erp_pending'] > 0;
-    $status = $stats['erp_discrepancy'] > 0 ? 'CONFIRMED_FINANCIAL_DISCREPANCY'
+    $confirmedDiscrepancy = $stats['erp_discrepancy'] > 0
+        || $stats['provider_approved_without_erp'] > 0;
+    $status = $confirmedDiscrepancy ? 'CONFIRMED_FINANCIAL_DISCREPANCY'
         : ($incomplete ? 'INCOMPLETE_NOT_CERTIFIED' : 'NO_DISCREPANCY_IN_VERIFIED_SAMPLE');
-    echo json_encode(['ok' => !$incomplete && $stats['erp_discrepancy'] === 0, 'status' => $status,
+    echo json_encode(['ok' => !$incomplete && !$confirmedDiscrepancy, 'status' => $status,
         'read_only' => true, 'limit' => $limit, 'stats' => $stats],
         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
-    return $stats['erp_discrepancy'] > 0 ? 2 : ($incomplete ? 3 : 0);
+    return $confirmedDiscrepancy ? 2 : ($incomplete ? 3 : 0);
 }
 
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath(__FILE__)) {
