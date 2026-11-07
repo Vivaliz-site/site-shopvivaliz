@@ -78,7 +78,7 @@ export class BrowserDriver {
       const tag=node.tagName.toLowerCase();
       const type=(node.getAttribute('type')||'text').toLowerCase();
       const attributes=['name','id','autocomplete','aria-label','placeholder'].map(name=>node.getAttribute(name)||'').join(' ').toLowerCase();
-      const sensitive=/password|passcode|passphrase|one.time.code|two.factor|2fa|otp|secret|token|cvv|cvc|security.code|card.number|credit.card|private.key/;
+      const sensitive=/password|passcode|passphrase|one.time.code|one.time.password|verification.code|auth.code|authenticator|two.factor|2fa|mfa|otp|pin.code|security.pin|api.key|secret|token|cvv|cvc|security.code|card.number|credit.card|private.key/;
       if(sensitive.test(attributes))return true;
       if(tag==='input' && !['text','search','email','url','tel','number'].includes(type))return true;
       return !(tag==='input'||tag==='textarea'||node.isContentEditable);
