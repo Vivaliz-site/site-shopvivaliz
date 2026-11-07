@@ -37,6 +37,7 @@ final class SvAmazonMarginExport
             'Ativo Amazon'=>$buyable?'Sim':'Nao',
             'Status Amazon'=>is_array($status)?implode(',',$status):'',
             'Canal'=>(string)($row['program'] ?? $row['fulfillment_channel'] ?? ''),
+            'Fonte canal historico'=>(string)($row['historical_fulfillment_source'] ?? ''),
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
             'Margem atual estimada (%)'=>isset($row['current_margin_bps']) ? round((int)$row['current_margin_bps']/100,2) : null,
             'Lucro atual por unidade (R$)'=>isset($row['current_profit_cents']) ? round((int)$row['current_profit_cents']/100,2) : null,
