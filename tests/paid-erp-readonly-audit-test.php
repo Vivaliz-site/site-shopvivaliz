@@ -25,6 +25,7 @@ foreach ([
     ['external_reference' => 'SV' . str_repeat('2', 17)],
     ['transaction_amount' => 52.75],
     ['transaction_amount_refunded' => 1.0],
+    ['refund_count' => 1],
     ['refunds' => [['id' => 'refund-example']]],
 ] as $change) {
     svfra_test(!svfra_approved_payment(array_replace($approved, $change), $reference, 52.50), 'never trust unmatched, pending or refunded payment');
