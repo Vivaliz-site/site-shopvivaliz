@@ -75,6 +75,10 @@ def _safe_members(root: Path) -> tuple[list[Path], int]:
             # Never back it up or block a durable checkpoint snapshot on it.
             if base == root and name in EPHEMERAL_ROOT_FILES:
                 continue
+            # Atomic writers replace these hidden siblings outside the state lock.
+            # They are never durable checkpoints; skip before path.stat/open.
+            if name.startswith("._"):
+                continue
             path = base / name
             if path.is_symlink() or not path.is_file():
                 raise BackupError("unsafe_checkpoint_member")

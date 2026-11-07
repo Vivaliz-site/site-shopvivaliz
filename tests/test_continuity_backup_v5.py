@@ -66,6 +66,17 @@ class BackupStateV5Tests(unittest.TestCase):
         self.assertNotIn(".resume-private.txt", names)
         self.assertNotIn("checkpoint.tmp.1", names)
 
+    def test_atomic_writer_sibling_is_not_backup_checkpoint(self):
+        # The browser health writer uses mkstemp ._<name>.json.<random>
+        # outside the checkpoint lock; partial JSON must not abort backup.
+        transient = self.state / "._chatgpt-browser-health.json.rnpebjho"
+        transient.write_text("{incomplete")
+        result = self.run_backup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with tarfile.open(self.archives()[0], "r:gz") as tf:
+            self.assertNotIn(transient.name, tf.getnames())
+            self.assertIn("v5-test.json", tf.getnames())
+
     def test_volatile_controller_lease_is_not_archived(self):
         # The controller creates/deletes this lease outside the checkpoint
         # writer's lock; including it caused a real scheduled backup failure.
