@@ -98,7 +98,7 @@ if (empty($_SESSION['is_admin']) || !is_numeric($_SESSION['is_admin'])) {
 if (empty($_SESSION['is_admin'])) {
     http_response_code(403);
     require_once __DIR__ . '/admin-denied-response.php';
-    $svDeniedScript = str_replace('\\\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $svDeniedScript = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
     if (sv_admin_denied_is_browser_page(
         $svDeniedScript,
         (string)($_SERVER['REQUEST_METHOD'] ?? 'GET'),
