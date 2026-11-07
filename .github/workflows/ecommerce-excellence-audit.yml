@@ -195,6 +195,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts
+          # Fail closed against stale reports from a previous checkout/job;
+          # this runner persists across workflow runs.
+          rm -f artifacts/ecommerce-live.json artifacts/ecommerce-live.md artifacts/google-commerce-config.json
           python3 scripts/ecommerce-excellence-audit.py --mode live --base-url https://shopvivaliz.com.br --output artifacts/ecommerce-live.json --fail-on blocker
           test -s artifacts/ecommerce-live.json
           test -s artifacts/ecommerce-live.md

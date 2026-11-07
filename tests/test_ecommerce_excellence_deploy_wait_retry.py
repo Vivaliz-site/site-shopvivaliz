@@ -32,6 +32,7 @@ for marker in (
     'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-audit]',
     'python3 scripts/ecommerce-excellence-audit.py --mode live',
     'SHOPVIVALIZ_ROOT="$root" php scripts/google-commerce-config-audit.php',
+    'rm -f artifacts/ecommerce-live.json artifacts/ecommerce-live.md artifacts/google-commerce-config.json',
     'test -s artifacts/ecommerce-live.json',
     'test -s artifacts/ecommerce-live.md',
     'test -s artifacts/google-commerce-config.json',
