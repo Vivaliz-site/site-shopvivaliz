@@ -1418,7 +1418,7 @@ class ScopedCorporateLoginPeerUnderOwnerOptoutTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         scoped.assert_called_once_with("synthetic",4,"browser_auth_open")
         launch.assert_called_once()
-        self.assertEqual(launch.call_args.args[2], "")
+        self.assertEqual(launch.call_args.args[1], "")
 
     def test_home_open_requires_identity_and_scoped_lease_with_global_optout(self):
         args={"session":"dev", "runtime_lease_id":"synthetic", "runtime_fencing_token":4}
