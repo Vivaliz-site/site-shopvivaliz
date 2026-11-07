@@ -920,6 +920,8 @@ if ($notFound) {
         var pFreteCep = document.getElementById('p-frete-cep');
         var pFreteResult = document.getElementById('p-frete-result');
         if (pFreteBtn && pFreteCep && pFreteResult) {
+            var pFreteActiveKey = '';
+            var pFreteRequestSequence = 0;
             function calcProductFrete() {
                 var cep = pFreteCep.value.replace(/\D/g, '');
                 if (cep.length !== 8) {
@@ -928,6 +930,10 @@ if ($notFound) {
                 }
                 var qtyInput = document.getElementById('product-qty-input');
                 var quantity = parseInt(qtyInput ? qtyInput.value : '1', 10) || 1;
+                var requestKey = cep + ':' + quantity;
+                if (pFreteActiveKey === requestKey) return;
+                var requestSequence = ++pFreteRequestSequence;
+                pFreteActiveKey = requestKey;
                 pFreteResult.innerHTML = '<span style="color:#0b4f88;font-weight:600;">Calculando as melhores opções de envio...</span>';
                 fetch('/api/melhorenvio/shipping-check-v2.php', {
                     method: 'POST',
@@ -944,6 +950,7 @@ if ($notFound) {
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
+                    if (requestSequence !== pFreteRequestSequence) return;
                     var options = Array.isArray(data.shipping_options) ? data.shipping_options : (Array.isArray(data.options) ? data.options : []);
                     if (!data.ok || !options.length) {
                         var msg = data.message || 'Nenhuma opção de frete encontrada para este CEP.';
@@ -967,7 +974,10 @@ if ($notFound) {
                     pFreteResult.innerHTML = html;
                 })
                 .catch(function() {
+                    if (requestSequence !== pFreteRequestSequence) return;
                     pFreteResult.innerHTML = '<span style="color:#b91c1c;">Não foi possível cotar o frete no momento. Tente novamente no carrinho.</span>';
+                }).finally(function() {
+                    if (requestSequence === pFreteRequestSequence) pFreteActiveKey = '';
                 });
             }
             pFreteBtn.addEventListener('click', calcProductFrete);
