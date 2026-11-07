@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MarginMath.php';
+require_once __DIR__ . '/FinancialStatus.php';
 require_once __DIR__ . '/CurrentPriceMargin.php';
 require_once __DIR__ . '/CurrentFeeEstimates.php';
 require_once __DIR__ . '/DbaOrderGroup.php';
@@ -764,10 +765,12 @@ final class SvAmazonMarginCollector
                 $row['realized_sale_gross_cents']=$totalGross;
                 $row['realized_unit_price']=round($totalGross/100/$row['confirmed_units'],2);
                 $row['financial_gross_source']='AMAZON_FINANCES_PRODUCT_CHARGES_PLUS_NET_SHIPPING';
-                $row['status']= $row['pending_sales'] ? 'partial' : 'confirmed';
+                $row['status']=SvAmazonMarginFinancialStatus::classify(
+                    (int)$row['confirmed_sales'], (int)$row['pending_sales']);
                 $row['below_10_pct']=$row['margin_min_bps']<1000;
             } else {
-                $row['status'] = 'no_confirmed_sales';
+                $row['status']=SvAmazonMarginFinancialStatus::classify(
+                    (int)$row['confirmed_sales'], (int)$row['pending_sales']);
                 $row['below_10_pct'] = null;
             }
             $rows[]=$row;
