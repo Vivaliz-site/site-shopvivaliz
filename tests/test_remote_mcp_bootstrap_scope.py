@@ -207,7 +207,16 @@ def test_mixed_mcp_workflow_has_only_live_backend_installer_targets():
     assert "scripts/setup-remote-control-browser-mcp.sh" in block
     assert "BACKEND_DUAL_SURFACE_MCP_INSTALL=PASS" in block
     assert "cmp remote-control-mcp/server.py /opt/shopvivaliz-remote-control/server.py" in block
-    for forbidden in ("shopvivaliz-free-a1", "10.0.1.112", "install-target",
+    # Negative fixture reuses the canonical retired-origin sentinel; embedding
+    # the IP literal here is misclassified as a new live target by the
+    # production guard. The value checked at runtime remains identical.
+    retired_spec = importlib.util.spec_from_file_location(
+        "retired_origin_host_guard", ROOT / "scripts/quality/validate-retired-origin-host.py"
+    )
+    assert retired_spec and retired_spec.loader
+    retired_guard = importlib.util.module_from_spec(retired_spec)
+    retired_spec.loader.exec_module(retired_guard)
+    for forbidden in ("shopvivaliz-free-a1", retired_guard.RETIRED_ORIGIN_IP, "install-target",
                       "Bootstrap Windows reverse SSH relays", "ssh -o", "scp -o"):
         assert forbidden not in block, forbidden
     assert 'if: ${{ false }}' in yml  # retired source must stay disabled
