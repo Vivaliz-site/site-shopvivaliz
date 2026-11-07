@@ -12,6 +12,14 @@ MVP isolado de navegador controlado pelo ChatGPT, com **handoff humano** para di
 - Playwright Chromium com perfil proprio em `.private-profile` ou `WEB_AGENT_PROFILE_DIR`; NUNCA compartilhar perfil corporate Dev / Atendimento nem CDP existentes.
 - Enderecos nao publicos, protocolos locais, loopback, metadata IP, rede privada e portas incomuns sao bloqueados em URL e requisicoes HTTP(S); DNS rebinding exige endurecimento complementar antes de rede publica.
 
+## Interfaces de hosts ShopVivaliz (nao "Sources")
+
+O objetivo operacional deste agente e a navegacao grafica **complementar** nos paineis HTTPS oficialmente autorizados dos hosts `always-free-arm-1787907847-26`, `marina-a1-4c24g`, `Fred-Win` e `KOCEPSV`. Nao existe destino chamado "Sources" neste projeto; `shopvivaliz-free-a1` foi excluida e nunca deve ser acessada. Para comandos ou servicos usar prioritariamente os MCPs Remote Control/Orquestrador e suas identidades/grants.
+
+Antes de abrir cada painel, obter da documentacao canonica viva o hostname/HTTPS oficial, host real de destino, identidade e sessao permitidas, grant/TTL/lease/fencing e autorizacao da operacao. O navegador nao herda RBAC da sessao MCP. Perfis Chromium Dev/Atendimento nao sao copiados. A protecao contra destinos privados e SSRF continua ativa: paineis restritos nao podem ser alcançados por substituicao improvisada de proxy, IP interno ou desativacao do filtro. O takeover e reservado a interacao humana real para MFA/credenciais, sem registrar esses dados no modelo.
+
+A navegacao por `web_agent_navigate`, `web_agent_back`, `web_agent_forward`, `web_agent_scroll`, `web_agent_fill` nao sensivel e `web_agent_key` e apenas capacidade local: **nao** representa ingress ChatGPT publicado, acesso administrativo generalizado, substituicao do MCP ou E2E certificado nos quatro hosts.
+
 ## Uso local de desenvolvimento (nao publico)
 
 Requer Node >=20, Chromium e `npm install --omit=dev --ignore-scripts`. Use um usuario dedicado **sem root**. No mesmo terminal, configure `WEB_AGENT_MCP_TOKEN` com ao menos 32 caracteres aleatorios em secret manager (`umask 077`); nunca inclua o valor na linha de comando, logs ou Git. Opcional: `WEB_AGENT_CHROME_BINARY`, `WEB_AGENT_PROFILE_DIR`, `WEB_AGENT_PORT`. Execute `npm start`. O listener permanece **somente em 127.0.0.1**.
