@@ -53,6 +53,7 @@ jobs:
     outputs:
       browser_only: ${{ steps.classify.outputs.browser_only }}
       backend_controller_only: ${{ steps.classify.outputs.backend_controller_only }}
+      backend_browser_combined: ${{ steps.classify.outputs.backend_browser_combined }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,6 +69,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" != push ] || [[ ! "${BEFORE_SHA:-}" =~ ^[a-f0-9]{40}$ ]] || [[ "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
             echo 'browser_only=false' >> "$GITHUB_OUTPUT"
             echo 'backend_controller_only=false' >> "$GITHUB_OUTPUT"
+            echo 'backend_browser_combined=false' >> "$GITHUB_OUTPUT"
             echo 'REMOTE_CONTROL_BOOTSTRAP_SCOPE=FULL reason=dispatch_or_unknown_diff'
           else
             git diff --no-renames --name-only "$BEFORE_SHA" "$GITHUB_SHA" | python3 scripts/remote_mcp_bootstrap_scope.py --github-output "$GITHUB_OUTPUT"
@@ -225,6 +227,49 @@ jobs:
           print('CHECKPOINT_STATUS='+after['status'])
           print('CHECKPOINT_CHECKED_AT='+after['last_checked_at'])
           PY
+
+  # Combined changes to the two installed MCP handlers are still backend-only.
+  # Never fall through to the retired four-host bootstrap (disabled below).
+  backend_browser_combined:
+    needs: scope
+    if: needs.scope.outputs.backend_browser_combined == 'true'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate both isolated MCP runtimes before changing live services
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py scripts/continuity/checkpoint_update_atomic.py
+          python3 tests/test_remote_mcp_bootstrap_scope.py
+          python3 tests/remote-control-mcp-test.py
+          python3 tests/remote-control-browser-mcp-test.py
+          python3 remote-control-browser-mcp/tests/test_account_auth_gate.py -v
+          bash -n scripts/setup-remote-control-access.sh scripts/setup-remote-control-browser-mcp.sh
+      - name: Install only backend central and browser MCP code via approved narrow installers
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo -n bash scripts/setup-remote-control-access.sh install-controller-code-only remote-control-mcp/server.py scripts/continuity/checkpoint_update_atomic.py
+          sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service
+      - name: Validate installed code and dedicated MCP loopback health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cmp remote-control-mcp/server.py /opt/shopvivaliz-remote-control/server.py
+          cmp remote-control-browser-mcp/server.py /opt/shopvivaliz-remote-control-browser/server.py
+          cmp scripts/continuity/checkpoint_update_atomic.py /opt/shopvivaliz-remote-control/scripts/continuity/checkpoint_update_atomic.py
+          systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
+          systemctl is-active --quiet shopvivaliz-browser-atendimento-mcp.service
+          systemctl is-active --quiet shopvivaliz-browser-dev-mcp.service
+          for port in 5580 5581 5582 5583; do
+            curl -fsS --connect-timeout 3 --max-time 8 "http://127.0.0.1:${port}/health" >/dev/null
+          done
+          echo BACKEND_DUAL_SURFACE_MCP_INSTALL=PASS
 
   bootstrap:
     needs: scope
