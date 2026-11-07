@@ -1506,16 +1506,32 @@ class ScopedCorporateLoginPeerUnderOwnerOptoutTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"runtime_lock_invalid"):
                 m.browser_auth_open(args)
 
-    def test_sensitive_auth_action_retains_global_handoff_requirement(self):
+    def test_sensitive_auth_action_still_requires_maintenance_lease_when_handoff_off(self):
         args={"session":"dev","tab_id":"A"*32,"action":"continue",
               "runtime_lease_id":"synthetic","runtime_fencing_token":4}
         with (
             mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base,"run_local_command_with_stdin") as input_action,
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind":"maintenance",
+                                            "owner_id":"shopvivaliz-account-auth:dev"}) as lease,
+            mock.patch.object(m.base,"run_local_command_with_stdin",
+                              return_value={"exit_code":0, "stdout":'{"ok":true}'}) as execute,
+            mock.patch.object(m, "_official_email_watch_stage", return_value=False),
         ):
-            with self.assertRaisesRegex(ValueError,"account_auth_lease_mode_required"):
+            result=m.browser_auth_action(args)
+            self.assertTrue(result["ok"])
+        lease.assert_called_once_with("synthetic",4,"browser_auth_action")
+        execute.assert_called_once()
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind":"maintenance",
+                                            "owner_id":"shopvivaliz-account-auth:atendimento"}),
+            mock.patch.object(m.base,"run_local_command_with_stdin") as execute,
+        ):
+            with self.assertRaisesRegex(ValueError,"maintenance_owner_required"):
                 m.browser_auth_action(args)
-            input_action.assert_not_called()
+            execute.assert_not_called()
 
 
 if __name__ == "__main__":
