@@ -52,6 +52,32 @@ function svote_reconciliation_state(string $paymentStatus, string $erpState): st
     return 'pending';
 }
 
+/**
+ * Provider evidence is authoritative. A local paid flag alone is never proof
+ * that the payment was settled (and must not turn ERP cancellation into
+ * "matched"). These states are diagnostic; no order/payment mutations here.
+ */
+function svote_reconciliation_state_with_local_order(
+    string $paymentStatus,
+    string $localStatus,
+    string $erpState
+): string {
+    $payment = svote_normalize_payment_status($paymentStatus);
+    $local = svote_normalize_payment_status($localStatus);
+    $erp = svote_normalize_erp_state($erpState);
+
+    if ($payment === 'approved' && in_array($erp, ['cancelled', 'canceled', 'not_delivered'], true)) {
+        return 'discrepancy';
+    }
+    if ($local === 'approved' && $payment !== 'approved') {
+        return 'requires_review';
+    }
+    if ($payment === 'approved' && $local !== 'approved') {
+        return 'requires_review';
+    }
+    return svote_reconciliation_state($paymentStatus, $erpState);
+}
+
 function svote_sanitize_payment_snapshot(array $snapshot): array
 {
     $allowed = ['provider', 'status', 'provider_id', 'status_detail', 'amount', 'currency', 'topic'];
@@ -81,10 +107,12 @@ function svote_record_payment(PDO $pdo, string $orderNumber, array $snapshot): v
 
 function svote_record_reconciliation(PDO $pdo, string $orderNumber, string $provider, string $erpState, array $details = []): void
 {
-    $lookup = $pdo->prepare('SELECT payment_provider_status FROM orders WHERE order_number=:order_number LIMIT 1');
+    $lookup = $pdo->prepare('SELECT payment_provider_status, order_status FROM orders WHERE order_number=:order_number LIMIT 1');
     $lookup->execute([':order_number' => $orderNumber]);
-    $paymentStatus = (string)($lookup->fetchColumn() ?: 'pending');
-    $state = svote_reconciliation_state($paymentStatus, $erpState);
+    $stored = $lookup->fetch(PDO::FETCH_ASSOC) ?: [];
+    $paymentStatus = trim((string)($stored['payment_provider_status'] ?? ''));
+    $localStatus = trim((string)($stored['order_status'] ?? ''));
+    $state = svote_reconciliation_state_with_local_order($paymentStatus, $localStatus, $erpState);
     $safeDetails = [];
     foreach (['erp_order_id', 'erp_status', 'invoice_id'] as $key) {
         if (isset($details[$key]) && !is_array($details[$key]) && !is_object($details[$key])) {
