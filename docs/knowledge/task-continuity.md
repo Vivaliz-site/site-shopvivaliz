@@ -1,3 +1,11 @@
+<!-- OWNER_CHECKPOINT_PERSISTENCE_BEFORE_AUTH_V1 -->
+## Persistir tarefa antes de autenticar, nunca reproduzir em conversa errada
+
+A determinacao do proprietario para eliminar bloqueios operacionais dos ultimos 30 dias revoga a exigencia global de `conversation_id` e `browser_session` **no momento de criar ou suceder o checkpoint**, introduzida em 11/10/2026. `agent_task_state.py start` persiste o objetivo e a proxima acao mesmo enquanto a autenticação da conta corporativa estiver pendente. Isso preserva trabalho executado sem inventar uma conversa.
+
+**A exigencia de origem continua rigorosa no envio de qualquer mensagem de retomada pela UI:** um checkpoint sem `conversation_id` real e `browser_session` corporativa verificada fica `RUNNING` e visivel, mas nao entra no dispatcher proativo de navegador. Somente `bind-route` com evidencia autentica e identidade exata pode liberar a retomada, preservando leases, fencing e separacao Dev/Atendimento. O modo estrito `SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS=1` permanece disponivel onde explicitamente configurado. Nunca gerar conversa ficticia, ignorar MFA ou copiar sessoes.
+<!-- /OWNER_CHECKPOINT_PERSISTENCE_BEFORE_AUTH_V1 -->
+
 <!-- MANDATORY_AGENT_CHECKLIST_V1 -->
 ## Checklist proporcional: sem bloqueio global para tarefas rotineiras
 
