@@ -13,6 +13,7 @@ class DummyEnum:
 class DummyCriterion:
     def __init__(self, status):
         self.primary_status = DummyEnum(status)
+        self.primary_status_reasons = [DummyEnum("AD_GROUP_CRITERION_RARELY_SERVED")] if status == "NOT_ELIGIBLE" else ([DummyEnum("AD_GROUP_CRITERION_LOW_QUALITY")] if status == "UNKNOWN" else [])
 
 
 class DummyKeywordRow:
@@ -23,6 +24,7 @@ class DummyKeywordRow:
 class DummyCampaign:
     serving_status = DummyEnum("SERVING")
     primary_status = DummyEnum("ELIGIBLE")
+    bidding_strategy_type = DummyEnum("TARGET_SPEND")
 
     class target_spend:
         cpc_bid_ceiling_micros = 800000
@@ -52,8 +54,8 @@ class ZeroDeliveryTests(unittest.TestCase):
         signal = zero_delivery_classification("ENABLED", 0, ["ELIGIBLE", "NOT_ELIGIBLE", "UNKNOWN"])
         self.assertEqual(signal["status"], "ZERO_IMPRESSIONS_REVIEW_ONLY")
         self.assertEqual(signal["keyword_eligible"], 1)
-        self.assertEqual(signal["keyword_rarely_served"], 1)
-        self.assertEqual(signal["keyword_low_quality_or_unknown"], 1)
+        self.assertEqual(signal["keyword_not_eligible"], 1)
+        self.assertEqual(signal["keyword_unknown"], 1)
         self.assertFalse(signal["cause_certified"])
         self.assertFalse(signal["commercial_mutation_authorized"])
 
@@ -61,6 +63,9 @@ class ZeroDeliveryTests(unittest.TestCase):
         fake = FakeGoogleService()
         output = inspect_zero_delivery(fake, "1234567890", 23900755807, "ENABLED", 0)
         self.assertEqual(output["cpc_ceiling_brl"], 0.8)
+        self.assertEqual(output["keyword_reason_rarely_served"], 1)
+        self.assertEqual(output["keyword_reason_low_quality"], 1)
+        self.assertEqual(output["bidding_strategy"], "TARGET_SPEND")
         self.assertEqual(output["serving_status"], "SERVING")
         self.assertEqual(len(fake.queries), 2)
         self.assertTrue(all(q.lstrip().upper().startswith("SELECT ") for q in fake.queries))
