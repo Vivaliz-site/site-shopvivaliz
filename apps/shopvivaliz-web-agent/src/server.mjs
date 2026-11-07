@@ -40,7 +40,7 @@ export function createServer({controller=new TakeoverController(new BrowserDrive
   const humanOrigins=new Set([origin]);
   if(!Array.isArray(allowedHumanOrigins))throw Error('invalid_human_cors_origins');
   for(const value of allowedHumanOrigins){
-    if(typeof value!=='string'||!value.startsWith('https://'))throw Error('invalid_human_cors_origin');
+    if(typeof value!=='string'||!value.startsWith('https://')||value.includes('*'))throw Error('invalid_human_cors_origin');
     let target;
     try{target=new URL(value);}catch{throw Error('invalid_human_cors_origin');}
     if(target.origin!==value||target.username||target.password)throw Error('invalid_human_cors_origin');
