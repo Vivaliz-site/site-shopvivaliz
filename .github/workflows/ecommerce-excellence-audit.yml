@@ -187,89 +187,26 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Configure verified SSH host
-        shell: bash
-        env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY"
-          test -n "$ORACLE_VM_KNOWN_HOSTS"
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
-          chmod 600 "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-
-      - name: Copy auditors without copying credentials
+      # This job is pinned to the canonical production Marina audit runner.
+      # Audit scripts operate locally; SSH to 127.0.0.1 used a shared HOME key
+      # that another runner could remove while this job was still executing.
+      - name: Run live SEO sitemap feed and security audit locally on Marina
         shell: bash
         run: |
-          set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1 \
-            'rm -f /tmp/ecommerce-live.json /tmp/ecommerce-live.md /tmp/google-commerce-config.json'
-          scp \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            scripts/ecommerce-excellence-audit.py \
-            scripts/google-commerce-config-audit.php \
-            ubuntu@127.0.0.1:/tmp/
-
-      - name: Run live SEO sitemap feed and security audit
-        shell: bash
-        run: |
-          set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1 \
-            'python3 /tmp/ecommerce-excellence-audit.py --mode live --base-url https://shopvivaliz.com.br --output /tmp/ecommerce-live.json --fail-on blocker'
+          set -Eeuo pipefail
+          mkdir -p artifacts
+          python3 scripts/ecommerce-excellence-audit.py --mode live --base-url https://shopvivaliz.com.br --output artifacts/ecommerce-live.json --fail-on blocker
+          test -s artifacts/ecommerce-live.json
+          test -s artifacts/ecommerce-live.md
 
       - name: Validate Google commerce and runtime integration presence
         shell: bash
         run: |
-          set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1 \
-            'SHOPVIVALIZ_ROOT=/home/ubuntu/shopvivaliz-deploy/current php /tmp/google-commerce-config-audit.php > /tmp/google-commerce-config.json'
-
-      - name: Download redacted live evidence
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           mkdir -p artifacts
-          scp \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1:/tmp/ecommerce-live.json artifacts/ecommerce-live.json
-          scp \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1:/tmp/ecommerce-live.md artifacts/ecommerce-live.md
-          scp \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1:/tmp/google-commerce-config.json artifacts/google-commerce-config.json
+          root=/home/ubuntu/shopvivaliz-deploy/current
+          SHOPVIVALIZ_ROOT="$root" php scripts/google-commerce-config-audit.php > artifacts/google-commerce-config.json
+          test -s artifacts/google-commerce-config.json
 
       - name: Upload live production evidence
         if: always()
