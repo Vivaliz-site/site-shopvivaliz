@@ -1,6 +1,31 @@
 <?php
 declare(strict_types=1);
 require_once dirname(__DIR__,2).'/includes/amazon-margin/ReportExport.php';
+require_once dirname(__DIR__,2).'/includes/amazon-margin/AuditCollector.php';
+
+// RED on production run #14: 83 rows carried Olist product activation in
+// the ambiguous "active" field rather than Amazon's authoritative BUYABLE.
+$nonBuyable = SvAmazonMarginCollector::mergeProductForOffer(
+    ['seller_sku'=>'AMAZON-INACTIVE','amazon_status'=>['DISCOVERABLE'],'active'=>false],
+    ['erp_sku'=>'ACTIVE-ERP-PRODUCT','active'=>true,'last_cost'=>19.50]
+);
+if ($nonBuyable['active'] !== false || $nonBuyable['erp_product_active'] !== true
+    || $nonBuyable['last_cost'] !== 19.50 || $nonBuyable['seller_sku'] !== 'AMAZON-INACTIVE') {
+    throw new RuntimeException('ERP product activation must not redefine Amazon BUYABLE');
+}
+$buyableProduct = SvAmazonMarginCollector::mergeProductForOffer(
+    ['seller_sku'=>'AMAZON-BUYABLE','amazon_status'=>['BUYABLE','DISCOVERABLE']],
+    ['erp_sku'=>'ERP-ACTIVE','active'=>true,'last_cost'=>42.00]
+);
+if ($buyableProduct['active'] !== true || $buyableProduct['erp_product_active'] !== true) {
+    throw new RuntimeException('Amazon BUYABLE state lost during ERP detail merge');
+}
+if (SvAmazonMarginCollector::offerIsBuyable('BUYABLE')
+    || SvAmazonMarginCollector::offerIsBuyable(['DISCOVERABLE'])
+    || !SvAmazonMarginCollector::offerIsBuyable(['BUYABLE'])) {
+    throw new RuntimeException('BUYABLE must be derived only from status array');
+}
+
 $rows=[
  ['seller_sku'=>'A21','asin'=>'B08T6GQM2N','amazon_status'=>['BUYABLE','DISCOVERABLE'],
   'erp_sku'=>'A21','ean'=>'7890000000001','erp_match_method'=>'EAN',
