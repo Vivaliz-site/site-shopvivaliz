@@ -3804,5 +3804,71 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertNotIn("Requires=shopvivaliz-remote-control-mcp.service", unit)
 
 
+
+class ScopedCorporateLoginWithoutGenericHandoffTests(unittest.TestCase):
+    """Corporate tab recovery uses its own maintenance lock even when generic writes are ungated."""
+
+    def _lease(self, session="dev"):
+        return {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:" + session}
+
+    def _call(self, name, result, lease=None, session="dev"):
+        import io
+        args = {"session": session, "runtime_lease_id": "synthetic-lease",
+                "runtime_fencing_token": 17}
+        payload = {"jsonrpc": "2.0", "id": 1, "result": {
+            "structuredContent": result, "isError": False,
+        }}
+        with (
+            mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock",
+                              return_value=lease or self._lease(session)) as assertion,
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-test-token"),
+            mock.patch.object(m, "urlopen",
+                              return_value=io.BytesIO(json.dumps(payload).encode())) as peer,
+        ):
+            outcome = m.execute_tool(name, args)
+        assertion.assert_called_once_with("synthetic-lease", 17, name)
+        peer.assert_called_once()
+        return outcome
+
+    def test_login_tab_reachable_with_owner_optout_of_generic_runtime_gate(self):
+        result = {"ok": True, "session": "dev", "stdout": json.dumps({
+            "ok": True, "session": "dev", "stage": "/auth/login", "tab_id": "A" * 32,
+        })}
+        outcome = self._call("browser_auth_open", result)
+        self.assertEqual(outcome["stage"], "/auth/login")
+        self.assertEqual(outcome["session"], "dev")
+
+    def test_neutral_home_reachable_only_under_identity_check(self):
+        result = {"ok": True, "session": "dev", "identity_match": True,
+                  "tab_id": "A" * 32, "reused": False}
+        outcome = self._call("browser_profile_home_open", result)
+        self.assertTrue(outcome["identity_match"])
+        self.assertEqual(outcome["tab_id"], "A" * 32)
+
+    def test_wrong_owner_still_fails_before_peer_under_generic_handoff_off(self):
+        args = {"session": "dev", "runtime_lease_id": "synthetic-lease",
+                "runtime_fencing_token": 17}
+        with (
+            mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock",
+                              return_value=self._lease("atendimento")),
+            mock.patch.object(m, "urlopen") as peer,
+        ):
+            for name in ("browser_auth_open", "browser_profile_home_open"):
+                with self.subTest(name=name):
+                    with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                        m.execute_tool(name, args)
+            peer.assert_not_called()
+
+    def test_sensitive_login_action_still_requires_opted_in_handoff(self):
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}):
+            with self.assertRaisesRegex(ValueError, "account_auth_lease_mode_required"):
+                m.execute_tool("browser_auth_action", {
+                    "session": "dev", "tab_id": "A" * 32, "action": "continue",
+                    "runtime_lease_id": "synthetic-lease", "runtime_fencing_token": 17,
+                })
+
+
 if __name__ == "__main__":
     unittest.main()
