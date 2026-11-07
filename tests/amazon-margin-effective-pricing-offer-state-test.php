@@ -20,12 +20,12 @@ $cases = [
     'success_but_no_offer' => [
         ['status' => 'Success', 'Product' => ['Offers' => []]],
         ['price' => null, 'price_source' => 'UNVERIFIED',
-         'price_state' => 'NO_EFFECTIVE_OFFER', 'fulfillment_channel' => 'UNKNOWN'],
+         'price_state' => 'PRICING_OFFERS_EMPTY', 'fulfillment_channel' => 'UNKNOWN'],
     ],
     'missing_offers_array' => [
         ['status' => 'Success', 'Product' => []],
         ['price' => null, 'price_source' => 'UNVERIFIED',
-         'price_state' => 'NO_EFFECTIVE_OFFER', 'fulfillment_channel' => 'UNKNOWN'],
+         'price_state' => 'PRICING_OFFERS_EMPTY', 'fulfillment_channel' => 'UNKNOWN'],
     ],
     'provider_item_error' => [
         ['status' => 'Error', 'Error' => ['Code' => 'InvalidInput']],
