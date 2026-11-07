@@ -3907,13 +3907,55 @@ class ScopedCorporateLoginWithoutGenericHandoffTests(unittest.TestCase):
                         m.execute_tool(name, args)
             peer.assert_not_called()
 
-    def test_sensitive_login_action_still_requires_opted_in_handoff(self):
-        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}):
-            with self.assertRaisesRegex(ValueError, "account_auth_lease_mode_required"):
-                m.execute_tool("browser_auth_action", {
-                    "session": "dev", "tab_id": "A" * 32, "action": "continue",
-                    "runtime_lease_id": "synthetic-lease", "runtime_fencing_token": 17,
-                })
+    def test_sensitive_login_action_uses_scoped_maintenance_lock_with_generic_handoff_off(self):
+        # Generic background handoff is disabled by the owner. A live
+        # account-specific lease still permits a strictly scoped official
+        # login action, forwarded only to the existing protected browser peer.
+        import io
+        args = {
+            "session": "dev", "tab_id": "A" * 32, "action": "continue",
+            "runtime_lease_id": "synthetic-lease", "runtime_fencing_token": 17,
+        }
+        reply = {"jsonrpc": "2.0", "id": 1, "result": {
+            "structuredContent": {"ok": True, "session": "dev", "clicked": True},
+            "isError": False,
+        }}
+        with (
+            mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock",
+                              return_value=self._lease()) as lease,
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-test-token"),
+            mock.patch.object(m, "urlopen",
+                              return_value=io.BytesIO(json.dumps(reply).encode())) as peer,
+        ):
+            outcome = m.execute_tool("browser_auth_action", args)
+        self.assertTrue(outcome["ok"])
+        lease.assert_called_once_with("synthetic-lease", 17, "browser_auth_action")
+        self.assertEqual(json.loads(peer.call_args.args[0].data)["params"]["arguments"], args)
+
+    def test_sensitive_login_action_denies_wrong_owner_or_expired_lock_without_handoff(self):
+        args = {
+            "session": "dev", "tab_id": "A" * 32, "action": "continue",
+            "runtime_lease_id": "synthetic-lease", "runtime_fencing_token": 17,
+        }
+        with (
+            mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock",
+                              return_value=self._lease("atendimento")),
+            mock.patch.object(m, "urlopen") as peer,
+        ):
+            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                m.execute_tool("browser_auth_action", args)
+            peer.assert_not_called()
+        with (
+            mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock",
+                              side_effect=m.runtime_lock.RuntimeLockConflict("expired")),
+            mock.patch.object(m, "urlopen") as peer,
+        ):
+            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_invalid"):
+                m.execute_tool("browser_auth_action", args)
+            peer.assert_not_called()
 
 
 if __name__ == "__main__":
