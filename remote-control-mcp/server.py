@@ -2310,8 +2310,9 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     elif name == "browser_auth_open":
         if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
             raise ValueError("account_auth_scope_invalid")
-        if not _durable_handoff_enabled():
-            raise ValueError("account_auth_lease_mode_required")
+        # Exact account-specific maintenance lease is sufficient for opening an
+        # official login/neutral tab; generic handoff may be intentionally off.
+        # Keep the scoped lock, owner identity and fencing checks below.
         lease_id = str(args.get("runtime_lease_id") or "").strip()
         token = args.get("runtime_fencing_token")
         if not lease_id or token is None:
@@ -2325,8 +2326,9 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     elif name == "browser_profile_home_open":
         if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
             raise ValueError("account_auth_scope_invalid")
-        if not _durable_handoff_enabled():
-            raise ValueError("account_auth_lease_mode_required")
+        # Exact account-specific maintenance lease is sufficient for opening an
+        # official login/neutral tab; generic handoff may be intentionally off.
+        # Keep the scoped lock, owner identity and fencing checks below.
         lease_id = str(args.get("runtime_lease_id") or "").strip()
         token = args.get("runtime_fencing_token")
         if not lease_id or token is None:
