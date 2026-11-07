@@ -38,6 +38,52 @@ class AgentTaskStateTests(unittest.TestCase):
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
 
+    def test_controller_persists_unbound_task_until_exact_browser_route_is_attested(self) -> None:
+        # Global rule no longer loses work when ChatGPT login/route is missing.
+        # Never write tests into the production controller task directory.
+        with mock.patch.dict(state.os.environ, {"SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "0"}):
+            with mock.patch.object(state, "RUNTIME_DIR", state.CANONICAL_CONTROLLER_RUNTIME_DIR):
+                self.assertFalse(state._require_verified_chatgpt_origin_on_create("chatgpt"))
+                self.assertFalse(state._require_verified_chatgpt_origin_on_create("gpt6"))
+            task = state.start_task("save-unbound-before-login", "retain authorized work", "gpt")
+            self.assertEqual(task["status"], "RUNNING")
+            self.assertNotIn("conversation_id", task)
+            progress = state.record_progress(
+                "save-unbound-before-login", next_action="await attested Dev login",
+                evidence="checkpoint stored before browser identity was available",
+            )
+            self.assertEqual(progress["status"], "RUNNING")
+            self.assertNotIn("conversation_id", progress)
+            bound = state.bind_route(
+                "save-unbound-before-login",
+                conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                browser_session="dev",
+            )
+            self.assertEqual(bound["browser_session"], "dev")
+            with self.assertRaisesRegex(state.TaskStateError, "conflicts"):
+                state.bind_route(
+                    "save-unbound-before-login",
+                    conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                    browser_session="atendimento",
+                )
+
+    def test_unbound_successor_is_persisted_but_not_assigned_fake_origin(self) -> None:
+        predecessor = {
+            "status": "CONCLUIDO",
+            "task_id": "verified-completion-without-route",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "completed_at": "2026-10-11T14:00:00Z",
+        }
+        with mock.patch.dict(state.os.environ, {"SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "0"}):
+            with mock.patch.object(state, "_load", return_value=predecessor):
+                successor = state.start_successor_task(
+                    "next-unbound-but-saved", predecessor_task_id="verified-completion-without-route",
+                    goal="recover new business task", agent_id="chatgpt",
+                )
+        self.assertEqual(successor["status"], "RUNNING")
+        self.assertNotIn("conversation_id", successor)
+        self.assertNotIn("browser_session", successor)
+
     def test_new_chatgpt_checkpoint_fails_closed_without_verified_origin(self) -> None:
         # An ordinary test runtime can simulate the controller's enforced gate.
         legacy = state.start_task("legacy-unbound", "keep prior progress", "chatgpt")
