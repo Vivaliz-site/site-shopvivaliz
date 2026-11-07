@@ -10,7 +10,8 @@ $rows = [
   'current_margin_bps'=>850,'current_profit_cents'=>6714,'current_commission_cents'=>8689,
   'current_logistics_cents'=>675,'current_tax_cents'=>11059,'current_weight_kg'=>0.85,
   'current_dimensional_kg'=>1.2,'current_billable_kg'=>1.22,
-  'current_margin_status'=>'estimated','current_package_source'=>'AMAZON_CATALOG_PACKAGE'],
+  'current_margin_status'=>'estimated','current_package_source'=>'AMAZON_CATALOG_PACKAGE',
+  'historical_fulfillment_source'=>'AMAZON_ORDERS_V2026_FULFILLMENT'],
  ['seller_sku'=>'1C7Q-LKVS-KOPL','erp_sku'=>'TAJ/AS*BR1-NOVO','asin'=>'B0BM514NX7','program'=>'DBA',
   'price'=>71.91,'last_cost'=>42.90,'confirmed_units'=>12,'pending_sales'=>1,'margin_weighted_bps'=>445,
   'margin_min_bps'=>445,'profit_cents'=>3840,'last_cost_date'=>'2026-09-07','status'=>'partial',
@@ -24,6 +25,9 @@ if (abs(($data[0]['Margem atual estimada (%)']??-1)-8.50)>0.0001
     || ($data[0]['Peso tarifavel (kg)']??null)!==1.22
     || ($data[0]['Situacao margem atual']??'')!=='estimated')
     throw new Exception('current price margin breakdown must be exported');
+
+if ($data[0]['Fonte canal historico']!=='AMAZON_ORDERS_V2026_FULFILLMENT')
+    throw new Exception('historical source must be attributed rather than inferred');
 
 if ($data[0]['Receita bruta media por unidade (R$)']!==75.0
     || $data[0]['Receita bruta das unidades conciliadas (R$)']!==675.0) {
@@ -42,6 +46,10 @@ $xml=simplexml_load_string($sheet);
 if (!$xml) throw new Exception('xlsx xml');
 if (!str_contains($sheet,'12.78')) throw new Exception('margin output');
 if (!str_contains($sheet,'Margem atual estimada (%)') || !str_contains($sheet,'Comissao Amazon atual (R$)')) throw new Exception('new XLSX current margin columns missing');
+if(!str_contains($sheet,'Fonte canal historico')
+    || !str_contains($sheet,'AMAZON_ORDERS_V2026_FULFILLMENT')) {
+    throw new Exception('historical order provenance missing from XLSX');
+}
 if (!str_contains($sheet,'Receita bruta media por unidade (R$)')
     || !str_contains($sheet,'Receita bruta das unidades conciliadas (R$)'))
     throw new Exception('realized gross columns missing');
