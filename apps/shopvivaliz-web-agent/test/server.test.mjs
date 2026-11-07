@@ -50,3 +50,45 @@ test('MCP protocol keeps handoff capability in hidden _meta and human API never 
   const reused=await fetch(base+'/human/'+sid+'/action',{method:'POST',headers:{Authorization:'Bearer '+capability,'content-type':'application/json'},body:JSON.stringify({action:'type',text:'bad'})});
   assert.equal(reused.status,404);
 });
+
+
+test('takeover CORS rejects foreign origins before capabilities and never emits wildcard',async(t)=>{
+  const trusted='https://takeover-owner.example';
+  const server=createServer({
+    controller:new TakeoverController(fake),mcpToken:TOKEN,
+    allowedHumanOrigins:[trusted]
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const base='http://127.0.0.1:'+server.address().port;
+  const path='/human/00000000-0000-0000-0000-000000000000/frame';
+  const preflight=(origin)=>fetch(base+path,{
+    method:'OPTIONS',headers:{
+      ...(origin===undefined?{}:{Origin:origin}),
+      'Access-Control-Request-Method':'GET',
+      'Access-Control-Request-Headers':'Authorization'
+    }
+  });
+  const ok=await preflight(trusted);
+  assert.equal(ok.status,204);
+  assert.equal(ok.headers.get('access-control-allow-origin'),trusted);
+  assert.equal(ok.headers.get('vary'),'Origin');
+  assert.notEqual(ok.headers.get('access-control-allow-origin'),'*');
+  const same=await preflight('http://127.0.0.1:5598');
+  assert.equal(same.status,204);
+  for(const origin of ['null','https://attacker.example','http://takeover-owner.example']){
+    const denied=await preflight(origin);
+    assert.equal(denied.status,403,origin);
+    assert.equal(denied.headers.get('access-control-allow-origin'),null,origin);
+    const get=await fetch(base+path,{headers:{Origin:origin,Authorization:'Bearer dummy'}});
+    assert.equal(get.status,403,origin);
+    assert.equal(get.headers.get('access-control-allow-origin'),null,origin);
+  }
+  const noOrigin=await preflight(undefined);
+  assert.equal(noOrigin.status,403);
+  assert.equal(noOrigin.headers.get('access-control-allow-origin'),null);
+  assert.throws(()=>createServer({mcpToken:TOKEN,allowedHumanOrigins:['*']}),/invalid_human_cors_origin/);
+  assert.throws(()=>createServer({mcpToken:TOKEN,allowedHumanOrigins:['https://*.example']}),/invalid_human_cors_origin/);
+  assert.throws(()=>createServer({mcpToken:TOKEN,allowedHumanOrigins:['http://untrusted.example']}),/invalid_human_cors_origin/);
+  assert.throws(()=>createServer({mcpToken:TOKEN,allowedHumanOrigins:['https://trusted.example/path']}),/invalid_human_cors_origin/);
+});
