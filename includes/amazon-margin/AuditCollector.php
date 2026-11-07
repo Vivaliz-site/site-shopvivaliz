@@ -757,7 +757,14 @@ final class SvAmazonMarginCollector
             $channel = $row['fulfillment_channel'];
             if (!in_array($channel,['AMAZON','MERCHANT'],true)
                 && $shipments!==[]) {
-                $historicalChannel=$this->historicalChannel($shipments);
+                try {
+                    $historicalChannel=$this->historicalChannel($shipments);
+                } catch (Throwable $e) {
+                    if (SvAmazonMarginReadErrorPolicy::mustAbortAudit($e)) throw $e;
+                    // An individual missing/invalid Order cannot certify a
+                    // channel. Keep sales pending; never invent past FBA/DBA.
+                    $historicalChannel=null;
+                }
                 if ($historicalChannel!==null) {
                     $channel=$historicalChannel;
                     $row['historical_fulfillment_source']='AMAZON_ORDERS_V2026_FULFILLMENT';
