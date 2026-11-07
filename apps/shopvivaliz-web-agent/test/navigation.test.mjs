@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {TakeoverController} from '../src/controller.mjs';
 import {createServer} from '../src/server.mjs';
+import {BrowserDriver} from '../src/browser.mjs';
 
 function driverFake(){
   const actions=[];
@@ -78,4 +79,34 @@ test('MCP advertises navigation tools and rejects wrong argument types',async(t)
   assert.equal(good.structuredContent.title,'Scrolled');
   const fill=await rpc(5,'tools/call',{name:'web_agent_fill',arguments:{session_id:sid,selector:'#search',text:'books'}});
   assert.equal(fill.structuredContent.title,'Filled');
+});
+
+
+test('browser fill refuses password, OTP and payment fields while allowing non-secret search',async()=>{
+  const driver=new BrowserDriver();
+  let node={tagName:'INPUT',isContentEditable:false,getAttribute:()=>null};
+  let fills=0;
+  driver.page={locator:()=>({first:()=>({
+    evaluate:async fn=>fn(node),
+    fill:async()=>{fills++;}
+  })})};
+  driver.snapshot=async()=>({title:'Safe form'});
+  const setNode=(tag,attributes={},editable=false)=>{
+    node={tagName:tag.toUpperCase(),isContentEditable:editable,
+      getAttribute:name=>Object.hasOwn(attributes,name)?attributes[name]:null};
+  };
+  setNode('input',{type:'password'});
+  await assert.rejects(driver.fill('#pwd','synthetic'),/sensitive_field_requires_human_takeover/);
+  setNode('input',{type:'text',autocomplete:'one-time-code'});
+  await assert.rejects(driver.fill('#code','synthetic'),/sensitive_field_requires_human_takeover/);
+  setNode('input',{type:'text','aria-label':'Payment Card Number'});
+  await assert.rejects(driver.fill('#payment','synthetic'),/sensitive_field_requires_human_takeover/);
+  setNode('input',{type:'hidden'});
+  await assert.rejects(driver.fill('#hidden','synthetic'),/sensitive_field_requires_human_takeover/);
+  setNode('textarea',{name:'api_token'});
+  await assert.rejects(driver.fill('#token','synthetic'),/sensitive_field_requires_human_takeover/);
+  assert.equal(fills,0);
+  setNode('input',{type:'search',placeholder:'Buscar'});
+  assert.equal((await driver.fill('#query','printer')).title,'Safe form');
+  assert.equal(fills,1);
 });
