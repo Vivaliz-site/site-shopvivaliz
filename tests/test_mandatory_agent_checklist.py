@@ -44,10 +44,10 @@ class MandatoryChecklistTests(unittest.TestCase):
                 with self.assertRaisesRegex(state.TaskStateError, "explicit action plan"):
                     state.mark_ready(task["task_id"], evidence=["not proven"], verification="not proven")
 
-    def test_progress_and_ready_fail_when_no_plan_exists(self):
+    def test_progress_remains_possible_before_plan_but_ready_requires_opted_in_plan(self):
         self.new()
-        with self.assertRaisesRegex(state.TaskStateError, "plan required"):
-            state.record_progress("plan-test", next_action="pretend progress", evidence="claim")
+        advanced = state.record_progress("plan-test", next_action="investigate actual task", evidence="log#1")
+        self.assertEqual(advanced["next_action"], "investigate actual task")
         with self.assertRaisesRegex(state.TaskStateError, "explicit action plan"):
             state.mark_ready("plan-test", evidence=["claim"], verification="claim")
         self.assertEqual(state.load_task("plan-test")["status"], "RUNNING")
@@ -140,6 +140,30 @@ class MandatoryChecklistTests(unittest.TestCase):
             task = state.start_task("legacy-case", "legacy goal", "worker")
         self.assertNotIn("checklist", task)
         self.assertEqual(state.start_task("legacy-case", "legacy goal", "worker"), task)
+
+    def test_global_controller_no_longer_automatically_requires_checklist(self):
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_REQUIRE_AGENT_CHECKLIST": "0"}):
+            with mock.patch.object(state, "RUNTIME_DIR", state.CANONICAL_CONTROLLER_RUNTIME_DIR):
+                self.assertFalse(state._mandatory_checklist_enabled())
+
+    def test_empty_auto_inserted_legacy_plan_does_not_block_after_retirement(self):
+        self.new("legacy-auto")  # originally created while strict mode was on
+        self.assertEqual(state.load_task("legacy-auto")["checklist"]["items"], [])
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_REQUIRE_AGENT_CHECKLIST": "0"}):
+            progress = state.record_progress("legacy-auto", next_action="verify actual result", evidence="real progress")
+            self.assertEqual(progress["next_action"], "verify actual result")
+            state.mark_ready("legacy-auto", evidence=["real task test passed"], verification="independent readback")
+            self.assertEqual(state.complete_task("legacy-auto")["status"], "CONCLUIDO")
+
+    def test_explicitly_planned_checklist_keeps_immutable_evidence_gate(self):
+        self.new("explicit-plan")
+        state.set_checklist("explicit-plan", steps=["verify outcome"])
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_REQUIRE_AGENT_CHECKLIST": "0"}):
+            with self.assertRaisesRegex(state.TaskStateError, "step 1"):
+                state.mark_ready("explicit-plan", evidence=["partial"], verification="not complete")
+            state.complete_checklist_step("explicit-plan", step_id=1, evidence="e2e report", verification="independent test")
+            state.mark_ready("explicit-plan", evidence=["e2e report"], verification="independent test")
+            self.assertEqual(state.complete_task("explicit-plan")["status"], "CONCLUIDO")
 
 
 class MandatoryPolicyTests(unittest.TestCase):
