@@ -104,20 +104,6 @@ jobs:
           python3 tests/test_storefront_erp_price_parity.py
           python3 -m py_compile scripts/quality/audit-storefront-erp-prices.py
 
-      - name: Configure approved loopback SSH for production audit
-        env:
-          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          test -n "$KEY" && test -n "$HOSTS"
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
       - name: Compare all active products and effective storefront prices
         id: compare
         shell: bash
@@ -125,23 +111,50 @@ jobs:
           DEPLOY_SHA: ${{ needs.select_release.outputs.release_sha }}
         run: |
           set -Eeuo pipefail
+          umask 077
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
-          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes
-                    -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
+          # This runner already executes on Marina: SSH to itself fails host-key
+          # verification and must not be replaced with weaker SSH options.
+          test "$(hostname -s)" = 'marina-a1-4c24g'
+          test "$(id -un)" = 'ubuntu'
+          release='/home/ubuntu/shopvivaliz-deploy/current'
+          resolved="$(readlink -f -- "$release")"
+          case "$resolved" in
+            /home/ubuntu/shopvivaliz-deploy/releases/*) ;;
+            *) echo '::error::Untrusted active release path'; exit 1 ;;
+          esac
+          test -f "$release/.release-sha"
+          test "$(cat "$release/.release-sha")" = "$DEPLOY_SHA"
           report="/home/ubuntu/shopvivaliz-deploy/shared/logs/price-parity-${DEPLOY_SHA}.json"
-          if ssh "${ssh_opts[@]}" ubuntu@127.0.0.1 \
-            "cd /home/ubuntu/shopvivaliz-deploy/current && test \"\$(cat .release-sha)\" = '$DEPLOY_SHA' && python3 -u scripts/quality/audit-storefront-erp-prices.py --expected-sha '$DEPLOY_SHA' --output '$report'"; then
-            status=0
+          test ! -L "$report"
+          # The same audited local identity runs the read-only probe, without
+          # new privileges, broad SSH trust or an extra remote executor.
+          if (cd "$release" && python3 -u scripts/quality/audit-storefront-erp-prices.py \
+              --expected-sha "$DEPLOY_SHA" --output "$report"); then
+            test -s "$report"
+            test ! -L "$report"
+            test "$(cat "$release/.release-sha")" = "$DEPLOY_SHA"
+            python3 - "$report" "$DEPLOY_SHA" <<'PY'
+          import json,sys
+          from pathlib import Path
+          report=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          expected=sys.argv[2]
+          if not (report.get('status') == 'PASS'
+                  and report.get('release_sha') == expected
+                  and report.get('published_release_sha') == expected
+                  and report.get('read_only') is True
+                  and report.get('price_list_id') == 991
+                  and isinstance(report.get('counts'), dict)
+                  and report['counts'].get('errors') == 0
+                  and report.get('issues') == []):
+              raise SystemExit('Postdeploy parity evidence invalid or not passing')
+          print('PRICE_PARITY_ARTIFACT=VERIFIED exact_release=true read_only=true')
+          PY
+            install -m 0600 "$report" "$RUNNER_TEMP/price-parity.json"
           else
-            status=$?
+            echo '::error::Post-deploy price parity audit failed; no green evidence' >&2
+            exit 1
           fi
-          # A missing report is itself a failed evidence gate: never suppress scp.
-          scp "${ssh_opts[@]}" "ubuntu@127.0.0.1:$report" "$RUNNER_TEMP/price-parity.json"
-          if [ "$status" -ne 0 ]; then
-            echo '::error::Post-deploy price parity failed; production cannot be certified as fully price-synchronized'
-            exit "$status"
-          fi
-
       - name: Upload immutable read-only price parity evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
