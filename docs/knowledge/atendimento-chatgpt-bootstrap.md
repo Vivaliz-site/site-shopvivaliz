@@ -66,12 +66,12 @@ Para o contexto complementar da conta Atendimento, consultar `docs/knowledge/pro
 - `marina-a1-4c24g` (OCI ESPOSA): **site/web/deploy de produção**, Apache/MySQL/workers/runner; IP privado documentado `10.80.1.116`, Tailscale observado `100.118.170.46`. Acesso direto RDC 1/2 confirmado em 2026-10-29.
 - `always-free-arm-1787907847-26` (OCI PRINCIPAL): backend/controller do MCP central, navegador corporativo, MEI/M365 e relay; privado `10.0.1.38`, Tailscale observado `100.66.174.74`.
 - `shopvivaliz-free-a1`: **origem excluida segundo proprietario** em 2026-10-29, SSH sem rota; proibido usar como destino. `shopvivaliz-ai` e E2 antigas sao historicas.
-- Estado dos MCPs e alternativas: [`current-topology-and-access-2026-10-29.md`](current-topology-and-access-2026-10-29.md).
+- Estado operacional do MCP: [`docs/ops/mcp-client-catalog-publication-2026-11-06.md`](../ops/mcp-client-catalog-publication-2026-11-06.md). O mapa de 29/10 e historico e nao restringe ferramentas publicadas atualmente.
 - Produção: `/home/ubuntu/shopvivaliz-deploy/`, com releases imutáveis. Nunca editar `current/` nem a release ativa diretamente.
 
 ## Rota de operação
 
-1. Backend: ShopVivaliz Remote Control MCP para hosts **validos de sua allowlist**; a origem excluida ainda aparece, e Marina **nao** aparece nesse MCP.
+1. Backend e roteamento MCP: os clientes ShopVivaliz Remote Control e Orquestrador anunciam `always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e `marina-a1-4c24g` em `admin_command_run`, `task_submit` e `service_action` (verificacao 06/11/2026). A VM excluida `shopvivaliz-free-a1` NAO aparece nesses enums. Em toda sessao, verificar esquema, grant e lease atuais e executar canario autorizado; catalogo publicado nao significa privilegio irrestrito.
 2. Marina: MCP central e Orquestrador aceitam marina-a1-4c24g com schema/grants autorizados e canario exit_code=0; MCP independente tem autenticacao publica nao certificada; RDC/SSH sao alternativas independentes autorizadas, nunca forma de contornar recusa.
 3. GitHub Actions/OCI Bastion somente para bootstrap/recovery.
 4. Navegador operacional roda na VM de backend; não usar navegador dos hosts Windows nem Opera Connector para tarefas ShopVivaliz.
