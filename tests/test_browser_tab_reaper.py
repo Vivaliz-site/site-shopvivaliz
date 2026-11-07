@@ -56,6 +56,17 @@ def page(tab_id, url, title="t"):
 
 
 class BrowserTabReaperTest(unittest.TestCase):
+    def test_systemd_timer_restarts_without_staying_elapsed(self):
+        # The timer previously became active/elasped without a next trigger
+        # after restarting past OnBootSec and the previous service activation.
+        # The calendar expression must independently schedule every hour.
+        unit = SCRIPT.parents[1] / "deploy" / "systemd" / "shopvivaliz-browser-tab-reaper.timer"
+        config = unit.read_text(encoding="utf-8")
+        self.assertIn("OnCalendar=hourly", config)
+        self.assertIn("Persistent=true", config)
+        self.assertNotIn("OnBootSec=", config)
+        self.assertNotIn("OnUnitActiveSec=", config)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
