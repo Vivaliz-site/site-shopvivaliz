@@ -59,4 +59,34 @@ if (str_contains($sheet,'Preco medio efetivo das vendas')
     || str_contains($p,'Preco medio efetivo nas vendas')) {
     throw new Exception('Gross including shipping cannot be presented as product price');
 }
+// Regression from persisted production run #14: three DBA Shipment rows had
+// pending_sales=1, confirmed_sales=0 but were labelled "no sales" in UI/exports.
+// Relabel for presentation without mutating the historical audit payload.
+$legacy=SvAmazonMarginExport::rows(['rows'=>[
+    ['seller_sku'=>'80cm','amazon_status'=>['BUYABLE'],'status'=>'no_confirmed_sales',
+     'confirmed_sales'=>0,'confirmed_units'=>0,'pending_sales'=>1,
+     'margin_weighted_bps'=>null,'profit_cents'=>0,'program'=>'DBA'],
+]],[]);
+if (count($legacy)!==1
+    || $legacy[0]['Situacao']!=='pending_financial_reconciliation'
+    || !str_contains($legacy[0]['Diagnostico'],'Venda identificada')
+    || $legacy[0]['Vendas pendentes']!==1
+    || $legacy[0]['Margem ponderada (%)']!==null
+    || $legacy[0]['Lucro acumulado do periodo (R$)']!==null) {
+    throw new Exception('pending financial shipment must never look like zero sales or certified margin');
+}
+$legacyXlsx=SvAmazonMarginExport::xlsx($legacy);
+$legacyFile=tempnam(sys_get_temp_dir(),'sv-margin-pending-');
+file_put_contents($legacyFile,$legacyXlsx);
+$legacyZip=new ZipArchive();
+if($legacyZip->open($legacyFile)!==true) throw new Exception('legacy pending XLSX invalid');
+$legacySheet=$legacyZip->getFromName('xl/worksheets/sheet1.xml');
+if(!str_contains((string)$legacySheet,'pending_financial_reconciliation')
+    || !str_contains((string)$legacySheet,'Venda identificada')) {
+    throw new Exception('XLSX must disclose unresolved financial shipment');
+}
+$legacyZip->close();unlink($legacyFile);
+$legacyPdf=SvAmazonMarginExport::pdf($legacy,'2026-11-07');
+if(!str_starts_with($legacyPdf,'%PDF-1.4')) throw new Exception('pending PDF invalid');
+
 echo "PASS margin exports: XLSX file/worksheet/data + PDF header/footer + selection\n";
