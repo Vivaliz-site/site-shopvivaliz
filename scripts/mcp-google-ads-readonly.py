@@ -67,9 +67,24 @@ def is_placeholder(value: str) -> bool:
     )
 
 
+def python_for_script(script: str) -> str:
+    """Use the already-provisioned Google Ads SDK environment, when available.
+
+    Immutable production releases live under deploy/releases/<sha>. The
+    shared venv is deploy/shared/venv-google-ads; ordinary development and
+    CI checkouts retain the calling interpreter when that venv is absent.
+    Only the read-only Ads API review needs this SDK.
+    """
+    if script == "google_ads_review_campaigns.py":
+        candidate = ROOT.parent.parent / "shared" / "venv-google-ads" / "bin" / "python"
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return sys.executable
+
+
 def run_script(script: str) -> dict[str, Any]:
     result = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / script)],
+        [python_for_script(script), str(ROOT / "scripts" / script)],
         cwd=str(ROOT),
         text=True,
         capture_output=True,
