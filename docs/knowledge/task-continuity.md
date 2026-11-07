@@ -71,23 +71,31 @@ explicitamente antes de reivindicar lease. Health ativo nao equivale a
 <!-- /CONTINUITY_ATOMIC_ROUTING_V1 -->
 
 <!-- NEW_CHATGPT_CHECKPOINT_PROVENANCE_GATE_V1 -->
-### Novos checkpoints ChatGPT no runtime canônico
-No backend canônico `/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state`,
-uma nova tarefa identificada como agente `chatgpt`, `gpt`, `gpt6` ou
-`orquestrador` **não pode ser criada** sem `conversation_id` exato e
-`browser_session` corporativo (`dev` ou `atendimento`). A API
-`start_task` falha antes de gravar o arquivo; ela não deve adivinhar rota,
-usar a conta pessoal legada, ou produzir outro `RUNNING` irrecuperável.
-A chamada deve manter seu objetivo na fila original sem perder dados e
-repetir a criação quando a origem for comprovada.
+### Novos checkpoints ChatGPT: gravar primeiro, autenticar antes de retomar
 
-A regra não altera checkpoints anteriores (inclusive chamadas idempotentes
-para um mesmo `task_id`) e não proíbe tarefas CLI de outros provedores sem
-conversa ChatGPT. Em testes isolados, o contrato pode ser exercitado com
-`SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS=1`; essa flag não desativa
-a regra no diretório canônico. Sucessores ChatGPT devem herdar ambas as
-identidades válidas do predecessor concluído; caso contrário falham antes
-de criar um novo checkpoint.
+**Contrato vigente apos PR #3772 (07/11/2026):** no backend canonico
+`/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state`, uma nova tarefa
+`chatgpt`, `gpt`, `gpt6` ou `orquestrador` **pode ser persistida sem
+`conversation_id` e sem `browser_session`** quando a sessao de login ainda
+nao estiver disponivel. O checkpoint fica `RUNNING`, conserva objetivo,
+`task_id`, historico e `next_action`; nao criar duplicata nem inventar
+a identidade da conversa. A mesma regra vale para sucessores sem origem
+comprovada. A indisponibilidade temporaria do navegador nao descarta trabalho.
+
+**Gate que permanece:** nenhuma recuperacao automatica, nudge, envio de
+mensagem ou acao na UI pode usar o checkpoint nao vinculado. O watchdog
+proativo e o dispatcher exigem o `conversation_id` real e o perfil corporativo
+`dev` ou `atendimento` autenticado, com lease/fencing e propriedade corretos.
+Depois de obter origem autentica, vincular atomicamente por `bind-route` e
+revalidar a versao/identidade; nunca atribuir conta pelo titulo, horario ou
+ultimo browser ativo. A validacao posterior de E2E continua obrigatoria.
+
+**Excecao estrita por fluxo:** a flag
+`SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS=1` ainda ativa recusa
+preventiva **somente no fluxo explicitamente configurado**; esse comportamento
+nao se aplica automaticamente por executar no diretorio canonico. Respeitar
+MFA, RBAC, isolamento de perfis, grants, consentimentos de plataforma e
+evidencias reais; nao contornar o bloqueio de identidade na hora da retomada.
 <!-- /NEW_CHATGPT_CHECKPOINT_PROVENANCE_GATE_V1 -->
 
 <!-- CONTINUITY_TASK_LOOKBACK_V1 -->
