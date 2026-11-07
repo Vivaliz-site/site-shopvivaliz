@@ -216,6 +216,9 @@ function funnelClientId() {
   }
 
   function pushOnce(key, eventName, params) {
+    // Do not burn the one-time milestone before analytics consent exists.
+    // Consent can be granted while the visitor is already on this page.
+    if (!analyticsConsentGranted()) return;
     var storageKey = 'sv_ga_once_' + key;
     try {
       if (sessionStorage.getItem(storageKey) === '1') return;
@@ -367,6 +370,11 @@ function funnelClientId() {
       }
 
       if (form.matches('#checkout-form')) {
+        // checkout.php uses novalidate and validates inside its async submit
+        // handler. The capturing analytics listener runs first, so reject
+        // invalid attempts before emitting payment/shipping milestones.
+        if (form.checkValidity && !form.checkValidity()) return;
+        if (!cartItems().length) return;
         trackCheckoutDetails(form);
       }
 
@@ -411,6 +419,16 @@ function funnelClientId() {
     // Revenue is deliberately not emitted from browser state. The canonical
     // purchase event is sent server-side only after the payment webhook marks
     // the order approved, preventing boleto/order creation from inflating ROAS.
+  }
+
+  // The privacy banner does not reload the page on consent selection.
+  // Recover the current page milestone once after a new analytics grant.
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('shopvivaliz:privacy-consent-changed', function (event) {
+      if (event && event.detail && event.detail.value === 'accepted') {
+        trackPageContext();
+      }
+    });
   }
 
   window.ShopVivalizGoogleEvents = {

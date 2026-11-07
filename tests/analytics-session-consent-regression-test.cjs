@@ -68,4 +68,89 @@ check('Pending Ads wrapper uses only one dataLayer fallback when gtag is absent'
   assert.equal(ctx.dataLayer[0].event, 'ads_conversion_pending_payment');
 });
 
+
+// Regression: a form with novalidate can dispatch submit before the checkout
+// has accepted the details. Invalid attempts are not payment milestones.
+function funnelHarness(pathname, consent) {
+  const documentListeners = {};
+  const windowListeners = {};
+  const beacons = [];
+  const gtagEvents = [];
+  const local = new Map([['shopvivaliz_cart', JSON.stringify([
+    {sku:'TEST-SKU', name:'Test product', price:28, quantity:1}
+  ])]]);
+  const session = new Map();
+  const storage = map => ({
+    getItem: key => map.has(key) ? map.get(key) : null,
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: key => map.delete(key)
+  });
+  const cookies = new Map(consent ? [['sv_privacy_consent','accepted']] : []);
+  const form = {
+    valid: false,
+    matches: selector => selector === '#checkout-form',
+    checkValidity() { return this.valid; },
+    querySelector: selector => selector.includes('payment_method') ? {value:'mercado_pago'} : null
+  };
+  const document = {
+    readyState: 'loading',
+    addEventListener(name, fn) { (documentListeners[name] ||= []).push(fn); },
+    getElementById: () => null,
+    querySelectorAll: () => [],
+    documentElement: {style: {removeProperty(){}}}
+  };
+  Object.defineProperty(document, 'cookie', {
+    get: () => [...cookies].map(([key, value]) => key + '=' + value).join('; '),
+    set: value => {
+      const [key, val] = value.split(';')[0].split('=');
+      cookies.set(key, val || '');
+    }
+  });
+  const window = {
+    location: {pathname, search:'', protocol:'https:', href:'https://example.invalid' + pathname},
+    crypto: {randomUUID: () => 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'},
+    dataLayer: [],
+    gtag: (...args) => gtagEvents.push(args),
+    addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); },
+    dispatchEvent(evt) { (windowListeners[evt.type] || []).forEach(fn => fn(evt)); },
+    ShopVivalizProductContext: pathname === '/produto' ? {sku:'TEST-SKU',price:28} : null
+  };
+  const context = {
+    document, window,
+    localStorage: storage(local), sessionStorage: storage(session),
+    URL, URLSearchParams, Uint8Array,
+    CustomEvent: class { constructor(type, options) { this.type=type; this.detail=options.detail; } },
+    Blob: class { constructor(parts) { this.parts = parts; } },
+    navigator: {sendBeacon: (url, blob) => {
+      assert.equal(url, '/api/analytics/funnel-event.php');
+      beacons.push(JSON.parse(blob.parts.join('')));
+      return true;
+    }}
+  };
+  vm.createContext(context);
+  vm.runInContext(eventsSource, context);
+  (documentListeners.DOMContentLoaded || []).forEach(fn => fn());
+  return {
+    form, window, context, session, beacons, gtagEvents,
+    submit(valid) { form.valid=valid; (documentListeners.submit || []).forEach(fn => fn({target:form})); },
+    accept() { vm.runInContext(privacySource, context); window.ShopVivalizPrivacy.acceptAll(); }
+  };
+}
+check('Invalid checkout submit must not count payment info or consume one-time milestone', () => {
+  const app=funnelHarness('/checkout', true);
+  app.submit(false);
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_payment_info').length, 0);
+  app.submit(true);
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_payment_info').length, 1);
+  app.submit(true);
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_payment_info').length, 1);
+});
+check('Accepting analytics on a product page records one consented first-party view', () => {
+  const app=funnelHarness('/produto', false);
+  assert.equal(app.beacons.filter(x => x.event_name === 'view_item').length, 0);
+  app.accept();
+  assert.equal(app.beacons.filter(x => x.event_name === 'view_item').length, 1);
+  assert.equal(app.session.get('sv_ga_once_view_item_TEST-SKU'), '1');
+});
+
 process.exitCode=failures?1:0;
