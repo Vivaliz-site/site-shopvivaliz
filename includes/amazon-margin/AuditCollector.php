@@ -23,6 +23,26 @@ require_once __DIR__ . '/OlistProductTabCapture.php';
  */
 final class SvAmazonMarginCollector
 {
+    /**
+     * BUYABLE belongs to the Amazon offer, not to the linked Olist product.
+     * Olist's product detail also has an `active` boolean. Never allow its
+     * value to overwrite the Amazon offer's availability in persisted rows.
+     */
+    public static function offerIsBuyable(mixed $status): bool
+    {
+        return is_array($status) && in_array('BUYABLE', $status, true);
+    }
+
+    /** @param array<string,mixed> $row @param array<string,mixed> $product */
+    public static function mergeProductForOffer(array $row, array $product): array
+    {
+        $buyable = self::offerIsBuyable($row['amazon_status'] ?? null);
+        $merged = array_merge($row, $product);
+        $merged['erp_product_active'] = ($product['active'] ?? false) === true;
+        $merged['active'] = $buyable;
+        return $merged;
+    }
+
     private array $productsByEan = [];
     private array $productsBySku = [];
     private array $productDetails = [];
@@ -443,6 +463,7 @@ final class SvAmazonMarginCollector
                 $this->note('calculating_margins',$processed,count($listings));
             }
             $row = $listing;
+            $row['active'] = self::offerIsBuyable($row['amazon_status'] ?? null);
             $row += ['ean'=>null, 'erp_id'=>null, 'erp_sku'=>null,'last_cost'=>null,
                 'last_cost_date'=>null,'margin_min_bps'=>null,'margin_max_bps'=>null,
                 'margin_weighted_bps'=>null,'confirmed_sales'=>0,'pending_sales'=>0,
@@ -627,7 +648,7 @@ final class SvAmazonMarginCollector
                 }
                 $kitComponents=$prod['erp_kit_components']??[];
                 unset($prod['erp_kit_components']); // No raw BOM in persisted report.
-                $row = array_merge($row,$prod);
+                $row = self::mergeProductForOffer($row,$prod);
                 if (($prod['erp_product_type']??'')==='K') {
                     // A complete Olist K is NOT multiplied again, but its
                     // recorded price history must match the verified LIVE
