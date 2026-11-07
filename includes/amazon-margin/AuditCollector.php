@@ -153,6 +153,45 @@ final class SvAmazonMarginCollector
         return $seen;
     }
 
+    /**
+     * Classify the Amazon Pricing item WITHOUT promoting HTTP 200 / Success to
+     * a verified price when Product.Offers is empty. This is a read-only
+     * contract: registered Listings prices are never substituted as sale prices.
+     *
+     * @return array{price: ?float, price_source: string, price_state: string, fulfillment_channel: string}
+     */
+    public static function effectivePriceState(array $record): array
+    {
+        $empty = [
+            'price' => null,
+            'price_source' => 'UNVERIFIED',
+            'price_state' => 'NO_EFFECTIVE_OFFER',
+            'fulfillment_channel' => 'UNKNOWN',
+        ];
+        if (strtoupper(trim((string)($record['status'] ?? 'Success'))) !== 'SUCCESS') {
+            $empty['price_state'] = 'PROVIDER_ITEM_ERROR';
+            return $empty;
+        }
+
+        $offers = $record['Product']['Offers'] ?? [];
+        if (!is_array($offers) || $offers === []) {
+            return $empty;
+        }
+
+        $offer = $offers[0] ?? null;
+        $channel = is_array($offer) ? trim((string)($offer['FulfillmentChannel'] ?? '')) : '';
+        $price = self::validPrice(is_array($offer)
+            ? ($offer['BuyingPrice']['ListingPrice']['Amount'] ?? null)
+            : null);
+
+        return [
+            'price' => $price,
+            'price_source' => $price !== null ? 'AMAZON_SPAPI_PRICING' : 'UNVERIFIED',
+            'price_state' => $price !== null ? 'EFFECTIVE_OFFER' : 'INVALID_OFFER_PRICE',
+            'fulfillment_channel' => $channel !== '' ? $channel : 'UNKNOWN',
+        ];
+    }
+
     private function pricing(array &$listings): void
     {
         $chunks=array_chunk(array_keys($listings),20);
@@ -164,15 +203,21 @@ final class SvAmazonMarginCollector
             foreach ($res['payload'] ?? [] as $r) {
                 $sku = (string)($r['SellerSKU'] ?? '');
                 if (!array_key_exists($sku, $listings)) continue;
-                $offers = $r['Product']['Offers'] ?? [];
-                $offer = $offers[0] ?? [];
-                $live = self::validPrice($offer['BuyingPrice']['ListingPrice']['Amount'] ?? null);
-                $listings[$sku]['price'] = $live;
-                $listings[$sku]['price_source'] = 'AMAZON_SPAPI_PRICING';
-                $listings[$sku]['fulfillment_channel'] = (string)($offer['FulfillmentChannel'] ?? 'UNKNOWN');
+                $priceState = self::effectivePriceState($r);
+                foreach ($priceState as $key => $value) {
+                    $listings[$sku][$key] = $value;
+                }
+                $live = $priceState['price'];
                 if ($live !== null && $listings[$sku]['listed_price'] !== null
                     && abs($live - $listings[$sku]['listed_price']) >= 0.01) {
                     $listings[$sku]['price_divergence'] = true;
+                }
+                if ($priceState['price_state'] === 'NO_EFFECTIVE_OFFER'
+                    && in_array('BUYABLE', $listings[$sku]['amazon_status'] ?? [], true)) {
+                    $this->warnings[] = 'buyable_no_effective_offer:' . self::skuExcerpt($sku);
+                }
+                if ($priceState['price_state'] === 'PROVIDER_ITEM_ERROR') {
+                    $this->warnings[] = 'pricing_provider_item_error:' . self::skuExcerpt($sku);
                 }
                 $seen[$sku] = true;
             }
@@ -180,6 +225,7 @@ final class SvAmazonMarginCollector
                 if (!isset($seen[$sku])) {
                     $listings[$sku]['price'] = null;
                     $listings[$sku]['price_source'] = 'UNVERIFIED';
+                    $listings[$sku]['price_state'] = 'PRICING_RESPONSE_MISSING';
                     $listings[$sku]['fulfillment_channel'] = 'UNKNOWN';
                 }
             }
