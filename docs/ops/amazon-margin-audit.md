@@ -410,9 +410,11 @@ O endpoint oficial Amazon `GET /products/pricing/v0/price` pode responder HTTP 2
 O coletor diferencia os estados de leitura sem realizar nenhuma escrita:
 
 - `EFFECTIVE_OFFER`: existe oferta com `BuyingPrice.ListingPrice.Amount` positivo e finito; somente aqui `price_source=AMAZON_SPAPI_PRICING`.
-- `NO_EFFECTIVE_OFFER`: resposta bem-sucedida sem oferta; `price=null`, `price_source=UNVERIFIED`. Em anúncio `BUYABLE`, adiciona alerta `buyable_no_effective_offer:SKU`.
+- `PRICING_OFFERS_EMPTY`: resposta bem-sucedida sem oferta; `price=null`, `price_source=UNVERIFIED`. Em anúncio `BUYABLE`, adiciona alerta `buyable_pricing_offers_empty:SKU`.
 - `INVALID_OFFER_PRICE`: há objeto de oferta, mas sem preço numérico positivo válido; não inferir preço do cadastro.
 - `PROVIDER_ITEM_ERROR`: erro por item na própria resposta Amazon; não tratar como oferta ausente.
 - `PRICING_RESPONSE_MISSING`: o lote não retornou o Seller SKU solicitado.
 
 Esse estado não autoriza publicar margem projetada nem lucro calculado a partir do preço cadastral. Para corrigir anúncios, obter confirmação de publicação, status BUYABLE, possíveis regras de precificação automática e o readback posterior no mesmo Seller SKU. Não repetir um PATCH comercial apenas porque a resposta Listings foi `ACCEPTED`. Regressão local: `php tests/amazon-margin-effective-pricing-offer-state-test.php`.
+
+**Nota de interpretação (UI real 07/11):** o Seller Central pode exibir uma oferta ativa e um valor de preço diferente do cadastro mesmo quando o endpoint SP-API Pricing retorna `Product.Offers=[]`. O estado `PRICING_OFFERS_EMPTY` significa **somente** que essa resposta específica não forneceu preço suficiente para a certificação automatizada; não equivale a anúncio sem oferta ou sem disponibilidade no Seller Central. A fonte UI e sua data devem ser registradas separadamente, sem converter o preço cadastral em preço realizado.
