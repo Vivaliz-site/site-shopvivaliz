@@ -402,3 +402,17 @@ A margem da lista de risco **abaixo de 10%** e a **margem atual estimada** da of
 Fontes: FBA Onsite https://sellercentral.amazon.com.br/gp/help/external/GSCSJT23SEAKNXAN ; DBA https://venda.amazon.com.br/cresca/dba ; comissoes https://venda.amazon.com.br/precos ; cotacao https://developer-docs.amazon.com/sp-api/reference/getmyfeesestimates .
 
 A promocao especial de 50% nas tarifas logisticas (01/06 ate 30/09/2026) **nao e aplicada automaticamente** em novembro de 2026. Mudancas so em leitura, sem alterar precos ou estoque. Gates finais exigem auditoria completa real e UI autenticada.
+
+## Certificação de preço efetivo — resposta Pricing sem ofertas (07/11/2026)
+
+O endpoint oficial Amazon `GET /products/pricing/v0/price` pode responder HTTP 200 com item `status=Success` e `Product.Offers=[]`. **Isso não certifica um preço de venda vigente**, mesmo quando a API Listings registra `purchasable_offer` e preço mínimo corretos após um PATCH aceito.
+
+O coletor diferencia os estados de leitura sem realizar nenhuma escrita:
+
+- `EFFECTIVE_OFFER`: existe oferta com `BuyingPrice.ListingPrice.Amount` positivo e finito; somente aqui `price_source=AMAZON_SPAPI_PRICING`.
+- `NO_EFFECTIVE_OFFER`: resposta bem-sucedida sem oferta; `price=null`, `price_source=UNVERIFIED`. Em anúncio `BUYABLE`, adiciona alerta `buyable_no_effective_offer:SKU`.
+- `INVALID_OFFER_PRICE`: há objeto de oferta, mas sem preço numérico positivo válido; não inferir preço do cadastro.
+- `PROVIDER_ITEM_ERROR`: erro por item na própria resposta Amazon; não tratar como oferta ausente.
+- `PRICING_RESPONSE_MISSING`: o lote não retornou o Seller SKU solicitado.
+
+Esse estado não autoriza publicar margem projetada nem lucro calculado a partir do preço cadastral. Para corrigir anúncios, obter confirmação de publicação, status BUYABLE, possíveis regras de precificação automática e o readback posterior no mesmo Seller SKU. Não repetir um PATCH comercial apenas porque a resposta Listings foi `ACCEPTED`. Regressão local: `php tests/amazon-margin-effective-pricing-offer-state-test.php`.
