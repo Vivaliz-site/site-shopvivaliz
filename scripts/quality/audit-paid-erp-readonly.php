@@ -42,7 +42,7 @@ function svfra_approved_payment(array $payment, string $orderNumber, float $orde
     if (abs((float)($payment['transaction_amount'] ?? 0) - $orderTotal) > 0.01) {
         return false;
     }
-    if ((float)($payment['transaction_amount_refunded'] ?? 0) > 0.0) {
+    if ((float)($payment['transaction_amount_refunded'] ?? 0) > 0.0 || (int)($payment['refund_count'] ?? 0) > 0) {
         return false;
     }
     $refunds = $payment['refunds'] ?? [];
@@ -151,7 +151,8 @@ function svfra_audit_live(int $limit): int
         }
     }
 
-    $incomplete = $stats['unverified_provider'] > 0 || $stats['provider_lookup_error'] > 0
+    $incomplete = $stats['orders_considered'] === 0 || $stats['provider_verified_approved'] === 0
+        || $stats['unverified_provider'] > 0 || $stats['provider_lookup_error'] > 0
         || $stats['erp_lookup_error'] > 0 || $stats['erp_pending'] > 0;
     $status = $stats['erp_discrepancy'] > 0 ? 'CONFIRMED_FINANCIAL_DISCREPANCY'
         : ($incomplete ? 'INCOMPLETE_NOT_CERTIFIED' : 'NO_DISCREPANCY_IN_VERIFIED_SAMPLE');
