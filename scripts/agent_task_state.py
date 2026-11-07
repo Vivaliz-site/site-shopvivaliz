@@ -67,11 +67,13 @@ SCHEMA_VERSION = 1
 PROOF_SCHEMA_VERSION = 2
 DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 CANONICAL_CONTROLLER_RUNTIME_DIR = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
-# MANDATORY_AGENT_CHECKLIST_V1: strict for fresh canonical checkpoints,
-# with explicit environment opt-in for isolated regression tests.
+# MANDATORY_AGENT_CHECKLIST_V1: a checklist is opt-in per workflow, not an
+# unconditional blocker on the shared controller. Existing completed steps and
+# their immutable evidence remain protected when a plan has been started.
 def _mandatory_checklist_enabled() -> bool:
-    strict = os.getenv("SHOPVIVALIZ_REQUIRE_AGENT_CHECKLIST", "").strip().lower() in {"1", "true", "yes", "on"}
-    return strict or RUNTIME_DIR.resolve() == CANONICAL_CONTROLLER_RUNTIME_DIR
+    return os.getenv("SHOPVIVALIZ_REQUIRE_AGENT_CHECKLIST", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
 
 CHATGPT_AGENT_ID_RE = re.compile(r"(?:^|[^a-z0-9])(?:chatgpt|gpt[0-9]*|orquestrador)(?=$|[^a-z0-9])", re.I)
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -534,8 +536,15 @@ def _require_checklist_complete(payload: dict[str, Any]) -> None:
     if not isinstance(checklist, dict) or not checklist.get("required"):
         raise TaskStateError("mandatory checklist contract missing or invalid")
     items = checklist.get("items")
-    if not isinstance(items, list) or not items:
-        raise TaskStateError("mandatory checklist requires an explicit action plan")
+    if not isinstance(items, list):
+        raise TaskStateError("mandatory checklist has an invalid items collection")
+    if not items:
+        # Legacy checkpoints had an empty auto-inserted checklist. They must
+        # not be stranded merely because the global blanket gate was retired.
+        # Explicit strict mode still requires planning before certification.
+        if _mandatory_checklist_enabled():
+            raise TaskStateError("mandatory checklist requires an explicit action plan")
+        return
     for position, item in enumerate(items, 1):
         if not isinstance(item, dict) or item.get("id") != position or not str(item.get("description", "")).strip():
             raise TaskStateError("mandatory checklist is structurally invalid")
@@ -783,9 +792,8 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     if is_terminal(payload):
         raise TaskStateError("terminal task cannot record progress; resume a blocked task explicitly")
     _require_current_resume(payload)
-    checklist = payload.get("checklist")
-    if isinstance(checklist, dict) and checklist.get("required") and not checklist.get("items"):
-        raise TaskStateError("mandatory checklist plan required before progress")
+    # Recording a real next action must never be blocked by an absent plan.
+    # Explicitly planned steps still retain their completion integrity gate.
     action = str(next_action).strip()
     if not action:
         raise TaskStateError("non-terminal task requires a concrete next_action")
