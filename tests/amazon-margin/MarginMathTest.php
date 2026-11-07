@@ -101,4 +101,32 @@ margin_assert(SvAmazonMarginMath::transactionGrossCents($wrongCurrency)===null,
     'Financial BRL amounts cannot silently mix currencies');
 echo "PASS transaction gross: actual sale price, DBA freight, rebates, net reconciliation, fail-closed\n";
 
+
+// A later Seller Flex stock removal can make current Pricing return no
+// effective offer. Verified historical gross is still authoritative.
+$inactiveHistorical=SvAmazonMarginMath::calculate([
+    'sku'=>'ABRA-PERF-FBA','price'=>null,'cost'=>25.00,'quantity'=>2,
+    'shipment_total'=>55.64,'program'=>'FBA_ONSITE',
+    'sale_gross_cents'=>7800,'tax_bps'=>1400,
+]);
+margin_assert($inactiveHistorical['status']==='confirmed'
+    && $inactiveHistorical['gross_cents']===7800
+    && $inactiveHistorical['tax_cents']===1092
+    && $inactiveHistorical['profit_cents']===-528
+    && $inactiveHistorical['margin_bps']===-677,
+    'Historical actual sale must survive removal of current Amazon Pricing offer');
+$inactiveWithoutGross=SvAmazonMarginMath::calculate([
+    'sku'=>'NOT_CERTIFIED','price'=>null,'cost'=>25.00,'quantity'=>2,
+    'shipment_total'=>55.64,'program'=>'FBA_ONSITE','sale_gross_cents'=>null,
+]);
+margin_assert($inactiveWithoutGross['status']==='unverified',
+    'Missing current price AND transaction gross must fail closed');
+$inactiveWithoutCost=SvAmazonMarginMath::calculate([
+    'sku'=>'NOT_CERTIFIED','price'=>null,'cost'=>null,'quantity'=>2,
+    'shipment_total'=>55.64,'program'=>'FBA_ONSITE','sale_gross_cents'=>7800,
+]);
+margin_assert($inactiveWithoutCost['status']==='unverified',
+    'Verified gross cannot substitute unverified ERP kit/component cost');
+echo "PASS inactive-current-offer transactional gross only (no guessing)\\n";
+
 echo "PASS amazon margin accounting: 5 confirmed cases + missing fee/zero cost/tax/rounding\n";
