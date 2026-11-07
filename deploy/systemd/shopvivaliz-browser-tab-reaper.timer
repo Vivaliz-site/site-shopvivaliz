@@ -1,9 +1,11 @@
 [Unit]
-Description=Run the browser tab reaper every hour
+Description=Run the owner-approved browser tab reaper hourly (restart-safe)
 
 [Timer]
-OnBootSec=15min
-OnUnitActiveSec=1h
+# The former OnBootSec + OnUnitActiveSec pair could be stuck elapsed after
+# a timer restart: the only service activation had already aged out.
+# An absolute calendar trigger always schedules the next hourly execution.
+OnCalendar=hourly
 AccuracySec=5min
 Persistent=true
 Unit=shopvivaliz-browser-tab-reaper.service
