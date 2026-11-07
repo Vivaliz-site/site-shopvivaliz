@@ -75,7 +75,8 @@ final class SvAmazonMarginMath
         $hasSaleGross=array_key_exists('sale_gross_cents',$line);
         $saleGross=$hasSaleGross ? $line['sale_gross_cents'] : null;
         if ($sku === '' || !in_array($program, ['FBA_ONSITE', 'DBA'], true)
-            || $quantity < 1 || $quantity > 100000 || $price === null || $price <= 0
+            || $quantity < 1 || $quantity > 100000
+            || (!$hasSaleGross && ($price === null || $price <= 0))
             || $cost === null || $cost <= 0 || $shipment === null
             || $taxBps < 0 || $taxBps > 10000
             || ($hasSaleGross && (!is_int($saleGross) || $saleGross<=0))) {
@@ -90,8 +91,9 @@ final class SvAmazonMarginMath
             return ['status' => 'unverified', 'reason' => 'invalid_postage_charge', 'sku' => $sku];
         }
 
-        // The live listing price is NOT necessarily the historical sale price.
-        // Production collector supplies verified item gross from Finances.
+        // The listing may now be inactive and have no effective current price.
+        // Certified historical gross comes exclusively from Amazon Finances.
+        // Without a verified sale gross, the legacy calculation still requires price.
         $gross = $hasSaleGross ? $saleGross : $price * $quantity;
         $tax = (int)round($gross * $taxBps / 10000, 0, PHP_ROUND_HALF_UP);
         $cogs = $cost * $quantity;

@@ -12,7 +12,13 @@
  */
 const fs = require('fs');
 const crypto = require('crypto');
-const {chromium} = require('/home/ubuntu/amazon-returns-deploy/shared/olist-erp-browser/runtime/node_modules/playwright-core');
+// This browser dependency survives immutable site releases and the retired
+// amazon-returns-deploy tree. Never fall back to an ephemeral npx cache.
+const playwrightPath = '/home/ubuntu/shopvivaliz-deploy/shared/ops/amazon-margin-browser/node_modules/playwright-core';
+if (!fs.existsSync(playwrightPath)) {
+  throw Error('amazon_margin_playwright_core_missing_from_persistent_shared_ops');
+}
+const {chromium} = require(playwrightPath);
 
 const base = '/home/ubuntu/.shopvivaliz/runtime/amazon-margin';
 const inputPath = process.env.SV_AMAZON_OLIST_PRODUCT_TABS_INPUT

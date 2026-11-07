@@ -130,7 +130,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
-      <select id="status"><option value="">Todos os resultados</option><option value="current_low10">Margem atual estimada abaixo de 10%</option><option value="current_pending">Margem atual pendente</option><option value="low">Confirmada abaixo de 10%</option><option value="healthy">Confirmada ≥10%</option><option value="pending">Pendente ou parcial</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
+      <select id="status"><option value="">Todos os resultados</option><option value="current_low10">Margem atual estimada abaixo de 10%</option><option value="current_pending">Margem atual pendente</option><option value="low">Confirmada abaixo de 10%</option><option value="healthy">Confirmada ≥10%</option><option value="pending">Pendente ou parcial</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="pending_financial">Vendas aguardando conciliação financeira</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
       <label class="filter-active" for="only-active"><input type="checkbox" id="only-active" checked> Somente ativos <span id="active-count" class="small muted"></span></label>
       <button type="button" id="select-visible">Selecionar visíveis</button>
       <button type="button" id="clear-selected">Limpar seleção</button>
@@ -245,6 +245,7 @@ const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{mi
 function isActive(r){return Array.isArray(r.amazon_status)&&r.amazon_status.includes('BUYABLE');}
 function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'MERCHANT':'UNKNOWN');}
 function programLabel(r){const p=program(r);return p==='FBA_ONSITE'?'FBA Onsite':p==='DBA'?'DBA':p==='DBA_CANDIDATE'||p==='MERCHANT'?'Envio vendedor':p==='UNKNOWN'?'Não identificado':p;}
+function financialStatus(r){return r.status==='no_confirmed_sales'&&Number(r.confirmed_sales||0)===0&&Number(r.pending_sales||0)>0?'pending_financial_reconciliation':r.status;}
 function state(r){if(r.status!=='confirmed'||r.margin_weighted_bps===null||r.margin_weighted_bps===undefined)return 'pending';return r.margin_weighted_bps<1000?'low':'healthy';}
 function canSimulate(r){return r.status==='confirmed'&&Number(r.confirmed_units||0)>0&&Number(r.realized_sale_gross_cents)>0&&r.profit_cents!==null&&r.profit_cents!==undefined&&Number.isFinite(Number(r.profit_cents))&&r.price!==null&&r.price!==undefined&&Number.isFinite(Number(r.price))&&Number(r.price)>0&&r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined;}
 function simulateGross(r,targetGross,taxBps){if(!canSimulate(r))return null;const units=Number(r.confirmed_units),baseGross=Number(r.realized_sale_gross_cents)/100/units,baseProfit=Number(r.profit_cents)/100/units,rate=Number(taxBps)/10000;if(!Number.isFinite(targetGross)||targetGross<=0||!Number.isFinite(baseGross)||baseGross<=0||!Number.isFinite(baseProfit)||!Number.isFinite(rate)||rate<0||rate>1)return null;const profit=baseProfit+(targetGross-baseGross)*(1-rate);return {profit,margin:100*profit/targetGross};}
@@ -262,7 +263,8 @@ function filterMatch(r,s){
  if(s==='current_pending')return r.current_margin_bps===null||r.current_margin_bps===undefined;
  if(s==='low'||s==='healthy'||s==='pending')return state(r)===s;
  if(s==='unmapped')return r.status==='unmapped_erp';
- if(s==='no_sales')return r.status==='no_confirmed_sales';
+ if(s==='no_sales')return financialStatus(r)==='no_confirmed_sales';
+ if(s==='pending_financial')return financialStatus(r)==='pending_financial_reconciliation';
  if(s==='no_price')return r.price===null||r.price===undefined;
  if(s==='erp_error')return ['erp_or_catalog_read_failed','ambiguous_erp','erp_identity_mismatch','kit_cost_unverified'].includes(r.status);
  return true;
@@ -287,7 +289,8 @@ const reasonText={
  kit_cost_unverified:'Quantidade ou composição do kit sem prova suficiente; margem bloqueada',
  price_divergence:'Preço da oferta divergente do cadastro',
  fulfillment_unverified:'Modalidade logística não identificada',
- no_confirmed_sales:'Sem vendas financeiras conciliadas no período',
+ no_confirmed_sales:'Sem vendas financeiras identificadas no período',
+ pending_financial_reconciliation:'Venda identificada, mas postagem DBA ou lançamento financeiro ainda não conciliado; margem histórica não certificada',
 };
 function priceMarkup(r){
  if(r.price!==null&&r.price!==undefined) {
@@ -361,7 +364,7 @@ function render(){
   const st=state(r),active=isActive(r);
   const diag=r.erp_ui_conflict
    ?'Divergência entre vínculo da interface atual Olist e identificação anterior; custo e margem não certificados'
-   :(reasonText[r.status]||String(r.status??'Não verificado'));
+   :(reasonText[financialStatus(r)]||String(financialStatus(r)??'Não verificado'));
   const marginText=r.margin_weighted_bps===null||r.margin_weighted_bps===undefined
    ?'—<span class="cell-note warn">Margem não apurada</span>'
    :margin(r.margin_weighted_bps)+(r.status==='partial'?'<span class="cell-note warn">Conciliação parcial</span>':'');
@@ -398,7 +401,7 @@ function render(){
    +'<td><span class="pill">'+(active?'Ativo · BUYABLE':'Sem oferta ativa')+'</span></td>'
    +'<td class="right">'+priceMarkup(r)+'</td>'
    +'<td class="right">'+costMarkup(r)+'</td>'
-   +'<td class="right">'+Number(r.confirmed_sales||0)+'<span class="cell-note">'+Number(r.confirmed_units||0)+' unidade(s) vendida(s)</span></td>'
+   +'<td class="right">'+Number(r.confirmed_sales||0)+'<span class="cell-note">'+Number(r.confirmed_units||0)+' unidade(s) conciliada(s)</span>'+(Number(r.pending_sales||0)>0?'<span class="cell-note warn">'+Number(r.pending_sales)+' lançamento(s) aguardando conciliação</span>':'')+'</td>'
    +'<td class="right '+(currentVerified?(r.current_margin_bps<1000?'danger':'positive'):'warning')+'">'+currentText+'</td>'
    +'<td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+marginText+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined&&Number(r.confirmed_units||0)>0?price(Number(r.profit_cents||0)/100/Number(r.confirmed_units)):'—')+'</td>'

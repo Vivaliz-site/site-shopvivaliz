@@ -71,6 +71,61 @@ def build_client():
     return GoogleAdsClient.load_from_dict(config)
 
 
+def zero_delivery_classification(status: str, impressions: int, keyword_states: list[str]) -> dict | None:
+    """Read-only evidence signal, not a causal diagnosis or a bid recommendation.
+
+    A serving/eligible campaign can still record zero impressions; never
+    equate enabled status with traffic, and never assume the CPC cap is causal.
+    """
+    if status != "ENABLED" or impressions > 0:
+        return None
+    states = [state.upper() for state in keyword_states]
+    return {
+        "status": "ZERO_IMPRESSIONS_REVIEW_ONLY",
+        "enabled_keywords": len(states),
+        "keyword_eligible": states.count("ELIGIBLE"),
+        "keyword_not_eligible": states.count("NOT_ELIGIBLE"),
+        "keyword_unknown": states.count("UNKNOWN"),
+        "cause_certified": False,
+        "commercial_mutation_authorized": False,
+    }
+
+
+def inspect_zero_delivery(service, customer_id: str, campaign_id: int, status: str, impressions: int) -> dict | None:
+    """Use only official GAQL SELECT queries with bounded responses."""
+    if status != "ENABLED" or impressions > 0:
+        return None
+    keyword_query = (
+        "SELECT ad_group_criterion.primary_status,ad_group_criterion.primary_status_reasons "
+        "FROM keyword_view "
+        f"WHERE campaign.id = {int(campaign_id)} "
+        "AND ad_group_criterion.status = ENABLED LIMIT 100"
+    )
+    states = []
+    reason_counts = {}
+    for row in service.search(customer_id=customer_id, query=keyword_query):
+        states.append(row.ad_group_criterion.primary_status.name)
+        for reason in row.ad_group_criterion.primary_status_reasons:
+            label = reason.name
+            reason_counts[label] = reason_counts.get(label, 0) + 1
+    output = zero_delivery_classification(status, impressions, states)
+    output["keyword_reason_rarely_served"] = reason_counts.get("AD_GROUP_CRITERION_RARELY_SERVED", 0)
+    output["keyword_reason_low_quality"] = reason_counts.get("AD_GROUP_CRITERION_LOW_QUALITY", 0)
+    campaign_query = (
+        "SELECT campaign.serving_status,campaign.primary_status,campaign.bidding_strategy_type,"
+        "campaign.target_spend.cpc_bid_ceiling_micros "
+        f"FROM campaign WHERE campaign.id = {int(campaign_id)}"
+    )
+    for row in service.search(customer_id=customer_id, query=campaign_query):
+        output["serving_status"] = row.campaign.serving_status.name
+        output["primary_status"] = row.campaign.primary_status.name
+        output["bidding_strategy"] = row.campaign.bidding_strategy_type.name
+        if row.campaign.bidding_strategy_type.name == "TARGET_SPEND":
+            output["cpc_ceiling_brl"] = round(row.campaign.target_spend.cpc_bid_ceiling_micros / 1_000_000, 2)
+        break
+    return output
+
+
 def main() -> int:
     load_dotenv(ROOT / ".env")
     missing = [key for key in REQUIRED_ENV if is_missing_or_placeholder(os.getenv(key, ""))]
@@ -111,9 +166,24 @@ def main() -> int:
     try:
         rows = service.search(customer_id=customer_id, query=query)
         print("READ_ONLY_REVIEW")
+        flagged_campaigns = 0
         for row in rows:
             budget_brl = row.campaign_budget.amount_micros / 1_000_000
             cost_brl = row.metrics.cost_micros / 1_000_000
+            if row.campaign.status.name == "ENABLED" and row.metrics.impressions == 0:
+                flagged_campaigns += 1
+                try:
+                    detail = inspect_zero_delivery(
+                        service, customer_id, int(row.campaign.id),
+                        row.campaign.status.name, row.metrics.impressions,
+                    )
+                    print("delivery_diagnostic=" + __import__("json").dumps(
+                        {"campaign_id": int(row.campaign.id), **detail},
+                        ensure_ascii=True, sort_keys=True,
+                    ))
+                except Exception as exc:
+                    print("delivery_diagnostic=INCOMPLETE")
+                    print("delivery_diagnostic_error=" + type(exc).__name__)
             print(
                 "campaign="
                 + str(row.campaign.id)
@@ -130,6 +200,8 @@ def main() -> int:
                 + f"\tconversions={row.metrics.conversions:.2f}"
                 + f"\tconversion_value={row.metrics.conversions_value:.2f}"
             )
+        if flagged_campaigns:
+            print(f"zero_impression_enabled_campaigns={flagged_campaigns}")
     except Exception as exc:
         print("API_REVIEW_FAILED")
         print("reason=" + classify_auth_error(exc))

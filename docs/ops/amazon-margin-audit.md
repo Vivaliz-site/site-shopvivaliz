@@ -418,3 +418,90 @@ O coletor diferencia os estados de leitura sem realizar nenhuma escrita:
 Esse estado não autoriza publicar margem projetada nem lucro calculado a partir do preço cadastral. Para corrigir anúncios, obter confirmação de publicação, status BUYABLE, possíveis regras de precificação automática e o readback posterior no mesmo Seller SKU. Não repetir um PATCH comercial apenas porque a resposta Listings foi `ACCEPTED`. Regressão local: `php tests/amazon-margin-effective-pricing-offer-state-test.php`.
 
 **Nota de interpretação (UI real 07/11):** o Seller Central pode exibir uma oferta ativa e um valor de preço diferente do cadastro mesmo quando o endpoint SP-API Pricing retorna `Product.Offers=[]`. O estado `PRICING_OFFERS_EMPTY` significa **somente** que essa resposta específica não forneceu preço suficiente para a certificação automatizada; não equivale a anúncio sem oferta ou sem disponibilidade no Seller Central. A fonte UI e sua data devem ser registradas separadamente, sem converter o preço cadastral em preço realizado.
+
+## Reparacao de dependencia do navegador Olist na Marina (07/11/2026)
+
+O coletor `scripts/amazon-margin/capture-olist-product-links.js` requer o
+`playwright-core` para conectar **somente ao CDP autenticado existente** em
+`127.0.0.1:9226`. Em 07/11 o caminho historico
+`/home/ubuntu/amazon-returns-deploy/shared/olist-erp-browser/runtime/node_modules/playwright-core`
+nao existia mais, embora a sessao Olist e o CDP ainda estivessem ativos.
+A falha `MODULE_NOT_FOUND` impedia renovar a evidencia de produto/anuncio
+quando a captura de ate 48 horas expirasse; nao era falta de senha ou RBAC.
+
+**Caminho persistente, fora de releases imutaveis:**
+`/home/ubuntu/shopvivaliz-deploy/shared/ops/amazon-margin-browser/node_modules/playwright-core`.
+No runtime Marina autorizado, foi provisionada a versao **1.63.0** do pacote
+Apache-2.0 a partir do cache npm oficial, sem iniciar novo navegador, copiar
+cookies, criar workers ou alterar cadastro. Para reparar a instalacao em
+futuros hosts, sob a identidade e lease autorizados:
+
+```bash
+npm install --offline --ignore-scripts --no-audit --no-fund --no-save \
+  --prefix /home/ubuntu/shopvivaliz-deploy/shared/ops/amazon-margin-browser \
+  playwright-core@1.63.0
+node --check scripts/amazon-margin/capture-olist-product-links.js
+```
+
+O script agora gera erro explicito
+`amazon_margin_playwright_core_missing_from_persistent_shared_ops` se essa
+dependencia nao estiver instalada, em vez de recorrer a um `_npx` temporario.
+Esta alteracao e somente de transporte. Validacao de CDP, autoria da sessao,
+lease, indice oficial Olist de produtos ativos, screenshots privados e
+integralidade das tres integracoes continuam obrigatorios. **Nao executar
+capturas concorrentes** enquanto houver outra leitura/escrita autorizada no
+mesmo perfil; o produto ERP nao e alterado e evidencias antigas nao devem ser
+reescritas retroativamente.
+
+
+## Evidência histórica após encerramento da oferta Seller Flex (07/11/2026)
+
+A situação **BUYABLE** e o preço efetivo em Amazon Pricing descrevem somente
+**a oferta atual**. Uma baixa autenticada no Seller Flex pode remover BUYABLE,
+deixar `Product.Offers=[]` e não deve apagar da visão financeira os lançamentos
+Shipment já publicados pela Amazon Finances dentro da janela auditada.
+
+**RED real:** a auditoria #14 tinha 73 margens transacionais confirmadas,
+mas o run #15 passou a ter 70 após 38 SKUs perderem BUYABLE por ajuste
+Seller Flex autorizado. `ABRA-PERF-FBA`, `ME-MYQ8-H4JQ` e
+`FN-WXV1-QWDV` perderam o reconhecimento da venda porque o código exigia
+preço e fulfillment atuais. A queda de BUYABLE **não é regressão de estoque**:
+o readback Seller Flex/SP-API das 38 baixas estava concluído e documentado
+na issue #3699. A correção trata exclusivamente a classificação histórica.
+
+**Regra de cálculo:** com custo do produto atual ativo e unidade do kit
+verificados, `sale_gross_cents` positivo e conciliado com os valores
+`ProductCharges+Shipping+PromoRebates` da transação Finances e com a
+receita líquida de Shipment, calcular lucro/imposto (14%) sobre a transação
+**mesmo quando a oferta não tem mais preço vigente**. Sem receita financeira
+confirmada e sem preço corrente, margem = NULL, não fallback para preço
+cadastral. Para ofertas inativas sem preço atual, margem **projetada continua
+NULL** e somente a margem histórica devidamente conciliada é apresentada.
+
+**Canal histórico:** `GET /orders/2026-01-01/orders/{orderId}` com
+`includedData=FULFILLMENT`; verificar `fulfillment.fulfilledBy` para
+**TODOS** os pedidos com remessas elegíveis no período. Aceitar somente
+`AMAZON` ou `MERCHANT` sem mistura entre pedidos. `MERCHANT` exige
+`programs[]` contendo explicitamente `DELIVERY_BY_AMAZON`, frete
+`MfnPostageFee` conciliado uma única vez e Seller SKU único para aquele
+pedido. Nem um SKU marcado FBA, nem um snapshot antigo, nem o tipo de anúncio
+suprem a resposta da API. Se pedidos contraditórios/ausentes, status
+`pending_financial_reconciliation` e nenhum lucro/margem histórica
+certificados; 401/403/429/5xx globais abortam a execução pela política de
+quota/backoff vigente, sem chamadas agressivas. Não usar FBAFees clássica
+como custo do Seller Flex.
+
+**Vínculo ERP:** pedido antigo fornece evidência para reconciliação do
+Seller SKU independentemente de `BUYABLE`, mas somente sob verificação de
+um pedido e um item/produto ativo Olist, sem disputa com EAN/aba Anúncios;
+caso contrário `unmapped_erp`/`ambiguous_erp` permanece não certificado.
+Os relatórios XLSX distinguem a origem
+`AMAZON_ORDERS_V2026_FULFILLMENT` da hipótese de canal atual, sem expor IDs
+de pedidos. Testes: `MarginMathTest.php`,
+`HistoricalFulfillmentTest.php`, `ReportExportTest.php` e regressões
+DBA/kit/FINANCES. Esta correção é P1 somente leitura comercial: **não**
+ativa escrita automática de preços, estoque, custos ou pedidos.
+
+A certificação global depende de nova auditoria completa pelo worker
+existente após merge/deploy e UI admin autenticada com filtro ativos,
+PDF/XLSX, reload/persistência. Snapshots #14/#15 são históricos imutáveis.

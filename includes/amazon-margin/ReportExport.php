@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/FinancialStatus.php';
 
 /**
  * Self-contained, dependency-free PDF/XLSX export of an authenticated audit.
@@ -14,7 +15,8 @@ final class SvAmazonMarginExport
         $reference=is_array($row['prior_cost_reference']??null) ? $row['prior_cost_reference'] : [];
         $status = $row['amazon_status'] ?? [];
         $buyable = is_array($status) && in_array('BUYABLE',$status,true);
-        $reason = match((string)($row['status'] ?? '')) {
+        $financialStatus = SvAmazonMarginFinancialStatus::forDisplay($row);
+        $reason = match($financialStatus) {
             'unmapped_erp' => 'Produto vinculado no ERP nao identificado',
             'ambiguous_erp' => 'Produto ERP ambiguo',
             'erp_or_catalog_read_failed' => 'Falha consulta ERP/catalogo',
@@ -22,6 +24,7 @@ final class SvAmazonMarginExport
             'price_or_cost_missing' => 'Preco efetivo ou custo ausente',
             'kit_cost_unverified' => 'Custo do kit nao conciliado: conferir quantidade, composicao e divergencia de custos',
             'no_confirmed_sales' => 'Sem vendas conciliadas no periodo',
+            'pending_financial_reconciliation' => 'Venda identificada, mas postagem DBA ou lancamento financeiro sem conciliacao; margem nao certificada',
             'partial' => 'Conciliacao financeira parcial',
             'confirmed' => 'Conciliado',
             default => 'Aguardando verificacao',
@@ -34,6 +37,7 @@ final class SvAmazonMarginExport
             'Ativo Amazon'=>$buyable?'Sim':'Nao',
             'Status Amazon'=>is_array($status)?implode(',',$status):'',
             'Canal'=>(string)($row['program'] ?? $row['fulfillment_channel'] ?? ''),
+            'Fonte canal historico'=>(string)($row['historical_fulfillment_source'] ?? ''),
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
             'Margem atual estimada (%)'=>isset($row['current_margin_bps']) ? round((int)$row['current_margin_bps']/100,2) : null,
             'Lucro atual por unidade (R$)'=>isset($row['current_profit_cents']) ? round((int)$row['current_profit_cents']/100,2) : null,
@@ -96,7 +100,7 @@ final class SvAmazonMarginExport
             'Lucro acumulado do periodo (R$)'=>isset($row['margin_weighted_bps'],$row['profit_cents'])
                 ? round(((int)$row['profit_cents'])/100,2) : null,
             'Data ultimo custo'=>(string)($row['last_cost_date'] ?? ''),
-            'Situacao'=>(string)($row['status'] ?? 'unverified'),
+            'Situacao'=>$financialStatus,
             'Diagnostico'=>!empty($row['erp_ui_conflict']) ? 'Divergencia de produto ERP com UI Olist: custo/margem bloqueados' : $reason,
         ];
     }
