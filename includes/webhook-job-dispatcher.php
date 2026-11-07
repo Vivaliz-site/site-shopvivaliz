@@ -270,12 +270,11 @@ function sv_webhook_job_dispatch_mercadopago(array $payload): array
             ':olist_order_id' => $order['tiny_order_id'] ?? null,
             ':order_number' => $externalReference,
         ]);
-        if (!empty($order['tiny_order_id'])) {
-            svote_record_reconciliation($pdo, $externalReference, 'olist_tiny', 'open', [
-                'erp_order_id' => (string)$order['tiny_order_id'],
-                'erp_status' => 'open',
-            ]);
-        }
+        // A successful Tiny/Olist order push only confirms the ERP order ID,
+        // not its latest situation. A repeated payment webhook must never
+        // overwrite a previous verified cancellation/discrepancy with a
+        // fabricated 'open' reconciliation. The official ERP readback/audit
+        // is responsible for interpreting actual situacao values.
     } catch (Throwable $e) {
         error_log('[MercadoPago] MySQL orders mirror failed: order=' . $externalReference . ' ' . $e->getMessage());
     }
@@ -538,12 +537,9 @@ function sv_webhook_job_dispatch_infinitepay(array $payload): array
             ':olist_order_id' => $order['tiny_order_id'] ?? null,
             ':order_number' => $orderNumber,
         ]);
-        if (!empty($order['tiny_order_id'])) {
-            svote_record_reconciliation($pdo, $orderNumber, 'olist_tiny', 'open', [
-                'erp_order_id' => (string)$order['tiny_order_id'],
-                'erp_status' => 'open',
-            ]);
-        }
+        // As with Mercado Pago, the ERP order ID is not proof of its current
+        // status. Do not clobber authoritative reconciliation evidence with
+        // a guessed state on InfinitePay webhook retries.
     } catch (Throwable $e) {
         error_log('[InfinitePay] MySQL orders mirror failed: order=' . $orderNumber . ' ' . $e->getMessage());
     }

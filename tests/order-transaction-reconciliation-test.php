@@ -55,9 +55,9 @@ foreach (['payment_provider_status', 'payment_provider_id', 'payment_evidence_js
 $dispatcher = (string)file_get_contents(dirname(__DIR__) . '/includes/webhook-job-dispatcher.php');
 otr_assert(str_contains($dispatcher, "require_once __DIR__ . '/order-transaction-evidence.php';"), 'webhook dispatcher must load transaction evidence helper');
 otr_assert(str_contains($dispatcher, 'svote_record_payment('), 'Mercado Pago webhook must persist provider evidence');
-otr_assert(str_contains($dispatcher, 'svote_record_reconciliation('), 'ERP push must persist reconciliation state');
+otr_assert(!str_contains($dispatcher, 'svote_record_reconciliation('), 'payment webhook must not invent ERP state from a push response');
 
 otr_assert(substr_count($dispatcher, 'svote_record_payment(') >= 2, 'both payment gateways must persist provider evidence');
-otr_assert(substr_count($dispatcher, 'svote_record_reconciliation(') >= 2, 'both payment gateways must persist ERP reconciliation state');
+otr_assert(!str_contains($dispatcher, "'erp_status' => 'open'"), 'both gateway retries must preserve verified ERP state');
 
 fwrite(STDOUT, "PASS: order transaction evidence and reconciliation contract including Tiny v3 status enums.\n");
