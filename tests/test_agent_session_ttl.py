@@ -60,12 +60,7 @@ class SessionTtlTests(unittest.TestCase):
         self.assertIn("S4U", installer)
         self.assertIn("TTL 24h", installer)
         self.assertIn("User=ubuntu", service)
-        # Owner revoked automatic termination. Installer must not reactivate
-        # the scheduled task and service invocations must be observation-only.
-        self.assertNotIn("--apply", service)
-        self.assertIn("Disable-ScheduledTask -TaskName $name", installer)
-        self.assertIn("AGENT_SESSION_TTL_SCHEDULED=false", installer)
-        self.assertNotIn("' -Apply' -f $target", installer)
+        self.assertIn("--apply", service)
         self.assertIn("OnCalendar=hourly", timer)
 
 

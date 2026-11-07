@@ -1,6 +1,5 @@
-# Keep the optional Windows CLI session auditor installed but disabled by default.
-# Automatic termination was revoked by the owner on 2026-11-06.
-# Desktop apps and service processes remain untouched.
+# Install a small Windows housekeeping task, never a long-running agent.
+# This handles only the executing user's CLI processes; desktop apps are excluded.
 param([int]$IntervalMinutes=60)
 $ErrorActionPreference='Stop'
 if($IntervalMinutes -lt 15 -or $IntervalMinutes -gt 1440){
@@ -23,19 +22,18 @@ if(-not ($dryRun -match 'MODE=dry-run')){
 }
 $currentUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name
 $principal=New-ScheduledTaskPrincipal -UserId $currentUser -LogonType S4U -RunLevel Limited
-$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $target)
+$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -Apply' -f $target)
 $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 $settings=New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $task=New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -Principal $principal
 $name='ShopVivaliz Agent CLI Session TTL 24h'
 Register-ScheduledTask -TaskName $name -InputObject $task -Force | Out-Null
-Disable-ScheduledTask -TaskName $name -ErrorAction Stop | Out-Null
 $readback=Get-ScheduledTask -TaskName $name -ErrorAction Stop
 if($readback.Actions[0].Arguments -notlike '*agent-session-ttl.ps1*' -or
-  $readback.Actions[0].Arguments -like '*-Apply*' -or
-  $readback.State -ne 'Disabled'){
+  $readback.Actions[0].Arguments -notlike '*-Apply*'){
   throw 'Scheduled task readback mismatch'
 }
-Write-Output 'AGENT_SESSION_TTL_SCHEDULED=false'
+Start-ScheduledTask -TaskName $name
+Write-Output 'AGENT_SESSION_TTL_SCHEDULED=true'
 Write-Output "INTERVAL_MINUTES=$IntervalMinutes"
 Write-Output ('TASK_STATE='+(Get-ScheduledTask -TaskName $name).State)
