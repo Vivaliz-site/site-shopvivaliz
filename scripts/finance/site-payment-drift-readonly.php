@@ -149,9 +149,11 @@ foreach (array_keys($paths) as $path) {
     }
 }
 
-$status = ($summary['discrepancy'] > 0 || $summary['mysql_missing_evidence'] > 0)
-    ? 'P0_FINANCIAL_DRIFT_FOUND'
-    : ($summary['api_errors'] > 0 || $summary['mysql_unavailable'] > 0)
-        ? 'INCOMPLETE_EVIDENCE'
-        : 'NO_VERIFIED_DRIFT_IN_SCANNED_ORDERS';
+if ($summary['discrepancy'] > 0 || $summary['mysql_missing_evidence'] > 0) {
+    $status = 'P0_FINANCIAL_DRIFT_FOUND';
+} elseif ($summary['api_errors'] > 0 || $summary['mysql_unavailable'] > 0) {
+    $status = 'INCOMPLETE_EVIDENCE';
+} else {
+    $status = 'NO_VERIFIED_DRIFT_IN_SCANNED_ORDERS';
+}
 echo json_encode(['status' => $status, 'summary' => $summary], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL;
