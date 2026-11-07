@@ -56,10 +56,43 @@ class AccountAuthGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
                 m.browser_auth_action(args)
 
-    def test_disabled_handoff_auth_is_denied(self):
-        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False):
-            with self.assertRaisesRegex(ValueError, "account_auth_lease_mode_required"):
+    def test_disabled_generic_handoff_does_not_block_exact_account_maintenance_lease(self):
+        # The global flag controls background continuation, not a distinct
+        # account-specific authorization. Keep all other official auth gates.
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")) as lease,
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code": 0, "stdout": '{"ok":true}',
+                                            "stderr": ""}) as execute,
+        ):
+            outcome = m.browser_auth_action(payload(action="fill_password",
+                                                     value="TEST_PLACEHOLDER_ONLY"))
+        self.assertTrue(outcome["ok"])
+        lease.assert_called_once_with("example-lease", 1, "browser_auth_action")
+        self.assertEqual(execute.call_args.args[1], "TEST_PLACEHOLDER_ONLY")
+        self.assertNotIn("TEST_PLACEHOLDER_ONLY", " ".join(execute.call_args.args[0]))
+
+    def test_generic_handoff_off_still_denies_missing_or_wrong_owner_lease(self):
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
+            mock.patch.object(m.base, "run_local_command_with_stdin") as execute,
+        ):
+            args = payload()
+            args.pop("runtime_lease_id")
+            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
+                m.browser_auth_action(args)
+            execute.assert_not_called()
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("atendimento")),
+            mock.patch.object(m.base, "run_local_command_with_stdin") as execute,
+        ):
+            with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
                 m.browser_auth_action(payload())
+            execute.assert_not_called()
 
     def test_invalid_or_unrelated_lease_auth_is_denied(self):
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
