@@ -127,6 +127,6 @@ $inactiveWithoutCost=SvAmazonMarginMath::calculate([
 ]);
 margin_assert($inactiveWithoutCost['status']==='unverified',
     'Verified gross cannot substitute unverified ERP kit/component cost');
-echo "PASS inactive-current-offer transactional gross only (no guessing)\\n";
+echo "PASS inactive-current-offer transactional gross only (no guessing)\n";
 
 echo "PASS amazon margin accounting: 5 confirmed cases + missing fee/zero cost/tax/rounding\n";
