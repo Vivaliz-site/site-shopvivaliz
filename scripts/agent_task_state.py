@@ -88,19 +88,19 @@ class TaskStateError(RuntimeError):
 
 
 def _require_verified_chatgpt_origin_on_create(agent_id: str) -> bool:
-    """Fail closed for new ChatGPT checkpoints on the canonical controller.
+    """Require ChatGPT origin at creation only for explicitly strict flows.
 
-    The durable dispatcher cannot recover an unbound ChatGPT conversation.
-    Keep legacy checkpoints and tests usable; only new corporate ChatGPT
-    starts in the live controller (or explicit strict-mode tests) are gated.
+    Do not throw away new task checkpoints because login, browser identity
+    or a conversation route is temporarily unavailable. An unbound checkpoint
+    remains RUNNING and must never be dispatched to a browser automatically:
+    task_continuation_watchdog and the resume dispatcher already require an
+    attested exact conversation_id and account-specific browser_session.
+    Those independent routing, ownership and fencing checks stay unchanged.
     """
-    strict_test_mode = os.getenv("SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS", "").strip().lower() in {
+    strict_mode = os.getenv("SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS", "").strip().lower() in {
         "1", "true", "yes", "on",
     }
-    canonical_runtime = RUNTIME_DIR.resolve() == CANONICAL_CONTROLLER_RUNTIME_DIR
-    return bool(CHATGPT_AGENT_ID_RE.search(str(agent_id or ""))) and (
-        canonical_runtime or strict_test_mode
-    )
+    return bool(CHATGPT_AGENT_ID_RE.search(str(agent_id or ""))) and strict_mode
 
 RECOVERY_STATES = frozenset({
     'FOREGROUND_ACTIVE', 'FOREGROUND_RELEASED', 'LEASE_EXPIRED',
