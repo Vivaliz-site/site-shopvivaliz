@@ -1657,8 +1657,7 @@ def browser_profile_home_open(args: dict[str, Any], cancel_check=None) -> dict[s
     session = str(args.get("session") or "")
     if session not in ACCOUNT_AUTH_PORTS:
         raise ValueError("account_profile_scope_invalid")
-    if not base._durable_handoff_enabled():
-        raise ValueError("account_auth_lease_mode_required")
+    # Scoped maintenance lock is independent of generic durable handoff mode.
     lease_id = str(args.get("runtime_lease_id") or "")
     token = args.get("runtime_fencing_token")
     if not lease_id or token is None:
@@ -1736,8 +1735,7 @@ def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]
     session = str(args.get("session") or "")
     if session not in ACCOUNT_AUTH_PORTS:
         raise ValueError("account_auth_session_invalid")
-    if not base._durable_handoff_enabled():
-        raise ValueError("account_auth_lease_mode_required")
+    # Scoped maintenance lock is independent of generic durable handoff mode.
     lease_id = str(args.get("runtime_lease_id") or "")
     token = args.get("runtime_fencing_token")
     if not lease_id or token is None:

@@ -387,8 +387,14 @@ class AccountAuthGateTests(unittest.TestCase):
                                    return_value=allowed_lease("dev")):
                 with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
                     m.browser_auth_open(args)
-        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False):
-            with self.assertRaisesRegex(ValueError, "account_auth_lease_mode_required"):
+        # Generic handoff remains off by owner's policy, but tab recovery
+        # still requires a live account-scoped maintenance lease and fence.
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              side_effect=m.base.runtime_lock.RuntimeLockConflict("expired")),
+        ):
+            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_invalid"):
                 m.browser_auth_open(args)
 
     def test_auth_open_never_transmits_secret_or_arbitrary_url(self):
