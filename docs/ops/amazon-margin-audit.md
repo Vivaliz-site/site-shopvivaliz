@@ -418,3 +418,37 @@ O coletor diferencia os estados de leitura sem realizar nenhuma escrita:
 Esse estado não autoriza publicar margem projetada nem lucro calculado a partir do preço cadastral. Para corrigir anúncios, obter confirmação de publicação, status BUYABLE, possíveis regras de precificação automática e o readback posterior no mesmo Seller SKU. Não repetir um PATCH comercial apenas porque a resposta Listings foi `ACCEPTED`. Regressão local: `php tests/amazon-margin-effective-pricing-offer-state-test.php`.
 
 **Nota de interpretação (UI real 07/11):** o Seller Central pode exibir uma oferta ativa e um valor de preço diferente do cadastro mesmo quando o endpoint SP-API Pricing retorna `Product.Offers=[]`. O estado `PRICING_OFFERS_EMPTY` significa **somente** que essa resposta específica não forneceu preço suficiente para a certificação automatizada; não equivale a anúncio sem oferta ou sem disponibilidade no Seller Central. A fonte UI e sua data devem ser registradas separadamente, sem converter o preço cadastral em preço realizado.
+
+## Reparacao de dependencia do navegador Olist na Marina (07/11/2026)
+
+O coletor `scripts/amazon-margin/capture-olist-product-links.js` requer o
+`playwright-core` para conectar **somente ao CDP autenticado existente** em
+`127.0.0.1:9226`. Em 07/11 o caminho historico
+`/home/ubuntu/amazon-returns-deploy/shared/olist-erp-browser/runtime/node_modules/playwright-core`
+nao existia mais, embora a sessao Olist e o CDP ainda estivessem ativos.
+A falha `MODULE_NOT_FOUND` impedia renovar a evidencia de produto/anuncio
+quando a captura de ate 48 horas expirasse; nao era falta de senha ou RBAC.
+
+**Caminho persistente, fora de releases imutaveis:**
+`/home/ubuntu/shopvivaliz-deploy/shared/ops/amazon-margin-browser/node_modules/playwright-core`.
+No runtime Marina autorizado, foi provisionada a versao **1.63.0** do pacote
+Apache-2.0 a partir do cache npm oficial, sem iniciar novo navegador, copiar
+cookies, criar workers ou alterar cadastro. Para reparar a instalacao em
+futuros hosts, sob a identidade e lease autorizados:
+
+```bash
+npm install --offline --ignore-scripts --no-audit --no-fund --no-save \
+  --prefix /home/ubuntu/shopvivaliz-deploy/shared/ops/amazon-margin-browser \
+  playwright-core@1.63.0
+node --check scripts/amazon-margin/capture-olist-product-links.js
+```
+
+O script agora gera erro explicito
+`amazon_margin_playwright_core_missing_from_persistent_shared_ops` se essa
+dependencia nao estiver instalada, em vez de recorrer a um `_npx` temporario.
+Esta alteracao e somente de transporte. Validacao de CDP, autoria da sessao,
+lease, indice oficial Olist de produtos ativos, screenshots privados e
+integralidade das tres integracoes continuam obrigatorios. **Nao executar
+capturas concorrentes** enquanto houver outra leitura/escrita autorizada no
+mesmo perfil; o produto ERP nao e alterado e evidencias antigas nao devem ser
+reescritas retroativamente.
