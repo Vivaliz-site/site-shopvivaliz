@@ -22,23 +22,36 @@ class PostDeployPriceParityContract(unittest.TestCase):
             "p.get('status')=='PRODUCTION_UPDATED'",
             "jobs.get(k)=='success'",
             "if: ${{ needs.select_release.outputs.audit_required == 'true' }}",
-            "--expected-sha '$DEPLOY_SHA'",
+            '--expected-sha "$DEPLOY_SHA"',
             "scripts/quality/audit-storefront-erp-prices.py",
             "Upload immutable read-only price parity evidence",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, workflow)
 
-    def test_failed_ssh_or_missing_evidence_is_never_green(self):
+    def test_local_marina_evidence_fails_closed_without_ssh_to_self(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertNotIn("set +e", workflow)
         self.assertNotIn("if-no-files-found: warn", workflow)
         self.assertNotIn("::warning::Real audit report unavailable", workflow)
         self.assertIn("if-no-files-found: error", workflow)
-        self.assertIn("if ssh ", workflow)
-        self.assertIn("status=$?", workflow)
-        self.assertIn('scp "${ssh_opts[@]}"', workflow)
-
+        self.assertNotIn("ssh ubuntu@127.0.0.1", workflow)
+        self.assertNotIn("SHOPVIVALIZ_VM_SSH_KEY", workflow)
+        self.assertNotIn('scp "${ssh_opts[@]}"', workflow)
+        for marker in (
+            'test "$(hostname -s)" = \'marina-a1-4c24g\'',
+            'test "$(id -un)" = \'ubuntu\'',
+            '/home/ubuntu/shopvivaliz-deploy/releases/*',
+            'test "$(cat "$release/.release-sha")" = "$DEPLOY_SHA"',
+            'and report.get(\'release_sha\') == expected',
+            'and report.get(\'published_release_sha\') == expected',
+            'and report.get(\'read_only\') is True',
+            'and report[\'counts\'].get(\'errors\') == 0',
+            'and report.get(\'issues\') == []',
+            'install -m 0600 "$report" "$RUNNER_TEMP/price-parity.json"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, workflow)
     def test_live_source_is_verifiably_erp_v3_and_read_only(self):
         code = SCRIPT.read_text(encoding="utf-8")
         for marker in (
