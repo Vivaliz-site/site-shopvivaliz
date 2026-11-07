@@ -165,7 +165,7 @@ final class SvAmazonMarginCollector
         $empty = [
             'price' => null,
             'price_source' => 'UNVERIFIED',
-            'price_state' => 'NO_EFFECTIVE_OFFER',
+            'price_state' => 'PRICING_OFFERS_EMPTY',
             'fulfillment_channel' => 'UNKNOWN',
         ];
         if (strtoupper(trim((string)($record['status'] ?? 'Success'))) !== 'SUCCESS') {
@@ -212,9 +212,9 @@ final class SvAmazonMarginCollector
                     && abs($live - $listings[$sku]['listed_price']) >= 0.01) {
                     $listings[$sku]['price_divergence'] = true;
                 }
-                if ($priceState['price_state'] === 'NO_EFFECTIVE_OFFER'
+                if ($priceState['price_state'] === 'PRICING_OFFERS_EMPTY'
                     && in_array('BUYABLE', $listings[$sku]['amazon_status'] ?? [], true)) {
-                    $this->warnings[] = 'buyable_no_effective_offer:' . self::skuExcerpt($sku);
+                    $this->warnings[] = 'buyable_pricing_offers_empty:' . self::skuExcerpt($sku);
                 }
                 if ($priceState['price_state'] === 'PROVIDER_ITEM_ERROR') {
                     $this->warnings[] = 'pricing_provider_item_error:' . self::skuExcerpt($sku);
