@@ -382,6 +382,52 @@ class RemoteControlMcpTests(unittest.TestCase):
                 m.execute_tool("marina_service_status", {"service": "ssh.service; sudo id"})
             runner.assert_not_called()
 
+    def test_marina_admin_can_inspect_unlisted_unit_without_mutation(self):
+        # A valid admin grant already permits shell commands on Marina.
+        # Status inspection must not be spuriously blocked by the narrower
+        # read-only service list or enable unit mutations.
+        unit = "shopvivaliz-cloudflared-admin.service"
+        result_stub = {"host": m.MARINA_HOST, "exit_code": 0,
+                       "stdout": "ActiveState=active", "stderr": "",
+                       "duration_ms": 1}
+        with mock.patch.object(m, "marina_central_admin_grant_active",
+                               return_value=True), \
+             mock.patch.object(m, "run_host_command",
+                               return_value=result_stub) as runner:
+            result = m.execute_tool("service_status", {
+                "host": m.MARINA_HOST, "service": unit,
+            })
+            self.assertTrue(result["ok"])
+            command = runner.call_args.args[1]
+            self.assertEqual(command, m.marina_readonly_service_command(
+                unit, allow_admin=True
+            ))
+            self.assertTrue(runner.call_args.kwargs["marina_admin"])
+            self.assertFalse(runner.call_args.kwargs["recover_transport"])
+            self.assertIn("systemctl show --no-pager", command)
+            self.assertNotIn("sudo", command)
+            self.assertNotIn("restart", command)
+
+        with mock.patch.object(m, "marina_central_admin_grant_active",
+                               return_value=True), \
+             mock.patch.object(m, "run_host_command") as runner:
+            with self.assertRaisesRegex(ValueError, "marina_service_not_allowlisted"):
+                m.execute_tool("service_status", {
+                    "host": m.MARINA_HOST, "service": "ssh.service; sudo id",
+                })
+            runner.assert_not_called()
+
+    def test_marina_nonallowlisted_unit_rejected_without_admin_grant(self):
+        unit = "shopvivaliz-cloudflared-admin.service"
+        with mock.patch.object(m, "marina_central_admin_grant_active",
+                               return_value=False), \
+             mock.patch.object(m, "run_host_command") as runner:
+            with self.assertRaisesRegex(ValueError, "marina_service_not_allowlisted"):
+                m.execute_tool("service_status", {
+                    "host": m.MARINA_HOST, "service": unit,
+                })
+            runner.assert_not_called()
+
     def test_marina_status_builds_only_fixed_unprivileged_command(self):
         with mock.patch.object(m, "run_host_command", return_value={
             "host": m.MARINA_HOST, "exit_code": 0, "stdout": "ActiveState=active",
