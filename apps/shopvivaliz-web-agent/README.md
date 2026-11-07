@@ -4,8 +4,8 @@ MVP isolado de navegador controlado pelo ChatGPT, com **handoff humano** para di
 
 ## Recursos implementados
 
-- MCP Streamable HTTP JSON-RPC em `127.0.0.1:5598/mcp` com ferramentas `web_agent_open`, `web_agent_inspect`, `web_agent_click`, `web_agent_takeover`, `web_agent_status`, `web_agent_close`.
-- UI MCP `ui://shopvivaliz-web-agent/takeover.html`: visualizacao JPEG, toque/clique para selecionar campo, entrada humana de texto, teclas Tab/Enter/Backspace/Esc, devolucao de controle ao agente.
+- MCP Streamable HTTP JSON-RPC em `127.0.0.1:5598/mcp` com ferramentas `web_agent_open`, `web_agent_inspect`, `web_agent_click`, `web_agent_navigate`, `web_agent_back`, `web_agent_forward`, `web_agent_scroll`, `web_agent_fill`, `web_agent_key`, `web_agent_takeover`, `web_agent_status`, `web_agent_close`. As novas acoes somente funcionam no modo `agent`, exigem sessao existente e nao dispensam autorizacao por operacao/host.
+- UI MCP `ui://shopvivaliz-web-agent/takeover.html`: visualizacao JPEG, origem atual indicada por quadro, toque/clique para selecionar campo, entrada humana de texto, teclas Tab/Enter/Backspace/Esc, rolagem e historico durante controle humano, devolucao de controle ao agente.
 - Token exclusivo de 256 bits por handoff, expira em 15 min e nunca e colocado em `content` ou `structuredContent` (somente `_meta`, entregue ao widget).
 - Estado de controle `agent` / `human`; durante takeover nao e permitido ao modelo abrir, inspecionar, clicar, fechar ou capturar a pagina. A capacidade humana expirada **nao** reativa o agente: exige novo takeover emitido via MCP.
 - Credenciais digitadas no widget sao enviadas diretamente ao host pelo canal de navegador, sem serem emitidas como chamadas de ferramenta ao modelo, sem logs de texto de campos e sem persistencia em estado do widget.
