@@ -92,6 +92,28 @@ function svfra_erp_reference_matches(array $response, string $number): bool
     return trim((string)($payload['numeroOrdemCompra'] ?? '')) === $number;
 }
 
+/**
+ * Distinguish explicitly marked test orders from unavailable historical
+ * archives. A missing archive MUST still be investigated via official
+ * reference-verified provider search, not discarded as nonexistent revenue.
+ */
+function svfra_order_scope(?array $order, string $reference): string
+{
+    if ($order === null) {
+        return 'missing_archive';
+    }
+    if ((string)($order['order_number'] ?? '') !== $reference) {
+        return 'reference_mismatch';
+    }
+    if (!str_starts_with((string)($order['source'] ?? ''), 'site_checkout')) {
+        return 'non_site';
+    }
+    if (!empty($order['test_order'])) {
+        return 'test_order';
+    }
+    return 'site';
+}
+
 function svfra_audit_live(int $limit): int
 {
     require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
@@ -111,6 +133,9 @@ function svfra_audit_live(int $limit): int
         'erp_reference_unverified' => 0,
         'verified_via_reference_search' => 0,
         'test_order_true' => 0,
+        'test_orders_excluded' => 0,
+        'missing_archive' => 0,
+        'excluded_non_site' => 0,
         'test_provenance_unknown' => 0,
         'discrepancy_provenance_unknown' => 0,
     ];
@@ -155,6 +180,23 @@ function svfra_audit_live(int $limit): int
         // authoritative MySQL total+reference; its test provenance is unknown.
         $hasTrustedFile = is_array($order)
             && trim((string)($order['order_number'] ?? '')) === $number;
+        $scope = svfra_order_scope(is_array($order) && $order !== [] ? $order : null, $number);
+        if ($scope === 'test_order') {
+            $stats['test_orders_excluded']++;
+            $stats['test_order_true']++;
+            continue;
+        }
+        if ($scope === 'non_site') {
+            $stats['excluded_non_site']++;
+            continue;
+        }
+        if ($scope === 'reference_mismatch') {
+            $stats['unverified_provider']++;
+            continue;
+        }
+        if ($scope === 'missing_archive') {
+            $stats['missing_archive']++;
+        }
         $provenance = $hasTrustedFile
             ? (!empty($order['test_order']) ? 'test' : 'live_or_unmarked')
             : 'unknown';
@@ -192,9 +234,7 @@ function svfra_audit_live(int $limit): int
             $stats['provider_lookup_error']++;
             continue;
         }
-        if ($provenance === 'test') {
-            $stats['test_order_true']++;
-        } elseif ($provenance === 'unknown') {
+        if ($provenance === 'unknown') {
             $stats['test_provenance_unknown']++;
         }
         $stats['provider_verified_approved']++;
