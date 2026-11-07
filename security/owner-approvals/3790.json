@@ -13,20 +13,12 @@
   "currency": "BRL",
   "erp_price_list_id": 991,
   "allowed_seller_skus": [
-    "ABRA-PERF-FBA",
-    "FITAPERFAFBA",
-    "8F-QXBC-MINT",
-    "RH-6WBD-NY54",
     "F12CASTANHOFBA",
     "ASSLIMFBA",
     "TAJ/AS*BR1",
     "1C7Q-LKVS-KOPL"
   ],
   "exact_sale_price_cents_by_seller_sku": {
-    "ABRA-PERF-FBA": 4922,
-    "FITAPERFAFBA": 4922,
-    "8F-QXBC-MINT": 4922,
-    "RH-6WBD-NY54": 4922,
     "F12CASTANHOFBA": 2528,
     "ASSLIMFBA": 7639,
     "TAJ/AS*BR1": 7639,
@@ -34,11 +26,10 @@
   },
   "exact_erp_991_exception_price_cents_by_product_id": {
     "341484398": 7639,
-    "353697660": 2528,
-    "362847505": 4922
+    "353697660": 2528
   },
-  "maximum_affected_skus": 8,
-  "maximum_affected_erp_products": 3,
+  "maximum_affected_skus": 4,
+  "maximum_affected_erp_products": 2,
   "require_target_price_quoted_with_official_amazon_product_fees_api": true,
   "require_verified_projected_margin_bps_at_least": 1000,
   "require_erp_mapping_cost_and_kit_validation": true,
@@ -66,5 +57,12 @@
   "execution_channel": "ShopVivaliz Remote Control MCP",
   "expires_at_utc": "2026-11-10T23:59:00Z",
   "evidence_issue": 3788,
-  "note": "Proposta condicionada a cotacao Amazon no novo preco e suporte oficial de escrita na excecao ERP lista 991; qualquer falha bloqueia a escrita e exige novo HEAD/revisao se alterar valores."
+  "note": "Apos GET Amazon Pricing real 3 dos 4 SKUs do ERP 362847505 retornaram PRICING_OFFERS_EMPTY; TODOS os quatro desse produto ficam EXCLUIDOS deste grant para evitar alteracao implicita do ERP e ofertas nao certificadas. Quatro SKUs restantes possuem EFFECTIVE_OFFER e Amazon Product Fees quote real no target: margens estimadas 1001 bps com tarifas anteriores, revalidar tarifas e PUT ERP 991 antes de escrever. Sem novo HEAD/revisao se valores mudarem.",
+  "require_amazon_pricing_effective_offer_before_write": true,
+  "excluded_not_currently_price_certified_skus": [
+    "ABRA-PERF-FBA",
+    "8F-QXBC-MINT",
+    "RH-6WBD-NY54"
+  ],
+  "excluded_shared_erp_with_uncertified_offer_product_id": 362847505
 }
