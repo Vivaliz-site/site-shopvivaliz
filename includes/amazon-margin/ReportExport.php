@@ -23,7 +23,7 @@ final class SvAmazonMarginExport
             'erp_identity_mismatch' => 'EAN/SKU divergentes',
             'price_or_cost_missing' => 'Preco efetivo ou custo ausente',
             'kit_cost_unverified' => 'Custo do kit nao conciliado: conferir quantidade, composicao e divergencia de custos',
-            'no_confirmed_sales' => 'Sem vendas no periodo',
+            'no_confirmed_sales' => 'Sem vendas conciliadas no periodo',
             'pending_financial_reconciliation' => 'Venda identificada, mas postagem DBA ou lancamento financeiro sem conciliacao; margem nao certificada',
             'partial' => 'Conciliacao financeira parcial',
             'confirmed' => 'Conciliado',
