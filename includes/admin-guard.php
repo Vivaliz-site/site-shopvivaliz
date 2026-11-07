@@ -97,8 +97,21 @@ if (empty($_SESSION['is_admin']) || !is_numeric($_SESSION['is_admin'])) {
 
 if (empty($_SESSION['is_admin'])) {
     http_response_code(403);
-    header('Content-Type: text/plain; charset=UTF-8');
-    echo 'Acesso negado.';
+    require_once __DIR__ . '/admin-denied-response.php';
+    $svDeniedScript = str_replace('\\\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    if (sv_admin_denied_is_browser_page(
+        $svDeniedScript,
+        (string)($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+        (string)($_SERVER['HTTP_ACCEPT'] ?? '')
+    )) {
+        header('Content-Type: text/html; charset=UTF-8');
+        header('X-Content-Type-Options: nosniff');
+        echo sv_admin_denied_page();
+    } else {
+        // Keep the historical fail-closed contract for API consumers.
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'Acesso negado.';
+    }
     exit;
 }
 
