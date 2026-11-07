@@ -156,13 +156,61 @@ def test_classifier_self_repair_routes_to_exactly_one_installer():
     ]
     assert scope.is_backend_controller_only(files)
     assert scope.is_browser_only(files)  # raw allowlists intentionally overlap
-    assert scope.classify_bootstrap(files) == (False, True)
-    assert scope.classify_bootstrap(["remote-control-browser-mcp/server.py"]) == (True, False)
-    assert scope.classify_bootstrap(["remote-control-mcp/server.py"]) == (False, True)
+    assert scope.classify_bootstrap(files) == (False, True, False)
+    assert scope.classify_bootstrap(["remote-control-browser-mcp/server.py"]) == (True, False, False)
+    assert scope.classify_bootstrap(["remote-control-mcp/server.py"]) == (False, True, False)
     assert scope.classify_bootstrap([
         "remote-control-mcp/server.py",
         "deploy/systemd/shopvivaliz-remote-control-mcp.service",
-    ]) == (False, False)
+    ]) == (False, False, False)
+
+
+def test_mixed_authorized_mcp_sources_use_exact_one_backend_combined_job():
+    files = [
+        "remote-control-mcp/server.py",
+        "remote-control-browser-mcp/server.py",
+        "tests/remote-control-mcp-test.py",
+        "tests/remote-control-browser-mcp-test.py",
+        "remote-control-browser-mcp/tests/test_account_auth_gate.py",
+        "docs/knowledge/chatgpt-access-parity.md",
+    ]
+    assert scope.is_backend_browser_combined(files)
+    assert scope.classify_bootstrap(files) == (False, False, True)
+    # This was the merged PR #3767: before the fix, its workflow passed
+    # the scope job but every installer was SKIPPED.
+    assert not scope.is_backend_controller_only(files)
+    assert not scope.is_browser_only(files)
+    for bad in (
+        ["remote-control-mcp/server.py", "remote-control-browser-mcp/server.py",
+         "scripts/setup-remote-control-windows.ps1"],
+        ["remote-control-mcp/server.py", "remote-control-browser-mcp/server.py",
+         "deploy/systemd/shopvivaliz-remote-control-mcp.service"],
+        ["remote-control-mcp/server.py", "remote-control-browser-mcp/server.py",
+         "../secrets"],
+        ["remote-control-mcp/server.py", "remote-control-browser-mcp/server.py",
+         r"C:\\Windows\\Temp"],
+        ["remote-control-mcp/server.py", "remote-control-browser-mcp/server.py",
+         "remote-control-browser-mcp/server.py"],
+        ["remote-control-mcp/server.py"],
+        ["remote-control-browser-mcp/server.py"],
+    ):
+        assert not scope.is_backend_browser_combined(bad), bad
+        assert scope.classify_bootstrap(bad)[2] is False
+
+
+def test_mixed_mcp_workflow_has_only_live_backend_installer_targets():
+    yml = (ROOT / ".github/workflows/remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+    block = yml.split("  backend_browser_combined:", 1)[1].split("\n  bootstrap:", 1)[0]
+    assert "needs.scope.outputs.backend_browser_combined == 'true'" in block
+    assert "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]" in block
+    assert "install-controller-code-only" in block
+    assert "scripts/setup-remote-control-browser-mcp.sh" in block
+    assert "BACKEND_DUAL_SURFACE_MCP_INSTALL=PASS" in block
+    assert "cmp remote-control-mcp/server.py /opt/shopvivaliz-remote-control/server.py" in block
+    for forbidden in ("shopvivaliz-free-a1", "10.0.1.112", "install-target",
+                      "Bootstrap Windows reverse SSH relays", "ssh -o", "scp -o"):
+        assert forbidden not in block, forbidden
+    assert 'if: ${{ false }}' in yml  # retired source must stay disabled
 
 
 def test_code_only_installer_leaves_config_and_other_hosts_untouched():
@@ -206,6 +254,8 @@ if __name__ == "__main__":
     test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap()
     test_marina_grant_worker_pr_3739_reaches_backend_installer()
     test_classifier_self_repair_routes_to_exactly_one_installer()
+    test_mixed_authorized_mcp_sources_use_exact_one_backend_combined_job()
+    test_mixed_mcp_workflow_has_only_live_backend_installer_targets()
     test_code_only_installer_leaves_config_and_other_hosts_untouched()
     test_empty_or_untrusted_diff_fails_closed()
     test_workflow_disables_retired_full_bootstrap_and_keeps_backend_only()

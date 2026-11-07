@@ -97,16 +97,35 @@ def is_backend_controller_only(paths: list[str]) -> bool:
     return mandatory.issubset(clean) and set(clean).issubset(BACKEND_CONTROLLER_FILES)
 
 
-def classify_bootstrap(paths: list[str]) -> tuple[bool, bool]:
-    """Return mutually exclusive (browser_only, backend_controller_only) flags.
+def is_backend_browser_combined(paths: list[str]) -> bool:
+    """Allow only two already-approved MCP surfaces on the *live backend*.
 
-    Classifier self-repair files are in both allowlists so the backend
-    installer can self-heal, but restarting both services is redundant.
-    Backend-only wins whenever both gates match.
+    The retired four-host bootstrap is permanently disabled. A mixed
+    server.py change must never silently turn into a no-op deploy, nor
+    become a general purpose permission to modify Windows or production.
     """
-    backend_controller_only = is_backend_controller_only(paths)
-    browser_only = is_browser_only(paths) and not backend_controller_only
-    return browser_only, backend_controller_only
+    clean = [path.strip() for path in paths]
+    if not clean or len(clean) != len(set(clean)):
+        return False
+    if any(not name or name.startswith("/") or "\\" in name
+           or ".." in name.split("/") for name in clean):
+        return False
+    changed = set(clean)
+    if not {"remote-control-mcp/server.py", "remote-control-browser-mcp/server.py"} <= changed:
+        return False
+    return all(
+        name in BACKEND_CONTROLLER_FILES or name in BROWSER_FILES
+        or any(name.startswith(prefix) for prefix in BROWSER_PREFIXES)
+        for name in clean
+    )
+
+
+def classify_bootstrap(paths: list[str]) -> tuple[bool, bool, bool]:
+    """Return exclusive browser, controller, or verified two-surface routes."""
+    backend_only = is_backend_controller_only(paths)
+    combined = is_backend_browser_combined(paths)
+    browser_only = is_browser_only(paths) and not backend_only and not combined
+    return browser_only, backend_only, combined
 
 
 def main() -> int:
@@ -114,12 +133,17 @@ def main() -> int:
     parser.add_argument("--github-output", type=Path)
     args = parser.parse_args()
     paths = sys.stdin.read().splitlines()
-    browser_only, backend_controller_only = classify_bootstrap(paths)
+    browser_only, backend_controller_only, backend_browser_combined = classify_bootstrap(paths)
     if args.github_output:
         with args.github_output.open("a", encoding="utf-8") as output:
             output.write("browser_only=" + ("true" if browser_only else "false") + "\n")
             output.write("backend_controller_only=" + ("true" if backend_controller_only else "false") + "\n")
-    scope = "BROWSER_ONLY" if browser_only else "BACKEND_CONTROLLER_ONLY" if backend_controller_only else "FULL"
+            output.write("backend_browser_combined=" + ("true" if backend_browser_combined else "false") + "\n")
+    scope = (
+        "BROWSER_ONLY" if browser_only else
+        "BACKEND_CONTROLLER_ONLY" if backend_controller_only else
+        "BACKEND_BROWSER_COMBINED" if backend_browser_combined else "FULL"
+    )
     print("REMOTE_CONTROL_BOOTSTRAP_SCOPE=" + scope)
     return 0
 
