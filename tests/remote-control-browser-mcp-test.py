@@ -1452,10 +1452,10 @@ class ScopedCorporateLoginPeerUnderOwnerOptoutTests(unittest.TestCase):
             login.assert_not_called()
             home.assert_not_called()
         with (
-            mock.patch.object(m.base, "runtime_lock") as lock,
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              side_effect=m.base.runtime_lock.RuntimeLockConflict("expired")),
             mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
         ):
-            lock.assert_runtime_lock.side_effect=m.base.runtime_lock.RuntimeLockConflict("expired")
             with self.assertRaisesRegex(ValueError,"runtime_lock_invalid"):
                 m.browser_auth_open(args)
 
