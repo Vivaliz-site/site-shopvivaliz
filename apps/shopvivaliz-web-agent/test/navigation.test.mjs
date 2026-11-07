@@ -99,6 +99,12 @@ test('browser fill refuses password, OTP and payment fields while allowing non-s
   await assert.rejects(driver.fill('#pwd','synthetic'),/sensitive_field_requires_human_takeover/);
   setNode('input',{type:'text',autocomplete:'one-time-code'});
   await assert.rejects(driver.fill('#code','synthetic'),/sensitive_field_requires_human_takeover/);
+  setNode('input',{type:'tel',name:'mfa_code'});
+  await assert.rejects(driver.fill('#mfa','synthetic'),/sensitive_field_requires_human_takeover/);
+  setNode('input',{type:'text',placeholder:'Verification code'});
+  await assert.rejects(driver.fill('#verification','synthetic'),/sensitive_field_requires_human_takeover/);
+  setNode('input',{type:'text',autocomplete:'new-password'});
+  await assert.rejects(driver.fill('#pw-new','synthetic'),/sensitive_field_requires_human_takeover/);
   setNode('input',{type:'text','aria-label':'Payment Card Number'});
   await assert.rejects(driver.fill('#payment','synthetic'),/sensitive_field_requires_human_takeover/);
   setNode('input',{type:'hidden'});
