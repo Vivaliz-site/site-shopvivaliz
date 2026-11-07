@@ -52,6 +52,46 @@ function svfra_approved_payment(array $payment, string $orderNumber, float $orde
     return true;
 }
 
+/**
+ * Select exactly one matching, approved and unrefunded payment from an official
+ * provider search. An incomplete search page or multiple matches are
+ * inconclusive: never select an arbitrary payment or label it real revenue.
+ */
+function svfra_search_payment_id(array $response, string $number, float $total): ?string
+{
+    $results = $response['results'] ?? null;
+    if (!is_array($results)) {
+        return null;
+    }
+    $paging = $response['paging'] ?? null;
+    if (is_array($paging) && isset($paging['total']) && (int)$paging['total'] > count($results)) {
+        return null;
+    }
+    $ids = [];
+    foreach ($results as $candidate) {
+        if (!is_array($candidate) || !svfra_approved_payment($candidate, $number, $total)) {
+            continue;
+        }
+        $id = trim((string)($candidate['id'] ?? ''));
+        if (!ctype_digit($id)) {
+            return null;
+        }
+        $ids[$id] = true;
+    }
+    return count($ids) === 1 ? (string)array_key_first($ids) : null;
+}
+
+/** Whether the provider response contains an official, exact ERP order link. */
+function svfra_erp_reference_matches(array $response, string $number): bool
+{
+    $json = $response['json'] ?? null;
+    if ((int)($response['status'] ?? 0) !== 200 || !is_array($json)) {
+        return false;
+    }
+    $payload = is_array($json['data'] ?? null) ? $json['data'] : $json;
+    return trim((string)($payload['numeroOrdemCompra'] ?? '')) === $number;
+}
+
 function svfra_audit_live(int $limit): int
 {
     require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
@@ -68,6 +108,11 @@ function svfra_audit_live(int $limit): int
         'unverified_provider' => 0,
         'provider_lookup_error' => 0,
         'erp_lookup_error' => 0,
+        'erp_reference_unverified' => 0,
+        'verified_via_reference_search' => 0,
+        'test_order_true' => 0,
+        'test_provenance_unknown' => 0,
+        'discrepancy_provenance_unknown' => 0,
     ];
     $pdo = sv_pdo();
     $mpToken = svmp_env('MERCADOPAGO_ACCESS_TOKEN');
@@ -79,7 +124,7 @@ function svfra_audit_live(int $limit): int
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT order_number, order_status, payment_provider_id, olist_order_id
+        $stmt = $pdo->prepare("SELECT order_number, order_total, order_status, payment_provider_id, olist_order_id
             FROM orders
             WHERE olist_order_id IS NOT NULL AND olist_order_id <> ''
               AND (order_status = 'pagamento_aprovado' OR payment_provider_status = 'approved')
@@ -105,23 +150,41 @@ function svfra_audit_live(int $limit): int
             continue;
         }
         $path = svmp_find_order_path($number);
-        if ($path === '') {
+        $order = $path !== '' ? svmp_read_order($path) : [];
+        // A missing or inconsistent historical JSON file does not invalidate
+        // authoritative MySQL total+reference; its test provenance is unknown.
+        $hasTrustedFile = is_array($order)
+            && trim((string)($order['order_number'] ?? '')) === $number;
+        $provenance = $hasTrustedFile
+            ? (!empty($order['test_order']) ? 'test' : 'live_or_unmarked')
+            : 'unknown';
+        $paymentId = $hasTrustedFile
+            ? trim((string)($order['mercadopago']['payment_id'] ?? $row['payment_provider_id'] ?? ''))
+            : trim((string)($row['payment_provider_id'] ?? ''));
+        $total = (float)($row['order_total'] ?? 0);
+        if ($total <= 0.0) {
             $stats['unverified_provider']++;
             continue;
         }
-        $order = svmp_read_order($path);
-        if (trim((string)($order['order_number'] ?? '')) !== $number) {
-            $stats['unverified_provider']++;
-            continue;
-        }
-        $paymentId = trim((string)($order['mercadopago']['payment_id'] ?? $row['payment_provider_id'] ?? ''));
-        if ($paymentId === '' || !ctype_digit($paymentId)) {
-            $stats['unverified_provider']++;
-            continue;
-        }
+
         try {
+            if (!ctype_digit($paymentId)) {
+                $search = svmp_api_request(
+                    'GET',
+                    '/v1/payments/search?external_reference=' . rawurlencode($number) . '&limit=10',
+                    $mpToken
+                );
+                $paymentId = svfra_search_payment_id($search, $number, $total) ?? '';
+                if ($paymentId === '') {
+                    $stats['unverified_provider']++;
+                    continue;
+                }
+                $stats['verified_via_reference_search']++;
+            }
+            // Search summaries are never enough: always re-verify the official
+            // payment ID, status, exact reference, amount and refund status.
             $payment = svmp_api_request('GET', '/v1/payments/' . rawurlencode($paymentId), $mpToken);
-            if (!svfra_approved_payment($payment, $number, (float)($order['total'] ?? 0))) {
+            if (!svfra_approved_payment($payment, $number, $total)) {
                 $stats['unverified_provider']++;
                 continue;
             }
@@ -129,11 +192,20 @@ function svfra_audit_live(int $limit): int
             $stats['provider_lookup_error']++;
             continue;
         }
+        if ($provenance === 'test') {
+            $stats['test_order_true']++;
+        } elseif ($provenance === 'unknown') {
+            $stats['test_provenance_unknown']++;
+        }
         $stats['provider_verified_approved']++;
 
         try {
             $erp = svtop_tiny_get_order($erpId, $olistToken);
             $erpStatus = svfra_erp_status($erp);
+            if ($erpStatus !== null && !svfra_erp_reference_matches($erp, $number)) {
+                $stats['erp_reference_unverified']++;
+                continue;
+            }
             if ($erpStatus === null) {
                 $stats['erp_lookup_error']++;
                 continue;
@@ -141,6 +213,9 @@ function svfra_audit_live(int $limit): int
             $state = svote_reconciliation_state('approved', $erpStatus);
             if ($state === 'discrepancy') {
                 $stats['erp_discrepancy']++;
+                if ($provenance === 'unknown') {
+                    $stats['discrepancy_provenance_unknown']++;
+                }
             } elseif ($state === 'matched') {
                 $stats['erp_matched']++;
             } else {
@@ -153,7 +228,8 @@ function svfra_audit_live(int $limit): int
 
     $incomplete = $stats['orders_considered'] === 0 || $stats['provider_verified_approved'] === 0
         || $stats['unverified_provider'] > 0 || $stats['provider_lookup_error'] > 0
-        || $stats['erp_lookup_error'] > 0 || $stats['erp_pending'] > 0;
+        || $stats['erp_lookup_error'] > 0 || $stats['erp_reference_unverified'] > 0
+        || $stats['test_provenance_unknown'] > 0 || $stats['erp_pending'] > 0;
     $status = $stats['erp_discrepancy'] > 0 ? 'CONFIRMED_FINANCIAL_DISCREPANCY'
         : ($incomplete ? 'INCOMPLETE_NOT_CERTIFIED' : 'NO_DISCREPANCY_IN_VERIFIED_SAMPLE');
     echo json_encode(['ok' => !$incomplete && $stats['erp_discrepancy'] === 0, 'status' => $status,
