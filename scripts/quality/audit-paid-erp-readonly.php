@@ -52,6 +52,28 @@ function svfra_approved_payment(array $payment, string $orderNumber, float $orde
     return true;
 }
 
+/**
+ * Scope classification is based on the local order provenance. Missing
+ * archives remain an incomplete audit; known test orders are excluded from
+ * real revenue accounting even if a local MySQL row says paid.
+ */
+function svfra_order_scope(?array $order, string $reference): string
+{
+    if ($order === null) {
+        return 'missing_archive';
+    }
+    if ((string)($order['order_number'] ?? '') !== $reference) {
+        return 'reference_mismatch';
+    }
+    if (!str_starts_with((string)($order['source'] ?? ''), 'site_checkout')) {
+        return 'non_site';
+    }
+    if (!empty($order['test_order'])) {
+        return 'test_order';
+    }
+    return 'site';
+}
+
 function svfra_audit_live(int $limit): int
 {
     require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
@@ -66,6 +88,9 @@ function svfra_audit_live(int $limit): int
         'erp_matched' => 0,
         'erp_pending' => 0,
         'unverified_provider' => 0,
+        'test_orders_excluded' => 0,
+        'missing_archive' => 0,
+        'excluded_non_site' => 0,
         'provider_lookup_error' => 0,
         'erp_lookup_error' => 0,
     ];
@@ -105,12 +130,22 @@ function svfra_audit_live(int $limit): int
             continue;
         }
         $path = svmp_find_order_path($number);
-        if ($path === '') {
+        $order = $path !== '' ? svmp_read_order($path) : null;
+        $scope = svfra_order_scope(is_array($order) ? $order : null, $number);
+        if ($scope === 'test_order') {
+            $stats['test_orders_excluded']++;
+            continue;
+        }
+        if ($scope === 'non_site') {
+            $stats['excluded_non_site']++;
+            continue;
+        }
+        if ($scope === 'missing_archive') {
+            $stats['missing_archive']++;
             $stats['unverified_provider']++;
             continue;
         }
-        $order = svmp_read_order($path);
-        if (trim((string)($order['order_number'] ?? '')) !== $number) {
+        if ($scope !== 'site') {
             $stats['unverified_provider']++;
             continue;
         }
