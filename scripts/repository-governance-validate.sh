@@ -59,6 +59,16 @@ run_suite() {
   esac
 }
 
+# Web Agent is an isolated Node service; generic Python/PHP governance cannot
+# replace its own security, takeover and navigation regression tests.
+# Run only when its path is affected, or when the comparison is unavailable.
+if [ ! -s "$CI_CHANGED_LIST" ] || grep -Eq '^apps/shopvivaliz-web-agent/' "$CI_CHANGED_LIST"; then
+  echo 'RUN_WEB_AGENT_NODE_TESTS=web_agent_path_or_unknown_diff'
+  (cd apps/shopvivaliz-web-agent && npm test && npm run check)
+else
+  echo 'SKIP_WEB_AGENT_NODE_TESTS=no_web_agent_files_changed'
+fi
+
 # Prevent blanket GitHub human review requests before expensive CI.
 python3 -m unittest tests.test_ci_suite_relevance -v
 run_suite python3 scripts/check_pr_review_routing.py
