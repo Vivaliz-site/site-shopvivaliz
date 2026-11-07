@@ -31,10 +31,21 @@ async function readJson(req,limit){
   try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw Error('invalid_json');}
 }
 function validId(x){return typeof x==='string'&&/^[a-f0-9-]{36}$/.test(x);}
-export function createServer({controller=new TakeoverController(new BrowserDriver()),mcpToken,publicOrigin='http://127.0.0.1:5598'}={}){
+export function createServer({controller=new TakeoverController(new BrowserDriver()),mcpToken,publicOrigin='http://127.0.0.1:5598',allowedHumanOrigins=[]}={}){
   if(!mcpToken||mcpToken.length<32)throw Error('WEB_AGENT_MCP_TOKEN_requires_32_characters');
   const origin=new URL(publicOrigin).origin;
   if(origin.startsWith('http:')&&!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))throw Error('https_required_for_public_origin');
+  // Cross-origin takeover is disabled unless the HTTPS origin was configured
+  // explicitly. No wildcard or untrusted Origin can read frame/action responses.
+  const humanOrigins=new Set([origin]);
+  if(!Array.isArray(allowedHumanOrigins))throw Error('invalid_human_cors_origins');
+  for(const value of allowedHumanOrigins){
+    if(typeof value!=='string'||!value.startsWith('https://'))throw Error('invalid_human_cors_origin');
+    let target;
+    try{target=new URL(value);}catch{throw Error('invalid_human_cors_origin');}
+    if(target.origin!==value||target.username||target.password)throw Error('invalid_human_cors_origin');
+    humanOrigins.add(value);
+  }
   const rate=new Map();
   function permit(key,max=100){const now=Date.now();const v=rate.get(key);if(!v||now-v.start>=60000){rate.set(key,{start:now,count:1});return true;}v.count++;return v.count<=max;}
   const server=http.createServer(async(req,res)=>{
@@ -84,8 +95,17 @@ export function createServer({controller=new TakeoverController(new BrowserDrive
     const m=/^\/human\/([a-f0-9-]{36})\/(frame|action|release)$/.exec(pathname);
     if(!m||!validId(m[1]))return sendJson(res,404,{error:'not_found'},common);
     const id=m[1],operation=m[2];
-    const cors={'access-control-allow-origin':'*','access-control-allow-headers':'Authorization, Content-Type','access-control-allow-methods':'GET, POST, OPTIONS','vary':'Origin','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
-    if(req.method==='OPTIONS'){res.writeHead(204,cors);return res.end();}
+    const hasOrigin=Object.hasOwn(req.headers,'origin');
+    const requestOrigin=hasOrigin?req.headers.origin:null;
+    const originAllowed=typeof requestOrigin==='string'&&humanOrigins.has(requestOrigin);
+    const cors={...common,'vary':'Origin','access-control-allow-headers':'Authorization, Content-Type',
+      'access-control-allow-methods':'GET, POST, OPTIONS',
+      ...(originAllowed?{'access-control-allow-origin':requestOrigin}:{})};
+    if(hasOrigin&&!originAllowed)return sendJson(res,403,{error:'origin_not_allowed'},cors);
+    if(req.method==='OPTIONS'){
+      if(!originAllowed)return sendJson(res,403,{error:'origin_required'},cors);
+      res.writeHead(204,cors);return res.end();
+    }
     if(!permit(id,200))return sendJson(res,429,{error:'rate_limited'},cors);
     const supplied=(req.headers.authorization||'').replace(/^Bearer /i,'');
     try{
@@ -113,6 +133,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const token=process.env.WEB_AGENT_MCP_TOKEN;
   const host='127.0.0.1';
   const port=Number(process.env.WEB_AGENT_PORT||5598);
-  const server=createServer({mcpToken:token,publicOrigin:process.env.WEB_AGENT_PUBLIC_ORIGIN||`http://${host}:${port}`});
+  const allowedHumanOrigins=(process.env.WEB_AGENT_HUMAN_ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const server=createServer({mcpToken:token,publicOrigin:process.env.WEB_AGENT_PUBLIC_ORIGIN||`http://${host}:${port}`,allowedHumanOrigins});
   server.listen(port,host,()=>console.log(`web-agent local listener ${host}:${port}`));
 }
