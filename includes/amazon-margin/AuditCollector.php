@@ -434,7 +434,7 @@ final class SvAmazonMarginCollector
         $seen=[];
         foreach ($shipments as $shipment) {
             $id=(string)($shipment['order']??'');
-            if ($id==='' || !empty($seen[$id]) && $seen[$id] === 'missing') return null;
+            if ($id==='') return null;
             if (isset($seen[$id])) continue;
             $evidence=$this->orderEvidence($id);
             if ($evidence===null) return null;
