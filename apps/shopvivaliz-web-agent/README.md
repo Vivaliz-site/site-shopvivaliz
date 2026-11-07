@@ -18,6 +18,12 @@ Requer Node >=20, Chromium e `npm install --omit=dev --ignore-scripts`. Use um u
 
 Teste de saude: `curl -fsS http://127.0.0.1:5598/health`. Testes sem rede: `npm test && npm run check`. O browser real exige ligacao ao Chromium e navegacao publica, nao substituida por mocks.
 
+### CORS do takeover: configuracao futura, sem publicacao
+
+`WEB_AGENT_HUMAN_ALLOWED_ORIGINS` aceita apenas uma lista separada por virgulas de **origens HTTPS exatas**, sem barra final, caminho, curingas ou asteriscos; exemplo de formato: `https://takeover-owner.example`. Por padrao, apenas a origem de `WEB_AGENT_PUBLIC_ORIGIN` e permitida. Requisicoes com `Origin` divergente ou `null` e preflights sem `Origin` sao rejeitados **antes** de validar/operar a capability humana. Nenhuma resposta de takeover envia `Access-Control-Allow-Origin: *`. Sem cabecalho `Origin`, o canal direto ainda exige capability valida, sem habilitar CORS.
+
+A lista exata de origens do iframe/widget deve ser confirmada com a identidade oficial do provedor antes de configurar qualquer dominio publico. Este ajuste **nao** integra OAuth/JWT ao servidor, nao cria Cloudflare Access, DNS, TLS ou ingress; o bloqueio externo de publicacao e os testes E2E no ChatGPT web/Safari permanecem.
+
 ## Fluxo de uso (apos publicacao autenticada e registro do MCP)
 
 1. ChatGPT chama `web_agent_open({url})`, recebe `session_id`.
