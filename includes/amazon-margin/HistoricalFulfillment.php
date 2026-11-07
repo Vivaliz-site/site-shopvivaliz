@@ -38,6 +38,7 @@ final class SvAmazonMarginHistoricalFulfillment
             $current = $order['channel'] ?? 'UNKNOWN';
             if (!in_array($current,['AMAZON','MERCHANT'],true)) return null;
             if ($current === 'MERCHANT' && !($order['is_dba'] ?? false)) return null;
+            if ($current === 'AMAZON' && ($order['is_dba'] ?? false)) return null;
             if ($channel !== null && $current !== $channel) return null;
             $channel=$current;
         }
