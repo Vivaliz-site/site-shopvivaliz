@@ -3,7 +3,7 @@
   "repository": "Vivaliz-site/site-shopvivaliz",
   "pr_number": 3759,
   "resource": "amazon:inventory:br",
-  "principal": "shopvivaliz-commercial-operator",
+  "principal": "fredmourao-ai",
   "capabilities": [
     "amazon_inventory_zero_oneoff"
   ],
@@ -81,5 +81,9 @@
   "commercial_write_disabled_until_approved": true,
   "excludes_other_skus": true,
   "excludes_erp_and_prices": true,
-  "expires_at_utc": "2026-11-10T00:00:00Z"
+  "expires_at_utc": "2026-11-10T00:00:00Z",
+  "execution_host": "marina-a1-4c24g",
+  "run_as_user": "ubuntu",
+  "execution_channel": "ShopVivaliz Remote Control MCP",
+  "requires_separate_external_amazon_entitlement": true
 }
