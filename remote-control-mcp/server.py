@@ -2353,8 +2353,9 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("account_auth_action_invalid")
         if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
             raise ValueError("account_auth_tab_invalid")
-        if not _durable_handoff_enabled():
-            raise ValueError("account_auth_lease_mode_required")
+        # Account authentication already has a distinct, exact-session,
+        # maintenance-only runtime lease. The generic background-continuity
+        # handoff flag is unrelated and must not disable this approved route.
         lease_id = str(args.get("runtime_lease_id") or "").strip()
         token = args.get("runtime_fencing_token")
         if not lease_id or token is None:
