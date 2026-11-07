@@ -1387,8 +1387,12 @@ def ssh_base(address: str, user: str, port: int = 22) -> list[str]:
     ]
 
 
-def marina_readonly_service_command(service: str) -> str:
-    if not isinstance(service, str) or service not in MARINA_READONLY_SERVICES:
+def marina_readonly_service_command(service: str, *, allow_admin: bool = False) -> str:
+    # Keep the fixed read-only route narrow. An already-approved admin grant
+    # may inspect any syntactically valid unit through its separately checked
+    # private SSH transport; no sudo, shell parameters or unit mutations.
+    if (not isinstance(service, str) or not SERVICE_RE.fullmatch(service)
+            or (service not in MARINA_READONLY_SERVICES and not allow_admin)):
         raise ValueError("marina_service_not_allowlisted")
     # The unprivileged operator can inspect this metadata with no sudo.
     return ("systemctl show --no-pager "
@@ -2627,7 +2631,9 @@ def execute_tool(
         else:
             raise PermissionError("marina_central_route_capability_not_approved")
     if host == MARINA_HOST and name == "service_status":
-        marina_readonly_service_command(args.get("service"))
+        marina_readonly_service_command(
+            args.get("service"), allow_admin=marina_central_admin_grant_active()
+        )
     _assert_runtime_mutation(name, args)
     _assert_conversation_mutation(name, args)
     if name in {"marina_cart_preview", "marina_cart_retire_source"}:
@@ -2905,14 +2911,21 @@ def execute_tool(
             marina_admin=(host == MARINA_HOST and marina_central_admin_grant_active()),
         )
     elif name == "service_status":
+        marina_admin_status = (
+            host == MARINA_HOST
+            and str(args.get("service") or "") not in MARINA_READONLY_SERVICES
+        )
         command = (
-            marina_readonly_service_command(args.get("service"))
+            marina_readonly_service_command(
+                args.get("service"), allow_admin=marina_admin_status
+            )
             if host == MARINA_HOST else
             service_command(platform, str(args.get("service") or ""), "status",
                             str(cfg.get("service_user_owner") or "") or None)
         )
         result = run_host_command(
             str(host), command, timeout, cancel_check, recover_transport=False,
+            marina_admin=marina_admin_status,
         )
     elif name == "service_action":
         action = str(args.get("action") or "")
