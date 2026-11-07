@@ -234,6 +234,7 @@ jobs:
           php tests/amazon-margin/KitBomCostTest.php
           php tests/amazon-margin/KitCostReportTest.php
           php tests/amazon-margin/ReportExportTest.php
+          php tests/admin/AdminDeniedResponseTest.php
           php tests/amazon-margin/MarginMathTest.php
           php tests/amazon-margin/DbaOrderGroupTest.php
           node tests/amazon-margin/DashboardMarginsStatusTest.js
