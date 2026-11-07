@@ -16,6 +16,10 @@ check() {
 
 check false README.md docs/VM-SSH-ACCESS.md .codex/config.toml .github/workflows/foo.yml tests/unit-test.php
 check false docs/runbook.md
+check false scripts/repository-governance-validate.sh apps/shopvivaliz-web-agent/src/server.mjs
+check false scripts/repository-governance-validate.sh apps/shopvivaliz-web-agent/test/navigation.test.mjs
+check true scripts/repository-governance-validate.sh produto.php
+check true scripts/repository-governance-validate.sh scripts/unknown-cli.sh
 check false apps/shopvivaliz-web-agent/src/access-auth.mjs apps/shopvivaliz-web-agent/test/access-auth.test.mjs
 check false apps/shopvivaliz-web-agent/src/server.mjs apps/shopvivaliz-web-agent/deploy/shopvivaliz-web-agent.service
 check true apps/shopvivaliz-web-agent/src/access-auth.mjs produto.php

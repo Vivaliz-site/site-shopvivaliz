@@ -4,19 +4,33 @@ MVP isolado de navegador controlado pelo ChatGPT, com **handoff humano** para di
 
 ## Recursos implementados
 
-- MCP Streamable HTTP JSON-RPC em `127.0.0.1:5598/mcp` com ferramentas `web_agent_open`, `web_agent_inspect`, `web_agent_click`, `web_agent_takeover`, `web_agent_status`, `web_agent_close`.
-- UI MCP `ui://shopvivaliz-web-agent/takeover.html`: visualizacao JPEG, toque/clique para selecionar campo, entrada humana de texto, teclas Tab/Enter/Backspace/Esc, devolucao de controle ao agente.
+- MCP Streamable HTTP JSON-RPC em `127.0.0.1:5598/mcp` com ferramentas `web_agent_open`, `web_agent_inspect`, `web_agent_click`, `web_agent_navigate`, `web_agent_back`, `web_agent_forward`, `web_agent_scroll`, `web_agent_fill`, `web_agent_key`, `web_agent_takeover`, `web_agent_status`, `web_agent_close`. As novas acoes somente funcionam no modo `agent`, exigem sessao existente e nao dispensam autorizacao por operacao/host.
+- UI MCP `ui://shopvivaliz-web-agent/takeover.html`: visualizacao JPEG, origem atual indicada por quadro, toque/clique para selecionar campo, entrada humana de texto, teclas Tab/Enter/Backspace/Esc, rolagem e historico durante controle humano, devolucao de controle ao agente.
 - Token exclusivo de 256 bits por handoff, expira em 15 min e nunca e colocado em `content` ou `structuredContent` (somente `_meta`, entregue ao widget).
 - Estado de controle `agent` / `human`; durante takeover nao e permitido ao modelo abrir, inspecionar, clicar, fechar ou capturar a pagina. A capacidade humana expirada **nao** reativa o agente: exige novo takeover emitido via MCP.
 - Credenciais digitadas no widget sao enviadas diretamente ao host pelo canal de navegador, sem serem emitidas como chamadas de ferramenta ao modelo, sem logs de texto de campos e sem persistencia em estado do widget.
 - Playwright Chromium com perfil proprio em `.private-profile` ou `WEB_AGENT_PROFILE_DIR`; NUNCA compartilhar perfil corporate Dev / Atendimento nem CDP existentes.
 - Enderecos nao publicos, protocolos locais, loopback, metadata IP, rede privada e portas incomuns sao bloqueados em URL e requisicoes HTTP(S); DNS rebinding exige endurecimento complementar antes de rede publica.
 
+## Interfaces de hosts ShopVivaliz (nao "Sources")
+
+O objetivo operacional deste agente e a navegacao grafica **complementar** nos paineis HTTPS oficialmente autorizados dos hosts `always-free-arm-1787907847-26`, `marina-a1-4c24g`, `Fred-Win` e `KOCEPSV`. Nao existe destino chamado "Sources" neste projeto; `shopvivaliz-free-a1` foi excluida e nunca deve ser acessada. Para comandos ou servicos usar prioritariamente os MCPs Remote Control/Orquestrador e suas identidades/grants.
+
+Antes de abrir cada painel, obter da documentacao canonica viva o hostname/HTTPS oficial, host real de destino, identidade e sessao permitidas, grant/TTL/lease/fencing e autorizacao da operacao. O navegador nao herda RBAC da sessao MCP. Perfis Chromium Dev/Atendimento nao sao copiados. A protecao contra destinos privados e SSRF continua ativa: paineis restritos nao podem ser alcançados por substituicao improvisada de proxy, IP interno ou desativacao do filtro. O takeover e reservado a interacao humana real para MFA/credenciais, sem registrar esses dados no modelo.
+
+A navegacao por `web_agent_navigate`, `web_agent_back`, `web_agent_forward`, `web_agent_scroll`, `web_agent_fill` nao sensivel e `web_agent_key` e apenas capacidade local: **nao** representa ingress ChatGPT publicado, acesso administrativo generalizado, substituicao do MCP ou E2E certificado nos quatro hosts.
+
 ## Uso local de desenvolvimento (nao publico)
 
 Requer Node >=20, Chromium e `npm install --omit=dev --ignore-scripts`. Use um usuario dedicado **sem root**. No mesmo terminal, configure `WEB_AGENT_MCP_TOKEN` com ao menos 32 caracteres aleatorios em secret manager (`umask 077`); nunca inclua o valor na linha de comando, logs ou Git. Opcional: `WEB_AGENT_CHROME_BINARY`, `WEB_AGENT_PROFILE_DIR`, `WEB_AGENT_PORT`. Execute `npm start`. O listener permanece **somente em 127.0.0.1**.
 
 Teste de saude: `curl -fsS http://127.0.0.1:5598/health`. Testes sem rede: `npm test && npm run check`. O browser real exige ligacao ao Chromium e navegacao publica, nao substituida por mocks.
+
+### CORS do takeover: configuracao futura, sem publicacao
+
+`WEB_AGENT_HUMAN_ALLOWED_ORIGINS` aceita apenas uma lista separada por virgulas de **origens HTTPS exatas**, sem barra final, caminho, curingas ou asteriscos; exemplo de formato: `https://takeover-owner.example`. Por padrao, apenas a origem de `WEB_AGENT_PUBLIC_ORIGIN` e permitida. Requisicoes com `Origin` divergente ou `null` e preflights sem `Origin` sao rejeitados **antes** de validar/operar a capability humana. Nenhuma resposta de takeover envia `Access-Control-Allow-Origin: *`. Sem cabecalho `Origin`, o canal direto ainda exige capability valida, sem habilitar CORS.
+
+A lista exata de origens do iframe/widget deve ser confirmada com a identidade oficial do provedor antes de configurar qualquer dominio publico. Este ajuste **nao** integra OAuth/JWT ao servidor, nao cria Cloudflare Access, DNS, TLS ou ingress; o bloqueio externo de publicacao e os testes E2E no ChatGPT web/Safari permanecem.
 
 ## Fluxo de uso (apos publicacao autenticada e registro do MCP)
 

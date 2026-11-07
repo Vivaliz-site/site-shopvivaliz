@@ -27,6 +27,7 @@ input {flex:1;min-width:175px;border:1px solid #8897a5;border-radius:9px;font:in
 <p id="notice" role="status">Aguardando sessao segura do aplicativo.</p>
 <img id="screen" width="1280" height="800" alt="Visualizacao da janela remota; toque no campo de login para selecionar" draggable="false" />
 <div class="toolbar"><input id="entry" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Digite aqui a senha ou codigo" aria-label="Texto privado enviado diretamente ao navegador" disabled /><button id="send" disabled class="primary">Digitar</button><button id="toggle" disabled>Mostrar texto</button></div>
+<div class="toolbar"><button data-nav="back" disabled>Voltar</button><button data-nav="forward" disabled>Avancar</button><button data-scroll="-550" disabled>Rolar para cima</button><button data-scroll="550" disabled>Rolar para baixo</button></div>
 <div class="toolbar"><button data-key="Tab" disabled>Tab</button><button data-key="Enter" disabled>Enter</button><button data-key="Backspace" disabled>Apagar</button><button data-key="Escape" disabled>Esc</button><button id="refresh" disabled>Atualizar tela</button><button id="release" disabled class="primary">Devolver controle ao agente</button></div>
 <p id="privacy">Digite somente no componente protegido. O texto e enviado diretamente ao navegador isolado por conexao autenticada; nao e incluido em mensagens para a IA nem salvo no historico do aplicativo. Ao devolver o controle, o agente podera continuar visualizando o site autenticado. Verifique sempre o dominio oficial antes de fazer login.</p>
 <script>
@@ -56,6 +57,8 @@ input {flex:1;min-width:175px;border:1px solid #8897a5;border-radius:9px;font:in
     rendering=true;
     try{
       const res=await call('frame');const blob=await res.blob();
+      const liveOrigin=res.headers.get('X-ShopVivaliz-Site-Origin');
+      $('origin').textContent=liveOrigin||'Nao identificado: confirme o endereco antes de autenticar';
       const url=URL.createObjectURL(blob);
       screen.onload=()=>{if(frameUrl)URL.revokeObjectURL(frameUrl);frameUrl=url};
       screen.src=url;
@@ -64,7 +67,8 @@ input {flex:1;min-width:175px;border:1px solid #8897a5;border-radius:9px;font:in
     finally{rendering=false;}
   }
   async function action(data){
-    try{await call('action','POST',data);await draw();}catch(e){message(String(e.message),true)}
+    try{await call('action','POST',data);await draw();return true;}
+    catch(e){message(String(e.message),true);return false;}
   }
   screen.addEventListener('click',async event=>{
     if(!context||!active)return;
@@ -77,12 +81,13 @@ input {flex:1;min-width:175px;border:1px solid #8897a5;border-radius:9px;font:in
     if(!context||!active)return;
     const text=entry.value;entry.value='';
     if(!text)return;
-    await action({action:'type',text});
-    message('Texto enviado diretamente ao navegador.');
+    if(await action({action:'type',text}))message('Texto enviado diretamente ao navegador.');
   });
   entry.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('send').click()}});
   $('toggle').addEventListener('click',()=>{entry.type=entry.type==='password'?'text':'password';$('toggle').textContent=entry.type==='password'?'Mostrar texto':'Ocultar texto'});
   for(const button of document.querySelectorAll('[data-key]'))button.addEventListener('click',()=>action({action:'key',key:button.dataset.key}));
+  for(const button of document.querySelectorAll('[data-scroll]'))button.addEventListener('click',()=>action({action:'scroll',delta_y:Number(button.dataset.scroll)}));
+  for(const button of document.querySelectorAll('[data-nav]'))button.addEventListener('click',()=>action({action:button.dataset.nav}));
   $('refresh').addEventListener('click',draw);
   $('release').addEventListener('click',async()=>{
     if(!context||!active)return;
@@ -99,8 +104,8 @@ input {flex:1;min-width:175px;border:1px solid #8897a5;border-radius:9px;font:in
       else await new Promise(resolve=>setTimeout(resolve,200));
     }
     if(!context){state.textContent='Nao conectado';message('O ChatGPT nao entregou o contexto privado da sessao. Nao digite sua senha nesta janela.',true);return;}
-    $('origin').textContent=context.site_origin||'Nao informado: confirme diretamente na pagina';
-    disable(false);message('Clique no campo da pagina remota, digite aqui e clique Digitar. Ao finalizar, devolva o controle.');
+    $('origin').textContent='Carregando origem da pagina...';
+    disable(false);message('Toque na pagina, digite os dados no campo privado e use os controles para navegar. Ao finalizar, devolva o controle.');
     await draw();
     const task=async()=>{while(active){await new Promise(r=>setTimeout(r,1400));if(active)await draw();}};
     task();

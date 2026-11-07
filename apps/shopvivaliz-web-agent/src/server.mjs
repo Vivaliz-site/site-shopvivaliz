@@ -10,10 +10,17 @@ export const RESOURCE_URI='ui://shopvivaliz-web-agent/takeover.html';
 const WIDGET=readFileSync(resolve(dirname(fileURLToPath(import.meta.url)),'../web/takeover.html'),'utf8');
 const inputObject=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
 const S={type:'string'};
+const SCROLL={type:'integer',minimum:-2000,maximum:2000};
 const TOOLS=[
   {name:'web_agent_open',description:'Open a public website in a new isolated ShopVivaliz browser session. Does not reuse corporate Chrome profiles.',inputSchema:inputObject({url:S},['url']),annotations:{readOnlyHint:false,openWorldHint:true}},
   {name:'web_agent_inspect',description:'Inspect sanitized controls only after human has returned control. Never call during human takeover.',inputSchema:inputObject({session_id:S},['session_id']),annotations:{readOnlyHint:true,openWorldHint:true}},
   {name:'web_agent_click',description:'Click an explicitly authorized control after human takeover ends. Requires separate approval for consequential actions.',inputSchema:inputObject({session_id:S,selector:S},['session_id','selector']),annotations:{openWorldHint:true}},
+  {name:'web_agent_navigate',description:'Navigate the existing isolated session to a public HTTP(S) URL. Agent mode only.',inputSchema:inputObject({session_id:S,url:S},['session_id','url']),annotations:{readOnlyHint:false,openWorldHint:true}},
+  {name:'web_agent_back',description:'Go to the previous page in the existing browser session. Agent mode only.',inputSchema:inputObject({session_id:S},['session_id']),annotations:{readOnlyHint:false,openWorldHint:true}},
+  {name:'web_agent_forward',description:'Go forward in the existing browser session. Agent mode only.',inputSchema:inputObject({session_id:S},['session_id']),annotations:{readOnlyHint:false,openWorldHint:true}},
+  {name:'web_agent_scroll',description:'Scroll the current public webpage by delta_y pixels, range -2000 to 2000, nonzero. Agent mode only.',inputSchema:inputObject({session_id:S,delta_y:SCROLL},['session_id','delta_y']),annotations:{readOnlyHint:false,openWorldHint:true}},
+  {name:'web_agent_fill',description:'Fill a non-secret search, text, or contenteditable field in agent mode. Password, OTP, tokens and payment fields require a separate human takeover. Filling does not submit.',inputSchema:inputObject({session_id:S,selector:S,text:S},['session_id','selector','text']),annotations:{readOnlyHint:false,openWorldHint:true}},
+  {name:'web_agent_key',description:'Press an allowed navigation key in agent mode. Submitting consequential forms needs authorization.',inputSchema:inputObject({session_id:S,key:S},['session_id','key']),annotations:{readOnlyHint:false,openWorldHint:true}},
   {name:'web_agent_takeover',description:'Open private takeover UI in ChatGPT so the owner can type a login password or TOTP directly without sending secrets to the model. The browser pauses until the owner returns control.',inputSchema:inputObject({session_id:S},['session_id']),_meta:{ui:{resourceUri:RESOURCE_URI},'openai/outputTemplate':RESOURCE_URI,'openai/toolInvocation/invoking':'Abrindo navegador para autenticacao','openai/toolInvocation/invoked':'Navegador disponivel para controle humano'}},
   {name:'web_agent_status',description:'Read nonsecret takeover status. If human control is active, do not access page content or call other automation actions.',inputSchema:inputObject({session_id:S},['session_id']),annotations:{readOnlyHint:true,openWorldHint:false}},
   {name:'web_agent_close',description:'Close an idle session, not during human takeover.',inputSchema:inputObject({session_id:S},['session_id']),annotations:{openWorldHint:false}}
@@ -31,10 +38,21 @@ async function readJson(req,limit){
   try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw Error('invalid_json');}
 }
 function validId(x){return typeof x==='string'&&/^[a-f0-9-]{36}$/.test(x);}
-export function createServer({controller=new TakeoverController(new BrowserDriver()),mcpToken,publicOrigin='http://127.0.0.1:5598'}={}){
+export function createServer({controller=new TakeoverController(new BrowserDriver()),mcpToken,publicOrigin='http://127.0.0.1:5598',allowedHumanOrigins=[]}={}){
   if(!mcpToken||mcpToken.length<32)throw Error('WEB_AGENT_MCP_TOKEN_requires_32_characters');
   const origin=new URL(publicOrigin).origin;
   if(origin.startsWith('http:')&&!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))throw Error('https_required_for_public_origin');
+  // Cross-origin takeover is disabled unless the HTTPS origin was configured
+  // explicitly. No wildcard or untrusted Origin can read frame/action responses.
+  const humanOrigins=new Set([origin]);
+  if(!Array.isArray(allowedHumanOrigins))throw Error('invalid_human_cors_origins');
+  for(const value of allowedHumanOrigins){
+    if(typeof value!=='string'||!value.startsWith('https://')||value.includes('*'))throw Error('invalid_human_cors_origin');
+    let target;
+    try{target=new URL(value);}catch{throw Error('invalid_human_cors_origin');}
+    if(target.origin!==value||target.username||target.password)throw Error('invalid_human_cors_origin');
+    humanOrigins.add(value);
+  }
   const rate=new Map();
   function permit(key,max=100){const now=Date.now();const v=rate.get(key);if(!v||now-v.start>=60000){rate.set(key,{start:now,count:1});return true;}v.count++;return v.count<=max;}
   const server=http.createServer(async(req,res)=>{
@@ -63,12 +81,23 @@ export function createServer({controller=new TakeoverController(new BrowserDrive
       const def=TOOLS.find(t=>t.name===name);
       if(!def)return sendJson(res,200,{jsonrpc:'2.0',id,error:{code:-32602,message:'unknown_tool'}},common);
       try{
-        for(const k of Object.keys(args))if(!Object.hasOwn(def.inputSchema.properties,k))throw Error('invalid_arguments');
-        for(const k of def.inputSchema.required)if(typeof args[k]!=='string'||!args[k])throw Error('missing_required_argument');
+        for(const [k,v] of Object.entries(args)){
+          const p=def.inputSchema.properties[k];
+          if(!p)throw Error('invalid_arguments');
+          if(p.type==='string' && (typeof v!=='string'||!v))throw Error('invalid_arguments');
+          if(p.type==='integer' && (!Number.isInteger(v)||v<p.minimum||v>p.maximum))throw Error('invalid_arguments');
+        }
+        for(const k of def.inputSchema.required)if(!Object.hasOwn(args,k))throw Error('missing_required_argument');
         let data,privateMeta;
         if(name==='web_agent_open')data=await controller.open(args.url);
         else if(name==='web_agent_inspect')data=await controller.inspect(args.session_id);
         else if(name==='web_agent_click')data=await controller.click(args.session_id,args.selector);
+        else if(name==='web_agent_navigate')data=await controller.navigate(args.session_id,args.url);
+        else if(name==='web_agent_back')data=await controller.back(args.session_id);
+        else if(name==='web_agent_forward')data=await controller.forward(args.session_id);
+        else if(name==='web_agent_scroll')data=await controller.scroll(args.session_id,args.delta_y);
+        else if(name==='web_agent_fill')data=await controller.fill(args.session_id,args.selector,args.text);
+        else if(name==='web_agent_key')data=await controller.key(args.session_id,args.key);
         else if(name==='web_agent_status')data=controller.status(args.session_id);
         else if(name==='web_agent_close')data=await controller.close(args.session_id);
         else if(name==='web_agent_takeover'){
@@ -84,14 +113,24 @@ export function createServer({controller=new TakeoverController(new BrowserDrive
     const m=/^\/human\/([a-f0-9-]{36})\/(frame|action|release)$/.exec(pathname);
     if(!m||!validId(m[1]))return sendJson(res,404,{error:'not_found'},common);
     const id=m[1],operation=m[2];
-    const cors={'access-control-allow-origin':'*','access-control-allow-headers':'Authorization, Content-Type','access-control-allow-methods':'GET, POST, OPTIONS','vary':'Origin','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
-    if(req.method==='OPTIONS'){res.writeHead(204,cors);return res.end();}
+    const hasOrigin=Object.hasOwn(req.headers,'origin');
+    const requestOrigin=hasOrigin?req.headers.origin:null;
+    const originAllowed=typeof requestOrigin==='string'&&humanOrigins.has(requestOrigin);
+    const cors={...common,'vary':'Origin','access-control-allow-headers':'Authorization, Content-Type',
+      'access-control-allow-methods':'GET, POST, OPTIONS',
+      'access-control-expose-headers':'X-ShopVivaliz-Site-Origin',
+      ...(originAllowed?{'access-control-allow-origin':requestOrigin}:{})};
+    if(hasOrigin&&!originAllowed)return sendJson(res,403,{error:'origin_not_allowed'},cors);
+    if(req.method==='OPTIONS'){
+      if(!originAllowed)return sendJson(res,403,{error:'origin_required'},cors);
+      res.writeHead(204,cors);return res.end();
+    }
     if(!permit(id,200))return sendJson(res,429,{error:'rate_limited'},cors);
     const supplied=(req.headers.authorization||'').replace(/^Bearer /i,'');
     try{
       if(operation==='frame'&&req.method==='GET'){
-        const frame=await controller.humanFrame(id,supplied);
-        res.writeHead(200,{'content-type':'image/jpeg','content-length':frame.length,...cors});return res.end(frame);
+        const {frame,origin}=await controller.humanFrame(id,supplied,true);
+        res.writeHead(200,{'content-type':'image/jpeg','content-length':frame.length,'X-ShopVivaliz-Site-Origin':origin,...cors});return res.end(frame);
       }
       if(operation==='action'&&req.method==='POST'){
         const v=await readJson(req,2048);
@@ -113,6 +152,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const token=process.env.WEB_AGENT_MCP_TOKEN;
   const host='127.0.0.1';
   const port=Number(process.env.WEB_AGENT_PORT||5598);
-  const server=createServer({mcpToken:token,publicOrigin:process.env.WEB_AGENT_PUBLIC_ORIGIN||`http://${host}:${port}`});
+  const allowedHumanOrigins=(process.env.WEB_AGENT_HUMAN_ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const server=createServer({mcpToken:token,publicOrigin:process.env.WEB_AGENT_PUBLIC_ORIGIN||`http://${host}:${port}`,allowedHumanOrigins});
   server.listen(port,host,()=>console.log(`web-agent local listener ${host}:${port}`));
 }

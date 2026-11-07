@@ -40,6 +40,7 @@ tests/should-deploy-production-test.sh)
     apps/shopvivaliz-web-agent/*|\
     *.md|docs/*|.codex/*|.github/*|tests/*|\
 scripts/check_pr_completion_policy.py|\
+scripts/repository-governance-validate.sh|\
 scripts/should-deploy-production.sh)
       ;;
     *)
