@@ -452,3 +452,56 @@ integralidade das tres integracoes continuam obrigatorios. **Nao executar
 capturas concorrentes** enquanto houver outra leitura/escrita autorizada no
 mesmo perfil; o produto ERP nao e alterado e evidencias antigas nao devem ser
 reescritas retroativamente.
+
+
+## Evidência histórica após encerramento da oferta Seller Flex (07/11/2026)
+
+A situação **BUYABLE** e o preço efetivo em Amazon Pricing descrevem somente
+**a oferta atual**. Uma baixa autenticada no Seller Flex pode remover BUYABLE,
+deixar `Product.Offers=[]` e não deve apagar da visão financeira os lançamentos
+Shipment já publicados pela Amazon Finances dentro da janela auditada.
+
+**RED real:** a auditoria #14 tinha 73 margens transacionais confirmadas,
+mas o run #15 passou a ter 70 após 38 SKUs perderem BUYABLE por ajuste
+Seller Flex autorizado. `ABRA-PERF-FBA`, `ME-MYQ8-H4JQ` e
+`FN-WXV1-QWDV` perderam o reconhecimento da venda porque o código exigia
+preço e fulfillment atuais. A queda de BUYABLE **não é regressão de estoque**:
+o readback Seller Flex/SP-API das 38 baixas estava concluído e documentado
+na issue #3699. A correção trata exclusivamente a classificação histórica.
+
+**Regra de cálculo:** com custo do produto atual ativo e unidade do kit
+verificados, `sale_gross_cents` positivo e conciliado com os valores
+`ProductCharges+Shipping+PromoRebates` da transação Finances e com a
+receita líquida de Shipment, calcular lucro/imposto (14%) sobre a transação
+**mesmo quando a oferta não tem mais preço vigente**. Sem receita financeira
+confirmada e sem preço corrente, margem = NULL, não fallback para preço
+cadastral. Para ofertas inativas sem preço atual, margem **projetada continua
+NULL** e somente a margem histórica devidamente conciliada é apresentada.
+
+**Canal histórico:** `GET /orders/2026-01-01/orders/{orderId}` com
+`includedData=FULFILLMENT`; verificar `fulfillment.fulfilledBy` para
+**TODOS** os pedidos com remessas elegíveis no período. Aceitar somente
+`AMAZON` ou `MERCHANT` sem mistura entre pedidos. `MERCHANT` exige
+`programs[]` contendo explicitamente `DELIVERY_BY_AMAZON`, frete
+`MfnPostageFee` conciliado uma única vez e Seller SKU único para aquele
+pedido. Nem um SKU marcado FBA, nem um snapshot antigo, nem o tipo de anúncio
+suprem a resposta da API. Se pedidos contraditórios/ausentes, status
+`pending_financial_reconciliation` e nenhum lucro/margem histórica
+certificados; 401/403/429/5xx globais abortam a execução pela política de
+quota/backoff vigente, sem chamadas agressivas. Não usar FBAFees clássica
+como custo do Seller Flex.
+
+**Vínculo ERP:** pedido antigo fornece evidência para reconciliação do
+Seller SKU independentemente de `BUYABLE`, mas somente sob verificação de
+um pedido e um item/produto ativo Olist, sem disputa com EAN/aba Anúncios;
+caso contrário `unmapped_erp`/`ambiguous_erp` permanece não certificado.
+Os relatórios XLSX distinguem a origem
+`AMAZON_ORDERS_V2026_FULFILLMENT` da hipótese de canal atual, sem expor IDs
+de pedidos. Testes: `MarginMathTest.php`,
+`HistoricalFulfillmentTest.php`, `ReportExportTest.php` e regressões
+DBA/kit/FINANCES. Esta correção é P1 somente leitura comercial: **não**
+ativa escrita automática de preços, estoque, custos ou pedidos.
+
+A certificação global depende de nova auditoria completa pelo worker
+existente após merge/deploy e UI admin autenticada com filtro ativos,
+PDF/XLSX, reload/persistência. Snapshots #14/#15 são históricos imutáveis.
