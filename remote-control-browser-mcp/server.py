@@ -1802,8 +1802,9 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
         raise ValueError("account_auth_scope_invalid")
     if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
         raise ValueError("account_auth_tab_invalid")
-    if not base._durable_handoff_enabled():
-        raise ValueError("account_auth_lease_mode_required")
+    # A dedicated maintenance lease, validated below, is the only
+    # authorization switch for this scoped official account-login action.
+    # Disabling background conversation handoff must not break account login.
     lease_id = str(args.get("runtime_lease_id") or "")
     fencing_token = args.get("runtime_fencing_token")
     if not lease_id or fencing_token is None:
