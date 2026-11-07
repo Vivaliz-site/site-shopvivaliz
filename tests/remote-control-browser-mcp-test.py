@@ -8,7 +8,9 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
+import subprocess
 import unittest
 import zlib
 from unittest import mock
@@ -1398,6 +1400,51 @@ class BrowserMcpTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "home_unconfirmed"):
                 m.browser_profile_home_open(args)
 
+
+
+class IdempotentOfficialLoginTabTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for browser script checks")
+    def test_existing_official_login_stage_is_reused_without_new_target(self):
+        # The exact browser tab is scoped to Dev's CDP port, even when global
+        # continuity handoff is intentionally disabled by the owner.
+        script = m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT
+        node_import = (
+            'const { Cdp } = await import("file:///home/ubuntu/.local/share/'
+            'shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");'
+        )
+        self.assertIn(node_import, script)
+        script = script.replace(node_import, "const Cdp = class {};")
+        for stage_url, expected in (
+            ("https://auth.openai.com/log-in/password", "/log-in/password"),
+            ("https://auth.openai.com/mfa-challenge/" + "b" * 32, "/mfa-challenge"),
+        ):
+            with self.subTest(stage=expected):
+                harness = (
+                    "globalThis.fetch = async (url) => {"
+                    "if (!String(url).endsWith('/json')) throw Error('unexpected_second_request');"
+                    "return {json:async()=>[{type:'page',id:'A'.repeat(32),"
+                    "url:" + json.dumps(stage_url) + "}]};};\n"
+                )
+                result = subprocess.run(
+                    ["node", "--input-type=module", "-e", harness + script, "dev"],
+                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    timeout=8, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                parsed = json.loads(result.stdout.strip())
+                self.assertTrue(parsed["ok"])
+                self.assertTrue(parsed["reused"])
+                self.assertEqual(parsed["session"], "dev")
+                self.assertEqual(parsed["tab_id"], "A" * 32)
+                self.assertEqual(parsed["stage"], expected)
+                self.assertNotIn("url", parsed)
+                self.assertNotIn("cookie", result.stdout.lower())
+
+    def test_open_reuse_keeps_account_owner_and_lease_guards(self):
+        source = Path(m.__file__).read_text(encoding="utf-8")
+        self.assertIn('base.runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")', source)
+        self.assertIn('"shopvivaliz-account-auth:" + session', source)
+        self.assertNotIn("auth_stage_already_open", m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
 
 
 class ScopedCorporateLoginPeerUnderOwnerOptoutTests(unittest.TestCase):

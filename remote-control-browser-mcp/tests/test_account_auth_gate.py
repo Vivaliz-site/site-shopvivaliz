@@ -416,7 +416,12 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertEqual(invocation[3], m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
         self.assertIn("https://chatgpt.com/auth/login", m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
         self.assertIn('Target.createTarget', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
-        self.assertIn('auth_stage_already_open', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        # Existing verified login stages are reused instead of falsely failing.
+        self.assertIn('const existing = preflight.find', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertIn('if (existing)', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertIn('reused:true', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertIn('safeStage', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertNotIn('auth_stage_already_open', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
         self.assertNotIn('Target.closeTarget', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
         self.assertNotIn('Page.navigate', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
         self.assertNotIn('password_value', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)

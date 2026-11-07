@@ -1359,8 +1359,8 @@ try {
 """
 
 ACCOUNT_AUTH_OPEN_NODE_SCRIPT = r"""
-// Open a NEW fixed official sign-in tab in the already dedicated browser
-// profile. No existing tab, conversation, cookies or local storage is edited.
+// Reuse the existing official sign-in tab in this dedicated profile, or
+// open one fixed tab. Never edit an existing tab, conversation or cookies.
 const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
 const [session] = process.argv.slice(1);
 const ports = { dev: 9559, atendimento: 9556 };
@@ -1375,10 +1375,17 @@ const stage = u => u.protocol === "https:" && (
     (u.hostname === "chatgpt.com" &&
         (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
-if (preflight.some(t => {
-    if (t?.type !== "page") return false;
-    try { return stage(new URL(t.url)); } catch { return false; }
-})) throw new Error("auth_stage_already_open");
+const existing = preflight.find(t => {
+    if (t?.type !== "page" || !/^[a-f0-9]{32}$/i.test(String(t.id || ""))) return false;
+    try { return stage(new URL(String(t.url || ""))); } catch { return false; }
+});
+if (existing) {
+    // A second opener should be idempotent, not a false permission error.
+    // Return only the validated target ID and approved stage, never its URL.
+    const url = new URL(String(existing.url));
+    const safeStage = url.pathname.startsWith("/mfa-challenge/") ? "/mfa-challenge" : url.pathname;
+    console.log(JSON.stringify({ok:true, session, tab_id:String(existing.id), stage:safeStage, reused:true}));
+} else {
 const version = await (await fetch(origin + "/json/version", {signal:AbortSignal.timeout(3000)})).json();
 const endpoint = new URL(String(version.webSocketDebuggerUrl || ""));
 if (endpoint.protocol !== "ws:" ||
@@ -1402,7 +1409,7 @@ try {
     });
     const tabId = String(result?.targetId || "");
     if (!/^[A-F0-9]{32}$/i.test(tabId)) throw new Error("auth_open_no_tab");
-    console.log(JSON.stringify({ok:true, session, tab_id:tabId, stage:"/auth/login"}));
+    console.log(JSON.stringify({ok:true, session, tab_id:tabId, stage:"/auth/login", reused:false}));
 } catch (error) {
     const reason = String(error?.message || "auth_open_failed");
     console.error(/^auth_[a-z_]+$/.test(reason) ? reason : "auth_open_failed");
@@ -1410,6 +1417,7 @@ try {
 } finally {
     try { c?.close(); } catch {}
     try { ws?.close(); } catch {}
+}
 }
 """
 
