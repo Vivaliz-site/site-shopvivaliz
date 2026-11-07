@@ -84,8 +84,8 @@ def zero_delivery_classification(status: str, impressions: int, keyword_states: 
         "status": "ZERO_IMPRESSIONS_REVIEW_ONLY",
         "enabled_keywords": len(states),
         "keyword_eligible": states.count("ELIGIBLE"),
-        "keyword_rarely_served": states.count("NOT_ELIGIBLE"),
-        "keyword_low_quality_or_unknown": states.count("UNKNOWN"),
+        "keyword_not_eligible": states.count("NOT_ELIGIBLE"),
+        "keyword_unknown": states.count("UNKNOWN"),
         "cause_certified": False,
         "commercial_mutation_authorized": False,
     }
@@ -96,24 +96,32 @@ def inspect_zero_delivery(service, customer_id: str, campaign_id: int, status: s
     if status != "ENABLED" or impressions > 0:
         return None
     keyword_query = (
-        "SELECT ad_group_criterion.primary_status "
+        "SELECT ad_group_criterion.primary_status,ad_group_criterion.primary_status_reasons "
         "FROM keyword_view "
         f"WHERE campaign.id = {int(campaign_id)} "
         "AND ad_group_criterion.status = ENABLED LIMIT 100"
     )
     states = []
+    reason_counts = {}
     for row in service.search(customer_id=customer_id, query=keyword_query):
         states.append(row.ad_group_criterion.primary_status.name)
+        for reason in row.ad_group_criterion.primary_status_reasons:
+            label = reason.name
+            reason_counts[label] = reason_counts.get(label, 0) + 1
     output = zero_delivery_classification(status, impressions, states)
+    output["keyword_reason_rarely_served"] = reason_counts.get("AD_GROUP_CRITERION_RARELY_SERVED", 0)
+    output["keyword_reason_low_quality"] = reason_counts.get("AD_GROUP_CRITERION_LOW_QUALITY", 0)
     campaign_query = (
-        "SELECT campaign.serving_status,campaign.primary_status,"
+        "SELECT campaign.serving_status,campaign.primary_status,campaign.bidding_strategy_type,"
         "campaign.target_spend.cpc_bid_ceiling_micros "
         f"FROM campaign WHERE campaign.id = {int(campaign_id)}"
     )
     for row in service.search(customer_id=customer_id, query=campaign_query):
         output["serving_status"] = row.campaign.serving_status.name
         output["primary_status"] = row.campaign.primary_status.name
-        output["cpc_ceiling_brl"] = round(row.campaign.target_spend.cpc_bid_ceiling_micros / 1_000_000, 2)
+        output["bidding_strategy"] = row.campaign.bidding_strategy_type.name
+        if row.campaign.bidding_strategy_type.name == "TARGET_SPEND":
+            output["cpc_ceiling_brl"] = round(row.campaign.target_spend.cpc_bid_ceiling_micros / 1_000_000, 2)
         break
     return output
 
