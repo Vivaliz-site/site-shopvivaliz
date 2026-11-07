@@ -1,36 +1,41 @@
-# Proposta P2: corrigir preco de venda Amazon e ERP 991 — lote inicial de 8 Seller SKUs
+# Proposta P2 reduzida após preflight real: quatro Seller SKUs / dois produtos ERP
 
-Fonte: [issue #3788](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3788), auditoria completa #14 gerada em 07/11/2026 03:52:16 UTC. **Ainda nao autoriza qualquer escrita antes da revisao formal.**
+Fonte: [issue #3788](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3788), auditoria #14 em 07/11/2026 03:52:16 UTC. **Ainda não autoriza qualquer escrita sem revisão formal, grant ativo, preflight e readback.**
 
-## Escopo exato do lote A
+## Escopo exato com preço efetivo Amazon comprovado
 
-| Produto ERP | Seller SKUs | Preco atual observado | Preco-alvo preliminar | Margem minima |
-|---|---|---:|---:|---|
-| 362847505 | `ABRA-PERF-FBA`, `FITAPERFAFBA`, `8F-QXBC-MINT`, `RH-6WBD-NY54` | R$ 48,59 | R$ 49,22 | >=10% |
-| 353697660 | `F12CASTANHOFBA` | R$ 25,02 | R$ 25,28 | >=10% |
-| 341484398 | `ASSLIMFBA`, `TAJ/AS*BR1`, `1C7Q-LKVS-KOPL` | R$ 75,35 | R$ 76,39 | >=10% |
+| Produto ERP | Seller SKUs | Preço efetivo atual | Preço-alvo | Margem estimada no alvo |
+|---|---|---:|---:|---:|
+| 353697660 | `F12CASTANHOFBA` | R$ 25,02 | R$ 25,28 | 10,01% |
+| 341484398 | `ASSLIMFBA`, `TAJ/AS*BR1`, `1C7Q-LKVS-KOPL` | R$ 75,35 | R$ 76,39 | 10,01% |
 
-Proposta inicial = **8 Seller SKUs / 3 IDs ERP**; o snapshot nao apontou outros SKUs Amazon BUYABLE nesses tres IDs. Nao representa resultado de leitura Amazon/Olist em tempo real. O target foi obtido por `ceil((custo_conjunto + logistica + WMS)/(1 - imposto14% - margem10% - comissao_atual/preco_atual))` em centavos, com o maior target entre anuncios do mesmo produto. E **apenas estimativa preliminar**; taxa da Amazon e tarifa podem mudar ao novo preco. Na aplicacao, validar a cotacao oficial `ProductFees` ao target e repetir calculo; se nao alcançar >=10% com todas as taxas/tarifas oficiais, **nao aplicar**, preparar novo target e nova revisao no HEAD exato.
+**Provas P0 observadas no runtime de produção pela rota MCP autorizada:**
 
-## Condicoes de seguranca, integridade e preflight antes de qualquer escrita
+1. Amazon Product Fees oficial, **POST de cotação read-only**, com validação SKU/BRL/marketplace/preço: tarefa `0a11b358-33ba-4648-b783-91d8d1b871fd`, `succeeded/exit_code=0`. As quatro cotações retornaram comissão de R$ 2,78 para o SKU a R$ 25,28 e R$ 8,40 para os três SKUs a R$ 76,39.
+2. Com custo e logística do snapshot #14 e 14% de imposto, margem projetada **1001 bps** nos quatro, exigindo **nova confirmação de custos, programa, peso, faixas logísticas e fees** imediatamente antes da mudança. Se a tarifa mudar um centavo que elimine o piso, parar e preparar novo grant.
+3. Olist/Tiny GET oficial `/listas-precos/991`: `f2993e5f-f5ab-4de2-b2fa-e507394bd1a8`, `succeeded/exit_code=0`; exceções ativas e sem promoção: 353697660 = R$ 25,02; 341484398 = R$ 75,35, coincidindo com o snapshot.
+4. Amazon Pricing oficial, **GET de 8 Seller SKUs**: tarefa `da36b7b1-0dca-4254-b20d-0e20cca1c7d7`, `succeeded/exit_code=0`. Os quatro SKUs acima retornaram `EFFECTIVE_OFFER` e preço efetivo esperado.
 
-1. Exigir grant comercial `security/owner-approvals/<PR>.json` aprovado no HEAD exato pela conta `shopvivaliz-human`, valido por prazo definido, CI e merge queue oficiais. O chat sozinho nao substitui a revisao GitHub.
-2. Confirmar pelo ERP Olist/Tiny v3 o vinculo exato, GTIN, kit/custo de unidade comercial e precos efetivos da tabela **991**, sem usar base de cadastro como fallback. Conferir promocoes, repricer, maximo, minimo e precos efetivos na Amazon SP-API Pricing. Se qualquer fonte contradiz a auditoria #14, interromper esse SKU.
-3. Confirmar pela API/documentacao oficial a **operacao de escrita de excecao na lista ERP 991**, nao usar endpoint de atualizacao de preco base. A lista 991 tambem alimenta site, catalogo, carrinho e checkout: validar todos e interromper se houver impacto fora dos 3 IDs autorizados.
-4. Confirmar Amazon PTD, `ProductFees` ao novo preco (SKU, BRL, marketplace), frete FBA Onsite/DBA por peso e faixa, imposto 14%, margem atual >=10%. Parar se 429/403/401 ou outra recusa, sem inventar comissao nem contornar recusa por outro canal.
-5. Aplicar usando lease e fencing, journal/receipts persistentes, idempotencia e compensacao/rollback; alterar somente preco de venda nos 8 Seller SKUs e excecoes dos 3 IDs na lista 991; manter estoque, custo, programas, outras ofertas e outros produtos inalterados. Nunca repetir PATCH Amazon so porque aceitou sem readback.
-6. Conferir GET Olist, Amazon Listings, **Amazon Pricing efetivo** e site apos propagacao; executar nova auditoria de margens e E2E grafico autenticado. Nao declarar concluido se a oferta continuar exibindo o preco antigo.
+### Grupo excluído após reproduzir discrepância no Amazon Pricing
 
-## Demais 55 Seller SKUs
+ERP **362847505** e seus **quatro SKUs** foram removidos do grant. O GET Pricing oficial constatou `PRICING_OFFERS_EMPTY` para `ABRA-PERF-FBA`, `8F-QXBC-MINT` e `RH-6WBD-NY54`; apenas `FITAPERFAFBA` retornou `EFFECTIVE_OFFER` a R$ 48,59. Alterar a exceção ERP comum sem confirmar as ofertas vivas poderia afetar três anúncios sem preço de venda efetivo verificável. Reconciliar Listings, programas Amazon e eventual sincronização antes de qualquer nova proposta desse produto. **Nenhuma escrita desses quatro SKUs / ERP ID está autorizada pela PR.**
 
-Fora do escopo desse grant. A auditoria identificou 63 BUYABLE abaixo de 10%; 55 nao cabem nesse primeiro lote por impacto em mais produtos/anuncios, fonte de medidas ou programa ainda nao verificados. Dos 29 IDs ERP afetados, 19 tambem compartilham **26 anuncios BUYABLE adicionais fora do grupo abaixo de 10%**; a atualizacao de excecao por produto pode alterar precos de terceiros. Exige reconciliacao SKU por SKU e outra autorizacao exata; nao assumir que a planilha ERP e exclusiva do Seller SKU.
+## Gates obrigatórios para aplicação do lote reduzido
 
-## Referencias
+- PR `#3790` **Ready for review** e `security/owner-approvals/3790.json` com allowlist restrita a quatro SKU e dois IDs ERP. Apenas review `APPROVED` autenticado de `shopvivaliz-human` para **HEAD exato** e CI/merge queue permitem execução.
+- Olist/Tiny v3 documenta `PUT /listas-precos/{idListaDePreco}`, mas a existência do endpoint **não prova** que a operação atualiza somente uma exceção sem substituir demais. Confirmar schema de payload e preservação de exceções/cadastro antes do PUT; não usar `PUT /produtos/{idProduto}/preco` (preço base).
+- Confirmar compatibilidade PTD para `purchasable_offer.our_price` por Seller SKU, preço efetivo Amazon Pricing, campos min/max, política de repricing e impacto do preço da lista 991 no site.
+- Para os dois IDs ERP, aferir os anúncios BUYABLE atuais relacionados e quaisquer anúncios descobertos após #14. Mudança por ID deve preservar demais produtos, regras e promoções da lista 991.
+- Novo quote oficial Amazon Product Fees **no preço autorizado**, logística por peso e faixa, custos e programa validados, margem >=1000 bps, impostos 14%.
+- Diário durável e reversível, idempotência, CAS, lease/fencing, proteção de concorrência, rollback/compensação. Não tratar `HTTP 200 ACCEPTED` como preço efetivo atualizado.
+- Após gravações autorizadas, comparar GET ERP 991, Amazon Listings e **Amazon Pricing efetivo**, site/catálogo/carrinho/checkout sem compra real, e recalcular auditoria. Sem todas as confirmações, resultado continua PENDENTE.
 
-- `docs/knowledge/pricing-integrity.md`: tabela Amazon 991 e integridade do preco do site
-- `docs/ops/amazon-margin-audit.md`: calculo da margem projetada, Product Fees, FBA Onsite/DBA
-- `security/owner-approvals/3780.json`: grant **distinto**, somente para minimum_seller_allowed_price, que NAO autoriza alterar preco de venda
-- [Amazon SP-API Purchasable Offer](https://developer-docs.amazon.com/sp-api/docs/manage-purchasable-offer)
-- [Olist listas de precos — regra geral e excecao por produto](https://ajuda.olist.com/precificacao/listas-de-precos)
+## Escopo posterior
 
-**Estado da proposta:** PREPARADA / COMERCIAL_WRITE_DISABLED ate formal review, preflight oficial e verificacao de capacidade de escrita ERP 991.
+Auditoria #14: 63 SKUs BUYABLE com margem projetada abaixo de 10%; 4 candidatos desta PR, **59 SKUs fora do escopo** depois da exclusão do ERP 362847505. Dentro do conjunto amplo, 19 dos 29 IDs ERP afetados também estão vinculados a 26 anúncios BUYABLE adicionais fora da lista de risco; modificar preço por produto sem prova poderia alterar outros anúncios. Das 63 margens, 17 apresentam divergência dimensional e cinco têm programa DBA não confirmado. A margem histórica não substitui a projetada.
+
+## Limites
+
+Nenhuma atualização de preço/estoque/custo será executada antes dos gates. Não contornar recusa explícita da ferramenta OpenAI nem 401/403, MFA, quota Amazon 429, regras de branch ou concessões. O grant de mínimo da PR #3780 é diferente de uma alteração de preço de venda.
+
+**Situação: preflight financeiro/API P0 concluído, CI verde antes de alterar HEAD, solicitação de aprovação formal aberta, escrita comercial não iniciada.**
