@@ -8,7 +8,8 @@ Type=oneshot
 User=ubuntu
 Group=ubuntu
 Environment=HOME=/home/ubuntu
-ExecStart=/usr/bin/python3 /home/ubuntu/.local/bin/shopvivaliz-agent-session-ttl.py --apply
+# Owner revoked automatic CLI termination on 2026-11-06; retain only dry-run diagnostics.
+ExecStart=/usr/bin/python3 /home/ubuntu/.local/bin/shopvivaliz-agent-session-ttl.py
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=full
