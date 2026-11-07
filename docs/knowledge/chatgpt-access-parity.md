@@ -130,10 +130,12 @@ The browser MCP instead provides two narrowly scoped operations:
   The provider actions click only exact official button labels on the observed
   `auth.openai.com/log-in` stage, without selecting an OAuth account or granting
   consent. The account email must still be verified after the provider flow.
-  Requires a **live maintenance runtime lock** authorizing the action with
-  exact owner `shopvivaliz-account-auth:<session>`, a matching fencing token,
-  and `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`. Normal browser mutation
-  gates and in-progress conversations are unchanged.
+  Requires a **live, account-specific maintenance runtime lock** authorizing
+  the exact action with owner `shopvivaliz-account-auth:<session>` and a
+  matching fencing token. This dedicated login authorization is independent
+  of the global `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF` switch, which
+  controls ordinary background conversation handoff and remains owner-disabled.
+  Normal browser mutation gates and in-progress conversations are unchanged.
 
 As an idempotent preflight, the action **brings only the already verified
 official login tab to the foreground** using CDP `Page.bringToFront` before
@@ -165,15 +167,17 @@ providers from EACH principal before checking account parity.
 
 The pre-login Browser MCP additionally supports
 `browser_auth_open(session, runtime_lease_id, runtime_fencing_token)`.
-It opens **only a new tab** with the fixed URL
-`https://chatgpt.com/auth/login` in the already-isolated
-account CDP profile, with no caller URL, tab ID or input values. Both the
+It **reuses an existing verified official login-stage tab** in the exact
+account CDP profile when present, or opens a single new tab with the fixed URL
+`https://chatgpt.com/auth/login` when none exists. It never accepts a
+caller-provided URL, tab ID or input values. Both the
 primary Remote Control proxy and the browser MCP independently verify a
 live maintenance lease owned by `shopvivaliz-account-auth:<session>`.
-The operation refuses to create duplicates if an official login-stage tab
-already exists and never navigates an existing conversation. After opening,
-use `browser_auth_tabs` and the existing `browser_auth_action` for login
-and verify the exact email with `/api/auth/session`.
+The operation returns `reused=true` for the existing tab rather than raising
+a false authorization error, and never navigates an existing conversation.
+The exact account-specific maintenance lock is still mandatory. Use
+`browser_auth_tabs` and the existing `browser_auth_action` for login,
+then verify the exact email with `/api/auth/session`.
 
 Both dedicated corporate Chrome services use the protected persistent
 `fredrdp` user D-Bus (`/run/user/1002/bus`) rather than a private
