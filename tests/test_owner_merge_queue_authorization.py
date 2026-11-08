@@ -87,7 +87,7 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         pr["merged_by"]={"login":"fredmourao-ai"}
         self.assertFalse(MODULE.decide(pr,grant,**args)[0])
     def test_auto_queue_requires_human_review_exact_head_and_official_green_checks(self):
-        pr={"state":"open","draft":False,"user":{"login":"fredmourao-ai"},
+        pr={"state":"open","draft":False,"user":{"login":"shopvivaliz-ci-bot"},
             "base":{"ref":"main"},"head":{"sha":HEAD,"repo":{"full_name":REPO}},
             "labels":[{"name":"no-auto-merge"}]}
         files=[{"filename":"security/owner-approvals/123.json"}]
