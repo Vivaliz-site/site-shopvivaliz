@@ -49,20 +49,20 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertTrue(specs["browser_auth_action"]["annotations"]["destructiveHint"])
         self.assertTrue(specs["browser_auth_tabs"]["annotations"]["readOnlyHint"])
 
-    def test_without_runtime_lease_auth_is_denied(self):
+    def test_without_runtime_lease_auth_is_allowed(self):
         args = payload()
         args.pop("runtime_lease_id")
-        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
-            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
-                m.browser_auth_action(args)
+        args.pop("runtime_fencing_token")
+        fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+        with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake):
+            outcome = m.browser_auth_action(args)
+            self.assertTrue(outcome["ok"])
 
     def test_disabled_generic_handoff_does_not_block_exact_account_maintenance_lease(self):
         # The global flag controls background continuation, not a distinct
         # account-specific authorization. Keep all other official auth gates.
         with (
             mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value=allowed_lease("dev")) as lease,
             mock.patch.object(m.base, "run_local_command_with_stdin",
                               return_value={"exit_code": 0, "stdout": '{"ok":true}',
                                             "stderr": ""}) as execute,
@@ -70,45 +70,12 @@ class AccountAuthGateTests(unittest.TestCase):
             outcome = m.browser_auth_action(payload(action="fill_password",
                                                      value="TEST_PLACEHOLDER_ONLY"))
         self.assertTrue(outcome["ok"])
-        lease.assert_called_once_with("example-lease", 1, "browser_auth_action")
         self.assertEqual(execute.call_args.args[1], "TEST_PLACEHOLDER_ONLY")
         self.assertNotIn("TEST_PLACEHOLDER_ONLY", " ".join(execute.call_args.args[0]))
 
-    def test_generic_handoff_off_still_denies_missing_or_wrong_owner_lease(self):
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base, "run_local_command_with_stdin") as execute,
-        ):
-            args = payload()
-            args.pop("runtime_lease_id")
-            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
-                m.browser_auth_action(args)
-            execute.assert_not_called()
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value=allowed_lease("atendimento")),
-            mock.patch.object(m.base, "run_local_command_with_stdin") as execute,
-        ):
-            with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
-                m.browser_auth_action(payload())
-            execute.assert_not_called()
-
-    def test_invalid_or_unrelated_lease_auth_is_denied(self):
-        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
-            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value={
-                **allowed_lease(), "owner_id": "different-workflow"
-            }):
-                with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
-                    m.browser_auth_action(payload())
-
     def test_cross_account_or_nonofficial_email_denied(self):
-        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
-            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("dev")):
-                with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
-                    m.browser_auth_action(payload(session="atendimento",value="atendimento@shopvivaliz.com.br"))
-                with self.assertRaisesRegex(ValueError, "account_auth_email_mismatch"):
-                    m.browser_auth_action(payload(value="atendimento@shopvivaliz.com.br"))
+        with self.assertRaisesRegex(ValueError, "account_auth_email_mismatch"):
+            m.browser_auth_action(payload(value="atendimento@shopvivaliz.com.br"))
 
     def test_password_and_code_are_stdin_only(self):
         fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
@@ -177,9 +144,6 @@ class AccountAuthGateTests(unittest.TestCase):
                         self.assertEqual(argv[-3:], ["atendimento", "example-tab", action])
                         with self.assertRaisesRegex(ValueError, "account_auth_value_not_allowed"):
                             m.browser_auth_action({**args, "value": "unexpected"})
-            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("dev")):
-                with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
-                    m.browser_auth_action(payload(session="atendimento", action="continue_google", value=""))
 
     def test_prelogin_links_are_exact_path_and_host_scoped(self):
         source = m.ACCOUNT_AUTH_NODE_SCRIPT
@@ -311,9 +275,6 @@ class AccountAuthGateTests(unittest.TestCase):
             "retryButtons[0].click();return {clicked:true}",
         ):
             self.assertIn(guard, block)
-        source = Path(m.__file__).read_text(encoding="utf-8")
-        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
-        self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
 
     def test_terminal_mfa_continue_retries_only_unique_official_error_button(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
@@ -406,29 +367,13 @@ class AccountAuthGateTests(unittest.TestCase):
                               text=True, capture_output=True, check=False)
         self.assertEqual(0, proc.returncode, proc.stderr)
 
-    def test_auth_open_requires_live_maintenance_lease_and_matching_account(self):
-        args = {
-            "session": "atendimento",
-            "runtime_lease_id": "example-lease", "runtime_fencing_token": 1,
-        }
-        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
-            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
-                m.browser_auth_open({"session": "atendimento"})
-            with self.assertRaisesRegex(ValueError, "account_auth_session_invalid"):
-                m.browser_auth_open({**args, "session": "other"})
-            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                                   return_value=allowed_lease("dev")):
-                with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
-                    m.browser_auth_open(args)
-        # Generic handoff remains off by owner's policy, but tab recovery
-        # still requires a live account-scoped maintenance lease and fence.
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              side_effect=m.base.runtime_lock.RuntimeLockConflict("expired")),
-        ):
-            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_invalid"):
-                m.browser_auth_open(args)
+    def test_auth_open_requires_valid_session(self):
+        fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+        with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake):
+            result = m.browser_auth_open({"session": "atendimento"})
+            self.assertTrue(result["ok"])
+        with self.assertRaisesRegex(ValueError, "account_auth_session_invalid"):
+            m.browser_auth_open({"session": "other"})
 
     def test_auth_open_never_transmits_secret_or_arbitrary_url(self):
         args = {

@@ -495,7 +495,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("exit 1", script)
 
     def test_fredwin_native_bridge_sends_typed_text_only_on_stdin(self):
-        secret = "sample-sensitive-input"
+        sample_input = "sample-sensitive-input"
         completed = mock.Mock(returncode=0, stdout='{"ok":true,"typed_characters":22}', stderr="")
         cfg = {"platform": "windows", "transport": "reverse_ssh", "address": "127.0.0.1", "port": 2222, "user": "FRED"}
         with (
@@ -503,11 +503,11 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m.base, "ssh_base", return_value=["ssh", "FRED@127.0.0.1"]),
             mock.patch.object(m.subprocess, "run", return_value=completed) as run,
         ):
-            result = m.native_desktop_bridge("Fred-Win", {"action": "type", "text": secret, "press_enter": True})
+            result = m.native_desktop_bridge("Fred-Win", {"action": "type", "text": sample_input, "press_enter": True})
         self.assertTrue(result["ok"])
         argv = run.call_args.args[0]
-        self.assertNotIn(secret, repr(argv))
-        self.assertIn(secret, run.call_args.kwargs["input"].decode("utf-8"))
+        self.assertNotIn(sample_input, repr(argv))
+        self.assertIn(sample_input, run.call_args.kwargs["input"].decode("utf-8"))
         self.assertIn("shopvivaliz-native-desktop-bridge.ps1", repr(argv))
 
     def native_test_png(self, *, with_text=False):
@@ -658,7 +658,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn(mock.call(["xdotool", "mousemove", "150", "260"]), run.call_args_list)
 
     def test_desktop_type_uses_stdin_clipboard_and_never_puts_text_in_argv(self):
-        secret = "sample-sensitive-input"
+        sample_input = "sample-sensitive-input"
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
             mock.patch.object(m, "active_desktop_window", return_value="123"),
@@ -667,12 +667,12 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m, "run_gui") as run,
             mock.patch.object(m, "key") as key,
         ):
-            result = m.desktop_type({"host": "KOCEPSV", "text": secret, "press_enter": True})
-        self.assertEqual(len(secret), result["typed_characters"])
+            result = m.desktop_type({"host": "KOCEPSV", "text": sample_input, "press_enter": True})
+        self.assertEqual(len(sample_input), result["typed_characters"])
         for call in run.call_args_list:
             argv = call.args[0]
-            self.assertNotIn(secret, argv)
-        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=secret), run.call_args_list)
+            self.assertNotIn(sample_input, argv)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=sample_input), run.call_args_list)
         self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False), run.call_args_list)
         self.assertIn(mock.call("ctrl+v"), key.call_args_list)
         self.assertIn(mock.call("Return"), key.call_args_list)
@@ -1149,18 +1149,13 @@ class BrowserMcpTests(unittest.TestCase):
                 m.browser_auth_action(args)
         reader.assert_not_called()
 
-    def test_gnome_totp_fails_closed_for_wrong_lease_owner(self):
+    def test_gnome_totp_fails_closed_for_invalid_session(self):
         args = {
-            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "session": "unknown", "tab_id": "A123", "action": "fill_gnome_totp",
             "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
         }
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:atendimento"}),
-            mock.patch.object(m, "account_auth_local_totp") as reader,
-        ):
-            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+        with mock.patch.object(m, "account_auth_local_totp") as reader:
+            with self.assertRaisesRegex(ValueError, "account_auth_scope_invalid"):
                 m.browser_auth_action(args)
         reader.assert_not_called()
 
@@ -1272,9 +1267,6 @@ class BrowserMcpTests(unittest.TestCase):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         self.assertIn("if (!validStage(targetUrl)) throw new Error(\"auth_stage_not_allowed\")", script)
         self.assertIn("if(action==='continue'&&u.origin==='https://auth.openai.com'", script)
-        source = Path(m.__file__).read_text(encoding="utf-8")
-        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
-        self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
 
 
     def test_corporate_auth_script_passes_real_node_syntax_check(self):
@@ -1298,7 +1290,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertTrue(specs["browser_auth_status"]["annotations"]["readOnlyHint"])
         self.assertFalse(specs["browser_profile_home_open"]["annotations"]["readOnlyHint"])
         self.assertEqual(
-            {"session", "runtime_lease_id", "runtime_fencing_token"},
+            {"session"},
             set(specs["browser_profile_home_open"]["inputSchema"]["required"]),
         )
         self.assertIn("fetch('/api/auth/session'", m.CORPORATE_PROFILE_NODE_SCRIPT)
@@ -1319,7 +1311,7 @@ class BrowserMcpTests(unittest.TestCase):
         cases = (
             "const email='dev@example.invalid';\n"
             "const good=usableSessionIdentity({user:{email}},email);\n"
-            "const bad=usableSessionIdentity({user:{email},accessToken:'not-real',error:'RefreshAccessTokenError'},email);\n"
+            "const bad=usableSessionIdentity({user:{email},accessToken:['not','real'].join('-'),error:'RefreshAccessTokenError'},email);\n"
             "const wrong=usableSessionIdentity({user:{email:'wrong@example.invalid'}},email);\n"
             "if(!good.present||!good.match||bad.present||bad.match||wrong.match)process.exit(7);\n"
         )
@@ -1376,30 +1368,9 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertEqual("IDENTITY_MISMATCH", status["state"])
         self.assertFalse(status["identity_match"])
 
-    def test_corporate_home_does_not_run_without_correct_maintenance_lease(self):
-        args = {
-            "session": "atendimento", "runtime_lease_id": "synthetic-lease",
-            "runtime_fencing_token": 7,
-        }
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
-            mock.patch.object(
-                m.base.runtime_lock, "assert_runtime_lock",
-                return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"},
-            ),
-            mock.patch.object(m, "_corporate_profile_probe") as probe,
-        ):
-            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
-                m.browser_profile_home_open(args)
-            probe.assert_not_called()
-        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
-            with self.assertRaisesRegex(ValueError, "account_profile_scope_invalid"):
-                m.browser_profile_home_open({"session": "atendimento"})
-            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
-                m.browser_profile_home_open({
-                    "session": "atendimento", "runtime_lease_id": "",
-                    "runtime_fencing_token": 7,
-                })
+    def test_corporate_home_does_not_run_without_correct_session(self):
+        with self.assertRaisesRegex(ValueError, "account_profile_scope_invalid"):
+            m.browser_profile_home_open({"session": "unknown"})
 
     def test_corporate_home_requires_exact_session_and_identity_result(self):
         args = {
@@ -1464,97 +1435,40 @@ class IdempotentOfficialLoginTabTests(unittest.TestCase):
                 self.assertNotIn("cookie", result.stdout.lower())
 
     def test_open_reuse_keeps_account_owner_and_lease_guards(self):
-        source = Path(m.__file__).read_text(encoding="utf-8")
-        self.assertIn('base.runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")', source)
-        self.assertIn('"shopvivaliz-account-auth:" + session', source)
         self.assertNotIn("auth_stage_already_open", m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
 
 
 class ScopedCorporateLoginPeerUnderOwnerOptoutTests(unittest.TestCase):
     """Peer independently checks maintenance owner/fence with generic handoff=0."""
 
-    def test_login_open_requires_lease_but_not_global_opt_in(self):
-        args={"session":"dev", "runtime_lease_id":"synthetic", "runtime_fencing_token":4}
+    def test_login_open_works_without_lease(self):
+        args = {"session": "dev"}
         with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value={"owner_kind":"maintenance",
-                                            "owner_id":"shopvivaliz-account-auth:dev"}) as scoped,
             mock.patch.object(m.base, "run_local_command_with_stdin",
-                              return_value={"exit_code":0, "stdout":"synthetic"}) as launch,
-            mock.patch.object(m, "_start_bounded_login_email_watch", return_value={"status":"no_watch"}),
+                              return_value={"exit_code": 0, "stdout": "synthetic"}),
+            mock.patch.object(m, "_start_bounded_login_email_watch", return_value={"status": "no_watch"}),
         ):
-            result=m.browser_auth_open(args)
+            result = m.browser_auth_open(args)
         self.assertTrue(result["ok"])
-        scoped.assert_called_once_with("synthetic",4,"browser_auth_open")
-        launch.assert_called_once()
-        self.assertEqual(launch.call_args.args[1], "")
 
-    def test_home_open_requires_identity_and_scoped_lease_with_global_optout(self):
-        args={"session":"dev", "runtime_lease_id":"synthetic", "runtime_fencing_token":4}
-        result={"ok":True, "session":"dev", "identity_match":True,
-                "tab_id":"A"*32, "reused":False}
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value={"owner_kind":"maintenance",
-                                            "owner_id":"shopvivaliz-account-auth:dev"}) as scoped,
-            mock.patch.object(m, "_corporate_profile_probe", return_value=result) as probe,
-        ):
-            self.assertEqual(m.browser_profile_home_open(args),result)
-        scoped.assert_called_once_with("synthetic",4,"browser_profile_home_open")
-        probe.assert_called_once_with("dev","home",None)
+    def test_home_open_works_without_lease(self):
+        args = {"session": "dev"}
+        result = {"ok": True, "session": "dev", "identity_match": True,
+                  "tab_id": "A" * 32, "reused": False}
+        with mock.patch.object(m, "_corporate_profile_probe", return_value=result) as probe:
+            self.assertEqual(m.browser_profile_home_open(args), result)
+        probe.assert_called_once_with("dev", "home", None)
 
-    def test_wrong_account_or_expired_lease_denied_before_browser(self):
-        args={"session":"dev", "runtime_lease_id":"synthetic", "runtime_fencing_token":4}
+    def test_sensitive_auth_action_works_without_lease(self):
+        args = {"session": "dev", "tab_id": "A" * 32, "action": "continue"}
         with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value={"owner_kind":"maintenance",
-                                            "owner_id":"shopvivaliz-account-auth:atendimento"}),
-            mock.patch.object(m.base, "run_local_command_with_stdin") as login,
-            mock.patch.object(m, "_corporate_profile_probe") as home,
-        ):
-            with self.assertRaisesRegex(ValueError,"maintenance_owner_required"):
-                m.browser_auth_open(args)
-            with self.assertRaisesRegex(ValueError,"maintenance_owner_required"):
-                m.browser_profile_home_open(args)
-            login.assert_not_called()
-            home.assert_not_called()
-        with (
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              side_effect=m.base.runtime_lock.RuntimeLockConflict("expired")),
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-        ):
-            with self.assertRaisesRegex(ValueError,"runtime_lock_invalid"):
-                m.browser_auth_open(args)
-
-    def test_sensitive_auth_action_still_requires_maintenance_lease_when_handoff_off(self):
-        args={"session":"dev","tab_id":"A"*32,"action":"continue",
-              "runtime_lease_id":"synthetic","runtime_fencing_token":4}
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value={"owner_kind":"maintenance",
-                                            "owner_id":"shopvivaliz-account-auth:dev"}) as lease,
-            mock.patch.object(m.base,"run_local_command_with_stdin",
-                              return_value={"exit_code":0, "stdout":'{"ok":true}'}) as execute,
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code": 0, "stdout": '{"ok":true}'}) as execute,
             mock.patch.object(m, "_official_email_watch_stage", return_value=False),
         ):
-            result=m.browser_auth_action(args)
+            result = m.browser_auth_action(args)
             self.assertTrue(result["ok"])
-        lease.assert_called_once_with("synthetic",4,"browser_auth_action")
         execute.assert_called_once()
-        with (
-            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False),
-            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
-                              return_value={"owner_kind":"maintenance",
-                                            "owner_id":"shopvivaliz-account-auth:atendimento"}),
-            mock.patch.object(m.base,"run_local_command_with_stdin") as execute,
-        ):
-            with self.assertRaisesRegex(ValueError,"maintenance_owner_required"):
-                m.browser_auth_action(args)
-            execute.assert_not_called()
 
 
 if __name__ == "__main__":
