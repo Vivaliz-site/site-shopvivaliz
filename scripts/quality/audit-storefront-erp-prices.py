@@ -40,6 +40,17 @@ def effective_price(regular: int | None, promotional: int | None) -> int | None:
     return promotional if promotional is not None and 0 < promotional < regular else regular
 
 
+def parent_stock_is_zero(item: dict[str, Any]) -> bool:
+    """Zero quantity must be exact: price-cents rounding is unsafe for stock."""
+    value = item.get("estoque_disponivel")
+    if value is None or isinstance(value, bool):
+        return False
+    try:
+        return Decimal(str(value)) == Decimal("0")
+    except (TypeError, ValueError, InvalidOperation):
+        return False
+
+
 def extract_prices(item: dict[str, Any]) -> tuple[int | None, int | None]:
     values = item.get("precos") if isinstance(item.get("precos"), dict) else {}
     regular = values.get("preco", values.get("preco_venda", item.get("preco")))
@@ -177,9 +188,7 @@ def evaluate(
                       or item.get("_price_list_id") != 991):
                     issues.append({"code": "unpriced_parent_price_provenance_invalid",
                                    "id": pid, "sku": sku})
-                elif (item.get("estoque_disponivel") is None
-                      or not str(item.get("estoque_disponivel")).strip()
-                      or cents(item.get("estoque_disponivel")) != 0):
+                elif not parent_stock_is_zero(item):
                     issues.append({"code": "unpriced_parent_has_stock", "id": pid, "sku": sku})
                 elif not (linked_children.get(pid, set()) & (set(active) - {pid})):
                     issues.append({"code": "unpriced_parent_without_active_variations",

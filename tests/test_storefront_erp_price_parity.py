@@ -259,6 +259,20 @@ class PriceParityTests(unittest.TestCase):
         self.assertEqual(data["counts"]["unpriced_structural_parents"], 1)
         self.assertIn("erp_price_invalid", {x["code"] for x in data["issues"]})
 
+    def test_parent_stock_fraction_or_unknown_must_not_round_to_zero(self):
+        for stock in (0.001, "0.004", None, True, "invalid"):
+            with self.subTest(stock=stock):
+                parent = item(100, "MODEL-PAI", 0)
+                parent.update({"tipo": "V", "estoque_disponivel": stock,
+                               "variacoes": [{"id": 101, "sku": "CHILD"}]})
+                child = item(101, "CHILD", 50)
+                result = evaluate([active(100, "MODEL-PAI"), active(101, "CHILD")],
+                                  {"100": parent, "101": child}, [parent, child],
+                                  [published(101, "CHILD", 50)])
+                self.assertEqual(result["status"], "FAIL")
+                self.assertIn("unpriced_parent_has_stock",
+                              {x["code"] for x in result["issues"]})
+
     def test_unpriced_parent_without_active_children_is_blocked(self):
         parent = item(100, "MODEL-PAI", 0)
         parent.update({"tipo": "V", "tipoVariacao": "P", "estoque_disponivel": 0,
