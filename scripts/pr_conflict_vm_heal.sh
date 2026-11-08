@@ -108,22 +108,32 @@ if [[ "$merge_clean" -eq 0 ]]; then
   (( ${#unresolved[@]} > 0 )) || fail 'merge failed without conflict entries'
   printf 'pr_conflict_count=%s\n' "${#unresolved[@]}"
   command -v python3 >/dev/null || fail 'python3 unavailable on Oracle'
-  # Never move a credential between hosts; use only already provisioned AI.
-  if [[ -r "$shared_env" ]]; then
-    [[ -r "$trusted_healer" ]] || fail 'trusted healer unavailable'
-    GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer" --credential-preflight
-    GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer"
-    echo 'conflict_ai_route=private_gemini'
-  else
+  # Never move a credential between hosts. Gemini is used only when the exact
+  # provisioned key has a recent owner-verified Free-tier attestation. Quota,
+  # billing, attestation or provider failures fall back to local Ollama.
+  run_local_ollama_healer() {
     [[ -r "$trusted_local_healer" ]] || fail 'trusted_local_ollama_healer_unavailable'
     command -v ollama >/dev/null || fail 'local_ollama_cli_unavailable'
     ollama show qwen2.5-coder:1.5b >/dev/null 2>&1 || fail 'free_local_ollama_model_unavailable'
     TRUSTED_AI_CONFLICT_RULES="$trusted_rules" OLLAMA_MODEL=qwen2.5-coder:1.5b python3 "$trusted_local_healer" || fail 'local_ollama_conflict_unresolved'
     echo 'conflict_ai_route=free_loopback_ollama'
+  }
+
+  if [[ -r "$shared_env" && -r "$trusted_healer" ]] \
+    && GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer" --credential-preflight; then
+    if GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer"; then
+      echo 'conflict_ai_route=verified_free_gemini'
+    else
+      echo 'gemini_free_quota_or_provider_unavailable=true'
+      run_local_ollama_healer
+    fi
+  else
+    echo 'gemini_free_tier_not_verified_fallback=ollama'
+    run_local_ollama_healer
   fi
-  [[ -z "$(git diff --name-only --diff-filter=U)" ]] || fail 'unmerged paths remain after Gemini'
+  [[ -z "$(git diff --name-only --diff-filter=U)" ]] || fail 'unmerged paths remain after free AI repair'
   git diff --cached --check
-  git commit -m "chore: auto-resolve PR #${pr_number} conflicts with main via Gemini" >/dev/null
+  git commit -m "chore: auto-resolve PR #${pr_number} conflicts with main via free AI" >/dev/null
 fi
 
 after_sha="$(git rev-parse HEAD)"
