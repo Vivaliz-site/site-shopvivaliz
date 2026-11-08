@@ -155,17 +155,26 @@ def run_admin_shell(arguments: dict, *, home: str | None = None, audit=_audit, r
     path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" if as_root else "/usr/local/bin:/usr/bin:/bin"
     # Output goes to bounded temporary files, never to memory: RLIMIT_FSIZE makes
     # the kernel stop a flooding child while the timeout is still running.
-    with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
-        try:
-            proc = runner(_argv(command, timeout, as_root), cwd=workdir,
-                          env={"PATH": path, "HOME": workdir, "LANG": "C.UTF-8"},
-                          stdout=out_file, stderr=err_file, timeout=timeout + (10 if as_root else 0),
-                          check=False, preexec_fn=_limit_output_size)
-            exit_code, timed_out = proc.returncode, False
-        except subprocess.TimeoutExpired:
-            exit_code, timed_out = None, True
-        out, out_over = _read_bounded(out_file)
-        err, err_over = _read_bounded(err_file)
+    try:
+        with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
+            try:
+                proc = runner(_argv(command, timeout, as_root), cwd=workdir,
+                              env={"PATH": path, "HOME": workdir, "LANG": "C.UTF-8"},
+                              stdout=out_file, stderr=err_file, timeout=timeout + (10 if as_root else 0),
+                              check=False, preexec_fn=_limit_output_size)
+                exit_code, timed_out = proc.returncode, False
+            except subprocess.TimeoutExpired:
+                exit_code, timed_out = None, True
+            out, out_over = _read_bounded(out_file)
+            err, err_over = _read_bounded(err_file)
+    except Exception:
+        # Preserve the audit pair when launch/output handling raises unexpectedly.
+        # Only the command hash and generic outcome are recorded, never its text.
+        audit({"event": "end", "command_sha256": digest, "as_root": as_root,
+               "exit_code": None, "timed_out": False,
+               "duration_seconds": round(time.time() - started, 3),
+               "outcome": "execution_error"})
+        raise
     # coreutils timeout exits 124 when it had to stop the command.
     timed_out = timed_out or (as_root and exit_code == 124)
     audit({"event": "end", "command_sha256": digest, "as_root": as_root, "exit_code": exit_code,
