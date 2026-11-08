@@ -33,7 +33,8 @@ class MarinaDcrApplyWorkflowContract(unittest.TestCase):
 
     def test_existing_secret_and_job_scoping(self):
         self.assertIn("secrets.CLOUDFLARE_API_TOKEN", self.workflow)
-        self.assertIn("environment: Production", self.workflow)
+        self.assertNotIn("environment: Production", self.workflow)
+        self.assertIn("REPO_CLOUDFLARE_TOKEN_SELECTED=true", self.workflow)
         self.assertIn("concurrency:", self.workflow)
         self.assertIn("cancel-in-progress: false", self.workflow)
         self.assertNotIn("secrets.CLOUDFLARE_DNS_EDIT_TOKEN", self.workflow)
