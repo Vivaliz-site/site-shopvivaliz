@@ -77,7 +77,7 @@ function funnelHarness(pathname, consent) {
   const beacons = [];
   const gtagEvents = [];
   const local = new Map([['shopvivaliz_cart', JSON.stringify([
-    {sku:'TEST-SKU', name:'Test product', price:28, quantity:1}
+    {sku:'TEST-SKU', olist_product_id:'OLIST-123', name:'Test product', price:28, quantity:1}
   ])]]);
   const session = new Map();
   const storage = map => ({
@@ -109,6 +109,7 @@ function funnelHarness(pathname, consent) {
   const window = {
     location: {pathname, search:'', protocol:'https:', href:'https://example.invalid' + pathname},
     crypto: {randomUUID: () => 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'},
+    decodeURIComponent,
     dataLayer: [],
     gtag: (...args) => gtagEvents.push(args),
     addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); },
@@ -133,7 +134,19 @@ function funnelHarness(pathname, consent) {
   return {
     form, window, context, session, beacons, gtagEvents,
     submit(valid) { form.valid=valid; (documentListeners.submit || []).forEach(fn => fn({target:form})); },
-    accept() { vm.runInContext(privacySource, context); window.ShopVivalizPrivacy.acceptAll(); }
+    accept() { vm.runInContext(privacySource, context); window.ShopVivalizPrivacy.acceptAll(); },
+    clickBuy() {
+      const product = {sku:'TEST-SKU', olist_product_id:'OLIST-123', name:'Test product', price:28};
+      const button = {getAttribute(name) { return name==='data-product' ? encodeURIComponent(JSON.stringify(product)) : ''; }};
+      const target = {closest(selector) { return selector==='[data-product]' ? button : null; }};
+      (documentListeners.click || []).forEach(fn => fn({target}));
+    },
+    commitCart(quantity, detail={product_id:'OLIST-123'}) {
+      local.set('shopvivaliz_cart', JSON.stringify([
+        {sku:'TEST-SKU', olist_product_id:'OLIST-123', name:'Test product', price:28, quantity}
+      ]));
+      window.dispatchEvent({type:'shopvivaliz:add_to_cart', detail});
+    }
   };
 }
 check('Invalid checkout submit must not count payment info or consume one-time milestone', () => {
@@ -151,6 +164,33 @@ check('Accepting analytics on a product page records one consented first-party v
   app.accept();
   assert.equal(app.beacons.filter(x => x.event_name === 'view_item').length, 1);
   assert.equal(app.session.get('sv_ga_once_view_item_TEST-SKU'), '1');
+});
+
+
+check('Cart-add analytics fires only after persisted cart quantity grows and exactly once', () => {
+  const app=funnelHarness('/catalogo', true);
+  app.clickBuy(); // Store quota error / no successful app write.
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_to_cart').length, 0,
+    'click without successful cart mutation must not count as add_to_cart');
+  app.commitCart(4); // Existing quantity 1 => three new units.
+  const events=app.gtagEvents.filter(x => x[1] === 'add_to_cart');
+  assert.equal(events.length, 1, 'one canonical GA4 event after app event and write');
+  assert.equal(events[0][2].items[0].quantity, 3, 'attribution uses actual added quantity');
+  assert.equal(events[0][2].value, 84);
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_to_cart').length, 1);
+  app.commitCart(4); // Duplicate application notification without an additional write.
+  assert.equal(app.gtagEvents.filter(x => x[1] === 'add_to_cart').length, 1);
+});
+
+
+check('PDP SKU event honors actual multi-unit cart delta', () => {
+  const app=funnelHarness('/produto', true);
+  app.commitCart(3, {sku:'TEST-SKU', quantity:2});
+  const adds=app.gtagEvents.filter(x => x[1] === 'add_to_cart');
+  assert.equal(adds.length, 1);
+  assert.equal(adds[0][2].items[0].item_id, 'TEST-SKU');
+  assert.equal(adds[0][2].items[0].quantity, 2);
+  assert.equal(adds[0][2].value, 56);
 });
 
 process.exitCode=failures?1:0;
