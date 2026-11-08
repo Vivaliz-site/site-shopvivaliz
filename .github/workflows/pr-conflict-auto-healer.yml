@@ -107,7 +107,7 @@ jobs:
           echo 'independent_backend_operator_verified=true'
           echo 'secret_values_printed=false'
 
-      - name: Verify free local Ollama fallback model
+      - name: Verify already provisioned local AI model
         shell: bash
         run: |
           set -Eeuo pipefail
