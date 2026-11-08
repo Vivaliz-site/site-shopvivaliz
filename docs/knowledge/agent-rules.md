@@ -26,6 +26,27 @@ Antes de afirmar falta de token/credencial ou pedir novamente ao owner: ler `AGE
 > **PRIORIDADE MCP ADMINISTRATIVO — ORDEM EXPRESSA DO PROPRIETARIO (2026-11-05).** Todo agente ShopVivaliz deve **descobrir e tentar uma chamada real** ao MCP autorizado do host antes de RDC, SSH ou concluir bloqueio. `hosts_list`/status de plugin e mero registro, nao sao teste de comando. Central ShopVivaliz e Orquestrador: backend, Fred-Win, KOCEPSV e Marina se o schema/grant vigentes permitirem; MCP independente Marina complementa. Executar comando/consulta MCP apropriado e registrar `remote_access_attempts` com host, ferramenta, hora, resultado e task_id. Sem ferramenta publicada, registrar `MCP_NOT_EXPOSED` e continuar apenas por fallback legitimamente autorizado; nunca alegar tentativa inexistente. Timeout do RDC NAO dispensa o MCP. Contrato completo: [MCP primeiro](../ops/mcp-first-agent-execution-2026-11-05.md).
 <!-- /OWNER_MCP_FIRST_REAL_ATTEMPT_20261105 -->
 
+<!-- DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
+> **Bloqueio absoluto contra reintroducao de travas desktop GUI (08/11/2026):**
+> As travas de clique, digitacao e abertura de janelas de interface gráfica no Remote Control MCP (`desktop_click`, `desktop_type`, `desktop_open` vinculados a `runtime_lock_required`, `_assert_runtime_mutation` ou `MUTATING_RUNTIME_ACTIONS`) foram formalmente removidas na PR #3837 aprovada pelo proprietario.
+> **Nenhum agente (ChatGPT, Codex, Claude, Gemini, subagentes ou bots) esta autorizado a reintroduzir ou restaurar tais travas.**
+> Qualquer PR que tente retornar essas travas para acoes desktop GUI exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) de **AMBAS** as contas GitHub no HEAD exato: `shopvivaliz-human` E `fredmourao-ai`. Sem a aprovacao de ambas as contas, o gate de CI (`verify_owner_protected_pr_review.py`) e a fila de merge (`owner_approved_merge_queue.py`) bloquearao o merge.
+<!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
+
+<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
+> **Regra do proprietario: QUALQUER insercao de trava, governanca, regras, tasks ou protecao exige aprovacao das duas contas (08/11/2026):**
+> Qualquer insercao, criacao, adicao, restauracao ou modificacao de:
+> 1. Travas, restricoes, barreiras, bloqueios de ferramentas/comandos, runtime locks (`runtime_lock_required`, `assert_runtime_lock`, `_assert_runtime_mutation`, `MUTATING_RUNTIME_ACTIONS`, `MUTATING_ACTIONS`), lease/fencing obrigatorio ou diretivas restritivas em MCP, rotas ou agentes;
+> 2. Governanca, grants, aprovacoes de seguranca (`security/`, `.github/CODEOWNERS`);
+> 3. Regras de agentes (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `AI-TO-CLI-PROTOCOL.md`, `agent-rules.md`);
+> 4. Tasks e workflows automatizados (`.github/workflows/`, `scripts/agent_task_state.py`, gates de CI);
+> 5. Outros sensiveis (exclusao de instancias/VM, alteracao de precos em producao);
+> Exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) no HEAD exato de **AMBAS** as contas GitHub:
+> 1. `shopvivaliz-human`
+> 2. `fredmourao-ai`
+> Nenhum agente esta autorizado a aprovar, burlar ou ignorar este requisito. Sem a aprovacao conjunta e formal de ambas as contas no commit exato, os gates automatizados (`verify_owner_protected_pr_review.py` e `owner_approved_merge_queue.py`) bloquearao o PR (`FAIL_CLOSED`).
+<!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
+
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
 
