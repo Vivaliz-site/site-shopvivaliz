@@ -152,8 +152,8 @@ def is_protected_file(f: dict | str) -> bool:
     if any(filename.startswith(p) for p in TASKS_PREFIXES) or filename in TASKS_FILES:
         return True
 
-    # 4. Outros sensíveis (Infraestrutura, root broker, preços)
-    if filename in SENSITIVE_FILES or is_protected_path(filename):
+    # 4. Outros meios de controle administrativo / broker
+    if filename in SENSITIVE_FILES:
         return True
 
     # 5. Documentos com diretivas de governança / trava

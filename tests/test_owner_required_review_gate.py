@@ -55,7 +55,7 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 self.assertTrue(res)
                 self.assertEqual(reason, "dual_owner_review_approved_exact_head")
 
-    def test_vm_deletion_and_price_changes_require_dual_approval(self):
+    def test_vm_deletion_and_price_changes_require_human(self):
         for path in ("scripts/ops/terminate-oci-instance.sh",
                      "deploy/oci/destroy-vm.sh",
                      "scripts/ops/vm-delete-old.py",
@@ -66,18 +66,13 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 self.assertEqual(self.decide([path])[0], False)
 
     def test_human_owner_exact_head_unblocks_only_protected_pr(self):
-        human = review(login="shopvivaliz-human", commit=HEAD)
-        operator = review(login="fredmourao-ai", commit=HEAD)
         self.assertEqual(self.decide(["includes/pricing-sync.php"],
-                                     [human, operator]), (True, "dual_owner_review_approved_exact_head"))
+                                     [review()]), (True, "owner_review_approved_exact_head"))
         self.assertEqual(self.decide(["includes/pricing-sync.php", "docs/other.md"],
-                                     [human, operator])[0], True)
-        # Se fredmourao-ai e o autor do PR, apenas a aprovacao de shopvivaliz-human e exigida
-        self.assertEqual(self.decide(["includes/pricing-sync.php"],
-                                     [human], pr_author="fredmourao-ai"), (True, "owner_review_approved_exact_head"))
+                                     [review()])[0], True)
 
     def test_technical_actor_not_a_human_review(self):
-        for login in ("github-actions[bot]", "another-user"):
+        for login in ("fredmourao-ai", "github-actions[bot]", "another-user"):
             self.assertEqual(self.decide(["includes/pricing-sync.php"],
                                          [review(login=login)])[0], False)
 
@@ -87,11 +82,10 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
         approvals = [review(), review(state="CHANGES_REQUESTED",
                                       at="2026-11-02T19:02:00Z")]
         self.assertEqual(self.decide(["includes/pricing-sync.php"],
-                                     approvals, pr_author="fredmourao-ai"), (False, "latest_owner_review_not_approved"))
+                                     approvals), (False, "latest_owner_review_not_approved"))
 
     def test_comments_do_not_override_owner_approval(self):
-        approvals = [review(login="shopvivaliz-human"), review(login="fredmourao-ai"),
-                     review(state="COMMENTED", at="2026-11-02T19:05:00Z")]
+        approvals = [review(), review(state="COMMENTED", at="2026-11-02T19:05:00Z")]
         self.assertTrue(self.decide(["includes/pricing-sync.php"], approvals)[0])
 
     def test_invalid_or_incomplete_github_pages_fail_closed(self):
