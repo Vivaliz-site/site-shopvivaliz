@@ -2171,7 +2171,7 @@ def browser_open_command(url: str) -> str:
 
 
 def browser_controls_expression() -> str:
-    return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
+    return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button],[role=menuitem]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
 
 
 def browser_controls_command(tab_id: str) -> str:
@@ -2230,7 +2230,7 @@ def browser_click_control_command(tab_id: str, index: int) -> str:
     if idx < 0 or idx >= 120:
         raise ValueError("invalid_control_index")
     expression = (
-        "(()=>{const controls=[...document.querySelectorAll('input,button,[role=button]')].slice(0,120);"
+        "(()=>{const controls=[...document.querySelectorAll('input,button,[role=button],[role=menuitem]')].slice(0,120);"
         f"const e=controls[{idx}];if(!e)throw new Error('control_index_not_found');"
         "if(typeof e.focus==='function')e.focus({preventScroll:true});"
         f"{_CORPORATE_LOGOUT_CLICK_JS}"
