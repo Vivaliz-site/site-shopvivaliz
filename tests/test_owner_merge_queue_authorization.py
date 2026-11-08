@@ -204,11 +204,17 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
             RUNNER.eligible(pr, files, [stale_human, operator_rev], checks, rules, specialized_check_completed=True),
             (False, "protected_requires_dual_approval_on_exact_head"),
         )
-        # Both approved on exact head -> allowed
+        # Both approved on exact head -> allowed only with independent PR author
         self.assertEqual(
             RUNNER.eligible(pr, files, [human_rev, operator_rev], checks, rules, specialized_check_completed=True),
             (True, "protected_dual_approved_exact_head_ready_for_native_queue"),
         )
+        for required_reviewer in ("fredmourao-ai", "shopvivaliz-human"):
+            pr["user"]["login"] = required_reviewer
+            self.assertEqual(
+                RUNNER.eligible(pr, files, [human_rev, operator_rev], checks, rules, specialized_check_completed=True),
+                (False, "protected_pr_requires_distinct_author"),
+            )
 
 if __name__=="__main__":
     unittest.main()
