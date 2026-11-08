@@ -694,7 +694,8 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(m.validate_desktop_host("KOCEPSV")["platform"], "windows")
         self.assertEqual(m.validate_desktop_host("Fred-Win")["platform"], "windows")
         self.assertEqual(m.validate_desktop_host("always-free-arm-1787907847-26")["platform"], "linux")
-        for host in ("marina-a1-4c24g", "shopvivaliz-free-a1", "unknown"):
+        self.assertEqual(m.validate_desktop_host("marina-a1-4c24g")["platform"], "linux")
+        for host in ("shopvivaliz-free-a1", "unknown"):
             with self.subTest(host=host):
                 with self.assertRaisesRegex(ValueError, "unsupported_desktop_host"):
                     m.validate_desktop_host(host)

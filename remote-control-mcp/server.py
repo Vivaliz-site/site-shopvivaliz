@@ -136,7 +136,7 @@ MARINA_READONLY_SERVICES = frozenset({
 })
 HOSTS[MARINA_HOST] = {
     "platform": "linux", "transport": "private_ssh_read_only",
-    "role": "production web/deploy/database/workers",
+    "role": "production web/deploy/database/workers/admin-gui",
     "service_user_owner": "ubuntu", "capability": "owner_grant_required",
 }
 
@@ -146,9 +146,9 @@ RETIRED_HOSTS = frozenset({"shopvivaliz-free-a1"})
 
 # Keep enough durable capacity for a control/diagnostic task even when one
 # long job is active. Windows relay work stays serialized.
-# The backend exposes only its isolated Xvfb display (see remote-control-browser-mcp),
+# Linux hosts (backend and Marina) expose isolated Xvfb displays (see remote-control-browser-mcp),
 # never a user's logged-in console session.
-DESKTOP_HOSTS = ("Fred-Win", "KOCEPSV", "always-free-arm-1787907847-26")
+DESKTOP_HOSTS = ("Fred-Win", "KOCEPSV", "always-free-arm-1787907847-26", "marina-a1-4c24g")
 RUSTDESK_ID_RE = re.compile(r"^[0-9]{6,20}$")
 
 
@@ -3077,11 +3077,11 @@ TOOLS = [
     ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_DURABLE_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
     ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
     ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
-    ("desktop_health", "Check the constrained GUI path for a canonical Windows support host. Fred-Win uses the native interactive Windows bridge; KOCEPSV uses the backend RustDesk path without exposing target IDs.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
-    ("desktop_open", "Prepare the constrained GUI path for a canonical Windows support host. Fred-Win uses the native interactive Windows bridge; KOCEPSV opens or focuses the protected RustDesk target.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, False, True),
-    ("desktop_screenshot", "Capture the constrained graphical surface for a canonical Windows support host: the interactive Windows desktop on Fred-Win or the resolved RustDesk window on KOCEPSV.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
-    ("desktop_click", "Click bounded coordinates on the constrained graphical surface for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "string", "enum": ["left", "middle", "right"]}, "clicks": {"type": "integer", "minimum": 1, "maximum": 3}}, False, True),
-    ("desktop_type", "Type into the active constrained graphical surface. Text is transported only through protected stdin/request files and is redacted from audit records.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "text": {"type": "string", "maxLength": 4096}, "press_enter": {"type": "boolean"}}, False, True),
+    ("desktop_health", "Check the constrained GUI path for a canonical support host: native interactive Windows bridge on Fred-Win, RustDesk path on KOCEPSV, or isolated Linux Xvfb display on Backend and Marina.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_open", "Prepare the constrained GUI path for a canonical support host: focus native bridge on Fred-Win, RustDesk target on KOCEPSV, or display readiness on Backend and Marina.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, False, True),
+    ("desktop_screenshot", "Capture the constrained graphical surface for a canonical support host: interactive Windows desktop on Fred-Win, RustDesk on KOCEPSV, or Linux display on Backend and Marina.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_click", "Click bounded coordinates on the constrained graphical surface for a canonical support host (Windows native/RustDesk or Linux isolated display).", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "string", "enum": ["left", "middle", "right"]}, "clicks": {"type": "integer", "minimum": 1, "maximum": 3}}, False, True),
+    ("desktop_type", "Type into the active constrained graphical surface for a canonical support host. Text is transported only through protected stdin/request files and is redacted from audit records.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "text": {"type": "string", "maxLength": 4096}, "press_enter": {"type": "boolean"}}, False, True),
     ("marina_cart_preview", "Read-only preflight for retiring the old source abandoned-cart timer and cron. Returns scope and hashed cron snapshot; DOES NOT issue approval or lease.", {}, True, False),
     ("marina_cart_retire_source", "Operator-signed, short-lived and one-use maintenance ticket only. No generic lease issuance; stop+disable ONLY the old source cart timer and remove its exact legacy cron, preserving Marina as sole writer.", {
         "ticket": {"type": "object"},
