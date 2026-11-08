@@ -10,7 +10,7 @@ function no_erp_assert(bool $expected, array $payment, string $erpId, string $ca
 $real=[
   'status'=>'approved','external_reference'=>'SV20260727000000001',
   'transaction_amount'=>12.51,'transaction_amount_refunded'=>0.0,
-  'live_mode'=>true,'refunds'=>[]
+  'live_mode'=>true,'currency_id'=>'BRL','refunds'=>[]
 ];
 no_erp_assert(true,$real,'','approved live payment with missing ERP');
 no_erp_assert(true,$real,'   ','blank ERP link');

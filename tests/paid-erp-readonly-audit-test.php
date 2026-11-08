@@ -18,6 +18,8 @@ $approved = [
     'transaction_amount' => 52.50,
     'transaction_amount_refunded' => 0.0,
     'refunds' => [],
+    'live_mode' => true,
+    'currency_id' => 'BRL',
 ];
 svfra_test(svfra_approved_payment($approved, $reference, 52.50), 'official matching approved unrefunded payment');
 foreach ([
@@ -27,10 +29,37 @@ foreach ([
     ['transaction_amount_refunded' => 1.0],
     ['refund_count' => 1],
     ['refunds' => [['id' => 'refund-example']]],
+    ['currency_id' => 'USD'],
+    ['currency_id' => null],
+    ['live_mode' => false],
+    ['live_mode' => null],
 ] as $change) {
     svfra_test(!svfra_approved_payment(array_replace($approved, $change), $reference, 52.50), 'never trust unmatched, pending or refunded payment');
 }
 svfra_test(!svfra_approved_payment($approved, $reference, 0.0), 'zero local order total fails closed');
+foreach (['currency_id', 'live_mode'] as $requiredProviderField) {
+    $missing = $approved;
+    unset($missing[$requiredProviderField]);
+    svfra_test(!svfra_approved_payment($missing, $reference, 52.50), "missing official {$requiredProviderField} fails closed");
+}
+
+$oldDbRecord = [
+    'payment_provider_status' => null, 'payment_evidence_at' => null,
+    'reconciliation_status' => null, 'reconciliation_checked_at' => null,
+];
+$missingDb = svfra_mysql_evidence_gaps($oldDbRecord, true);
+svfra_test($missingDb['payment'] === true && $missingDb['reconciliation'] === true,
+    'historical paid/cancelled order without durable evidence must remain visible');
+$unlinkedDb = svfra_mysql_evidence_gaps($oldDbRecord, false);
+svfra_test($unlinkedDb['payment'] === true && $unlinkedDb['reconciliation'] === false,
+    'missing ERP link must not fabricate an ERP reconciliation obligation');
+$completeDb = [
+    'payment_provider_status' => 'approved', 'payment_evidence_at' => '2026-11-08 02:00:00',
+    'reconciliation_status' => 'discrepancy', 'reconciliation_checked_at' => '2026-11-08 02:01:00',
+];
+$complete = svfra_mysql_evidence_gaps($completeDb, true);
+svfra_test($complete['payment'] === false && $complete['reconciliation'] === false,
+    'durably recorded official discrepancy is preserved and not mislabeled as missing');
 
 foreach ([
     '2' => 'discrepancy', // Cancelada
@@ -56,6 +85,12 @@ $search = [
     'results' => [['id' => 12345] + $approved],
 ];
 svfra_test(svfra_search_payment_id($search, $reference, 52.50) === '12345', 'select unique officially verified search match');
+$minimalSummary = $approved;
+unset($minimalSummary['currency_id'], $minimalSummary['live_mode']);
+svfra_test(svfra_search_payment_id(['results' => [['id' => 12345] + $minimalSummary]],
+    $reference, 52.50) === '12345', 'search summary may omit live/currency, but official GET still must verify them');
+svfra_test(!svfra_approved_payment($minimalSummary, $reference, 52.50),
+    'search summary missing live/currency never proves settled revenue');
 svfra_test(svfra_search_payment_id(['paging' => ['total' => 2], 'results' => [['id' => 12345] + $approved]], $reference, 52.50) === null, 'incomplete paginated search fails closed');
 svfra_test(svfra_search_payment_id(['results' => [['id' => 12345] + $approved, ['id' => 67890] + $approved]], $reference, 52.50) === null, 'multiple approvals ambiguous');
 svfra_test(svfra_search_payment_id(['results' => [['id' => 'not-an-id'] + $approved]], $reference, 52.50) === null, 'nonnumeric payment ID not accepted');
@@ -66,10 +101,34 @@ svfra_test(svfra_erp_reference_matches(['status' => 200, 'json' => ['data' => ['
 svfra_test(!svfra_erp_reference_matches(['status' => 200, 'json' => ['data' => ['numeroOrdemCompra' => 'other', 'situacao' => 2]]], $reference), 'mismatched ERP reference fails closed');
 svfra_test(!svfra_erp_reference_matches(['status' => 200, 'json' => ['data' => ['situacao' => 2]]], $reference), 'missing ERP link fails closed');
 
+$clean = [
+    'orders_considered' => 1, 'provider_verified_approved' => 1,
+    'erp_discrepancy' => 0, 'provider_approved_without_erp' => 0,
+    'erp_pending' => 0, 'test_provenance_unknown' => 0,
+    'mysql_missing_payment_evidence' => 0, 'mysql_missing_erp_reconciliation' => 0,
+];
+$ready = svfra_audit_verdict($clean);
+svfra_test($ready['ok'] === true && $ready['status'] === 'NO_DISCREPANCY_IN_VERIFIED_SAMPLE'
+    && $ready['exit_code'] === 0, 'fully verified payment can be clean only when durable evidence is complete');
+foreach (['mysql_missing_payment_evidence', 'mysql_missing_erp_reconciliation'] as $missingEvidence) {
+    $stale = svfra_audit_verdict(array_replace($clean, [$missingEvidence => 1]));
+    svfra_test($stale['ok'] === false && $stale['status'] === 'INCOMPLETE_NOT_CERTIFIED'
+        && $stale['exit_code'] === 3, "historical DB evidence missing must not be a false green: {$missingEvidence}");
+}
+$p0 = svfra_audit_verdict(array_replace($clean, [
+    'erp_discrepancy' => 1, 'mysql_missing_payment_evidence' => 1,
+]));
+svfra_test($p0['status'] === 'CONFIRMED_FINANCIAL_DISCREPANCY'
+    && $p0['exit_code'] === 2, 'known P0 cannot be downgraded by incomplete coverage');
+
 $script = (string)file_get_contents(dirname(__DIR__) . '/scripts/quality/audit-paid-erp-readonly.php');
 svfra_test(str_contains($script, "svmp_api_request('GET'"), 'provider verification is read-only GET');
 svfra_test(str_contains($script, 'svtop_tiny_get_order('), 'ERP verification is read-only GET');
 svfra_test(str_contains($script, 'SELECT order_number, order_total, order_status, payment_provider_id, olist_order_id'), 'DB read is SELECT only');
+foreach (['payment_evidence_at', 'reconciliation_checked_at', 'mysql_missing_payment_evidence',
+    'mysql_missing_erp_reconciliation'] as $marker) {
+    svfra_test(str_contains($script, $marker), "durable evidence coverage is audited: {$marker}");
+}
 svfra_test(!str_contains($script, 'UPDATE orders') && !str_contains($script, 'DELETE FROM orders'), 'no order database mutations in audit');
 svfra_test(!str_contains($script, "svote_record_reconciliation(") && !str_contains($script, "svote_record_payment("), 'no evidence or payment backfill from audit');
 
