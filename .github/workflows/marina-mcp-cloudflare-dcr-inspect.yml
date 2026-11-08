@@ -1,0 +1,61 @@
+name: Marina MCP Cloudflare OAuth DCR scoped verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Authorized read-only OAuth diagnosis
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect isolated MCP Access app (redacted)
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: "0afb7d99f708b9455598df9fa1035164"
+          EXPECTED_DOMAIN: mcp-marina.shopvivaliz.com.br
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          token=os.environ.get("CF_TOKEN","")
+          if not token:raise SystemExit("NO_CLOUDFLARE_SECRET")
+          account=os.environ["CF_ACCOUNT"]
+          domain=os.environ["EXPECTED_DOMAIN"]
+          def query(url):
+              req=urllib.request.Request(url,headers={"Authorization":"Bearer "+token,"Accept":"application/json"})
+              try:
+                  with urllib.request.urlopen(req,timeout=15) as r:
+                      return json.load(r)
+              except urllib.error.HTTPError as e:
+                  raise SystemExit("CLOUDFLARE_HTTP_"+str(e.code))
+          base="https://api.cloudflare.com/client/v4/accounts/"+account+"/access/apps"
+          r=query(base+"?per_page=100")
+          if r.get("success") is not True:raise SystemExit("APPS_READ_UNSUCCESSFUL")
+          apps=[a for a in r.get("result",[]) if a.get("domain")==domain]
+          print("MCP_ACCESS_APP_MATCH_COUNT="+str(len(apps)))
+          if len(apps)!=1:raise SystemExit("EXPECTED_ONE_ISOLATED_APP")
+          a=apps[0]
+          ident=a.get("id","")
+          if not ident:raise SystemExit("MISSING_APP_ID")
+          d=query(base+"/"+ident)
+          if d.get("success") is not True:raise SystemExit("APP_DETAIL_UNSUCCESSFUL")
+          app=d.get("result") or {}
+          if app.get("domain")!=domain or app.get("id")!=ident:raise SystemExit("APP_IDENTITY_MISMATCH")
+          cfg=app.get("oauth_configuration") or {}
+          reg=cfg.get("dynamic_client_registration") or {}
+          print("MCP_ACCESS_APP_ID="+ident)
+          print("MCP_ACCESS_APP_TYPE="+str(app.get("type")))
+          print("MCP_MANAGED_OAUTH_ENABLED="+str(cfg.get("enabled") is True).lower())
+          print("MCP_DCR_ENABLED="+str(reg.get("enabled") is True).lower())
+          print("MCP_DCR_URIS_COUNT="+str(len(reg.get("allowed_uris") or [])))
+          print("MCP_DCR_STABLE_CHATGPT_REDIRECT_PRESENT="+str("https://chatgpt.com/connector_platform_oauth_redirect" in (reg.get("allowed_uris") or [])).lower())
+          print("MCP_POLICY_COUNT="+str(len(app.get("policies") or [])))
+          print("MCP_ORIGIN_JWT_POLICY_PRESERVATION_REQUIRED=true")
+          PY
