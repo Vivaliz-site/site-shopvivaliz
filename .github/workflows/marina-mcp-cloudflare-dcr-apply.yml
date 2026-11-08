@@ -19,7 +19,8 @@ concurrency:
 jobs:
   apply-dcr:
     runs-on: ubuntu-latest
-    environment: Production
+    # No environment override: Production contains a stale same-named token (HTTP 401).
+    # Uses repository-scoped existing Cloudflare secret; owner grant #3521 is enforced below.
     timeout-minutes: 10
     steps:
       - name: Checkout protected main
@@ -69,6 +70,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           umask 077
+          echo "REPO_CLOUDFLARE_TOKEN_SELECTED=true"
           python3 -m pip install --disable-pip-version-check -q 'requests==2.32.5'
           backup="$RUNNER_TEMP/marina-mcp-oauth-dcr-before-$GITHUB_RUN_ID.json"
           python3 scripts/marina_mcp_oauth_dcr.py \
