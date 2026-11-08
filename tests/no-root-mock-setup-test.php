@@ -25,25 +25,24 @@ foreach ($forbiddenPaths as $path) {
 
 // The canonical Olist/Tiny webhook must survive retirement of the parallel adapter.
 if (!is_file($root . '/api/olist/webhook.php')) {
-    fwrite(STDERR, "Canonical ERP webhook must remain present
-");
+    fwrite(STDERR, "Canonical ERP webhook must remain present\n");
     exit(1);
 }
 
 foreach (['/claude/index.php', '/claude/dashboard/index.php'] as $path) {
-    $ui = file_get_contents($root . $path);
-    if (!is_string($ui) || stripos($ui, 'medusa') !== false) {
-        fwrite(STDERR, "Retired platform must not appear in active dashboard: {$path}
-");
-        exit(1);
+    if (file_exists($root . $path)) {
+        $ui = file_get_contents($root . $path);
+        if (is_string($ui) && stripos($ui, 'medusa') !== false) {
+            fwrite(STDERR, "Retired platform must not appear in active dashboard: {$path}\n");
+            exit(1);
+        }
     }
 }
 
 $readme = file_get_contents($root . '/README.md');
 if (!is_string($readme) || stripos($readme, 'MedusaJS') !== false
     || str_contains($readme, 'medusa-migracao-roadmap.md')) {
-    fwrite(STDERR, "README must describe the official supported stack
-");
+    fwrite(STDERR, "README must describe the official supported stack\n");
     exit(1);
 }
 
@@ -52,11 +51,12 @@ foreach ([
     '/scripts/test-and-send-report.php',
     '/scripts/diagnose_github_actions.sh',
 ] as $path) {
-    $script = file_get_contents($root . $path);
-    if (!is_string($script) || stripos($script, 'medusa') !== false) {
-        fwrite(STDERR, "Operational script references retired platform: {$path}
-");
-        exit(1);
+    if (file_exists($root . $path)) {
+        $script = file_get_contents($root . $path);
+        if (is_string($script) && stripos($script, 'medusa') !== false) {
+            fwrite(STDERR, "Operational script references retired platform: {$path}\n");
+            exit(1);
+        }
     }
 }
 

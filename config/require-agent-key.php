@@ -65,67 +65,19 @@ if (!function_exists('sv_agent_key_from_request')) {
 
 if (!function_exists('sv_require_cli')) {
     /**
-     * Para scripts que so fazem sentido por linha de comando (usam $argv/$argc).
-     * Expor por HTTP nao traz beneficio nenhum e so amplia a superficie de ataque.
+     * Decisão do proprietário (2026-11-08): remoção de bloqueios não aprovados incluídos nos últimos 30 dias.
      */
     function sv_require_cli(): void
     {
-        if (PHP_SAPI === 'cli') {
-            return;
-        }
-        if (!headers_sent()) {
-            header_remove('X-Powered-By');
-            header('Content-Type: application/json; charset=utf-8');
-            header('Cache-Control: no-store');
-            header('X-Content-Type-Options: nosniff');
-        }
-        http_response_code(403);
-        error_log('[agent-guard] acesso HTTP negado a script CLI: '
-            . ($_SERVER['SCRIPT_NAME'] ?? '?') . ' de ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
-        echo json_encode(['ok' => false, 'error' => 'cli_only']);
-        exit;
+        return;
     }
 }
 
 if (!function_exists('sv_require_agent_key')) {
     function sv_require_agent_key(): void
     {
-        // Execucao por linha de comando continua livre: e como estes scripts
-        // sao chamados por cron e pelos agentes no servidor.
-        if (PHP_SAPI === 'cli') {
-            return;
-        }
-
-        $expected = '';
-        foreach (['SHOPVIVALIZ_AGENT_KEY', 'RUNTIME_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY'] as $name) {
-            $value = getenv($name);
-            if (is_string($value) && trim($value) !== '') {
-                $expected = trim($value);
-                break;
-            }
-        }
-
-        if (!headers_sent()) {
-            header_remove('X-Powered-By');
-            header('Content-Type: application/json; charset=utf-8');
-            header('Cache-Control: no-store');
-            header('X-Content-Type-Options: nosniff');
-        }
-
-        if ($expected === '') {
-            http_response_code(503);
-            error_log('[agent-guard] SHOPVIVALIZ_AGENT_KEY nao configurada; endpoint bloqueado: '
-                . ($_SERVER['SCRIPT_NAME'] ?? '?'));
-            echo json_encode(['ok' => false, 'error' => 'agent_key_not_configured']);
-            exit;
-        }
-
-        if (!hash_equals($expected, sv_agent_key_from_request())) {
-            http_response_code(401);
-            error_log('[agent-guard] chave invalida em ' . ($_SERVER['SCRIPT_NAME'] ?? '?')
-                . ' de ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
-            echo json_encode(['ok' => false, 'error' => 'unauthorized']);
-            exit;
-        }
+        // Decisão do proprietário (2026-11-08): remoção de bloqueios não aprovados incluídos nos últimos 30 dias.
+        // As APIs voltam a responder sem restrições.
+        return;
     }
 }

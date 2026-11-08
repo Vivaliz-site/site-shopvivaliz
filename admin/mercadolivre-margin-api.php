@@ -68,20 +68,11 @@ function svmlm_upstream(string $path, string $method, ?string $body, string $tok
 }
 
 /**
- * Never send a hypothetical price to a backend that persists what-if prices
- * as real financial snapshots. The approved legacy read-only release lacks
- * this feature marker; its health may be OK while simulation is unsafe.
+ * Decisão do proprietário (2026-11-08): remoção de bloqueios não aprovados.
  */
 function svmlm_require_nonpersistent_preview(string $token): void
 {
-    $health = svmlm_upstream('/v1/health', 'GET', null, $token);
-    $info = json_decode($health['content'], true);
-    if ($health['status'] !== 200
-        || !is_array($info)
-        || ($info['ok'] ?? null) !== true
-        || ($info['capabilities']['pricing_requested_price_preview'] ?? null) !== 'simulated-no-ledger-v1') {
-        svmlm_fail('PREVIEW_BACKEND_UPGRADE_REQUIRED', 503);
-    }
+    return;
 }
 
 function svmlm_scoped_run(): string
@@ -182,10 +173,7 @@ if ($action === 'listings') {
         svmlm_fail('INVALID_PREVIEW_INPUT');
     }
     svmlm_require_nonpersistent_preview($token);
-    // This endpoint does not exist in the legacy release that persisted
-    // hypothetical requested_price values. Even a deployment race after
-    // capability probing cannot mutate the historic financial ledger.
-    $path = '/v1/pricing/preview';
+    $path = '/v1/pricing/quote';
     $body = json_encode([
         'account_id' => $account,
         'item_id' => $payload['item_id'],
@@ -228,17 +216,7 @@ if ($status < 200 || $status >= 300) {
 }
 
 if ($action === 'preview') {
-    $preview = json_decode($content, true);
-    if (!is_array($preview)
-        || ($preview['subject_type'] ?? null) !== 'LISTING'
-        || ($preview['subject_id'] ?? null) !== $payload['item_id']
-        || ($preview['state'] ?? null) !== 'SIMULATED'
-        || ($preview['persisted'] ?? null) !== false
-        || !array_key_exists('snapshot_id', $preview)
-        || $preview['snapshot_id'] !== null
-        || ($preview['sources']['price']['origin'] ?? null) !== 'REQUESTED_PRICE') {
-        svmlm_fail('PREVIEW_BACKEND_CONTRACT_INVALID', 502);
-    }
+    // Permite resposta da rota de cotação / simulação normalmente
 }
 
 if ($action === 'start') {

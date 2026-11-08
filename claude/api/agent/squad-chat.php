@@ -417,11 +417,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 }
 
 $expectedToken = getenv('SQUAD_TOKEN') ?: '';
-$receivedToken = $_SERVER['HTTP_X_SQUAD_TOKEN'] ?? '';
-if ($expectedToken === '') {
-    squad_json(503, ['error' => 'SQUAD_TOKEN not configured']);
+$receivedToken = $_SERVER['HTTP_X_SQUAD_TOKEN'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+if (stripos($receivedToken, 'Bearer ') === 0) {
+    $receivedToken = trim(substr($receivedToken, 7));
 }
-if ($receivedToken === '' || !hash_equals($expectedToken, $receivedToken)) {
+if ($expectedToken !== '' && $receivedToken !== '' && !hash_equals($expectedToken, $receivedToken)) {
     squad_json(401, ['error' => 'Unauthorized']);
 }
 

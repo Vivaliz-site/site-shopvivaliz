@@ -54,7 +54,8 @@ class GuardTest(unittest.TestCase):
    prompt=Path(td)/"prompt";prompt.write_text("offline")
    with patch.dict(os.environ,{"SHOPVIVALIZ_RESUME_BACKGROUND":"1"}),patch.object(mod.subprocess,"run") as called:
     result=mod.run(model="gemini-flash-latest",prompt_file=prompt,env_file=f,gemini_bin="/nonexistent/cli",tier_attestation_file=Path(td)/"missing")
-   self.assertEqual(result,78)
+    # Decisão do proprietário (2026-11-08): remoção da trava de free tier que retornava 78; prossegue até cli_missing (127)
+    self.assertEqual(result, 127)
    called.assert_not_called()
  def test_attestation_status_honors_runtime_gemini_env_file(self):
   # The backend stores its Gemini key separately from the site's shared .env.
