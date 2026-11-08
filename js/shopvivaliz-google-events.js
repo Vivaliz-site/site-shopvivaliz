@@ -298,6 +298,61 @@ function funnelClientId() {
     return '';
   }
 
+  function cartQuantities(items) {
+    var quantities = Object.create(null);
+    items.forEach(function (product) {
+      if (!product || typeof product !== 'object') return;
+      var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
+      var quantity = Number(product.quantity || 1);
+      if (!key || !Number.isFinite(quantity) || quantity <= 0) return;
+      quantities[key] = (quantities[key] || 0) + quantity;
+    });
+    return quantities;
+  }
+
+  var previousCartQuantities = cartQuantities(readCart());
+
+  function trackCommittedCartAdd(event) {
+    // Cart writers (PDP, catalog and related-product cards) dispatch this
+    // synchronous event only AFTER localStorage.setItem succeeded. A click
+    // alone is not evidence that the shopping cart changed.
+    var items = readCart();
+    var nextQuantities = cartQuantities(items);
+    var previous = previousCartQuantities;
+    previousCartQuantities = nextQuantities;
+    var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+    var sku = String(detail.sku || '').trim();
+    var productId = String(detail.product_id || '').trim();
+    if (!sku && !productId) return;
+
+    var changed = items.filter(function (product) {
+      if (!product || typeof product !== 'object') return false;
+      var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
+      if (!key || number(nextQuantities[key]) <= number(previous[key])) return false;
+      return (sku !== '' && String(product.sku || '') === sku)
+        || (productId !== '' && (String(product.olist_product_id || '') === productId
+          || String(product.sku || '') === productId));
+    });
+    // Ambiguous SKUs/ERP references are not grounds to invent a product event.
+    if (changed.length !== 1) return;
+
+    var product = changed[0];
+    var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
+    var delta = Math.floor(number(nextQuantities[key]) - number(previous[key]));
+    if (delta < 1) return;
+    var item = itemFromProduct(product);
+    item.quantity = delta;
+    push('add_to_cart', {
+      currency: 'BRL',
+      value: number(item.price) * item.quantity,
+      items: [item]
+    });
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('shopvivaliz:add_to_cart', trackCommittedCartAdd);
+  }
+
   function bindClicks() {
     document.addEventListener('click', function (event) {
       var removeButton = event.target && event.target.closest
@@ -316,28 +371,8 @@ function funnelClientId() {
         }
       }
 
-      var button = event.target && event.target.closest ? event.target.closest('[data-product]') : null;
-      if (button) {
-        var product = parseProductPayload(button);
-        if (product) {
-          var item = itemFromProduct(product);
-          push('add_to_cart', {
-            currency: 'BRL',
-            value: number(item.price) * item.quantity,
-            items: [item]
-          });
-        }
-      }
-
-      var buyNow = event.target && event.target.closest ? event.target.closest('#buy-now,.main-buy-button') : null;
-      if (buyNow && !button && window.ShopVivalizProductContext) {
-        var contextItem = itemFromProduct(window.ShopVivalizProductContext);
-        push('add_to_cart', {
-          currency: 'BRL',
-          value: number(contextItem.price) * contextItem.quantity,
-          items: [contextItem]
-        });
-      }
+      // add_to_cart is emitted by the committed cart event below, not by
+      // click intent. Cart persistence can fail before the item is added.
 
       var checkout = event.target && event.target.closest ? event.target.closest('#btn-checkout,.btn-checkout') : null;
       if (checkout) {
