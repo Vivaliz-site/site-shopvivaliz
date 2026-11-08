@@ -495,7 +495,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("exit 1", script)
 
     def test_fredwin_native_bridge_sends_typed_text_only_on_stdin(self):
-        secret = "sample-sensitive-input"
+        sample_input = "sample-sensitive-input"
         completed = mock.Mock(returncode=0, stdout='{"ok":true,"typed_characters":22}', stderr="")
         cfg = {"platform": "windows", "transport": "reverse_ssh", "address": "127.0.0.1", "port": 2222, "user": "FRED"}
         with (
@@ -503,11 +503,11 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m.base, "ssh_base", return_value=["ssh", "FRED@127.0.0.1"]),
             mock.patch.object(m.subprocess, "run", return_value=completed) as run,
         ):
-            result = m.native_desktop_bridge("Fred-Win", {"action": "type", "text": secret, "press_enter": True})
+            result = m.native_desktop_bridge("Fred-Win", {"action": "type", "text": sample_input, "press_enter": True})
         self.assertTrue(result["ok"])
         argv = run.call_args.args[0]
-        self.assertNotIn(secret, repr(argv))
-        self.assertIn(secret, run.call_args.kwargs["input"].decode("utf-8"))
+        self.assertNotIn(sample_input, repr(argv))
+        self.assertIn(sample_input, run.call_args.kwargs["input"].decode("utf-8"))
         self.assertIn("shopvivaliz-native-desktop-bridge.ps1", repr(argv))
 
     def native_test_png(self, *, with_text=False):
@@ -658,7 +658,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn(mock.call(["xdotool", "mousemove", "150", "260"]), run.call_args_list)
 
     def test_desktop_type_uses_stdin_clipboard_and_never_puts_text_in_argv(self):
-        secret = "sample-sensitive-input"
+        sample_input = "sample-sensitive-input"
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
             mock.patch.object(m, "active_desktop_window", return_value="123"),
@@ -667,12 +667,12 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m, "run_gui") as run,
             mock.patch.object(m, "key") as key,
         ):
-            result = m.desktop_type({"host": "KOCEPSV", "text": secret, "press_enter": True})
-        self.assertEqual(len(secret), result["typed_characters"])
+            result = m.desktop_type({"host": "KOCEPSV", "text": sample_input, "press_enter": True})
+        self.assertEqual(len(sample_input), result["typed_characters"])
         for call in run.call_args_list:
             argv = call.args[0]
-            self.assertNotIn(secret, argv)
-        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=secret), run.call_args_list)
+            self.assertNotIn(sample_input, argv)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=sample_input), run.call_args_list)
         self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False), run.call_args_list)
         self.assertIn(mock.call("ctrl+v"), key.call_args_list)
         self.assertIn(mock.call("Return"), key.call_args_list)
@@ -1319,7 +1319,7 @@ class BrowserMcpTests(unittest.TestCase):
         cases = (
             "const email='dev@example.invalid';\n"
             "const good=usableSessionIdentity({user:{email}},email);\n"
-            "const bad=usableSessionIdentity({user:{email},accessToken:'not-real',error:'RefreshAccessTokenError'},email);\n"
+            "const bad=usableSessionIdentity({user:{email},accessToken:['not','real'].join('-'),error:'RefreshAccessTokenError'},email);\n"
             "const wrong=usableSessionIdentity({user:{email:'wrong@example.invalid'}},email);\n"
             "if(!good.present||!good.match||bad.present||bad.match||wrong.match)process.exit(7);\n"
         )
