@@ -538,6 +538,91 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             self.assertNotIn("bad-secret", output)
             self.assertNotIn("good-secret", output)
 
+    def test_background_run_fails_closed_without_free_tier_attestation(self) -> None:
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            env_file = workspace / ".env"
+            env_file.write_text("GEMINI_API_KEY=fixture-secret\\n", encoding="utf-8")
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            invoked = workspace / "gemini-was-invoked"
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text(
+                "#!/bin/sh\\n"
+                f'touch "{invoked}"\\n'
+                "exit 0\\n",
+                encoding="utf-8",
+            )
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                buf = io.StringIO()
+                with patch.dict(os.environ, {"SHOPVIVALIZ_RESUME_BACKGROUND": "1"}, clear=False):
+                    with contextlib.redirect_stderr(buf):
+                        rc = self.mod.run(
+                            model="gemini-2.5-flash",
+                            prompt_file=prompt_file,
+                            env_file=env_file,
+                            gemini_bin=str(gemini_bin),
+                            tier_attestation_file=workspace / "missing-attestation.json",
+                        )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(rc, 78)
+            self.assertIn("background_gemini_error=free_tier_not_verified", buf.getvalue())
+            self.assertFalse(invoked.exists(), "unverified Gemini key must never reach the provider")
+
+    def test_background_run_accepts_only_the_exact_attested_free_key(self) -> None:
+        import datetime
+        import hashlib
+        import json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            secret = "fixture-secret"
+            env_file = workspace / ".env"
+            env_file.write_text(f"GEMINI_API_KEY={secret}\\n", encoding="utf-8")
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            attestation = workspace / "gemini-free-tier.json"
+            attestation.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "billing_tier": "free",
+                    "verified_source": "google_ai_studio",
+                    "project_id": "fixture-project",
+                    "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "key_sha256": [hashlib.sha256(secret.encode()).hexdigest()],
+                }),
+                encoding="utf-8",
+            )
+            attestation.chmod(0o600)
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text("#!/bin/sh\\nexit 0\\n", encoding="utf-8")
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                with patch.dict(os.environ, {"SHOPVIVALIZ_RESUME_BACKGROUND": "1"}, clear=False):
+                    rc = self.mod.run(
+                        model="gemini-2.5-flash",
+                        prompt_file=prompt_file,
+                        env_file=env_file,
+                        gemini_bin=str(gemini_bin),
+                        tier_attestation_file=attestation,
+                    )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(rc, 0)
+
     def test_failover_uses_protected_background_runner_only_in_background_mode(self) -> None:
         failover = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("run_background_gemini.py", failover)
