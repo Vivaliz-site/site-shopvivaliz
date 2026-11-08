@@ -47,7 +47,7 @@ O verificador canônico de concessões da ShopVivaliz (`scripts/validate-owner-p
 
 ## 4. Requisitos de aprovação e processo formal
 
-1. O documento de concessão `security/owner-approvals/<PR_NUMBER>.json` será anexado a esta PR após a atribuição do número pelo GitHub, mantendo vínculo estrito entre arquivo e PR.
+1. O documento de concessão formal `security/owner-approvals/3846.json` está vinculado a esta PR #3846, mantendo vínculo estrito entre arquivo e PR.
 2. A aprovação exige revisão `APPROVED` formal exclusivamente pela conta humana proprietária `@shopvivaliz-human` no HEAD final deste PR.
 3. Nenhum agente pode aprovar, simular aprovação, acionar auto-merge não autorizado ou fazer merge administrativo desta autorização.
 4. O merge da PR é condição necessária, mas não suficiente para envio: o operador no host de destino permanece obrigado a validar grant, escopo, RBAC, single-writer lease/fencing e readback de idempotência antes de qualquer efeito externo.
