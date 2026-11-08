@@ -1307,6 +1307,29 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertNotIn("sessionStorage", m.CORPORATE_PROFILE_NODE_SCRIPT)
         self.assertIn('url:"https://chatgpt.com/"', m.CORPORATE_PROFILE_NODE_SCRIPT)
 
+    def test_corporate_session_refresh_error_is_not_accepted_as_login(self):
+        # A stale user.email can coexist with RefreshAccessTokenError; the UI
+        # redirects to sign-in and must never be classified authenticated.
+        script = m.CORPORATE_PROFILE_NODE_SCRIPT
+        name = "function usableSessionIdentity("
+        self.assertIn(name, script)
+        start = script.index(name)
+        end = script.index("\n}", start) + 2
+        helper = script[start:end]
+        cases = (
+            "const email='dev@example.invalid';\n"
+            "const good=usableSessionIdentity({user:{email}},email);\n"
+            "const bad=usableSessionIdentity({user:{email},accessToken:'not-real',error:'RefreshAccessTokenError'},email);\n"
+            "const wrong=usableSessionIdentity({user:{email:'wrong@example.invalid'}},email);\n"
+            "if(!good.present||!good.match||bad.present||bad.match||wrong.match)process.exit(7);\n"
+        )
+        result = m.subprocess.run(
+            ["node", "--input-type=module", "-e", helper + "\n" + cases],
+            capture_output=True, text=True, check=False, timeout=6,
+        )
+        self.assertEqual(0, result.returncode, result.stderr[:1000])
+
+
     def test_corporate_auth_probe_strips_injected_secret_fields(self):
         synthetic = {
             "ok": True, "session": "atendimento", "state": "AUTHENTICATED",
