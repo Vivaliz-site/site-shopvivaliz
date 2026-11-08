@@ -72,7 +72,7 @@ jobs:
   heal:
     needs: preflight
     if: ${{ needs.preflight.outputs.should_heal == 'true' }}
-    name: Resolve same-repository PR conflicts with private Oracle Gemini pool
+    name: Resolve same-repository PR conflicts with verified-free Gemini and local Ollama fallback
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 30
     env:
@@ -107,7 +107,7 @@ jobs:
           echo 'independent_backend_operator_verified=true'
           echo 'secret_values_printed=false'
 
-      - name: Verify already provisioned local AI model
+      - name: Verify free local Ollama fallback model
         shell: bash
         run: |
           set -Eeuo pipefail
