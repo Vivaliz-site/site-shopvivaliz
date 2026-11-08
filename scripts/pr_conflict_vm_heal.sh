@@ -7,7 +7,7 @@ set -Eeuo pipefail
 # remain on the VM and are never copied back to Actions.
 
 repo='Vivaliz-site/site-shopvivaliz'
-shared_env='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+gemini_env='/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env'
 pr_number="${1:-}"
 head_ref="${2:-}"
 expected_head_sha="${3:-}"
@@ -119,9 +119,9 @@ if [[ "$merge_clean" -eq 0 ]]; then
     echo 'conflict_ai_route=free_loopback_ollama'
   }
 
-  if [[ -r "$shared_env" && -r "$trusted_healer" ]] \
-    && GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer" --credential-preflight; then
-    if GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer"; then
+  if [[ -r "$gemini_env" && -r "$trusted_healer" ]] \
+    && GEMINI_ENV_FILE="$gemini_env" python3 "$trusted_healer" --credential-preflight; then
+    if GEMINI_ENV_FILE="$gemini_env" python3 "$trusted_healer"; then
       echo 'conflict_ai_route=verified_free_gemini'
     else
       echo 'gemini_free_quota_or_provider_unavailable=true'
