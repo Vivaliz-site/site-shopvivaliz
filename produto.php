@@ -922,6 +922,8 @@ if ($notFound) {
         if (pFreteBtn && pFreteCep && pFreteResult) {
             var pFreteActiveKey = '';
             var pFreteRequestSequence = 0;
+            var pFreteLastSuccessKey = '';
+            var pFreteLastSuccessAt = 0;
             function calcProductFrete() {
                 var cep = pFreteCep.value.replace(/\D/g, '');
                 if (cep.length !== 8) {
@@ -932,6 +934,12 @@ if ($notFound) {
                 var quantity = parseInt(qtyInput ? qtyInput.value : '1', 10) || 1;
                 var requestKey = cep + ':' + quantity;
                 if (pFreteActiveKey === requestKey) return;
+                // The CEP input already auto-calculates on its eighth digit.
+                // A subsequent Calculate click must reuse the fresh visible quote.
+                if (pFreteLastSuccessKey === requestKey &&
+                    Date.now() - pFreteLastSuccessAt < 10000 &&
+                    (pFreteResult.innerHTML.indexOf('frete-results-list') !== -1 ||
+                     pFreteResult.innerHTML.indexOf('data-sv-five-shipping') !== -1)) return;
                 var requestSequence = ++pFreteRequestSequence;
                 pFreteActiveKey = requestKey;
                 pFreteResult.innerHTML = '<span style="color:#0b4f88;font-weight:600;">Calculando as melhores opções de envio...</span>';
@@ -972,6 +980,8 @@ if ($notFound) {
                     });
                     html += '</div>';
                     pFreteResult.innerHTML = html;
+                    pFreteLastSuccessKey = requestKey;
+                    pFreteLastSuccessAt = Date.now();
                 })
                 .catch(function() {
                     if (requestSequence !== pFreteRequestSequence) return;
