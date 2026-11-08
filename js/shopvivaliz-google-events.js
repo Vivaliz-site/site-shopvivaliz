@@ -353,24 +353,93 @@ function funnelClientId() {
     window.addEventListener('shopvivaliz:add_to_cart', trackCommittedCartAdd);
   }
 
+  // Only a user-initiated remove / quantity-minus is a removal conversion.
+  // Successful checkout clears the cart too, but must never be attributed
+  // as remove_from_cart. The click records intent ONLY; cart-updated confirms
+  // the resulting persisted delta, so failed storage writes emit no event.
+  var removalCartSnapshot = readCart();
+  var pendingUserRemoval = null;
+  var pendingCrossTabCartStorage = false;
+
+  function captureUserRemovalIntent(event) {
+    var target = event && event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    var button = target.closest('.btn-remove[data-remove]');
+    var fullRemove = Boolean(button);
+    if (!button) button = target.closest('.qty-btn[data-delta="-1"]');
+    if (!button) return;
+    var index = parseInt(button.getAttribute(fullRemove ? 'data-remove' : 'data-idx'), 10);
+    var cart = readCart();
+    if (!Number.isInteger(index) || index < 0 || !cart[index]) return;
+    var product = cart[index];
+    var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
+    if (!key) return;
+    var lineQuantity = Math.floor(number(product.quantity || 1));
+    var expectedRemoved = fullRemove ? lineQuantity : (lineQuantity > 1 ? 1 : 0);
+    if (expectedRemoved < 1) return;
+    var intent = {
+      key: key,
+      expectedRemoved: expectedRemoved,
+      totalBefore: cartQuantities(cart)[key],
+      product: product
+    };
+    pendingUserRemoval = intent;
+    // Browser event listener microtasks may run before the cart's bubble
+    // handler. Clear intent in the next task rather than before cart.set().
+    // A failed write must not authorize an unrelated later cart update.
+    var expireIntent = function () {
+      if (pendingUserRemoval === intent) pendingUserRemoval = null;
+    };
+    if (typeof setTimeout === 'function') setTimeout(expireIntent, 0);
+    else Promise.resolve().then(expireIntent);
+  }
+  if (typeof window.addEventListener === 'function') {
+    // Capture at the same window before the shared cart-persistence script's
+    // bubbling storage handler dispatches a synchronous cart-updated event.
+    // This preserves the existing cart writer without altering its protocol.
+    window.addEventListener('storage', function (event) {
+      if (!event || event.key !== 'shopvivaliz_cart') return;
+      pendingCrossTabCartStorage = true;
+      Promise.resolve().then(function () { pendingCrossTabCartStorage = false; });
+    }, true);
+  }
+
+  function trackCommittedCartRemoval(event) {
+    var nextCart = readCart();
+    var previousCart = removalCartSnapshot;
+    removalCartSnapshot = nextCart;
+    var intent = pendingUserRemoval;
+    pendingUserRemoval = null;
+    var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+    // Other-tab changes and checkout/order-completion clears are NOT user
+    // removal clicks in this page, even if the persisted cart becomes empty.
+    if (detail.origin === 'storage' || pendingCrossTabCartStorage) {
+      pendingCrossTabCartStorage = false;
+      return;
+    }
+    if (!intent || !intent.key) return;
+
+    var before = cartQuantities(previousCart);
+    var after = cartQuantities(nextCart);
+    if (number(before[intent.key]) !== number(intent.totalBefore)) return;
+    var removed = Math.floor(number(before[intent.key]) - number(after[intent.key]));
+    if (removed < 1 || removed !== intent.expectedRemoved) return;
+    var item = itemFromProduct(intent.product);
+    item.quantity = removed;
+    push('remove_from_cart', {
+      currency: 'BRL',
+      value: number(item.price) * item.quantity,
+      items: [item]
+    });
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('shopvivaliz:cart-updated', trackCommittedCartRemoval);
+  }
+
   function bindClicks() {
     document.addEventListener('click', function (event) {
-      var removeButton = event.target && event.target.closest
-        ? event.target.closest('.btn-remove[data-remove]')
-        : null;
-      if (removeButton) {
-        var cart = readCart();
-        var removeIndex = parseInt(removeButton.getAttribute('data-remove'), 10);
-        if (!isNaN(removeIndex) && cart[removeIndex]) {
-          var removedItem = itemFromProduct(cart[removeIndex]);
-          push('remove_from_cart', {
-            currency: 'BRL',
-            value: number(removedItem.price) * removedItem.quantity,
-            items: [removedItem]
-          });
-        }
-      }
-
+      captureUserRemovalIntent(event);
       // add_to_cart is emitted by the committed cart event below, not by
       // click intent. Cart persistence can fail before the item is added.
 
