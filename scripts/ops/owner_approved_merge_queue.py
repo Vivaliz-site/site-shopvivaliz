@@ -173,10 +173,10 @@ def eligible(pr: object, files: object, reviews: object, checks: object,
     sha = pr.get("head", {}).get("sha", "")
     requires_dual = requires_dual_approval(files)
     if requires_dual:
-        author = creator.get("login", "")
-        required_accounts = set({HUMAN, OPERATOR})
-        if author and author.casefold() in {u.casefold() for u in required_accounts}:
-            required_accounts = {u for u in required_accounts if u.casefold() != author.casefold()}
+        author = creator.get("login")
+        required_accounts = frozenset({HUMAN, OPERATOR})
+        if not isinstance(author, str) or not author.strip() or author.casefold() in required_accounts:
+            return False, "protected_pr_requires_distinct_author"
         ok, reason = verify_approvals(reviews, required_accounts, sha)
         if not ok:
             return False, "protected_requires_dual_approval_on_exact_head"
