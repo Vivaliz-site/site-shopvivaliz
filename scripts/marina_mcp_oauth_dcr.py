@@ -14,9 +14,8 @@ from pathlib import Path
 import re
 import sys
 import time
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+import requests
 
 DOMAIN = "mcp-marina.shopvivaliz.com.br"
 RESOURCE = "https://" + DOMAIN + "/mcp"
@@ -34,14 +33,17 @@ def api_json(url, token="", method="GET", payload=None):
         headers["Authorization"] = "Bearer " + token
     if payload is not None:
         headers["Content-Type"] = "application/json"
-    data = json.dumps(payload).encode() if payload is not None else None
     try:
-        with urlopen(Request(url, headers=headers, data=data, method=method), timeout=10) as res:
-            result = json.load(res)
-    except HTTPError as exc:
-        raise DcrError("provider_http_" + str(exc.code)) from None
-    except (URLError, TimeoutError, OSError, ValueError):
-        raise DcrError("provider_transport_or_json_error") from None
+        response = requests.request(method, url, headers=headers, json=payload,
+                                    allow_redirects=False, timeout=10)
+    except requests.RequestException:
+        raise DcrError("provider_transport_error") from None
+    if response.status_code != 200:
+        raise DcrError("provider_http_" + str(response.status_code))
+    try:
+        result = response.json()
+    except ValueError:
+        raise DcrError("provider_malformed_json") from None
     if not isinstance(result, dict):
         raise DcrError("provider_malformed_json")
     return result
