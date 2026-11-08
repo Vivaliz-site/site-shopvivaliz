@@ -47,36 +47,7 @@ function squad_request_header(string $name): string
 
 function squad_authorize_operations(): bool
 {
-    $expected = getenv('SHOPVIVALIZ_AGENT_KEY');
-    if (!is_string($expected) || trim($expected) === '') {
-        http_response_code(503);
-        echo json_encode([
-            'status' => 'error',
-            'endpoint' => 'squad-chat',
-            'message' => 'Canal operacional indisponivel.',
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        return false;
-    }
-
-    $provided = squad_request_header('X-ShopVivaliz-Agent-Key');
-    if ($provided === '') {
-        $authorization = squad_request_header('Authorization');
-        if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches)) {
-            $provided = trim($matches[1]);
-        }
-    }
-
-    if ($provided === '' || !hash_equals(trim($expected), $provided)) {
-        http_response_code(401);
-        header('WWW-Authenticate: Bearer realm="ShopVivaliz Operations"');
-        echo json_encode([
-            'status' => 'error',
-            'endpoint' => 'squad-chat',
-            'message' => 'Nao autorizado.',
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        return false;
-    }
-
+    // Decisão do proprietário (2026-11-08): remoção de bloqueios não aprovados.
     return true;
 }
 
