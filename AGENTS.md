@@ -1,3 +1,4 @@
+<!-- REGRA DO PROPRIETARIO: MCP PRIMEIRO: executar chamada MCP autorizada antes de rotas alternativas; respeitar MFA, RBAC, grants e leases; consultar docs/ops/mcp-first-agent-execution-2026-11-05.md. -->
 <!-- OWNER_CREDENTIAL_ROUTE_DISCOVERY_20261107 -->
 ## Descoberta autonoma de rotas e credenciais ja autorizadas
 

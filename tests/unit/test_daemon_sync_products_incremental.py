@@ -22,6 +22,7 @@ class IncrementalCatalogSyncTest(unittest.TestCase):
                 "estoque_disponivel": 4,
                 "_olist_updated_at": "2026-09-10T12:00:00Z",
                 "_detail_synced_at": "2999-09-10T12:00:00+00:00",
+                "_cache_schema_version": daemon.PUBLIC_PRODUCT_SCHEMA_VERSION,
                 "_erp_base_prices": {"preco": 15.0, "precoPromocional": 0.0},
                 # Only current-schema cache can reuse metadata; old schema
                 # must re-fetch detail to preserve variant parent identities.
@@ -49,6 +50,17 @@ class IncrementalCatalogSyncTest(unittest.TestCase):
         self.assertEqual(previous["10"]["anexos"], products[0]["anexos"])
         self.assertEqual([{"sku": "COMP-1", "quantidade": 2}], products[0]["kit"])
 
+
+    def test_legacy_schema_never_reuses_compacted_product_metadata(self):
+        cached = {
+            "_cache_schema_version": daemon.PUBLIC_PRODUCT_SCHEMA_VERSION - 1,
+            "_olist_updated_at": "2026-09-10T12:00:00Z",
+            "_detail_synced_at": "2999-09-10T12:00:00+00:00",
+            "_erp_base_prices": {"preco": 15.0},
+        }
+        self.assertFalse(daemon.detail_cache_is_fresh(cached, "2026-09-10T12:00:00Z"))
+        cached["_cache_schema_version"] = daemon.PUBLIC_PRODUCT_SCHEMA_VERSION
+        self.assertTrue(daemon.detail_cache_is_fresh(cached, "2026-09-10T12:00:00Z"))
 
     def test_unchanged_marker_but_stale_detail_is_refetched_for_erp_media_changes(self):
         previous = {
