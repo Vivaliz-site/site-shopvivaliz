@@ -236,9 +236,10 @@ def decide(files: object, reviews: object, head_sha: str, changed_files: object 
     # Priority Check: Does this PR touch locks, governance, rules, tasks, or sensitive actions?
     if requires_dual_approval(files):
         required = set(DUAL_REQUIRED_REVIEWERS)
+        # GitHub forbids self-review; never waive either designated approval.
+        # Protected PRs must be opened by a separate, independent identity.
         if pr_author and pr_author.casefold() in {u.casefold() for u in required}:
-            # GitHub forbids PR authors from reviewing their own PR.
-            required = {u for u in required if u.casefold() != pr_author.casefold()}
+            return False, "protected_pr_requires_distinct_author"
         return verify_approvals(reviews, required, head_sha)
 
     # Standard Check: VM deletion or price changes require shopvivaliz-human
@@ -296,6 +297,8 @@ def main(argv=None) -> int:
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
         pr_author = pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None
+        if protected and (not isinstance(pr_author, str) or not pr_author.strip()):
+            raise ValueError("protected_pr_author_unavailable")
         approved, reason = decide(files, reviews, args.head, pr.get("changed_files"), pr_author)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         print("OWNER_REVIEW_GATE=DENIED reason=github_verification_unavailable")
