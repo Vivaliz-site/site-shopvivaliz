@@ -1,0 +1,69 @@
+name: Marina MCP Cloudflare DCR inspect (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marina-mcp-cloudflare-dcr-inspect
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ACCOUNT_ID: 0afb7d99f708b9455598df9fa1035164
+      APP_ID: 961c1049-6e70-46ae-bcfa-7827fbdf7553
+      MCP_DOMAIN: mcp-marina.shopvivaliz.com.br
+    steps:
+      - name: Probe existing Access application with the pre-provisioned GitHub secret
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "CF_TOKEN=ABSENT"; exit 3; }
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+          chmod 600 "$response"
+          status="$(curl --silent --show-error --max-time 15 -o "$response" -w '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Accept: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/access/apps/$APP_ID")"
+          echo "CLOUDFLARE_ACCESS_APP_READ_HTTP=$status"
+          if [ "$status" != 200 ]; then
+            echo "CLOUDFLARE_ACCESS_APP_READ=NOT_AUTHORIZED_OR_UNAVAILABLE"
+            exit 2
+          fi
+          jq -e --arg id "$APP_ID" --arg domain "$MCP_DOMAIN" \
+            '.success == true and .result.id == $id and .result.domain == $domain and (.result.type | IN("self_hosted","mcp","mcp_portal"))' \
+            "$response" >/dev/null || { echo "CLOUDFLARE_ACCESS_APP=IDENTITY_MISMATCH"; exit 3; }
+          echo "CLOUDFLARE_ACCESS_APP_IDENTITY=PASS"
+          jq -r '
+            .result as $app |
+            "CLOUDFLARE_ACCESS_APP_TYPE=" + ($app.type // "missing"),
+            "CLOUDFLARE_MANAGED_OAUTH=" + (($app.oauth_configuration.enabled // false)|tostring),
+            "CLOUDFLARE_DCR_ENABLED=" + (($app.oauth_configuration.dynamic_client_registration.enabled // false)|tostring),
+            "CLOUDFLARE_POLICY_COUNT=" + (($app.policies // [] | length)|tostring),
+            "CLOUDFLARE_REDIRECT_COUNT=" + (($app.oauth_configuration.dynamic_client_registration.allowed_uris // [] | length)|tostring),
+            "CLOUDFLARE_LOCALHOST_ANY=" + (($app.oauth_configuration.dynamic_client_registration.allow_any_on_localhost // false)|tostring),
+            "CLOUDFLARE_LOOPBACK_ANY=" + (($app.oauth_configuration.dynamic_client_registration.allow_any_on_loopback // false)|tostring)
+          ' "$response"
+          jq -r '.result.oauth_configuration.dynamic_client_registration.allowed_uris[]? |
+            select(startswith("https://chatgpt.com/connector")) | "CLOUDFLARE_EXISTING_CHATGPT_REDIRECT=" + .' "$response"
+          echo "CLOUDFLARE_INSPECT=PASS"
+
+      - name: Inspect public authorization discovery
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+          status="$(curl --silent --show-error --max-time 15 -o "$response" -w '%{http_code}' \
+            "https://$MCP_DOMAIN/.well-known/oauth-authorization-server")"
+          test "$status" = 200 || { echo "PUBLIC_OAUTH_HTTP=$status"; exit 2; }
+          jq -e '(.code_challenge_methods_supported // []) | index("S256")' "$response" >/dev/null
+          echo "OAUTH_PKCE_S256=PASS"
+          jq -r '"OAUTH_DCR_PUBLISHED=" + (has("registration_endpoint")|tostring)' "$response"
