@@ -89,12 +89,11 @@ def decision(pr: dict, files: list, reviews: list, expected_sha: str) -> str:
     }
 
     author = pr.get("user", {}).get("login", "") if isinstance(pr.get("user"), dict) else ""
-    needed_reviewers = (
-        {HUMAN, OPERATOR}
-        if requires_dual_approval(files)
-        else {HUMAN}
-    )
-    if author and author.casefold() in {u.casefold() for u in needed_reviewers}:
+    dual_required = requires_dual_approval(files)
+    needed_reviewers = {HUMAN, OPERATOR} if dual_required else {HUMAN}
+    if dual_required and (not author or author.casefold() in needed_reviewers):
+        return "protected_pr_requires_distinct_author"
+    if not dual_required and author and author.casefold() in needed_reviewers:
         needed_reviewers = {u for u in needed_reviewers if u.casefold() != author.casefold()}
 
     if needed_reviewers <= requested_logins:
@@ -167,8 +166,8 @@ def run(number: int, expected_sha: str, token: str) -> int:
         owner_required = requires_owner(files, pr.get("labels"))
         reviews = github(f"/pulls/{number}/reviews?per_page=100", token) if owner_required else []
         status = decision(pr, files, reviews, expected_sha)
-        if status == "protected_pr_must_be_ready":
-            print("OWNER_REVIEW_REQUEST=PENDING protected_pr_must_be_ready")
+        if status in {"protected_pr_must_be_ready", "protected_pr_requires_distinct_author"}:
+            print("OWNER_REVIEW_REQUEST=PENDING " + status)
             return 3
         if status != "request_owner_review":
             print("OWNER_REVIEW_REQUEST=SKIPPED reason=" + status)
@@ -179,6 +178,8 @@ def run(number: int, expected_sha: str, token: str) -> int:
             raise ValueError("pr_changed_before_request")
         author = current.get("user", {}).get("login", "") if isinstance(current.get("user"), dict) else ""
         raw_reviewers = [HUMAN, OPERATOR] if requires_dual_approval(files) else [HUMAN]
+        if requires_dual_approval(files) and author.casefold() in {HUMAN, OPERATOR}:
+            raise ValueError("protected_pr_requires_distinct_author")
         reviewers_to_request = [u for u in raw_reviewers if u.casefold() != author.casefold()]
         already_requested = {
             r.get("login", "").casefold()
