@@ -55,6 +55,20 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 self.assertTrue(res)
                 self.assertEqual(reason, "dual_owner_review_approved_exact_head")
 
+    def test_no_author_exemption_for_dual_approval(self):
+        files = [{"filename": "scripts/quality/verify_owner_protected_pr_review.py"}]
+        approvals = [review(login="shopvivaliz-human"), review(login="fredmourao-ai")]
+        for author in ("shopvivaliz-human", "fredmourao-ai"):
+            with self.subTest(author=author):
+                self.assertEqual(
+                    GATE.decide(files, approvals, HEAD, pr_author=author),
+                    (False, "protected_pr_requires_distinct_author"),
+                )
+        self.assertEqual(
+            GATE.decide(files, approvals, HEAD, pr_author="github-actions[bot]"),
+            (True, "dual_owner_review_approved_exact_head"),
+        )
+
     def test_vm_deletion_and_price_changes_require_human(self):
         for path in ("scripts/ops/terminate-oci-instance.sh",
                      "deploy/oci/destroy-vm.sh",
