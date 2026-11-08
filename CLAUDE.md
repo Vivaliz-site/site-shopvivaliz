@@ -29,6 +29,21 @@ Regra de qualidade: nao perguntar "tem token admin?" ao owner nem encerrar com "
 <!-- OWNER_NO_UNAPPROVED_RESTRICTIONS_20261105 -->
 > **Regra do proprietario (2026-11-05): nenhum agente cria restricao ou bloqueio sem aprovacao expressa do dono.** Isso vale para qualquer agente (Claude, GPT, Codex, Gemini, Copilot, workers e subagentes) e para qualquer lugar: instrucoes, documentacao, codigo, workflows, testes de contrato, configuracao de MCP, permissoes, politicas e grants. Nao adicionar, reintroduzir nem endurecer proibicao, trava ou "NAO USE" por conta propria; se achar que algo precisa de limite, propor ao dono em PR ou pergunta e esperar a aprovacao. Restricao que o dono diga que nao aprovou deve ser removida quando ele pedir. Protecoes que o dono ja aprovou continuam valendo, e o agente nao as enfraquece por conta propria. Contexto: a proibicao de SSH direto, RDC e Bastion foi colocada sem aprovacao e retirada em 2026-11-05.
 
+<!-- DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
+> **Bloqueio absoluto contra reintroducao de travas desktop GUI (08/11/2026):**
+> As travas de clique, digitacao e abertura de janelas de interface gráfica no Remote Control MCP (`desktop_click`, `desktop_type`, `desktop_open` vinculados a `runtime_lock_required`, `_assert_runtime_mutation` ou `MUTATING_RUNTIME_ACTIONS`) foram formalmente removidas na PR #3837 aprovada pelo proprietario.
+> **Nenhum agente (ChatGPT, Codex, Claude, Gemini, subagentes ou bots) esta autorizado a reintroduzir ou restaurar tais travas.**
+> Qualquer PR que tente retornar essas travas para acoes desktop GUI exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) de **AMBAS** as contas GitHub no HEAD exato: `shopvivaliz-human` E `fredmourao-ai`. Sem a aprovacao de ambas as contas, o gate de CI (`verify_owner_protected_pr_review.py`) e a fila de merge (`owner_approved_merge_queue.py`) bloquearao o merge.
+<!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
+
+<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
+> **Regra do proprietario: QUALQUER insercao de trava exige aprovacao das duas contas (08/11/2026):**
+> Qualquer insercao, criacao, adicao ou restauracao de trava, restricao, barreira, bloqueio de ferramentas/comandos, runtime lock (`runtime_lock_required`, `assert_runtime_lock`, `_assert_runtime_mutation`, `MUTATING_RUNTIME_ACTIONS`, `MUTATING_ACTIONS`), lease/fencing obrigatorio ou diretivas restritivas em MCP, rotas ou agentes exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) no HEAD exato de **AMBAS** as contas GitHub:
+> 1. `shopvivaliz-human`
+> 2. `fredmourao-ai`
+> Nenhum agente esta autorizado a aprovar ou ignorar este requisito. Sem a aprovacao conjunta e formal de ambas as contas no commit exato, os gates automatizados (`verify_owner_protected_pr_review.py` e `owner_approved_merge_queue.py`) bloquearao o PR (`FAIL_CLOSED`).
+<!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
+
 > **REGRA DO PROPRIETARIO: MCP PRIMEIRO = TENTATIVA REAL.** Antes de optar por RDC/SSH ou encerrar tarefa remota, chamar uma ferramenta MCP adequada e autorizada para o host na sessao atual. Consultar catalogo nao conta como tentativa. Registrar host, ferramenta, data/hora, task_id/request_id e resultado; se indisponivel, declarar MCP_NOT_EXPOSED, nunca MCP_ATTEMPTED. Fonte: docs/ops/mcp-first-agent-execution-2026-11-05.md.
 
 <!-- OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
