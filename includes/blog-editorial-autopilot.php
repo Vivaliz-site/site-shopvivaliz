@@ -359,7 +359,7 @@ function sv_blog_editorial_topic_profile(string $title): array
         [
             'match' => ['ferramenta', 'ferramentas', 'reparo', 'reparos', 'conserto', 'consertos'],
             'category' => 'Ferramentas',
-            'image_url' => '/public/assets/blog/category-editorial/ferramentas.jpg',
+            'image_url' => '/public/assets/blog/category-editorial/ferramentas-v2.jpg',
             'search_term' => 'ferramentas',
         ],
         [

@@ -41,7 +41,7 @@ $method = new ReflectionMethod(BlogArticleRepository::class, 'resolveImage');
 foreach (['ferramentas', 'ferragens', 'organizacao', 'rodizios', 'jardim'] as $category) {
     $legacy = '/public/assets/category-images/cat-' . $category . '.jpg';
     $resolved = $method->invoke($repository, $legacy, ['slug' => 'sample', 'title' => $category]);
-    if ($resolved !== '/public/assets/blog/category-editorial/' . $category . '.jpg') {
+    if ($resolved !== '/public/assets/blog/category-editorial/' . $category . ($category === 'ferramentas' ? '-v2' : '') . '.jpg') {
         fwrite(STDERR, "Legacy fallback was not repaired: {$legacy}\n");
         exit(1);
     }
@@ -51,7 +51,7 @@ $svg = $method->invoke($repository, '/public/assets/blog/como-escolher-ferrament
     'title' => 'Como escolher ferramentas',
     'category' => 'Ferramentas',
 ]);
-if ($svg !== '/public/assets/blog/category-editorial/ferramentas.jpg') {
+if ($svg !== '/public/assets/blog/category-editorial/ferramentas-v2.jpg') {
     fwrite(STDERR, "Legacy SVG override not repaired\n");
     exit(1);
 }
