@@ -1,0 +1,59 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3830,
+  "resource": "amazon-returns:safet:marina",
+  "principal": "amazon-returns-safet-service",
+  "host": "marina-a1-4c24g",
+  "target_repository": "Vivaliz-site/amazon-returns-safet",
+  "capabilities": [
+    "safe_t_submit"
+  ],
+  "operation": "activate_d45_safe_t_automation",
+  "tenant_id": 1,
+  "amazon_connection_id": 1,
+  "one_use": true,
+  "expires_at_utc": "2026-11-30T23:59:00Z",
+  "allowed_write_actions": [
+    "SAFE_T_SUBMIT"
+  ],
+  "other_write_actions_denied": [
+    "SAFE_T_APPEAL",
+    "SAFE_T_EMAIL_REVIEW",
+    "SAFE_T_EMAIL_REPLY",
+    "SELLER_SUPPORT_OPEN",
+    "SELLER_SUPPORT_UPDATE",
+    "ERP_SALES_RETURN_CREATE"
+  ],
+  "automatic_future_cases": true,
+  "min_days_since_refund": 45,
+  "max_days_since_refund_exclusive": 90,
+  "max_new_claims_total": 20,
+  "max_new_claims_per_utc_day": 5,
+  "excluded_case_ids": [
+    8803
+  ],
+  "existing_grants_unmodified": [
+    3556,
+    3673
+  ],
+  "activation_requires_certified_production_adapter": true,
+  "mandatory_guards": [
+    "owner_approved_head_and_merged_pr",
+    "exact_host_tenant_connection_and_service_principal",
+    "fba_onsite_or_delivery_by_amazon_program_only",
+    "first_official_eligibility_check_at_d45",
+    "amazon_provider_specific_wait_and_eligibility_honored",
+    "no_new_opening_on_or_after_d90",
+    "warehouse_physical_receipt_absent",
+    "refunded_by_amazon_confirmed",
+    "seller_financial_credit_unrecovered",
+    "official_seller_central_eligibility_confirmed",
+    "no_existing_safe_t_or_duplicate_support",
+    "external_claim_readback_and_idempotency",
+    "per_case_durable_fencing_and_lease_single_writer",
+    "one_use_activation_and_max_claim_counts_durable",
+    "kill_switch_on_by_default_and_restored_even_on_crash",
+    "certified_immutable_deploy_and_real_ui_e2e"
+  ]
+}
