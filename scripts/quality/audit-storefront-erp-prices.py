@@ -133,7 +133,23 @@ def evaluate(
     excluded: list[dict[str, Any]] = []
     verified = 0
     verified_published = 0
+    unpriced_structural_parents = 0
     sku_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+    # ERP variation parents (tipo V) are non-sellable containers. Never infer
+    # that from the SKU suffix alone: require linked active child identities,
+    # zero available stock, and absence from the published storefront.
+    linked_children: dict[str, set[str]] = defaultdict(set)
+    for child_id, child in erp_details.items():
+        parent = child.get("produtoPai") if isinstance(child.get("produtoPai"), dict) else {}
+        if parent.get("id") not in (None, ""):
+            linked_children[str(parent["id"])].add(str(child_id))
+    for parent_id, parent in erp_details.items():
+        variants = parent.get("variacoes")
+        if isinstance(variants, list):
+            for variant in variants:
+                if isinstance(variant, dict) and variant.get("id") not in (None, ""):
+                    linked_children[str(parent_id)].add(str(variant["id"]))
 
     for pid in sorted(active):
         detail = erp_details.get(pid)
@@ -149,7 +165,31 @@ def evaluate(
         regular, promotional = amazon_prices_for(pid, detail, amazon_table)
         effective = effective_price(regular, promotional)
         if effective is None:
-            issues.append({"code": "erp_price_invalid", "id": pid, "sku": sku})
+            if str(detail.get("tipo") or "").strip().upper() == "V":
+                # A parent may have zero price ONLY when it is proven structural.
+                # Real child prices remain subject to the normal ERP/catalog gate.
+                if page is not None:
+                    issues.append({"code": "unpriced_parent_published", "id": pid, "sku": sku})
+                elif item is None or str(item.get("tipo") or "").strip().upper() != "V":
+                    issues.append({"code": "unpriced_parent_cache_missing_or_wrong_type",
+                                   "id": pid, "sku": sku})
+                elif (item.get("_price_source") != "olist_tiny_amazon"
+                      or item.get("_price_list_id") != 991):
+                    issues.append({"code": "unpriced_parent_price_provenance_invalid",
+                                   "id": pid, "sku": sku})
+                elif (item.get("estoque_disponivel") is None
+                      or not str(item.get("estoque_disponivel")).strip()
+                      or cents(item.get("estoque_disponivel")) != 0):
+                    issues.append({"code": "unpriced_parent_has_stock", "id": pid, "sku": sku})
+                elif not (linked_children.get(pid, set()) & (set(active) - {pid})):
+                    issues.append({"code": "unpriced_parent_without_active_variations",
+                                   "id": pid, "sku": sku})
+                else:
+                    excluded.append({"id": pid, "sku": sku,
+                                     "reason": "unpriced_structural_parent"})
+                    unpriced_structural_parents += 1
+            else:
+                issues.append({"code": "erp_price_invalid", "id": pid, "sku": sku})
             continue
         verified += 1
         if sku:
@@ -211,6 +251,7 @@ def evaluate(
     counts = {
         "erp_active": len(active), "cache_active": len(cached),
         "site_published": len(public), "erp_details_verified": verified,
+        "unpriced_structural_parents": unpriced_structural_parents,
         "price_list_id": 991,
         "published_prices_matching_erp": verified_published,
         "excluded_or_duplicate_not_published": len(excluded),

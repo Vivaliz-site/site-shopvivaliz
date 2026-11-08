@@ -187,6 +187,88 @@ class PriceParityTests(unittest.TestCase):
         self.assertEqual({x["reason"] for x in data["unpublished_exclusions"]},
             {"missing_sku", "explicit_storefront_exclusion"})
 
+    def test_unpriced_structural_parent_is_excluded_but_child_price_is_audited(self):
+        parent = item(100, "JVCD33-PAI", 0)
+        parent.update({"tipo": "V", "tipoVariacao": "P", "estoque_disponivel": 0,
+                       "variacoes": [{"id": 101, "sku": "JVCDPA33"}]})
+        child = item(101, "JVCDPA33", 129.90)
+        child["produtoPai"] = {"id": 100, "sku": "JVCD33-PAI"}
+        result = evaluate(
+            [active(100, "JVCD33-PAI"), active(101, "JVCDPA33")],
+            {"100": parent, "101": child}, [parent, child],
+            [published(101, "JVCDPA33", 129.90)])
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["counts"]["published_prices_matching_erp"], 1)
+        self.assertEqual(result["counts"]["unpriced_structural_parents"], 1)
+        self.assertEqual(result["issues"], [])
+        self.assertIn({"id": "100", "sku": "JVCD33-PAI",
+                       "reason": "unpriced_structural_parent"},
+                      result["unpublished_exclusions"])
+
+    def test_sku_suffix_alone_does_not_exempt_missing_sellable_price(self):
+        product = item(100, "JVCD33-PAI", 0)
+        product["tipo"] = "S"
+        result = evaluate([active(100, "JVCD33-PAI")],
+                          {"100": product}, [product], [])
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("erp_price_invalid", {x["code"] for x in result["issues"]})
+
+    def test_unpriced_parent_published_on_site_is_blocked(self):
+        parent = item(100, "MODEL-PAI", 0)
+        parent.update({"tipo": "V", "tipoVariacao": "P", "estoque_disponivel": 0,
+                       "variacoes": [{"id": 101, "sku": "CHILD"}]})
+        child = item(101, "CHILD", 50)
+        result = evaluate([active(100, "MODEL-PAI"), active(101, "CHILD")],
+                          {"100": parent, "101": child}, [parent, child],
+                          [published(100, "MODEL-PAI", 10),
+                           published(101, "CHILD", 50)])
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("unpriced_parent_published", {x["code"] for x in result["issues"]})
+
+    def test_unpriced_parent_with_available_stock_is_blocked(self):
+        parent = item(100, "MODEL-PAI", 0)
+        parent.update({"tipo": "V", "tipoVariacao": "P", "estoque_disponivel": 2,
+                       "variacoes": [{"id": 101, "sku": "CHILD"}]})
+        child = item(101, "CHILD", 50)
+        result = evaluate([active(100, "MODEL-PAI"), active(101, "CHILD")],
+                          {"100": parent, "101": child}, [parent, child],
+                          [published(101, "CHILD", 50)])
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("unpriced_parent_has_stock", {x["code"] for x in result["issues"]})
+
+    def test_parent_link_in_child_detail_proves_active_variation_without_parent_list(self):
+        parent = item(100, "GROUP", 0)
+        parent.update({"tipo": "V", "tipoVariacao": "P", "estoque_disponivel": 0})
+        child = item(101, "GROUP-RED", 50)
+        child["produtoPai"] = {"id": 100, "sku": "GROUP"}
+        data = evaluate([active(100, "GROUP"), active(101, "GROUP-RED")],
+                        {"100": parent, "101": child}, [parent, child],
+                        [published(101, "GROUP-RED", 50)])
+        self.assertEqual(data["status"], "PASS")
+        self.assertEqual(data["counts"]["unpriced_structural_parents"], 1)
+
+    def test_invalid_child_price_still_blocks_parent_exemption(self):
+        parent = item(100, "GROUP", 0)
+        parent.update({"tipo": "V", "tipoVariacao": "P", "estoque_disponivel": 0,
+                       "variacoes": [{"id": 101, "sku": "GROUP-RED"}]})
+        child = item(101, "GROUP-RED", 0)
+        child["produtoPai"] = {"id": 100, "sku": "GROUP"}
+        data = evaluate([active(100, "GROUP"), active(101, "GROUP-RED")],
+                        {"100": parent, "101": child}, [parent, child], [])
+        self.assertEqual(data["status"], "FAIL")
+        self.assertEqual(data["counts"]["unpriced_structural_parents"], 1)
+        self.assertIn("erp_price_invalid", {x["code"] for x in data["issues"]})
+
+    def test_unpriced_parent_without_active_children_is_blocked(self):
+        parent = item(100, "MODEL-PAI", 0)
+        parent.update({"tipo": "V", "tipoVariacao": "P", "estoque_disponivel": 0,
+                       "variacoes": [{"id": 101, "sku": "MISSING-CHILD"}]})
+        result = evaluate([active(100, "MODEL-PAI")],
+                          {"100": parent}, [parent], [])
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("unpriced_parent_without_active_variations",
+                      {x["code"] for x in result["issues"]})
+
     def test_missing_unexcluded_product_is_a_blocker(self):
         data=evaluate([active(100, "SKU")],
             {"100": item(100, "SKU", 100)}, [item(100, "SKU", 100)], [])
