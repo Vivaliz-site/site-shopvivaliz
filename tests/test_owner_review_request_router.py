@@ -56,6 +56,59 @@ class OwnerReviewRouterTests(unittest.TestCase):
         files = [{"filename": "AGENTS.md", "patch": None}]
         self.assertTrue(requires_owner(files, []))
 
+    def test_desktop_gui_lock_restoration_requires_dual_review(self):
+        files = [{
+            "filename": "remote-control-mcp/server.py",
+            "patch": "@@ -10,3 +10,4 @@\n MUTATING_ACTIONS = {\n+    \"desktop_click\": True,\n }",
+        }]
+        self.assertTrue(requires_owner(files, []))
+        # Neither requested -> request review
+        self.assertEqual(decision(pr(), files, [], SHA), "request_owner_review")
+        # Only human requested -> still need operator
+        self.assertEqual(
+            decision(pr(reviewers=[{"login": "shopvivaliz-human"}]), files, [], SHA),
+            "request_owner_review",
+        )
+        # Only operator requested -> still need human
+        self.assertEqual(
+            decision(pr(reviewers=[{"login": "fredmourao-ai"}]), files, [], SHA),
+            "request_owner_review",
+        )
+        # Both requested -> idempotent
+        self.assertEqual(
+            decision(
+                pr(reviewers=[{"login": "shopvivaliz-human"}, {"login": "fredmourao-ai"}]),
+                files,
+                [],
+                SHA,
+            ),
+            "owner_already_requested",
+        )
+        # Both reviewed current head -> not requested twice
+        reviews = [
+            {
+                "user": {"login": "shopvivaliz-human"},
+                "state": "APPROVED",
+                "commit_id": SHA,
+                "submitted_at": "2026-11-08T18:00:00Z",
+            },
+            {
+                "user": {"login": "fredmourao-ai"},
+                "state": "APPROVED",
+                "commit_id": SHA,
+                "submitted_at": "2026-11-08T18:05:00Z",
+            },
+        ]
+        self.assertEqual(
+            decision(pr(), files, reviews, SHA),
+            "owner_already_reviewed_current_head",
+        )
+        # One reviewed on head, one requested -> considered handled
+        self.assertEqual(
+            decision(pr(reviewers=[{"login": "fredmourao-ai"}]), files, [reviews[0]], SHA),
+            "owner_already_requested",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

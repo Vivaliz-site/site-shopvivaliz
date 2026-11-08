@@ -167,5 +167,48 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             RULESET.mutation_plan({**before,"rules":before["rules"][:-1]})
 
+    def test_desktop_lock_restoration_requires_dual_approval_in_merge_queue(self):
+        pr = {"state": "open", "draft": False, "user": {"login": "some-agent-or-bot"},
+              "base": {"ref": "main"}, "head": {"sha": HEAD, "repo": {"full_name": REPO}},
+              "labels": []}
+        files = [{"filename": "remote-control-mcp/server.py",
+                  "patch": "@@ -10,3 +10,4 @@\n MUTATING = {\n+    \"desktop_click\": True,\n }"}]
+        checks = [{"name": n, "status": "completed", "conclusion": "success",
+                   "app": {"id": 15368}, "id": i + 1} for i, n in enumerate(sorted(RUNNER.REQUIRED))]
+        rules = [{"type": t, "parameters": {"required_status_checks": [{"context": n, "integration_id": 15368}
+                  for n in RUNNER.REQUIRED]}} if t == "required_status_checks" else {"type": t}
+                  for t in ("pull_request", "non_fast_forward", "required_status_checks", "merge_queue")]
+        human_rev = {"user": {"login": "shopvivaliz-human"}, "state": "APPROVED",
+                     "commit_id": HEAD, "submitted_at": "2026-11-08T18:00:00Z"}
+        operator_rev = {"user": {"login": "fredmourao-ai"}, "state": "APPROVED",
+                        "commit_id": HEAD, "submitted_at": "2026-11-08T18:05:00Z"}
+
+        # No reviews -> denied
+        self.assertEqual(
+            RUNNER.eligible(pr, files, [], checks, rules, specialized_check_completed=True),
+            (False, "desktop_lock_requires_dual_approval_on_exact_head"),
+        )
+        # Only human -> denied
+        self.assertEqual(
+            RUNNER.eligible(pr, files, [human_rev], checks, rules, specialized_check_completed=True),
+            (False, "desktop_lock_requires_dual_approval_on_exact_head"),
+        )
+        # Only operator -> denied
+        self.assertEqual(
+            RUNNER.eligible(pr, files, [operator_rev], checks, rules, specialized_check_completed=True),
+            (False, "desktop_lock_requires_dual_approval_on_exact_head"),
+        )
+        # One stale commit -> denied
+        stale_human = {**human_rev, "commit_id": "c" * 40}
+        self.assertEqual(
+            RUNNER.eligible(pr, files, [stale_human, operator_rev], checks, rules, specialized_check_completed=True),
+            (False, "desktop_lock_requires_dual_approval_on_exact_head"),
+        )
+        # Both approved on exact head -> allowed
+        self.assertEqual(
+            RUNNER.eligible(pr, files, [human_rev, operator_rev], checks, rules, specialized_check_completed=True),
+            (True, "desktop_lock_dual_approved_exact_head_ready_for_native_queue"),
+        )
+
 if __name__=="__main__":
     unittest.main()

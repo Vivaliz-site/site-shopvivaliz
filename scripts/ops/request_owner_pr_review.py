@@ -18,17 +18,22 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from scripts.ops.owner_approved_merge_queue import protected
-from scripts.quality.verify_owner_protected_pr_review import is_protected_path
+from scripts.quality.verify_owner_protected_pr_review import (
+    is_protected_path,
+    requires_desktop_lock_dual_approval,
+)
 
 REPO = "Vivaliz-site/site-shopvivaliz"
 HUMAN = "shopvivaliz-human"
+OPERATOR = "fredmourao-ai"
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 OWNER_LABELS = frozenset({"owner-review-required", "owner-approval-required", "commercial-owner-approval"})
 POLICY_DOCS = frozenset({"AGENTS.md", "CLAUDE.md", "docs/knowledge/agent-rules.md", "docs/knowledge/host-access.md"})
 OWNER_DIRECTIVE_MARKERS = ("OWNER_DIRECTIVES_", "OWNER_NO_UNAPPROVED_RESTRICTIONS_",
                            "SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1", "PR_HUMAN_VISIBILITY_ROUTING_V1",
                            "PROTECTED_OWNER_REVIEW_REQUEST_VISIBILITY_V1",
-                           "OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2")
+                           "OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2",
+                           "DESKTOP_GUI_LOCK_PROHIBITION_")
 
 
 def requires_owner(files: object, labels: object) -> bool:
@@ -39,6 +44,8 @@ def requires_owner(files: object, labels: object) -> bool:
     if any(not isinstance(label, dict) or not isinstance(label.get("name"), str) for label in labels):
         raise ValueError("labels_invalid")
     if any(label["name"].casefold() in OWNER_LABELS for label in labels):
+        return True
+    if requires_desktop_lock_dual_approval(files):
         return True
     for f in files:
         if not isinstance(f, dict) or not isinstance(f.get("filename"), str):
@@ -72,20 +79,45 @@ def decision(pr: dict, files: list, reviews: list, expected_sha: str) -> str:
     requested = pr.get("requested_reviewers")
     if not isinstance(requested, list):
         raise ValueError("review_requests_unavailable")
-    if any(isinstance(r, dict) and r.get("login", "").casefold() == HUMAN for r in requested):
+    requested_logins = {
+        r.get("login", "").casefold()
+        for r in requested
+        if isinstance(r, dict) and isinstance(r.get("login"), str)
+    }
+
+    needed_reviewers = (
+        {HUMAN, OPERATOR}
+        if requires_desktop_lock_dual_approval(files)
+        else {HUMAN}
+    )
+
+    if needed_reviewers <= requested_logins:
         return "owner_already_requested"
+
     if not isinstance(reviews, list) or len(reviews) >= 100:
         raise ValueError("review_history_unavailable_or_incomplete")
-    owner = [r for r in reviews if isinstance(r, dict)
-             and isinstance(r.get("user"), dict)
-             and r["user"].get("login", "").casefold() == HUMAN
-             and r.get("state") in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}]
-    if owner:
-        if any(not isinstance(r.get("submitted_at"), str) for r in owner):
-            raise ValueError("review_timestamp_missing")
-        latest = max(owner, key=lambda r: r["submitted_at"])
-        if latest.get("commit_id") == expected_sha and latest.get("state") in {"APPROVED", "CHANGES_REQUESTED"}:
+
+    reviewed_on_head = set()
+    for user in needed_reviewers:
+        user_reviews = [
+            r for r in reviews
+            if isinstance(r, dict)
+            and isinstance(r.get("user"), dict)
+            and r["user"].get("login", "").casefold() == user.casefold()
+            and r.get("state") in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}
+        ]
+        if user_reviews:
+            if any(not isinstance(r.get("submitted_at"), str) for r in user_reviews):
+                raise ValueError("review_timestamp_missing")
+            latest = max(user_reviews, key=lambda r: r["submitted_at"])
+            if latest.get("commit_id") == expected_sha and latest.get("state") in {"APPROVED", "CHANGES_REQUESTED"}:
+                reviewed_on_head.add(user.casefold())
+
+    if needed_reviewers <= (requested_logins | reviewed_on_head):
+        if needed_reviewers <= reviewed_on_head:
             return "owner_already_reviewed_current_head"
+        return "owner_already_requested"
+
     return "request_owner_review"
 
 
@@ -139,14 +171,31 @@ def run(number: int, expected_sha: str, token: str) -> int:
         current = github(f"/pulls/{number}", token)
         if current.get("head", {}).get("sha") != expected_sha or current.get("state") != "open":
             raise ValueError("pr_changed_before_request")
-        github(f"/pulls/{number}/requested_reviewers", token, method="POST", data={"reviewers": [HUMAN]})
-        readback = github(f"/pulls/{number}", token)
-        if readback.get("head", {}).get("sha") != expected_sha:
-            raise ValueError("pr_changed_after_request")
-        if not any(isinstance(r, dict) and r.get("login", "").casefold() == HUMAN
-                   for r in readback.get("requested_reviewers", [])):
-            raise ValueError("reviewer_request_not_persisted")
-        print("OWNER_REVIEW_REQUEST=SUCCESS reviewer=shopvivaliz-human")
+        reviewers_to_request = (
+            [HUMAN, OPERATOR] if requires_desktop_lock_dual_approval(files) else [HUMAN]
+        )
+        already_requested = {
+            r.get("login", "").casefold()
+            for r in current.get("requested_reviewers", [])
+            if isinstance(r, dict)
+        }
+        to_request = [u for u in reviewers_to_request if u.casefold() not in already_requested]
+        if to_request:
+            github(f"/pulls/{number}/requested_reviewers", token, method="POST", data={"reviewers": to_request})
+            readback = github(f"/pulls/{number}", token)
+            if readback.get("head", {}).get("sha") != expected_sha:
+                raise ValueError("pr_changed_after_request")
+            new_requested = {
+                r.get("login", "").casefold()
+                for r in readback.get("requested_reviewers", [])
+                if isinstance(r, dict)
+            }
+            if not all(u.casefold() in new_requested for u in to_request):
+                raise ValueError("reviewer_request_not_persisted")
+        if len(reviewers_to_request) == 1:
+            print("OWNER_REVIEW_REQUEST=SUCCESS reviewer=" + HUMAN)
+        else:
+            print("OWNER_REVIEW_REQUEST=SUCCESS reviewers=" + ",".join(sorted(reviewers_to_request)))
         return 0
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         # A real 401/403/422 terminates this attempt; never change identity to bypass it.

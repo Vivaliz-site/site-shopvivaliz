@@ -21,6 +21,10 @@ TRUSTED_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(TRUSTED_REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(TRUSTED_REPOSITORY_ROOT))
 from scripts.pr_gate_scope import required_specialized_gates
+from scripts.quality.verify_owner_protected_pr_review import (
+    requires_desktop_lock_dual_approval,
+    verify_approvals,
+)
 
 REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 HUMAN = "shopvivaliz-human"
@@ -81,6 +85,11 @@ def approved_exact_head(reviews: object, sha: str) -> bool:
         return False
     last = max(owner, key=lambda r: r["submitted_at"])
     return last.get("state") == "APPROVED" and last.get("commit_id") == sha
+
+
+def approved_exact_head_dual(reviews: object, sha: str) -> bool:
+    ok, _ = verify_approvals(reviews, frozenset({HUMAN, OPERATOR}), sha)
+    return ok
 
 
 def required_green(checks: object) -> bool:
@@ -160,6 +169,10 @@ def eligible(pr: object, files: object, reviews: object, checks: object,
     if holds & {"blocked-by-runtime-lease", "blocked-external"}:
         return False, "active_operational_hold"
     sha = pr.get("head", {}).get("sha", "")
+    requires_dual = requires_desktop_lock_dual_approval(files)
+    if requires_dual:
+        if not approved_exact_head_dual(reviews, sha):
+            return False, "desktop_lock_requires_dual_approval_on_exact_head"
     if is_owner_only:
         # Only the real protected owner may authorize these PRs, and only
         # the immutable SHA they actually reviewed can enter the queue.
@@ -167,13 +180,15 @@ def eligible(pr: object, files: object, reviews: object, checks: object,
             return False, "protected_grant_author_must_be_distinct"
         if not approved_exact_head(reviews, sha):
             return False, "owner_review_not_approved_on_exact_head"
-    elif "no-auto-merge" in holds:
+    elif not requires_dual and "no-auto-merge" in holds:
         # A business/operational hold on a common PR is never overridden.
         return False, "technical_pr_manual_hold"
     if not specialized_check_completed:
         return False, "specialized_ci_gates_missing_or_failed"
     if not required_green(checks):
         return False, "official_required_checks_not_green"
+    if requires_dual:
+        return True, "desktop_lock_dual_approved_exact_head_ready_for_native_queue"
     return True, ("owner_approved_exact_head_ready_for_native_queue"
                   if is_owner_only else "technical_green_ready_for_native_queue")
 
@@ -205,8 +220,9 @@ def run(limit: int = 30) -> int:
             print(f"owner_queue_pr={number} state=fail_closed_files")
             continue
         is_owner_only = any(protected(f.get("filename", "")) for f in files if isinstance(f, dict))
+        requires_dual = requires_desktop_lock_dual_approval(files)
         reviews = (gh_json(f"repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100")
-                   if is_owner_only else [])
+                   if (is_owner_only or requires_dual) else [])
         sha = pr.get("head", {}).get("sha", "")
         checks = gh_json(f"repos/{REPOSITORY}/commits/{sha}/check-runs?per_page=100").get("check_runs")
         specialized_ok = specialized_workflows_green(files, sha)

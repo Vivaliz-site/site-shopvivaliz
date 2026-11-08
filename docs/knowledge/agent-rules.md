@@ -26,6 +26,13 @@ Antes de afirmar falta de token/credencial ou pedir novamente ao owner: ler `AGE
 > **PRIORIDADE MCP ADMINISTRATIVO — ORDEM EXPRESSA DO PROPRIETARIO (2026-11-05).** Todo agente ShopVivaliz deve **descobrir e tentar uma chamada real** ao MCP autorizado do host antes de RDC, SSH ou concluir bloqueio. `hosts_list`/status de plugin e mero registro, nao sao teste de comando. Central ShopVivaliz e Orquestrador: backend, Fred-Win, KOCEPSV e Marina se o schema/grant vigentes permitirem; MCP independente Marina complementa. Executar comando/consulta MCP apropriado e registrar `remote_access_attempts` com host, ferramenta, hora, resultado e task_id. Sem ferramenta publicada, registrar `MCP_NOT_EXPOSED` e continuar apenas por fallback legitimamente autorizado; nunca alegar tentativa inexistente. Timeout do RDC NAO dispensa o MCP. Contrato completo: [MCP primeiro](../ops/mcp-first-agent-execution-2026-11-05.md).
 <!-- /OWNER_MCP_FIRST_REAL_ATTEMPT_20261105 -->
 
+<!-- DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
+> **Bloqueio absoluto contra reintroducao de travas desktop GUI (08/11/2026):**
+> As travas de clique, digitacao e abertura de janelas de interface gráfica no Remote Control MCP (`desktop_click`, `desktop_type`, `desktop_open` vinculados a `runtime_lock_required`, `_assert_runtime_mutation` ou `MUTATING_RUNTIME_ACTIONS`) foram formalmente removidas na PR #3837 aprovada pelo proprietario.
+> **Nenhum agente (ChatGPT, Codex, Claude, Gemini, subagentes ou bots) esta autorizado a reintroduzir ou restaurar tais travas.**
+> Qualquer PR que tente retornar essas travas para acoes desktop GUI exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) de **AMBAS** as contas GitHub no HEAD exato: `shopvivaliz-human` E `fredmourao-ai`. Sem a aprovacao de ambas as contas, o gate de CI (`verify_owner_protected_pr_review.py`) e a fila de merge (`owner_approved_merge_queue.py`) bloquearao o merge.
+<!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
+
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
 

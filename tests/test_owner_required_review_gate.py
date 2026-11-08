@@ -76,6 +76,69 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
         self.assertEqual(self.decide(["includes/pricing-a.php"], [review(at="")])[0], False)
         self.assertEqual(self.decide(["includes/pricing-a.php"], [review()], head=OTHER)[0], False)
 
+    def test_desktop_gui_lock_patch_requires_dual_approval(self):
+        malicious_file = {
+            "filename": "remote-control-mcp/server.py",
+            "status": "modified",
+            "patch": "@@ -2550,6 +2550,7 @@ MUTATING_RUNTIME_ACTIONS = {\n+    \"desktop_click\": \"desktop_click\",\n }",
+        }
+        human_review = review(login="shopvivaliz-human", state="APPROVED", commit=HEAD)
+        operator_review = review(login="fredmourao-ai", state="APPROVED", commit=HEAD)
+
+        # Sem reviews -> bloqueia
+        res, reason = GATE.decide([malicious_file], [], HEAD)
+        self.assertFalse(res)
+        self.assertEqual(reason, "dual_owner_approval_missing")
+
+        # Somente shopvivaliz-human aprovou -> bloqueia por falta do operador
+        res, reason = GATE.decide([malicious_file], [human_review], HEAD)
+        self.assertFalse(res)
+        self.assertEqual(reason, "dual_approval_missing_fredmourao-ai")
+
+        # Somente fredmourao-ai aprovou -> bloqueia por falta do humano
+        res, reason = GATE.decide([malicious_file], [operator_review], HEAD)
+        self.assertFalse(res)
+        self.assertEqual(reason, "dual_approval_missing_shopvivaliz-human")
+
+        # AMBAS aprovaram no HEAD exato -> unblock
+        res, reason = GATE.decide([malicious_file], [human_review, operator_review], HEAD)
+        self.assertTrue(res)
+        self.assertEqual(reason, "dual_owner_review_approved_exact_head")
+
+        # fredmourao-ai com commit desatualizado -> bloqueia
+        stale_operator = review(login="fredmourao-ai", state="APPROVED", commit=OTHER)
+        res, reason = GATE.decide([malicious_file], [human_review, stale_operator], HEAD)
+        self.assertFalse(res)
+        self.assertEqual(reason, "approval_by_fredmourao-ai_not_bound_to_current_head")
+
+        # shopvivaliz-human pediu mudancas -> bloqueia
+        rejected_human = review(login="shopvivaliz-human", state="CHANGES_REQUESTED", commit=HEAD, at="2026-11-08T22:00:00Z")
+        res, reason = GATE.decide([malicious_file], [rejected_human, operator_review], HEAD)
+        self.assertFalse(res)
+        self.assertEqual(reason, "latest_review_by_shopvivaliz-human_not_approved")
+
+    def test_desktop_lock_all_patterns_trigger_dual_approval(self):
+        patterns_to_test = [
+            "+    'desktop_open': 'desktop_open',",
+            "+    'desktop_type': 'desktop_type',",
+            "+    base._assert_runtime_mutation('desktop_click', args)",
+            "+    runtime_lock.assert_runtime_lock(lease, token, 'desktop_click')",
+            "+    assert_runtime_lock(lease, token, 'desktop_type')",
+            "+    raise ValueError('runtime_lock_required')  # for desktop_click",
+            "+    schema_props['desktop_click']['required'].append('runtime_lease_id')",
+            "+    schema_props['desktop_type']['required'].append('runtime_fencing_token')",
+        ]
+        human = review(login="shopvivaliz-human", commit=HEAD)
+        operator = review(login="fredmourao-ai", commit=HEAD)
+
+        for line in patterns_to_test:
+            with self.subTest(line=line):
+                f = {"filename": "remote-control-mcp/server.py", "patch": f"@@ -1,1 +1,2 @@\n{line}\n"}
+                # Sem aprovacao dupla -> deve falhar
+                self.assertFalse(GATE.decide([f], [human], HEAD)[0])
+                # Com aprovacao dupla -> passa
+                self.assertTrue(GATE.decide([f], [human, operator], HEAD)[0])
+
 
 if __name__ == "__main__":
     unittest.main()
