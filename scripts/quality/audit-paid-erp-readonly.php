@@ -31,9 +31,15 @@ function svfra_erp_status(array $response): ?string
     return (string)$status;
 }
 
-function svfra_approved_payment(array $payment, string $orderNumber, float $orderTotal): bool
+/**
+ * An untrusted search result is only a hint to obtain an ID for a subsequent
+ * official GET. Its optional live_mode and currency fields may be missing,
+ * but status/reference/amount/refund and unique numeric ID must still match.
+ */
+function svfra_matching_payment_identity(array $payment, string $orderNumber, float $orderTotal): bool
 {
-    if ($orderNumber === '' || $orderTotal <= 0.0 || trim((string)($payment['external_reference'] ?? '')) !== $orderNumber) {
+    if ($orderNumber === '' || $orderTotal <= 0.0
+        || trim((string)($payment['external_reference'] ?? '')) !== $orderNumber) {
         return false;
     }
     if (strtolower(trim((string)($payment['status'] ?? ''))) !== 'approved') {
@@ -42,14 +48,42 @@ function svfra_approved_payment(array $payment, string $orderNumber, float $orde
     if (abs((float)($payment['transaction_amount'] ?? 0) - $orderTotal) > 0.01) {
         return false;
     }
-    if ((float)($payment['transaction_amount_refunded'] ?? 0) > 0.0 || (int)($payment['refund_count'] ?? 0) > 0) {
+    if ((float)($payment['transaction_amount_refunded'] ?? 0) > 0.0
+        || (int)($payment['refund_count'] ?? 0) > 0) {
         return false;
     }
     $refunds = $payment['refunds'] ?? [];
-    if (is_array($refunds) && count($refunds) > 0) {
-        return false;
-    }
-    return true;
+    return !is_array($refunds) || count($refunds) === 0;
+}
+
+/**
+ * Only the final official GET may establish a live BRL payment. Never count
+ * sandbox payments or missing settlement evidence as real money.
+ */
+function svfra_approved_payment(array $payment, string $orderNumber, float $orderTotal): bool
+{
+    return svfra_matching_payment_identity($payment, $orderNumber, $orderTotal)
+        && ($payment['live_mode'] ?? null) === true
+        && ($payment['currency_id'] ?? null) === 'BRL';
+}
+
+/**
+ * Count missing historical MySQL evidence without backfilling or fabricating
+ * reconciliation states. No ERP order means no ERP reconciliation to expect.
+ * Only call after a live, BRL, exact-reference payment was verified.
+ *
+ * @return array{payment: bool, reconciliation: bool}
+ */
+function svfra_mysql_evidence_gaps(array $record, bool $erpLinked): array
+{
+    $payment = strtolower(trim((string)($record['payment_provider_status'] ?? '')));
+    $paymentDate = trim((string)($record['payment_evidence_at'] ?? ''));
+    $erpStatus = trim((string)($record['reconciliation_status'] ?? ''));
+    $erpDate = trim((string)($record['reconciliation_checked_at'] ?? ''));
+    return [
+        'payment' => $payment !== 'approved' || $paymentDate === '',
+        'reconciliation' => $erpLinked && ($erpStatus === '' || $erpDate === ''),
+    ];
 }
 
 /**
@@ -80,7 +114,7 @@ function svfra_search_payment_id(array $response, string $number, float $total):
     }
     $ids = [];
     foreach ($results as $candidate) {
-        if (!is_array($candidate) || !svfra_approved_payment($candidate, $number, $total)) {
+        if (!is_array($candidate) || !svfra_matching_payment_identity($candidate, $number, $total)) {
             continue;
         }
         $id = trim((string)($candidate['id'] ?? ''));
@@ -125,6 +159,36 @@ function svfra_order_scope(?array $order, string $reference): string
     return 'site';
 }
 
+/**
+ * Pure fail-closed verdict. Financial alerts must never look green just
+ * because the official provider and ERP match while historical MySQL has no
+ * durable evidence. Known P0 always takes precedence over partial coverage.
+ *
+ * @return array{ok: bool, status: string, exit_code: int}
+ */
+function svfra_audit_verdict(array $stats): array
+{
+    $incomplete = (int)($stats['orders_considered'] ?? 0) === 0
+        || (int)($stats['provider_verified_approved'] ?? 0) === 0
+        || (int)($stats['unverified_provider'] ?? 0) > 0
+        || (int)($stats['provider_lookup_error'] ?? 0) > 0
+        || (int)($stats['erp_lookup_error'] ?? 0) > 0
+        || (int)($stats['erp_reference_unverified'] ?? 0) > 0
+        || (int)($stats['test_provenance_unknown'] ?? 0) > 0
+        || (int)($stats['erp_pending'] ?? 0) > 0
+        || (int)($stats['mysql_missing_payment_evidence'] ?? 0) > 0
+        || (int)($stats['mysql_missing_erp_reconciliation'] ?? 0) > 0;
+    $p0 = (int)($stats['erp_discrepancy'] ?? 0) > 0
+        || (int)($stats['provider_approved_without_erp'] ?? 0) > 0;
+
+    return [
+        'ok' => !$incomplete && !$p0,
+        'status' => $p0 ? 'CONFIRMED_FINANCIAL_DISCREPANCY'
+            : ($incomplete ? 'INCOMPLETE_NOT_CERTIFIED' : 'NO_DISCREPANCY_IN_VERIFIED_SAMPLE'),
+        'exit_code' => $p0 ? 2 : ($incomplete ? 3 : 0),
+    ];
+}
+
 function svfra_audit_live(int $limit): int
 {
     require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
@@ -150,6 +214,8 @@ function svfra_audit_live(int $limit): int
         'excluded_non_site' => 0,
         'test_provenance_unknown' => 0,
         'discrepancy_provenance_unknown' => 0,
+        'mysql_missing_payment_evidence' => 0,
+        'mysql_missing_erp_reconciliation' => 0,
     ];
     $pdo = sv_pdo();
     $mpToken = svmp_env('MERCADOPAGO_ACCESS_TOKEN');
@@ -161,7 +227,8 @@ function svfra_audit_live(int $limit): int
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT order_number, order_total, order_status, payment_provider_id, olist_order_id
+        $stmt = $pdo->prepare("SELECT order_number, order_total, order_status, payment_provider_id, olist_order_id,
+                   payment_provider_status, payment_evidence_at, reconciliation_status, reconciliation_checked_at
             FROM orders
             WHERE (order_status = 'pagamento_aprovado' OR payment_provider_status = 'approved')
             ORDER BY updated_at DESC LIMIT :max_rows");
@@ -249,6 +316,13 @@ function svfra_audit_live(int $limit): int
             $stats['test_provenance_unknown']++;
         }
         $stats['provider_verified_approved']++;
+        $evidenceGaps = svfra_mysql_evidence_gaps($row, $erpId !== '');
+        if ($evidenceGaps['payment']) {
+            $stats['mysql_missing_payment_evidence']++;
+        }
+        if ($evidenceGaps['reconciliation']) {
+            $stats['mysql_missing_erp_reconciliation']++;
+        }
 
         // Payment proof does not imply fulfilment. An empty ERP order link
         // is audited independently without issuing any ERP API request.
@@ -288,18 +362,11 @@ function svfra_audit_live(int $limit): int
         }
     }
 
-    $incomplete = $stats['orders_considered'] === 0 || $stats['provider_verified_approved'] === 0
-        || $stats['unverified_provider'] > 0 || $stats['provider_lookup_error'] > 0
-        || $stats['erp_lookup_error'] > 0 || $stats['erp_reference_unverified'] > 0
-        || $stats['test_provenance_unknown'] > 0 || $stats['erp_pending'] > 0;
-    $confirmedDiscrepancy = $stats['erp_discrepancy'] > 0
-        || $stats['provider_approved_without_erp'] > 0;
-    $status = $confirmedDiscrepancy ? 'CONFIRMED_FINANCIAL_DISCREPANCY'
-        : ($incomplete ? 'INCOMPLETE_NOT_CERTIFIED' : 'NO_DISCREPANCY_IN_VERIFIED_SAMPLE');
-    echo json_encode(['ok' => !$incomplete && !$confirmedDiscrepancy, 'status' => $status,
+    $verdict = svfra_audit_verdict($stats);
+    echo json_encode(['ok' => $verdict['ok'], 'status' => $verdict['status'],
         'read_only' => true, 'limit' => $limit, 'stats' => $stats],
         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
-    return $confirmedDiscrepancy ? 2 : ($incomplete ? 3 : 0);
+    return $verdict['exit_code'];
 }
 
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath(__FILE__)) {
