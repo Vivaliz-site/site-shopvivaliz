@@ -24,6 +24,7 @@ $payment = [
     'external_reference' => 'SV-FIXTURE-001',
     'transaction_amount' => 49.90,
     'currency_id' => 'BRL',
+    'live_mode' => true,
     'transaction_amount_refunded' => 0.00,
     'refunds' => [],
 ];
@@ -36,6 +37,14 @@ fd_assert('requires_review', $order, array_replace($payment, ['transaction_amoun
 fd_assert('requires_review', $order, array_replace($payment, ['refunds' => [['status' => 'approved']]]), ['situacao' => 2], 'refund details require review');
 fd_assert('unverified', $order, array_replace($payment, ['external_reference' => 'SV-OTHER']), ['situacao' => 2], 'different order reference');
 fd_assert('unverified', $order, array_replace($payment, ['currency_id' => 'USD']), ['situacao' => 2], 'different currency');
+fd_assert('unverified', $order, array_replace($payment, ['live_mode' => false]),
+    ['situacao' => 2], 'sandbox approved payment is not commercial evidence');
+fd_assert('unverified', $order, array_replace($payment, ['live_mode' => null]),
+    ['situacao' => 2], 'unknown provider live mode fails closed');
+$missingMode = $payment;
+unset($missingMode['live_mode']);
+fd_assert('unverified', $order, $missingMode, ['situacao' => 2],
+    'missing provider live mode fails closed');
 fd_assert('unverified', $order, array_replace($payment, ['transaction_amount' => 39.90]), ['situacao' => 2], 'different amount');
 fd_assert('unverified', $order, array_replace($payment, ['status' => 'pending']), ['situacao' => 2], 'not approved remotely');
 fd_assert('unverified', $order, $payment, ['situacao' => null], 'no ERP authority');
@@ -55,4 +64,4 @@ if (preg_match('/\\b(UPDATE|INSERT|DELETE|REPLACE|POST|PUT|PATCH)\\s+(orders|\\/
     fwrite(STDERR, 'FAIL detected payment/order mutation in read-only reporter' . PHP_EOL);
     exit(1);
 }
-echo "PASS: 16 financial drift fixtures, read-only contract.\n";
+echo "PASS: 19 financial drift fixtures, read-only contract.\n";
