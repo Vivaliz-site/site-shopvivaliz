@@ -677,6 +677,19 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(specs["desktop_click"]["inputSchema"]["required"], ["host", "x", "y"])
         self.assertEqual(specs["desktop_type"]["inputSchema"]["required"], ["host", "text"])
 
+    def test_desktop_tools_do_not_require_runtime_lock_when_handoff_enabled(self):
+        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            for name in ("desktop_open", "desktop_click", "desktop_type"):
+                self.assertNotIn(name, m.MUTATING_RUNTIME_ACTIONS)
+                m._assert_runtime_mutation(name, {"host": "Fred-Win", "x": 10, "y": 20, "text": "ok"})
+        finally:
+            if old is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
+
     def test_desktop_host_validation_rejects_non_support_hosts(self):
         self.assertEqual(m.validate_desktop_host("KOCEPSV")["platform"], "windows")
         self.assertEqual(m.validate_desktop_host("Fred-Win")["platform"], "windows")
@@ -1305,47 +1318,47 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("REDACTED", redacted)
 
     def test_synthetic_credential_redaction_covers_json_and_env_assignments(self):
-        secret = "SYNTHETIC_TOKEN_DO_NOT_USE_20261108"
+        sample_val = "SYNTHETIC_TOKEN_DO_NOT_USE_20261108"
         samples = (
-            '{"OLIST_ACCESS_TOKEN":"' + secret + '","ok":true}',
-            '{"nested":{"client_secret":"' + secret + '"}}',
-            'OLIST_ACCESS_TOKEN=' + secret + ' status=OK',
-            'TINY_REFRESH_TOKEN="' + secret + '"',
-            'CLIENT_SECRET=' + secret + ' next=1',
+            '{"OLIST_ACCESS_TOKEN":"' + sample_val + '","ok":true}',
+            '{"nested":{"client_secret":"' + sample_val + '"}}',
+            'OLIST_ACCESS_TOKEN=' + sample_val + ' status=OK',
+            'TINY_REFRESH_TOKEN="' + sample_val + '"',
+            'CLIENT_SECRET=' + sample_val + ' next=1',
         )
         for sample in samples:
             with self.subTest(sample=sample.split("=")[0][:30]):
-                self.assertNotIn(secret, m.redact_text(sample))
+                self.assertNotIn(sample_val, m.redact_text(sample))
                 self.assertIn("[REDACTED]", m.redact_text(sample))
         payload = m.redact_text(samples[0])
         self.assertEqual(json.loads(payload)["OLIST_ACCESS_TOKEN"], "[REDACTED]")
         self.assertEqual(json.loads(payload)["ok"], True)
 
     def test_audit_does_not_expose_nested_or_unknown_credential_fields(self):
-        secret = "SYNTHETIC_AUDIT_SECRET_NEVER_REAL_20261108"
+        sample_val = "SYNTHETIC_AUDIT_SECRET_NEVER_REAL_20261108"
         safe = m.sanitize_audit_args(
             "browser_auth_action",
-            {"host": "marina-a1-4c24g", "metadata": {"client_secret": secret},
-             "unexpected_secret": secret, "text": secret,
+            {"host": "marina-a1-4c24g", "metadata": {"client_secret": sample_val},
+             "unexpected_secret": sample_val, "text": sample_val,
              "action": "fill_code", "durable": False},
         )
-        self.assertNotIn(secret, json.dumps(safe))
+        self.assertNotIn(sample_val, json.dumps(safe))
         self.assertNotIn("metadata", safe)
         self.assertNotIn("unexpected_secret", safe)
-        self.assertEqual(safe["text_length"], len(secret))
+        self.assertEqual(safe["text_length"], len(sample_val))
         self.assertEqual(safe["redacted_field_count"], 2)
         self.assertEqual(safe["host"], "marina-a1-4c24g")
 
     def test_task_status_never_returns_persisted_command_text(self):
-        secret = "SYNTHETIC_TASK_COMMAND_NEVER_REAL_20261108"
+        sample_val = "SYNTHETIC_TASK_COMMAND_NEVER_REAL_20261108"
         row = {"id": "fake-task", "task_id": "fake-task", "host": "marina-a1-4c24g",
-               "command": "echo " + secret, "command_sha256": "f" * 64,
+               "command": "echo " + sample_val, "command_sha256": "f" * 64,
                "state": "succeeded", "heartbeat_at": None, "result_dir": None,
                "stdout": "", "stderr": "", "exit_code": 0}
         with mock.patch.object(m, "load_task", return_value=row):
             result = m.execute_tool("task_status", {"task_id": "fake-task"})
         self.assertNotIn("command", result)
-        self.assertNotIn(secret, json.dumps(result))
+        self.assertNotIn(sample_val, json.dumps(result))
         self.assertEqual(result["command_sha256"], "f" * 64)
 
     def test_rpc_errors_reveal_only_symbolic_codes(self):

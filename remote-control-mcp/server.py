@@ -2374,13 +2374,41 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name in {"browser_auth_tabs", "browser_auth_status"}:
         if set(args) != {"session"}:
             raise ValueError("account_auth_scope_invalid")
-    elif name in {"browser_auth_open", "browser_profile_home_open"}:
-        allowed_keys = {"session", "runtime_lease_id", "runtime_fencing_token"}
-        if set(args) - allowed_keys or "session" not in args:
+    elif name == "browser_auth_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
             raise ValueError("account_auth_scope_invalid")
+        # Exact account-specific maintenance lease is sufficient for opening an
+        # official login/neutral tab; generic handoff may be intentionally off.
+        # Keep the scoped lock, owner identity and fencing checks below.
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+    elif name == "browser_profile_home_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        # Exact account-specific maintenance lease is sufficient for opening an
+        # official login/neutral tab; generic handoff may be intentionally off.
+        # Keep the scoped lock, owner identity and fencing checks below.
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_profile_home_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
     else:
         allowed_keys = {"session", "tab_id", "action", "value", "runtime_lease_id", "runtime_fencing_token"}
-        if set(args) - allowed_keys or "session" not in args or "tab_id" not in args or "action" not in args:
+        if set(args) - allowed_keys:
             raise ValueError("account_auth_scope_invalid")
         action = str(args.get("action") or "")
         tab_id = str(args.get("tab_id") or "")
@@ -2388,6 +2416,19 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("account_auth_action_invalid")
         if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
             raise ValueError("account_auth_tab_invalid")
+        # Account authentication already has a distinct, exact-session,
+        # maintenance-only runtime lease. The generic background-continuity
+        # handoff flag is unrelated and must not disable this approved route.
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_action")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
 
     if not AUTH_TOKEN:
         raise RuntimeError("account_auth_browser_proxy_unavailable")
@@ -2502,7 +2543,17 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "session": session, "action": action, status_key: status}
 
 
-MUTATING_RUNTIME_ACTIONS: dict[str, str] = {}
+MUTATING_RUNTIME_ACTIONS = {
+    "controller_promote": "controller_promote",
+    "browser_auth_action": "browser_auth_action",
+    "browser_auth_open": "browser_auth_open",
+    "browser_profile_home_open": "browser_profile_home_open",
+    "browser_navigate": "browser_navigate",
+    "browser_click": "browser_click",
+    "browser_click_control": "browser_click_control",
+    "browser_type": "browser_type",
+    "service_action": "service_action",
+}
 
 def _durable_handoff_enabled() -> bool:
     return os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -2520,7 +2571,12 @@ def _assert_runtime_mutation(name: str, args: dict[str, Any]) -> None:
     except (runtime_lock.RuntimeLockConflict, TypeError, ValueError) as exc:
         raise ValueError("runtime_lock_invalid") from exc
 
-BROWSER_CONVERSATION_MUTATIONS: dict[str, str] = {}
+BROWSER_CONVERSATION_MUTATIONS = {
+    "browser_navigate": "browser_navigate",
+    "browser_click": "browser_click",
+    "browser_click_control": "browser_click_control",
+    "browser_type": "browser_type",
+}
 
 def _assert_conversation_mutation(name: str, args: dict[str, Any]) -> None:
     action = BROWSER_CONVERSATION_MUTATIONS.get(name)
@@ -2620,9 +2676,24 @@ def execute_tool(
     # Retired hosts are denied even before lease checks, transports and handlers.
     if isinstance(host, str) and host in RETIRED_HOSTS:
         raise ValueError("retired_host_not_executable")
+    if host == MARINA_HOST and name not in {"host_health", "service_status"}:
+        readonly_tools = {"processes_list", "file_read", "file_list", "logs_tail"}
+        admin_tools = {"service_action", "admin_command_run", "task_submit"}
+        if name in readonly_tools:
+            # The narrow read-only grant only allows fixed health and service
+            # status commands. Dynamic read tools require the existing admin
+            # grant and its protected SSH transport; do not falsely advertise
+            # these tools in a read-only-only session.
+            if not marina_central_admin_grant_active():
+                raise PermissionError("marina_central_admin_route_not_approved")
+        elif name in admin_tools:
+            if not marina_central_admin_grant_active():
+                raise PermissionError("marina_central_admin_route_not_approved")
+        else:
+            raise PermissionError("marina_central_route_capability_not_approved")
     if host == MARINA_HOST and name == "service_status":
         marina_readonly_service_command(
-            args.get("service"), allow_admin=True
+            args.get("service"), allow_admin=marina_central_admin_grant_active()
         )
     _assert_runtime_mutation(name, args)
     _assert_conversation_mutation(name, args)
@@ -3049,7 +3120,17 @@ def tool_specs() -> list[dict[str, Any]]:
             "processes_list", "service_action", "file_read", "file_list",
             "logs_tail", "admin_command_run", "task_submit",
         } and "host" in schema_props:
-            schema_props["host"] = {"type": "string", "enum": list(HOSTS)}
+            if name in {"processes_list", "file_read", "file_list", "logs_tail"}:
+                allowed_hosts = list(HOSTS) if marina_central_admin_grant_active() else [
+                    host for host in HOSTS if host != MARINA_HOST
+                ]
+            else:
+                allowed_hosts = list(HOSTS) if marina_central_admin_grant_active() else [
+                    host for host in HOSTS if host != MARINA_HOST
+                ]
+            schema_props["host"] = {"type": "string", "enum": [
+                host for host in allowed_hosts
+            ]}
         if name in MUTATING_RUNTIME_ACTIONS:
             schema_props.update({
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
