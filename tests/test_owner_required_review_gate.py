@@ -139,6 +139,39 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 # Com aprovacao dupla -> passa
                 self.assertTrue(GATE.decide([f], [human, operator], HEAD)[0])
 
+    def test_general_lock_insertion_triggers_dual_approval(self):
+        general_lock_lines = [
+            "+    MUTATING_RUNTIME_ACTIONS.add('new_tool')",
+            "+    MUTATING_ACTIONS.add('run_custom')",
+            "+    MUTATING_ACTIONS += ['exec_something']",
+            "+    MUTATING_ACTIONS = {'command': True}",
+            "+    assert_runtime_lock(lease, token, 'any_action')",
+            "+    _assert_runtime_mutation('any_action', args)",
+            "+    assert_runtime_lease(lease)",
+            "+    raise RuntimeError('action_blocked: permission denied')",
+            "+    raise ValueError('command_blocked: disallowed')",
+            "+    BLOCKED_COMMANDS = ['sh', 'bash']",
+            "+    RESTRICTED_TOOLS = {'custom_tool'}",
+            "+    DISALLOWED_OPERATIONS = ['kill']",
+            "+    <!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_20261108 -->",
+            "+    # nova trava de seguranca para agentes",
+        ]
+        human = review(login="shopvivaliz-human", commit=HEAD)
+        operator = review(login="fredmourao-ai", commit=HEAD)
+
+        for line in general_lock_lines:
+            with self.subTest(line=line):
+                f = {"filename": "remote-control-mcp/handlers.py", "patch": f"@@ -1,1 +1,2 @@\n{line}\n"}
+                self.assertTrue(GATE.requires_lock_dual_approval([f]))
+                # Sem aprovacao dupla -> bloqueia
+                res, reason = GATE.decide([f], [human], HEAD)
+                self.assertFalse(res)
+                self.assertEqual(reason, "dual_approval_missing_fredmourao-ai")
+                # Com aprovacao dupla -> aprova
+                res, reason = GATE.decide([f], [human, operator], HEAD)
+                self.assertTrue(res)
+                self.assertEqual(reason, "dual_owner_review_approved_exact_head")
+
 
 if __name__ == "__main__":
     unittest.main()

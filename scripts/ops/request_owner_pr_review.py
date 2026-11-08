@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 from scripts.ops.owner_approved_merge_queue import protected
 from scripts.quality.verify_owner_protected_pr_review import (
     is_protected_path,
+    requires_lock_dual_approval,
     requires_desktop_lock_dual_approval,
 )
 
@@ -33,7 +34,8 @@ OWNER_DIRECTIVE_MARKERS = ("OWNER_DIRECTIVES_", "OWNER_NO_UNAPPROVED_RESTRICTION
                            "SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1", "PR_HUMAN_VISIBILITY_ROUTING_V1",
                            "PROTECTED_OWNER_REVIEW_REQUEST_VISIBILITY_V1",
                            "OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2",
-                           "DESKTOP_GUI_LOCK_PROHIBITION_")
+                           "DESKTOP_GUI_LOCK_PROHIBITION_",
+                           "ALL_LOCK_INSERTION_DUAL_APPROVAL_")
 
 
 def requires_owner(files: object, labels: object) -> bool:
@@ -45,7 +47,7 @@ def requires_owner(files: object, labels: object) -> bool:
         raise ValueError("labels_invalid")
     if any(label["name"].casefold() in OWNER_LABELS for label in labels):
         return True
-    if requires_desktop_lock_dual_approval(files):
+    if requires_lock_dual_approval(files):
         return True
     for f in files:
         if not isinstance(f, dict) or not isinstance(f.get("filename"), str):
@@ -87,7 +89,7 @@ def decision(pr: dict, files: list, reviews: list, expected_sha: str) -> str:
 
     needed_reviewers = (
         {HUMAN, OPERATOR}
-        if requires_desktop_lock_dual_approval(files)
+        if requires_lock_dual_approval(files)
         else {HUMAN}
     )
 
@@ -172,7 +174,7 @@ def run(number: int, expected_sha: str, token: str) -> int:
         if current.get("head", {}).get("sha") != expected_sha or current.get("state") != "open":
             raise ValueError("pr_changed_before_request")
         reviewers_to_request = (
-            [HUMAN, OPERATOR] if requires_desktop_lock_dual_approval(files) else [HUMAN]
+            [HUMAN, OPERATOR] if requires_lock_dual_approval(files) else [HUMAN]
         )
         already_requested = {
             r.get("login", "").casefold()

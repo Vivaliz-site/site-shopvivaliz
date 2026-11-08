@@ -28,7 +28,8 @@ OWNER_SENSITIVE_RULES = (
     (("includes/", "api/"), ("pricing", "price", "preco", "preço")),
 )
 
-DESKTOP_LOCK_PATTERNS = (
+LOCK_PATTERNS = (
+    # Desktop GUI actions in mutating / lock sets
     re.compile(r"""['"]desktop_(?:open|click|type)['"]\s*:"""),
     re.compile(r"""MUTATING_RUNTIME_ACTIONS.*['"]desktop_"""),
     re.compile(r"""_assert_runtime_mutation\(\s*['"]desktop_"""),
@@ -37,11 +38,31 @@ DESKTOP_LOCK_PATTERNS = (
     re.compile(r"""desktop_(?:open|click|type).*runtime_lease_id"""),
     re.compile(r"""desktop_(?:open|click|type).*runtime_fencing_token"""),
     re.compile(r"""(?:desktop_(?:open|click|type).*runtime_lock_required|runtime_lock_required.*desktop_(?:open|click|type))"""),
+
+    # Generic MCP tool / runtime lock & lease additions
+    re.compile(r"""\bMUTATING_RUNTIME_ACTIONS\b"""),
+    re.compile(r"""\bMUTATING_ACTIONS\b\s*(?:\.add|\+=|\|?=|:)"""),
+    re.compile(r"""\bassert_runtime_lock\b"""),
+    re.compile(r"""\b_assert_runtime_mutation\b"""),
+    re.compile(r"""['"]runtime_lock_required['"]"""),
+    re.compile(r"""\bruntime_lease_id\b"""),
+    re.compile(r"""\bruntime_fencing_token\b"""),
+    re.compile(r"""\bassert_runtime_lease\b"""),
+
+    # Command / tool / action restriction lists
+    re.compile(r"""\b(?:BLOCKED|RESTRICTED|DISALLOWED|FORBIDDEN)_(?:COMMANDS|ACTIONS|TOOLS|OPERATIONS)\b"""),
+    re.compile(r"""\b(?:blocked|restricted|disallowed|forbidden)_(?:commands|actions|tools|operations)\b\s*="""),
+    re.compile(r"""raise\s+(?:\w+Error|Exception)\(['"].*(?:runtime_lock|lock_required|action_blocked|command_blocked|operacao_bloqueada|trava_obrigatoria).*['"]\)"""),
+
+    # Policy / prompt restriction markers
+    re.compile(r"""<!--\s*(?:DESKTOP_GUI_LOCK_PROHIBITION_|OWNER_NO_UNAPPROVED_RESTRICTIONS_|LOCK_INSERTION_RESTRICTION_|ALL_LOCK_INSERTION_DUAL_APPROVAL_)"""),
+    re.compile(r"""(?i)\b(?:nova\s+trava|novo\s+bloqueio|bloqueio\s+de\s+ferramenta|trava\s+de\s+seguranca)\b"""),
 )
+DESKTOP_LOCK_PATTERNS = LOCK_PATTERNS
 
 
-def is_desktop_gui_lock_restoration(f: dict) -> bool:
-    """Detect any attempt to re-introduce desktop GUI locks or restrictions."""
+def is_lock_insertion(f: dict) -> bool:
+    """Detect any attempt to introduce locks, blocks or restrictions."""
     if not isinstance(f, dict):
         return False
     patch = f.get("patch")
@@ -50,17 +71,23 @@ def is_desktop_gui_lock_restoration(f: dict) -> bool:
     for line in patch.splitlines():
         if line.startswith("+") and not line.startswith("+++"):
             added_line = line[1:].strip()
-            for pattern in DESKTOP_LOCK_PATTERNS:
+            for pattern in LOCK_PATTERNS:
                 if pattern.search(added_line):
                     return True
     return False
 
 
-def requires_desktop_lock_dual_approval(files: list[dict]) -> bool:
+is_desktop_gui_lock_restoration = is_lock_insertion
+
+
+def requires_lock_dual_approval(files: list[dict]) -> bool:
     for f in files:
-        if isinstance(f, dict) and is_desktop_gui_lock_restoration(f):
+        if isinstance(f, dict) and is_lock_insertion(f):
             return True
     return False
+
+
+requires_desktop_lock_dual_approval = requires_lock_dual_approval
 
 
 def is_protected_path(path: str) -> bool:
@@ -116,8 +143,8 @@ def decide(files: object, reviews: object, head_sha: str, changed_files: object 
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "pr_files_invalid"
 
-    # Priority Check: Does this PR attempt to re-introduce desktop GUI locks?
-    if requires_desktop_lock_dual_approval(files):
+    # Priority Check: Does this PR attempt to introduce any locks or restrictions?
+    if requires_lock_dual_approval(files):
         return verify_approvals(reviews, DUAL_REQUIRED_REVIEWERS, head_sha)
 
     # Standard Check: VM deletion or price changes require shopvivaliz-human
@@ -172,7 +199,7 @@ def main(argv=None) -> int:
         if not isinstance(files, list) or len(files) >= 100:
             raise ValueError("pr_files_unavailable_or_incomplete")
         protected = (any(is_protected_path(f.get("filename", "")) for f in files if isinstance(f, dict))
-                     or requires_desktop_lock_dual_approval(files))
+                     or requires_lock_dual_approval(files))
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
         approved, reason = decide(files, reviews, args.head, pr.get("changed_files"))
