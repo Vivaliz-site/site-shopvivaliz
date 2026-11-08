@@ -342,5 +342,22 @@ class RecurringAiPolicyGuardTests(unittest.TestCase):
             self.assertEqual([], guard.scan_repository(root))
 
 
+    def test_pr_conflict_repair_uses_only_verified_free_gemini_then_local_ollama(self):
+        workflow = (ROOT / ".github" / "workflows" / "pr-conflict-auto-healer.yml").read_text()
+        healer = (ROOT / "scripts" / "pr_conflict_gemini_healer.py").read_text()
+        wrapper = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text()
+
+        self.assertIn("verified-free Gemini and local Ollama fallback", workflow)
+        self.assertIn("free_tier_approved_credentials", healer)
+        self.assertIn("DEFAULT_TIER_ATTESTATION", healer)
+        self.assertIn("is_flash_free_tier_eligible", healer)
+        self.assertIn("--credential-preflight", wrapper)
+        self.assertIn("conflict_ai_route=verified_free_gemini", wrapper)
+        self.assertIn("conflict_ai_route=free_loopback_ollama", wrapper)
+        self.assertIn("gemini_free_tier_not_verified_fallback=ollama", wrapper)
+        self.assertNotRegex(wrapper, r"\bcodex(?:\.exe)?\s+(?:exec|resume)\b")
+        self.assertNotRegex(wrapper, r"\bclaude(?:\.exe)?\s+(?:-p|--print)\b")
+
+
 if __name__ == "__main__":
     unittest.main()
