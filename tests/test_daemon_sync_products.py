@@ -88,3 +88,92 @@ def test_public_product_extracts_nested_olist_seo():
     assert product["keywords"] == ["vaso japi", "decoracao"]
     assert product["slug"] == "produto-japi"
     assert product["video_url"] == "https://example.test/video"
+
+
+def test_public_product_preserves_parent_and_sanitized_variation_grade():
+    parent = daemon.public_product({
+        "id": 395224182, "sku": "JVCD33-PAI", "descricao": "Decore 33",
+        "tipo": "V", "tipoVariacao": "P",
+        "estoque_disponivel": 0,
+        "categoria": {"id": 361377079, "nome": "Cachepots", "caminhoCompleto": "Cachepots"},
+        "marca": {"id": 138166, "nome": "JAPI"},
+        "variacoes": [{
+            "id": 352312277, "sku": "JVCDPA33", "descricao": "Decore 33",
+            "grade": [{"chave": "Cor", "valor": "Amarelo"}],
+            "precos": {"preco": 100, "precoCusto": 60},
+            "estoque": {"quantidade": 300},
+            "fornecedores": [{"nome": "NAO_PUBLICAR"}],
+        }],
+    })
+    assert parent["tipo"] == "V"
+    assert parent["tipoVariacao"] == "P"
+    assert parent["produtoPai"] is None
+    assert parent["estoque_disponivel"] == 0
+    assert parent["categoria"]["id"] == 361377079
+    assert parent["marca"]["id"] == 138166
+    assert parent["variacoes"] == [{
+        "id": 352312277, "sku": "JVCDPA33", "descricao": "Decore 33",
+        "grade": [{"chave": "Cor", "valor": "Amarelo"}],
+    }]
+    assert parent["_cache_schema_version"] == daemon.PUBLIC_PRODUCT_SCHEMA_VERSION
+    assert "NAO_PUBLICAR" not in str(parent)
+
+    child = daemon.public_product({
+        "id": 352312277, "sku": "JVCDPA33", "tipo": "S",
+        "tipoVariacao": "V", "estoque_disponivel": 7,
+        "produtoPai": {
+            "id": 395224182, "sku": "JVCD33-PAI",
+            "descricao": "Decore 33", "tipo": "V",
+            "precos": {"precoCusto": 30},
+            "client_secret": "NAO_PUBLICAR",
+        },
+    })
+    assert child["produtoPai"] == {
+        "id": 395224182, "sku": "JVCD33-PAI",
+        "descricao": "Decore 33", "tipo": "V",
+    }
+    assert child["tipoVariacao"] == "V"
+    assert child["estoque_disponivel"] == 7
+    assert child["variacoes"] == []
+    assert "NAO_PUBLICAR" not in str(child)
+
+
+def test_legacy_cache_schema_triggers_detail_refetch_even_with_same_erp_marker(monkeypatch):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    old = {"id": 352312277, "sku": "JVCDPA33",
+           "_erp_base_prices": {"preco": 50},
+           "_olist_updated_at": "same-erp-change-marker",
+           "_detail_synced_at": now.isoformat(),
+           "_cache_schema_version": daemon.PUBLIC_PRODUCT_SCHEMA_VERSION - 1,
+           "estoque_disponivel": 3}
+    assert not daemon.detail_cache_is_fresh(old, "same-erp-change-marker", now=now)
+    current = {**old, "_cache_schema_version": daemon.PUBLIC_PRODUCT_SCHEMA_VERSION}
+    assert daemon.detail_cache_is_fresh(current, "same-erp-change-marker", now=now)
+    monkeypatch.setattr(daemon, "load_previous_cache", lambda: {"352312277": old})
+    calls = []
+
+    def api(path, token, **kwargs):
+        calls.append(path)
+        if path == "produtos/352312277":
+            return {
+                "id": 352312277, "sku": "JVCDPA33",
+                "tipo": "S", "tipoVariacao": "V",
+                "precos": {"preco": 50},
+                "produtoPai": {"id": 395224182, "sku": "JVCD33-PAI"},
+            }
+        if path == "estoque/352312277":
+            return {"disponivel": 3}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(daemon, "api_get", api)
+    products, failures = daemon.enrich_products(
+        [{"id": 352312277, "dataAlteracao": "same-erp-change-marker"}],
+        "fake-test-token", workers=1,
+    )
+    assert failures == 0
+    assert calls == ["produtos/352312277", "estoque/352312277"]
+    assert products[0]["tipoVariacao"] == "V"
+    assert products[0]["produtoPai"]["id"] == 395224182
+    assert products[0]["estoque_disponivel"] == 3
+    assert products[0]["_cache_schema_version"] == daemon.PUBLIC_PRODUCT_SCHEMA_VERSION
