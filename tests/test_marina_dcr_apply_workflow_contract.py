@@ -41,6 +41,12 @@ class MarinaDcrApplyWorkflowContract(unittest.TestCase):
         self.assertNotIn("cloudflared tunnel create", self.workflow)
         self.assertNotIn("--admin", self.workflow)
 
+    def test_github_expression_runtime_injection_not_literal_escaped(self):
+        self.assertNotIn("\\${{", self.workflow)
+        self.assertIn("${{ secrets.CLOUDFLARE_API_TOKEN }}", self.workflow)
+        self.assertIn("${{ github.token }}", self.workflow)
+        self.assertIn("${{ inputs.confirmation }}", self.workflow)
+        self.assertNotIn('test -n "$CLOUDFLARE_API_TOKEN"', self.workflow)
     def test_apply_never_proceeds_without_verified_owner_grant(self):
         self.assertIn("OWNER_PR_GRANT=AUTHORIZED", self.workflow)
         self.assertIn("OWNER_GRANT_VERIFIED", self.workflow)
