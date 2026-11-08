@@ -1304,6 +1304,56 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("projectsecret123456", redacted)
         self.assertIn("REDACTED", redacted)
 
+    def test_synthetic_credential_redaction_covers_json_and_env_assignments(self):
+        secret = "SYNTHETIC_TOKEN_DO_NOT_USE_20261108"
+        samples = (
+            '{"OLIST_ACCESS_TOKEN":"' + secret + '","ok":true}',
+            '{"nested":{"client_secret":"' + secret + '"}}',
+            'OLIST_ACCESS_TOKEN=' + secret + ' status=OK',
+            'TINY_REFRESH_TOKEN="' + secret + '"',
+            'CLIENT_SECRET=' + secret + ' next=1',
+        )
+        for sample in samples:
+            with self.subTest(sample=sample.split("=")[0][:30]):
+                self.assertNotIn(secret, m.redact_text(sample))
+                self.assertIn("[REDACTED]", m.redact_text(sample))
+        payload = m.redact_text(samples[0])
+        self.assertEqual(json.loads(payload)["OLIST_ACCESS_TOKEN"], "[REDACTED]")
+        self.assertEqual(json.loads(payload)["ok"], True)
+
+    def test_audit_does_not_expose_nested_or_unknown_credential_fields(self):
+        secret = "SYNTHETIC_AUDIT_SECRET_NEVER_REAL_20261108"
+        safe = m.sanitize_audit_args(
+            "browser_auth_action",
+            {"host": "marina-a1-4c24g", "metadata": {"client_secret": secret},
+             "unexpected_secret": secret, "text": secret,
+             "action": "fill_code", "durable": False},
+        )
+        self.assertNotIn(secret, json.dumps(safe))
+        self.assertNotIn("metadata", safe)
+        self.assertNotIn("unexpected_secret", safe)
+        self.assertEqual(safe["text_length"], len(secret))
+        self.assertEqual(safe["redacted_field_count"], 2)
+        self.assertEqual(safe["host"], "marina-a1-4c24g")
+
+    def test_task_status_never_returns_persisted_command_text(self):
+        secret = "SYNTHETIC_TASK_COMMAND_NEVER_REAL_20261108"
+        row = {"id": "fake-task", "task_id": "fake-task", "host": "marina-a1-4c24g",
+               "command": "echo " + secret, "command_sha256": "f" * 64,
+               "state": "succeeded", "heartbeat_at": None, "result_dir": None,
+               "stdout": "", "stderr": "", "exit_code": 0}
+        with mock.patch.object(m, "load_task", return_value=row):
+            result = m.execute_tool("task_status", {"task_id": "fake-task"})
+        self.assertNotIn("command", result)
+        self.assertNotIn(secret, json.dumps(result))
+        self.assertEqual(result["command_sha256"], "f" * 64)
+
+    def test_rpc_errors_reveal_only_symbolic_codes(self):
+        self.assertEqual(m.public_error_code(PermissionError("runtime_lock_required")),
+                         "runtime_lock_required")
+        self.assertEqual(m.public_error_code(RuntimeError(
+            "SYNTHETIC_EXCEPTION_WITH_SENSITIVE_DETAIL_20261108")), "internal_error")
+
     def test_audit_redacts_browser_text_and_navigation_query(self):
         safe = m.sanitize_audit_args(
             "browser_type",
