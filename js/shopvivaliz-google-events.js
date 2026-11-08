@@ -353,24 +353,61 @@ function funnelClientId() {
     window.addEventListener('shopvivaliz:add_to_cart', trackCommittedCartAdd);
   }
 
+  // Removal and quantity-minus use cart-updated, dispatched only after
+  // persistence. Click-intent may fail due to quota or a blocked storage write.
+  // Keep this snapshot separate from add_to_cart, whose writers dispatch their
+  // dedicated event after the same persistence boundary.
+  var removalCartSnapshot = readCart();
+  var pendingCrossTabCartStorage = false;
+  if (typeof window.addEventListener === 'function') {
+    // Capture at the same window before the shared cart-persistence script's
+    // bubbling storage handler dispatches a synchronous cart-updated event.
+    // This preserves the existing cart writer without altering its protocol.
+    window.addEventListener('storage', function (event) {
+      if (!event || event.key !== 'shopvivaliz_cart') return;
+      pendingCrossTabCartStorage = true;
+      Promise.resolve().then(function () { pendingCrossTabCartStorage = false; });
+    }, true);
+  }
+
+  function trackCommittedCartRemoval(event) {
+    var nextCart = readCart();
+    var previousCart = removalCartSnapshot;
+    removalCartSnapshot = nextCart;
+    var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+    // Another tab already attributes its own user action. Do not double-count
+    // the storage event that updates this tab's cart UI.
+    if (detail.origin === 'storage' || pendingCrossTabCartStorage) {
+      pendingCrossTabCartStorage = false;
+      return;
+    }
+
+    var prior = cartQuantities(previousCart);
+    var current = cartQuantities(nextCart);
+    var seen = Object.create(null);
+    previousCart.forEach(function (product) {
+      if (!product || typeof product !== 'object') return;
+      var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      var removed = Math.floor(number(prior[key]) - number(current[key]));
+      if (removed <= 0) return;
+      var item = itemFromProduct(product);
+      item.quantity = removed;
+      push('remove_from_cart', {
+        currency: 'BRL',
+        value: number(item.price) * item.quantity,
+        items: [item]
+      });
+    });
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('shopvivaliz:cart-updated', trackCommittedCartRemoval);
+  }
+
   function bindClicks() {
     document.addEventListener('click', function (event) {
-      var removeButton = event.target && event.target.closest
-        ? event.target.closest('.btn-remove[data-remove]')
-        : null;
-      if (removeButton) {
-        var cart = readCart();
-        var removeIndex = parseInt(removeButton.getAttribute('data-remove'), 10);
-        if (!isNaN(removeIndex) && cart[removeIndex]) {
-          var removedItem = itemFromProduct(cart[removeIndex]);
-          push('remove_from_cart', {
-            currency: 'BRL',
-            value: number(removedItem.price) * removedItem.quantity,
-            items: [removedItem]
-          });
-        }
-      }
-
       // add_to_cart is emitted by the committed cart event below, not by
       // click intent. Cart persistence can fail before the item is added.
 

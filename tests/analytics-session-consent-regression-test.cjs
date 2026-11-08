@@ -74,6 +74,7 @@ check('Pending Ads wrapper uses only one dataLayer fallback when gtag is absent'
 function funnelHarness(pathname, consent) {
   const documentListeners = {};
   const windowListeners = {};
+  const windowCaptureListeners = {};
   const beacons = [];
   const gtagEvents = [];
   const local = new Map([['shopvivaliz_cart', JSON.stringify([
@@ -112,8 +113,13 @@ function funnelHarness(pathname, consent) {
     decodeURIComponent,
     dataLayer: [],
     gtag: (...args) => gtagEvents.push(args),
-    addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); },
-    dispatchEvent(evt) { (windowListeners[evt.type] || []).forEach(fn => fn(evt)); },
+    addEventListener(name, fn, capture) {
+      ((capture ? windowCaptureListeners : windowListeners)[name] ||= []).push(fn);
+    },
+    dispatchEvent(evt) {
+      (windowCaptureListeners[evt.type] || []).forEach(fn => fn(evt));
+      (windowListeners[evt.type] || []).forEach(fn => fn(evt));
+    },
     ShopVivalizProductContext: pathname === '/produto' ? {sku:'TEST-SKU',price:28} : null
   };
   const context = {
@@ -146,6 +152,21 @@ function funnelHarness(pathname, consent) {
         {sku:'TEST-SKU', olist_product_id:'OLIST-123', name:'Test product', price:28, quantity}
       ]));
       window.dispatchEvent({type:'shopvivaliz:add_to_cart', detail});
+    },
+    clickRemove() {
+      const button = {getAttribute: key => key==='data-remove' ? '0' : null};
+      const target = {closest: selector => selector==='.btn-remove[data-remove]' ? button : null};
+      (documentListeners.click || []).forEach(fn => fn({target}));
+    },
+    changeCart(quantity, origin) {
+      const items = quantity > 0 ? [{sku:'TEST-SKU', olist_product_id:'OLIST-123', name:'Test product', price:28, quantity}] : [];
+      local.set('shopvivaliz_cart', JSON.stringify(items));
+      if (origin==='storage') {
+        window.addEventListener('storage', () => window.dispatchEvent({type:'shopvivaliz:cart-updated', detail:{items}}));
+        window.dispatchEvent({type:'storage', key:'shopvivaliz_cart'});
+      } else {
+        window.dispatchEvent({type:'shopvivaliz:cart-updated', detail:{items}});
+      }
     }
   };
 }
@@ -192,5 +213,42 @@ check('PDP SKU event honors actual multi-unit cart delta', () => {
   assert.equal(adds[0][2].items[0].quantity, 2);
   assert.equal(adds[0][2].value, 56);
 });
+
+
+check('Remove click without committed storage change must NOT fire remove_from_cart', () => {
+  const app=funnelHarness('/carrinho', true);
+  app.clickRemove();
+  assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 0);
+  assert.equal(app.beacons.filter(e => e.event_name === 'remove_from_cart').length, 0);
+});
+
+check('Only committed removal is counted, once per persisted decrease', () => {
+  const app=funnelHarness('/carrinho', true);
+  app.changeCart(0);
+  let remove=app.gtagEvents.filter(e => e[1] === 'remove_from_cart');
+  assert.equal(remove.length, 1);
+  assert.equal(remove[0][2].items[0].quantity, 1);
+  assert.equal(remove[0][2].value, 28);
+  app.changeCart(0); // repeated update, zero delta
+  assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 1);
+  app.changeCart(3); // increment is not a removal
+  app.changeCart(1); // quantity decrement of 2
+  remove=app.gtagEvents.filter(e => e[1] === 'remove_from_cart');
+  assert.equal(remove.length, 2);
+  assert.equal(remove[1][2].items[0].quantity, 2);
+  assert.equal(remove[1][2].value, 56);
+});
+
+check('Cross-tab storage changes never create duplicate removal attribution', () => {
+  const app=funnelHarness('/carrinho', true);
+  app.changeCart(0, 'storage');
+  assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 0);
+  app.changeCart(3);
+  app.changeCart(2);
+  const remove=app.gtagEvents.filter(e => e[1] === 'remove_from_cart');
+  assert.equal(remove.length, 1);
+  assert.equal(remove[0][2].items[0].quantity, 1);
+});
+
 
 process.exitCode=failures?1:0;
