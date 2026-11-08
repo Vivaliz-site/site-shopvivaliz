@@ -2,6 +2,8 @@
 """Resolve Git merge conflicts with Gemini using a rotating credential pool.
 
 Security invariants:
+- only calls Gemini with an exact API key covered by a recent owner-verified Free-tier attestation;
+- never falls back to an unverified or billable Gemini key;
 - never prints API key values;
 - never executes code from the pull request;
 - only rewrites files already reported by Git as conflicted;
@@ -22,6 +24,12 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
+
+from run_background_gemini import (
+    DEFAULT_TIER_ATTESTATION,
+    free_tier_approved_credentials,
+    is_flash_free_tier_eligible,
+)
 
 DEFAULT_MODELS = ("gemini-3.6-flash", "gemini-2.5-flash")
 KEY_ENV_NAMES = (
@@ -106,17 +114,33 @@ def configured_models(env: Mapping[str, str] | None = None) -> list[str]:
     return models or list(DEFAULT_MODELS)
 
 
+def free_tier_keys(env: Mapping[str, str] | None = None) -> list[str]:
+    keys = collect_api_keys(env)
+    candidates = [("GEMINI_API_KEY", key) for key in keys]
+    approved = free_tier_approved_credentials(candidates, DEFAULT_TIER_ATTESTATION)
+    return [key for _, key in approved]
+
+
+def free_tier_models(env: Mapping[str, str] | None = None) -> list[str]:
+    return [model for model in configured_models(env) if is_flash_free_tier_eligible(model)]
+
+
 def credential_preflight() -> int:
     env = credential_environment()
     keys = collect_api_keys(env)
-    models = configured_models(env)
+    approved_keys = free_tier_keys(env)
+    models = free_tier_models(env)
     print(f"gemini_credentials_configured={len(keys)}")
-    print(f"gemini_models_configured={len(models)}")
+    print(f"gemini_free_tier_credentials_approved={len(approved_keys)}")
+    print(f"gemini_free_tier_models_approved={len(models)}")
     print("gemini_credential_rotation_enabled=true")
     print("secret_values_printed=false")
-    if not keys:
-        print("::error::no_gemini_credentials_configured", file=sys.stderr)
-        return 3
+    if not approved_keys:
+        print("::error::gemini_free_tier_not_verified", file=sys.stderr)
+        return 4
+    if not models:
+        print("::error::no_free_tier_gemini_models_configured", file=sys.stderr)
+        return 5
     return 0
 
 
@@ -315,14 +339,19 @@ def main() -> int:
         return 2
 
     env = credential_environment()
-    keys = collect_api_keys(env)
-    models = configured_models(env)
+    configured_keys = collect_api_keys(env)
+    keys = free_tier_keys(env)
+    models = free_tier_models(env)
     print(f"conflicts_detected={len(files)}")
-    print(f"gemini_credentials_configured={len(keys)}")
-    print(f"gemini_models_configured={len(models)}")
+    print(f"gemini_credentials_configured={len(configured_keys)}")
+    print(f"gemini_free_tier_credentials_approved={len(keys)}")
+    print(f"gemini_free_tier_models_approved={len(models)}")
     if not keys:
-        print("::error::no_gemini_credentials_configured", file=sys.stderr)
-        return 3
+        print("::error::gemini_free_tier_not_verified", file=sys.stderr)
+        return 6
+    if not models:
+        print("::error::no_free_tier_gemini_models_configured", file=sys.stderr)
+        return 7
 
     total_attempts = 0
     try:

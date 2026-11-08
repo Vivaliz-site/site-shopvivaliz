@@ -359,16 +359,20 @@ try {
 
     $pdo = sv_pdo();
     $stmt = $pdo->prepare(
-        'INSERT INTO orders (user_id, order_number, olist_order_id, email, order_total, order_status, payment_method, items_json, attribution_json, created_at)
-         VALUES (:user_id, :order_number, :olist_order_id, :email, :total, :status, :payment_method, :items_json, :attribution_json, NOW())'
+        'INSERT INTO orders (user_id, order_number, olist_order_id, email, order_total, total, subtotal, shipping_total, status, order_status, payment_method, items_json, attribution_json, created_at)
+         VALUES (:user_id, :order_number, :olist_order_id, :email, :order_total, :total, :subtotal, :shipping_total, :status, :order_status, :payment_method, :items_json, :attribution_json, NOW())'
     );
     $stmt->execute([
         ':user_id' => $sessionUserId,
         ':order_number' => $orderNumber,
         ':olist_order_id' => null,
         ':email' => $email,
+        ':order_total' => $record['total'],
         ':total' => $record['total'],
-        ':status' => 'aguardando_pagamento',
+        ':subtotal' => $record['items_total'],
+        ':shipping_total' => $record['shipping_total'],
+        ':status' => 'pending',
+        ':order_status' => 'aguardando_pagamento',
         ':payment_method' => $paymentMethod,
         ':items_json' => json_encode($cleanItems, JSON_UNESCAPED_UNICODE),
         ':attribution_json' => json_encode($attribution, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
