@@ -5,7 +5,7 @@ from scripts.ops.request_owner_pr_review import decision, requires_owner
 SHA = "a" * 40
 
 
-def pr(*, draft=False, reviewers=None, labels=None, head=SHA, author=None):
+def pr(*, draft=False, reviewers=None, labels=None, head=SHA, author="shopvivaliz-ci-bot"):
     res = {"state": "open", "draft": draft,
            "base": {"ref": "main"},
            "head": {"sha": head, "repo": {"full_name": "Vivaliz-site/site-shopvivaliz"}},
