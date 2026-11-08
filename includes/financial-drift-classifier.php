@@ -24,7 +24,11 @@ function svfd_classify(array $order, array $payment, array $erp): string
         || (float)$localAmount <= 0
         || abs((float)$localAmount - (float)$providerAmount) >= 0.015
         || (string)($payment['currency_id'] ?? '') !== 'BRL'
-        || (string)($payment['status'] ?? '') !== 'approved') {
+        || (string)($payment['status'] ?? '') !== 'approved'
+        // This reporter uses the official GET payment response. A sandbox
+        // approval is not evidence of commercial settlement, even when its
+        // external reference/amount/BRL currency match the checkout order.
+        || ($payment['live_mode'] ?? null) !== true) {
         return 'unverified';
     }
 
