@@ -335,37 +335,37 @@ function sv_blog_editorial_topic_profile(string $title): array
         [
             'match' => ['rodizio', 'rodízio', 'rodizios', 'rodízios', 'roda', 'rodas'],
             'category' => 'Rodízios',
-            'image_url' => '/public/assets/category-images/cat-rodizios.jpg',
+            'image_url' => '/public/assets/blog/category-editorial/rodizios.jpg',
             'search_term' => 'rodizio',
         ],
         [
             'match' => ['cadeado', 'cadeados', 'fechadura', 'fechaduras', 'seguranca', 'segurança'],
             'category' => 'Cadeados',
-            'image_url' => '/public/assets/category-images/cat-ferragens.jpg',
+            'image_url' => '/public/assets/blog/category-editorial/ferragens.jpg',
             'search_term' => 'cadeado',
         ],
         [
             'match' => ['bucha', 'buchas', 'parafuso', 'parafusos', 'fixador', 'fixadores', 'suporte', 'suportes', 'gancho', 'ganchos'],
             'category' => 'Fixadores',
-            'image_url' => '/public/assets/category-images/cat-ferragens.jpg',
+            'image_url' => '/public/assets/blog/category-editorial/ferragens.jpg',
             'search_term' => 'fixadores',
         ],
         [
             'match' => ['ferragem', 'ferragens', 'dobradica', 'dobradiça', 'puxador', 'puxadores', 'metalica', 'metálica', 'metalicas', 'metálicas'],
             'category' => 'Ferragens',
-            'image_url' => '/public/assets/category-images/cat-ferragens.jpg',
+            'image_url' => '/public/assets/blog/category-editorial/ferragens.jpg',
             'search_term' => 'ferragens',
         ],
         [
             'match' => ['ferramenta', 'ferramentas', 'reparo', 'reparos', 'conserto', 'consertos'],
             'category' => 'Ferramentas',
-            'image_url' => '/public/assets/category-images/cat-ferramentas.jpg',
+            'image_url' => '/public/assets/blog/category-editorial/ferramentas.jpg',
             'search_term' => 'ferramentas',
         ],
         [
             'match' => ['organizar', 'organiza', 'organizacao', 'organização', 'armario', 'armário', 'cozinha', 'lavanderia', 'garagem', 'estoque', 'caixa', 'quarto', 'limpeza'],
             'category' => 'Organização',
-            'image_url' => '/public/assets/category-images/cat-organizacao.jpg',
+            'image_url' => '/public/assets/blog/category-editorial/organizacao.jpg',
             'search_term' => 'organizacao',
         ],
     ];
@@ -385,7 +385,7 @@ function sv_blog_editorial_topic_profile(string $title): array
 
     return [
         'category' => 'Utilidades domésticas',
-        'image_url' => '/public/assets/category-images/cat-organizacao.jpg',
+        'image_url' => '/public/assets/blog/category-editorial/organizacao.jpg',
         'search_term' => 'utilidades',
     ];
 }

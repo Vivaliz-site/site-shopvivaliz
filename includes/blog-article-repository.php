@@ -231,29 +231,24 @@ final class BlogArticleRepository
 
     private function resolveImage(string $image, array $article): string
     {
-        $slug = trim((string)($article['slug'] ?? ''));
-        if ($slug !== '') {
-            foreach (['svg', 'webp', 'jpg', 'jpeg', 'png'] as $extension) {
-                $candidate = '/public/assets/blog/' . $slug . '.' . $extension;
-                if (is_file(dirname(__DIR__) . $candidate)) {
-                    return $candidate;
-                }
-            }
-        }
-
         $image = trim($image);
-        if ($image !== '' && (str_starts_with($image, 'http://') || str_starts_with($image, 'https://') || str_starts_with($image, '//'))) {
-            return $image;
+        $path = (string)(parse_url($image, PHP_URL_PATH) ?: $image);
+        // Legacy category thumbnails and generated SVG templates are not
+        // editorial photography. Replace them even when the file exists.
+        if (preg_match('~^/public/assets/category-images/cat-(rodizios|jardim|ferramentas|ferragens|organizacao)\.jpg$~', $path, $matches) === 1) {
+            return '/public/assets/blog/category-editorial/' . $matches[1] . '.jpg';
         }
-
+        if (preg_match('~^/public/assets/blog/[a-z0-9-]+\.svg$~i', $path) === 1) {
+            return $this->fallbackImageFor($article);
+        }
         if ($image !== '') {
-            $path = (string)(parse_url($image, PHP_URL_PATH) ?: $image);
-            $absolute = dirname(__DIR__) . '/' . ltrim($path, '/');
-            if (is_file($absolute)) {
+            if (preg_match('~^https?://~i', $image) === 1 || str_starts_with($image, '//')) {
+                return $image;
+            }
+            if (is_file(dirname(__DIR__) . '/' . ltrim($path, '/'))) {
                 return $image;
             }
         }
-
         return $this->fallbackImageFor($article);
     }
 
@@ -270,11 +265,11 @@ final class BlogArticleRepository
         $haystack = strtolower(is_string($ascii) && $ascii !== '' ? $ascii : $haystack);
 
         $rules = [
-            '/rodizio|rodizios|roda|rodas/' => '/public/assets/category-images/cat-rodizios.jpg',
-            '/jardim|jardinagem|planta|plantas/' => '/public/assets/category-images/cat-jardim.jpg',
-            '/ferramenta|ferramentas|reparo|reparos|conserto|consertos/' => '/public/assets/category-images/cat-ferramentas.jpg',
-            '/ferragem|ferragens|fixador|fixadores|bucha|buchas|parafuso|parafusos|cadeado|cadeados|dobradica|puxador|gancho|suporte/' => '/public/assets/category-images/cat-ferragens.jpg',
-            '/organizacao|organizar|organizador|organizadores|armario|cozinha|lavanderia|garagem|estoque|caixa|quarto|limpeza|acessorio|acessorios/' => '/public/assets/category-images/cat-organizacao.jpg',
+            '/rodizio|rodizios|roda|rodas/' => '/public/assets/blog/category-editorial/rodizios.jpg',
+            '/jardim|jardinagem|planta|plantas/' => '/public/assets/blog/category-editorial/jardim.jpg',
+            '/ferramenta|ferramentas|reparo|reparos|conserto|consertos/' => '/public/assets/blog/category-editorial/ferramentas.jpg',
+            '/ferragem|ferragens|fixador|fixadores|bucha|buchas|parafuso|parafusos|cadeado|cadeados|dobradica|puxador|gancho|suporte/' => '/public/assets/blog/category-editorial/ferragens.jpg',
+            '/organizacao|organizar|organizador|organizadores|armario|cozinha|lavanderia|garagem|estoque|caixa|quarto|limpeza|acessorio|acessorios/' => '/public/assets/blog/category-editorial/organizacao.jpg',
         ];
         foreach ($rules as $pattern => $fallback) {
             if (preg_match($pattern, $haystack) === 1) {
@@ -282,7 +277,7 @@ final class BlogArticleRepository
             }
         }
 
-        return '/public/assets/category-images/cat-organizacao.jpg';
+        return '/public/assets/blog/category-editorial/organizacao.jpg';
     }
 
     private function decodeJson(?string $value): array
