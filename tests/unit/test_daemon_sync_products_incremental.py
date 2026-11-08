@@ -23,6 +23,9 @@ class IncrementalCatalogSyncTest(unittest.TestCase):
                 "_olist_updated_at": "2026-09-10T12:00:00Z",
                 "_detail_synced_at": "2999-09-10T12:00:00+00:00",
                 "_erp_base_prices": {"preco": 15.0, "precoPromocional": 0.0},
+                # Only current-schema cache can reuse metadata; old schema
+                # must re-fetch detail to preserve variant parent identities.
+                "_cache_schema_version": daemon.PUBLIC_PRODUCT_SCHEMA_VERSION,
             }
         }
         summaries = [{"id": 10, "situacao": "A", "dataAlteracao": "2026-09-10T12:00:00Z"}]
