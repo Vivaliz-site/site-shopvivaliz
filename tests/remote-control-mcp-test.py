@@ -1408,6 +1408,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn(".value", expression)
         self.assertIn("openai.com", tabs)
         self.assertIn("[REDACTED_EMAIL]", expression)
+        self.assertIn("querySelectorAll(\'input,button,[role=button],[role=menuitem]\')", expression)
         daybreak = m.browser_navigate_command("ABC123", "https://openai.com/form/enterprise-trusted-access-for-cyber/")
         self.assertIn("openai.com", daybreak)
         # Policy: any https site is navigable; credential-bearing queries stay denied.
@@ -1464,7 +1465,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         match = re.search(r"SHOPVIVALIZ_EXPR_B64=([A-Za-z0-9+/=]+)", command)
         self.assertIsNotNone(match)
         expression = base64.b64decode(match.group(1)).decode()
-        self.assertIn("querySelectorAll('input,button,[role=button]')", expression)
+        self.assertIn("querySelectorAll('input,button,[role=button],[role=menuitem]')", expression)
         self.assertIn("controls[2]", expression)
         self.assertIn("control_index_not_found", expression)
         self.assertIn(".focus({preventScroll:true})", expression)
