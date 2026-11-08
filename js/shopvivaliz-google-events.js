@@ -353,15 +353,46 @@ function funnelClientId() {
     window.addEventListener('shopvivaliz:add_to_cart', trackCommittedCartAdd);
   }
 
-  // Removal and quantity-minus use cart-updated, dispatched only after
-  // persistence. Click-intent may fail due to quota or a blocked storage write.
-  // Keep this snapshot separate from add_to_cart, whose writers dispatch their
-  // dedicated event after the same persistence boundary.
+  // Only a user-initiated remove / quantity-minus is a removal conversion.
+  // Successful checkout clears the cart too, but must never be attributed
+  // as remove_from_cart. The click records intent ONLY; cart-updated confirms
+  // the resulting persisted delta, so failed storage writes emit no event.
   var removalCartSnapshot = readCart();
-  // Only an actual remove/minus click can authorize one removal event.
-  // Checkout clears, stock reconciliation and replay events are not user removals.
-  var pendingRemovalClickKey = '';
+  var pendingUserRemoval = null;
   var pendingCrossTabCartStorage = false;
+
+  function captureUserRemovalIntent(event) {
+    var target = event && event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    var button = target.closest('.btn-remove[data-remove]');
+    var fullRemove = Boolean(button);
+    if (!button) button = target.closest('.qty-btn[data-delta="-1"]');
+    if (!button) return;
+    var index = parseInt(button.getAttribute(fullRemove ? 'data-remove' : 'data-idx'), 10);
+    var cart = readCart();
+    if (!Number.isInteger(index) || index < 0 || !cart[index]) return;
+    var product = cart[index];
+    var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
+    if (!key) return;
+    var lineQuantity = Math.floor(number(product.quantity || 1));
+    var expectedRemoved = fullRemove ? lineQuantity : (lineQuantity > 1 ? 1 : 0);
+    if (expectedRemoved < 1) return;
+    var intent = {
+      key: key,
+      expectedRemoved: expectedRemoved,
+      totalBefore: cartQuantities(cart)[key],
+      product: product
+    };
+    pendingUserRemoval = intent;
+    // Browser event listener microtasks may run before the cart's bubble
+    // handler. Clear intent in the next task rather than before cart.set().
+    // A failed write must not authorize an unrelated later cart update.
+    var expireIntent = function () {
+      if (pendingUserRemoval === intent) pendingUserRemoval = null;
+    };
+    if (typeof setTimeout === 'function') setTimeout(expireIntent, 0);
+    else Promise.resolve().then(expireIntent);
+  }
   if (typeof window.addEventListener === 'function') {
     // Capture at the same window before the shared cart-persistence script's
     // bubbling storage handler dispatches a synchronous cart-updated event.
@@ -377,34 +408,28 @@ function funnelClientId() {
     var nextCart = readCart();
     var previousCart = removalCartSnapshot;
     removalCartSnapshot = nextCart;
-    var userRemovedKey = pendingRemovalClickKey;
-    pendingRemovalClickKey = '';
+    var intent = pendingUserRemoval;
+    pendingUserRemoval = null;
     var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
-    // Another tab already attributes its own user action. Do not double-count
-    // the storage event that updates this tab's cart UI.
+    // Other-tab changes and checkout/order-completion clears are NOT user
+    // removal clicks in this page, even if the persisted cart becomes empty.
     if (detail.origin === 'storage' || pendingCrossTabCartStorage) {
       pendingCrossTabCartStorage = false;
       return;
     }
-    if (!userRemovedKey) return;
+    if (!intent || !intent.key) return;
 
-    var prior = cartQuantities(previousCart);
-    var current = cartQuantities(nextCart);
-    var seen = Object.create(null);
-    previousCart.forEach(function (product) {
-      if (!product || typeof product !== 'object') return;
-      var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
-      if (!key || seen[key] || key !== userRemovedKey) return;
-      seen[key] = true;
-      var removed = Math.floor(number(prior[key]) - number(current[key]));
-      if (removed <= 0) return;
-      var item = itemFromProduct(product);
-      item.quantity = removed;
-      push('remove_from_cart', {
-        currency: 'BRL',
-        value: number(item.price) * item.quantity,
-        items: [item]
-      });
+    var before = cartQuantities(previousCart);
+    var after = cartQuantities(nextCart);
+    if (number(before[intent.key]) !== number(intent.totalBefore)) return;
+    var removed = Math.floor(number(before[intent.key]) - number(after[intent.key]));
+    if (removed < 1 || removed !== intent.expectedRemoved) return;
+    var item = itemFromProduct(intent.product);
+    item.quantity = removed;
+    push('remove_from_cart', {
+      currency: 'BRL',
+      value: number(item.price) * item.quantity,
+      items: [item]
     });
   }
 
@@ -414,28 +439,9 @@ function funnelClientId() {
 
   function bindClicks() {
     document.addEventListener('click', function (event) {
+      captureUserRemovalIntent(event);
       // add_to_cart is emitted by the committed cart event below, not by
       // click intent. Cart persistence can fail before the item is added.
-      // For removal, click intent is a short-lived attribution guard only;
-      // event emission still requires a successful persisted quantity decrease.
-      var removeButton = event.target && event.target.closest
-        ? event.target.closest('.btn-remove[data-remove],.qty-btn[data-delta="-1"]')
-        : null;
-      if (removeButton) {
-        var cartIndex = removeButton.getAttribute('data-remove');
-        if (cartIndex === null) cartIndex = removeButton.getAttribute('data-idx');
-        var index = Number(cartIndex);
-        var beforeCart = readCart();
-        var beforeItem = Number.isInteger(index) && index >= 0 ? beforeCart[index] : null;
-        var key = beforeItem && String(beforeItem.sku || beforeItem.item_id
-          || beforeItem.olist_product_id || '').trim();
-        if (key) {
-          pendingRemovalClickKey = key;
-          Promise.resolve().then(function () {
-            if (pendingRemovalClickKey === key) pendingRemovalClickKey = '';
-          });
-        }
-      }
 
       var checkout = event.target && event.target.closest ? event.target.closest('#btn-checkout,.btn-checkout') : null;
       if (checkout) {

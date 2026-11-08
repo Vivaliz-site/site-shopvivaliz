@@ -155,12 +155,12 @@ function funnelHarness(pathname, consent) {
     },
     clickRemove() {
       const button = {getAttribute: key => key==='data-remove' ? '0' : null};
-      const target = {closest: selector => selector==='.btn-remove[data-remove],.qty-btn[data-delta="-1"]' ? button : null};
+      const target = {closest: selector => selector==='.btn-remove[data-remove]' ? button : null};
       (documentListeners.click || []).forEach(fn => fn({target}));
     },
     clickMinus() {
-      const button = {getAttribute: key => key==='data-idx' ? '0' : key==='data-delta' ? '-1' : null};
-      const target = {closest: selector => selector==='.btn-remove[data-remove],.qty-btn[data-delta="-1"]' ? button : null};
+      const button = {getAttribute: key => key==='data-idx' ? '0' : (key==='data-delta' ? '-1' : null)};
+      const target = {closest: selector => selector==='.qty-btn[data-delta="-1"]' ? button : null};
       (documentListeners.click || []).forEach(fn => fn({target}));
     },
     changeCart(quantity, origin) {
@@ -220,19 +220,6 @@ check('PDP SKU event honors actual multi-unit cart delta', () => {
 });
 
 
-check('Checkout cart clear after order creation is NOT user remove_from_cart', () => {
-  const app=funnelHarness('/checkout', true);
-  app.changeCart(0);
-  assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 0);
-  assert.equal(app.beacons.filter(e => e.event_name === 'remove_from_cart').length, 0);
-});
-
-check('Background reconciliation is NOT user remove_from_cart', () => {
-  const app=funnelHarness('/carrinho', true);
-  app.changeCart(0);
-  assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 0);
-});
-
 check('Remove click without committed storage change must NOT fire remove_from_cart', () => {
   const app=funnelHarness('/carrinho', true);
   app.clickRemove();
@@ -252,11 +239,11 @@ check('Only committed removal is counted, once per persisted decrease', () => {
   assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 1);
   app.changeCart(3); // increment is not a removal
   app.clickMinus();
-  app.changeCart(1); // quantity decrement of 2
+  app.changeCart(2); // quantity decrement of 1
   remove=app.gtagEvents.filter(e => e[1] === 'remove_from_cart');
   assert.equal(remove.length, 2);
-  assert.equal(remove[1][2].items[0].quantity, 2);
-  assert.equal(remove[1][2].value, 56);
+  assert.equal(remove[1][2].items[0].quantity, 1);
+  assert.equal(remove[1][2].value, 28);
 });
 
 check('Cross-tab storage changes never create duplicate removal attribution', () => {
@@ -271,5 +258,24 @@ check('Cross-tab storage changes never create duplicate removal attribution', ()
   assert.equal(remove[0][2].items[0].quantity, 1);
 });
 
+
+check('Checkout order completion clears cart WITHOUT user remove_from_cart', () => {
+  const app=funnelHarness('/checkout', true);
+  app.changeCart(0); // checkout clearCart() calls ShopVivalizCart.clear -> cart-updated
+  assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 0);
+  assert.equal(app.beacons.filter(e => e.event_name === 'remove_from_cart').length, 0);
+});
+
+check('Automated cart cleanup is not a remove_from_cart signal', () => {
+  const app=funnelHarness('/carrinho', true);
+  app.changeCart(0); // automated cleanup without user remove/quantity-minus
+  assert.equal(app.gtagEvents.filter(e => e[1] === 'remove_from_cart').length, 0);
+});
+
+check('Removal intent expires after event bubble, not during microtask checkpoints', () => {
+  // Browser DOM listeners may run microtasks between capture and bubble.
+  // Replacing this with Promise.resolve().then() broke a real headed click.
+  assert.match(eventsSource, /setTimeout\(expireIntent,\s*0\)/);
+});
 
 process.exitCode=failures?1:0;
