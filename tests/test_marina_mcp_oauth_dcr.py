@@ -117,6 +117,56 @@ class Tests(unittest.TestCase):
         self.assertIn("provider_credential_not_in_current_process", errors.getvalue())
         self.assertNotIn("provider_credential_not_provisioned", errors.getvalue())
 
+    def test_rollback_rejects_concurrent_policy_change_without_put(self):
+        from unittest.mock import patch
+        initial = copy.deepcopy(APP)
+        updated = dcr.plan(initial, APP_ID, CALLBACK)
+        concurrent = copy.deepcopy(updated)
+        concurrent["policies"] = [{"id": "different-policy", "precedence": 1}]
+        with patch.object(dcr, "app_get", return_value=concurrent), \
+             patch.object(dcr, "api_json") as api:
+            with self.assertRaisesRegex(dcr.DcrError, "rollback_concurrent_app_change"):
+                dcr.rollback_if_safe("fake", APP_ID, initial, updated)
+            api.assert_not_called()
+
+    def test_apply_auto_rolls_back_if_public_discovery_never_propagates(self):
+        from contextlib import redirect_stdout, redirect_stderr
+        from io import StringIO
+        from unittest.mock import patch
+        import os,sys
+        initial = copy.deepcopy(APP)
+        updated = dcr.plan(initial, APP_ID, CALLBACK)
+        puts = []
+        def fake_api(url, token='', method='GET', payload=None):
+            if method == 'PUT':
+                puts.append(copy.deepcopy(payload))
+                return {'success': True}
+            raise AssertionError('unexpected_url')
+        with tempfile.TemporaryDirectory() as folder:
+            argv = ["dcr.py", "--apply", "--app-id", APP_ID, "--redirect-uri", CALLBACK,
+                    "--backup-path", str(Path(folder) / "before.json")]
+            stdout, stderr = StringIO(), StringIO()
+            with patch.object(sys, "argv", argv), \
+                 patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "unit-test-only"}), \
+                 patch.object(dcr, "probe", return_value=False), \
+                 patch.object(dcr.time, "sleep", return_value=None), \
+                 patch.object(dcr, "app_get", side_effect=[initial, updated, updated, initial]), \
+                 patch.object(dcr, "api_json", side_effect=fake_api), \
+                 redirect_stdout(stdout), redirect_stderr(stderr):
+                status = dcr.main()
+            self.assertEqual(3, status)
+            self.assertEqual(puts, [updated, initial])
+            self.assertIn('CLOUDFLARE_DCR_ROLLBACK_CONFIRMED=true', stdout.getvalue())
+            self.assertIn('public_oauth_discovery_not_propagated', stderr.getvalue())
+            self.assertEqual((Path(folder) / "before.json").stat().st_mode & 0o777, 0o600)
+
+    def test_readback_policy_change_is_rejected(self):
+        from unittest.mock import patch
+        altered=copy.deepcopy(APP)
+        altered["policies"] = [{"id": "different"}]
+        with patch.object(dcr, 'app_get', return_value=altered):
+            with self.assertRaisesRegex(dcr.DcrError, 'rollback_concurrent_app_change'):
+                dcr.rollback_if_safe('fake', APP_ID, APP, dcr.plan(APP, APP_ID, CALLBACK))
     def test_probe_detects_missing_dcr(self):
         original = dcr.api_json
         def fake(url, **kwargs):

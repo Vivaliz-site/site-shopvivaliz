@@ -119,6 +119,44 @@ def save_private_backup(path, obj):
         output.write("\n")
 
 
+def _without_dcr_and_observation_timestamps(app):
+    """Compare security-relevant Access settings while allowing server time fields."""
+    result = copy.deepcopy(app)
+    for key in ("updated_at", "updated_on", "modified_at", "modified_on"):
+        result.pop(key, None)
+    cfg = result.get("oauth_configuration")
+    if not isinstance(cfg, dict):
+        raise DcrError("rollback_missing_oauth_configuration")
+    cfg.pop("dynamic_client_registration", None)
+    return result
+
+
+def rollback_if_safe(token, app_id, before, expected):
+    """Restore preimage only when no concurrent security or DCR change occurred."""
+    current = app_get(token, app_id)
+    if current.get("id") != app_id or current.get("domain") != DOMAIN:
+        raise DcrError("rollback_app_identity_mismatch")
+    if _without_dcr_and_observation_timestamps(current) != _without_dcr_and_observation_timestamps(before):
+        raise DcrError("rollback_concurrent_app_change")
+    before_dcr = before.get("oauth_configuration", {}).get("dynamic_client_registration", {})
+    expected_dcr = expected.get("oauth_configuration", {}).get("dynamic_client_registration", {})
+    current_dcr = current.get("oauth_configuration", {}).get("dynamic_client_registration", {})
+    if current_dcr == before_dcr:
+        print("CLOUDFLARE_DCR_ROLLBACK_CONFIRMED=true")
+        return
+    if current_dcr != expected_dcr:
+        raise DcrError("rollback_concurrent_dcr_change")
+    result = api_json(f"{API}/accounts/{ACCOUNT}/access/apps/{app_id}",
+                      token=token, method="PUT", payload=before)
+    if result.get("success") is not True:
+        raise DcrError("rollback_provider_update_failed")
+    readback = app_get(token, app_id)
+    if (_without_dcr_and_observation_timestamps(readback) !=
+            _without_dcr_and_observation_timestamps(before) or
+            readback.get("oauth_configuration", {}).get("dynamic_client_registration", {}) != before_dcr):
+        raise DcrError("rollback_readback_failed")
+    print("CLOUDFLARE_DCR_ROLLBACK_CONFIRMED=true")
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true")
@@ -126,6 +164,9 @@ def main():
     ap.add_argument("--redirect-uri", default="")
     ap.add_argument("--backup-path", default="")
     args = ap.parse_args()
+    old = updated = None
+    token = ""
+    change_might_have_been_sent = False
     try:
         current = probe()
         print("OAUTH_PKCE_S256=true")
@@ -143,6 +184,7 @@ def main():
         if updated != old:
             save_private_backup(Path(args.backup_path), old)
             print("PRIVATE_ROLLBACK_BACKUP_SAVED=true")
+            change_might_have_been_sent = True
             response = api_json(f"{API}/accounts/{ACCOUNT}/access/apps/{args.app_id}",
                                 token=token, method="PUT", payload=updated)
             if response.get("success") is not True:
@@ -151,14 +193,24 @@ def main():
         dcr = readback.get("oauth_configuration", {}).get("dynamic_client_registration", {})
         if readback.get("domain") != DOMAIN or dcr.get("enabled") is not True or callback not in dcr.get("allowed_uris", []):
             raise DcrError("dcr_readback_mismatch")
+        if (_without_dcr_and_observation_timestamps(readback) !=
+                _without_dcr_and_observation_timestamps(old)):
+            raise DcrError("access_app_security_settings_changed_after_write")
         print("CLOUDFLARE_DCR_CONFIG_READBACK_GREEN=true")
-        for _ in range(5):
+        for _ in range(15):
             if probe():
                 print("OAUTH_DCR_PUBLIC_GREEN=true")
                 return 0
             time.sleep(2)
         raise DcrError("public_oauth_discovery_not_propagated")
     except DcrError as exc:
+        if change_might_have_been_sent and old is not None and updated is not None:
+            try:
+                rollback_if_safe(token, args.app_id, old, updated)
+            except DcrError as restore_error:
+                print("MCP_DCR_ROLLBACK_ERROR=" + str(restore_error), file=sys.stderr)
+                print("MCP_DCR_ERROR=" + str(exc), file=sys.stderr)
+                return 4
         print("MCP_DCR_ERROR=" + str(exc), file=sys.stderr)
         return 3
 
