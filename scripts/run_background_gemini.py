@@ -24,7 +24,8 @@ from typing import Mapping
 
 DEFAULT_ENV_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/.env")
 DEFAULT_GEMINI_BIN = Path("/home/ubuntu/.local/bin/gemini")
-# FREE_TIER_BILLING_GUARD_V1: exact-key Free billing proof is mandatory in background.\n# A model offered on the free tier can still be billed when the API key
+# FREE_TIER_BILLING_GUARD_V1: exact-key Free billing proof is mandatory in background.
+# A model offered on the free tier can still be billed when the API key
 # belongs to a paid project. Never infer billing tier from a model alias.
 DEFAULT_TIER_ATTESTATION = Path(
     "/home/ubuntu/shopvivaliz-deploy/shared/ai-free-policy/gemini-free-tier.json"
