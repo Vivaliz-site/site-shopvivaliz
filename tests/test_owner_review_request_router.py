@@ -5,12 +5,15 @@ from scripts.ops.request_owner_pr_review import decision, requires_owner
 SHA = "a" * 40
 
 
-def pr(*, draft=False, reviewers=None, labels=None, head=SHA):
-    return {"state": "open", "draft": draft,
-            "base": {"ref": "main"},
-            "head": {"sha": head, "repo": {"full_name": "Vivaliz-site/site-shopvivaliz"}},
-            "requested_reviewers": reviewers if reviewers is not None else [],
-            "labels": labels if labels is not None else []}
+def pr(*, draft=False, reviewers=None, labels=None, head=SHA, author=None):
+    res = {"state": "open", "draft": draft,
+           "base": {"ref": "main"},
+           "head": {"sha": head, "repo": {"full_name": "Vivaliz-site/site-shopvivaliz"}},
+           "requested_reviewers": reviewers if reviewers is not None else [],
+           "labels": labels if labels is not None else []}
+    if author:
+        res["user"] = {"login": author}
+    return res
 
 
 class OwnerReviewRouterTests(unittest.TestCase):
@@ -37,15 +40,21 @@ class OwnerReviewRouterTests(unittest.TestCase):
 
     def test_existing_request_is_idempotent(self):
         files = [{"filename": "security/requests/security.md"}]
-        self.assertEqual(decision(pr(reviewers=[{"login": "shopvivaliz-human"}]), files, [], SHA),
+        self.assertEqual(decision(pr(reviewers=[{"login": "shopvivaliz-human"}, {"login": "fredmourao-ai"}]), files, [], SHA),
+                         "owner_already_requested")
+        self.assertEqual(decision(pr(reviewers=[{"login": "shopvivaliz-human"}], author="fredmourao-ai"), files, [], SHA),
                          "owner_already_requested")
 
     def test_review_exact_sha_is_not_requested_twice(self):
         files = [{"filename": "scripts/ops/owner_approved_merge_queue.py"}]
-        reviews = [{"user": {"login": "shopvivaliz-human"}, "state": "APPROVED",
-                    "commit_id": SHA, "submitted_at": "2026-11-05T15:00:00Z"}]
+        reviews = [
+            {"user": {"login": "shopvivaliz-human"}, "state": "APPROVED",
+             "commit_id": SHA, "submitted_at": "2026-11-05T15:00:00Z"},
+            {"user": {"login": "fredmourao-ai"}, "state": "APPROVED",
+             "commit_id": SHA, "submitted_at": "2026-11-05T15:01:00Z"},
+        ]
         self.assertEqual(decision(pr(), files, reviews, SHA), "owner_already_reviewed_current_head")
-        self.assertEqual(decision(pr(), files, [{**reviews[0], "commit_id": "b" * 40}], SHA),
+        self.assertEqual(decision(pr(), files, [{**reviews[0], "commit_id": "b" * 40}, reviews[1]], SHA),
                          "request_owner_review")
 
     def test_conflicting_head_fails_closed(self):

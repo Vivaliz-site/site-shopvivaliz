@@ -186,28 +186,28 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         # No reviews -> denied
         self.assertEqual(
             RUNNER.eligible(pr, files, [], checks, rules, specialized_check_completed=True),
-            (False, "lock_insertion_requires_dual_approval_on_exact_head"),
+            (False, "protected_requires_dual_approval_on_exact_head"),
         )
         # Only human -> denied
         self.assertEqual(
             RUNNER.eligible(pr, files, [human_rev], checks, rules, specialized_check_completed=True),
-            (False, "lock_insertion_requires_dual_approval_on_exact_head"),
+            (False, "protected_requires_dual_approval_on_exact_head"),
         )
         # Only operator -> denied
         self.assertEqual(
             RUNNER.eligible(pr, files, [operator_rev], checks, rules, specialized_check_completed=True),
-            (False, "lock_insertion_requires_dual_approval_on_exact_head"),
+            (False, "protected_requires_dual_approval_on_exact_head"),
         )
         # One stale commit -> denied
         stale_human = {**human_rev, "commit_id": "c" * 40}
         self.assertEqual(
             RUNNER.eligible(pr, files, [stale_human, operator_rev], checks, rules, specialized_check_completed=True),
-            (False, "lock_insertion_requires_dual_approval_on_exact_head"),
+            (False, "protected_requires_dual_approval_on_exact_head"),
         )
         # Both approved on exact head -> allowed
         self.assertEqual(
             RUNNER.eligible(pr, files, [human_rev, operator_rev], checks, rules, specialized_check_completed=True),
-            (True, "lock_insertion_dual_approved_exact_head_ready_for_native_queue"),
+            (True, "protected_dual_approved_exact_head_ready_for_native_queue"),
         )
 
 if __name__=="__main__":

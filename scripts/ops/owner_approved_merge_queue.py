@@ -22,6 +22,7 @@ if str(TRUSTED_REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(TRUSTED_REPOSITORY_ROOT))
 from scripts.pr_gate_scope import required_specialized_gates
 from scripts.quality.verify_owner_protected_pr_review import (
+    requires_dual_approval,
     requires_lock_dual_approval,
     requires_desktop_lock_dual_approval,
     verify_approvals,
@@ -170,11 +171,16 @@ def eligible(pr: object, files: object, reviews: object, checks: object,
     if holds & {"blocked-by-runtime-lease", "blocked-external"}:
         return False, "active_operational_hold"
     sha = pr.get("head", {}).get("sha", "")
-    requires_dual = requires_lock_dual_approval(files)
+    requires_dual = requires_dual_approval(files)
     if requires_dual:
-        if not approved_exact_head_dual(reviews, sha):
-            return False, "lock_insertion_requires_dual_approval_on_exact_head"
-    if is_owner_only:
+        author = creator.get("login", "")
+        required_accounts = set({HUMAN, OPERATOR})
+        if author and author.casefold() in {u.casefold() for u in required_accounts}:
+            required_accounts = {u for u in required_accounts if u.casefold() != author.casefold()}
+        ok, reason = verify_approvals(reviews, required_accounts, sha)
+        if not ok:
+            return False, "protected_requires_dual_approval_on_exact_head"
+    if is_owner_only and not requires_dual:
         # Only the real protected owner may authorize these PRs, and only
         # the immutable SHA they actually reviewed can enter the queue.
         if creator.get("login", "").casefold() == HUMAN:
@@ -189,7 +195,7 @@ def eligible(pr: object, files: object, reviews: object, checks: object,
     if not required_green(checks):
         return False, "official_required_checks_not_green"
     if requires_dual:
-        return True, "lock_insertion_dual_approved_exact_head_ready_for_native_queue"
+        return True, "protected_dual_approved_exact_head_ready_for_native_queue"
     return True, ("owner_approved_exact_head_ready_for_native_queue"
                   if is_owner_only else "technical_green_ready_for_native_queue")
 

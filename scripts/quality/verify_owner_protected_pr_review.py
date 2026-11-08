@@ -19,6 +19,7 @@ OPERATOR = "fredmourao-ai"
 DUAL_REQUIRED_REVIEWERS = frozenset({OWNER, OPERATOR})
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 REPO = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$")
+
 # Only two change classes need the owner's approval. Each rule pairs the
 # directories it applies to with the file-name terms that mark the change.
 OWNER_SENSITIVE_RULES = (
@@ -26,6 +27,52 @@ OWNER_SENSITIVE_RULES = (
     (("scripts/ops/", "deploy/"), ("terminate", "destroy", "vm-delete", "delete-instance")),
     # Price changes: pricing code in the storefront runtime.
     (("includes/", "api/"), ("pricing", "price", "preco", "preço")),
+)
+
+GOVERNANCE_PREFIXES = ("security/owner-approvals/", "security/requests/")
+GOVERNANCE_FILES = frozenset({
+    ".github/CODEOWNERS",
+    "docs/knowledge/security-approval-via-pr.md",
+    "scripts/validate-owner-pr-grant.py",
+    "scripts/ops/activate_owner_merge_queue_ruleset.py",
+})
+
+RULES_FILES = frozenset({
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "AI-TO-CLI-PROTOCOL.md",
+    "AI-AGENT-SAFETY.md",
+    "AI-AGENT-CLI-SESSION-POLICY.md",
+    "GLOBAL-CONTINUITY-PROTOCOL.md",
+    "docs/knowledge/agent-rules.md",
+})
+RULES_PREFIXES = ("docs/knowledge/agent-rules/",)
+
+TASKS_PREFIXES = (".github/workflows/",)
+TASKS_FILES = frozenset({
+    "scripts/agent_task_state.py",
+    "scripts/ops/owner_approved_merge_queue.py",
+    "scripts/ops/request_owner_pr_review.py",
+    "scripts/quality/verify_owner_protected_pr_review.py",
+})
+
+SENSITIVE_FILES = frozenset({
+    "marina-direct-mcp/root_broker.py",
+    "marina-direct-mcp/owner_pr_gate.py",
+    "remote-control-mcp/test_marina_admin_gate.py",
+    "scripts/ops/activate-mcp-central-marina-readonly.py",
+})
+
+POLICY_DIRECTIVE_MARKERS = (
+    "OWNER_DIRECTIVES_",
+    "OWNER_NO_UNAPPROVED_RESTRICTIONS_",
+    "SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1",
+    "PR_HUMAN_VISIBILITY_ROUTING_V1",
+    "PROTECTED_OWNER_REVIEW_REQUEST_VISIBILITY_V1",
+    "OWNER_ONE_CLICK_MERGE_QUEUE_POLICY_P2",
+    "DESKTOP_GUI_LOCK_PROHIBITION_",
+    "ALL_LOCK_INSERTION_DUAL_APPROVAL_",
 )
 
 LOCK_PATTERNS = (
@@ -80,14 +127,57 @@ def is_lock_insertion(f: dict) -> bool:
 is_desktop_gui_lock_restoration = is_lock_insertion
 
 
-def requires_lock_dual_approval(files: list[dict]) -> bool:
+def is_protected_file(f: dict | str) -> bool:
+    """Determine if file represents locks, governance, rules, tasks or sensitive items."""
+    if isinstance(f, dict):
+        filename = f.get("filename", "")
+        patch = f.get("patch")
+        if is_lock_insertion(f):
+            return True
+    elif isinstance(f, str):
+        filename = f
+        patch = None
+    else:
+        return False
+
+    # 1. Governança
+    if any(filename.startswith(p) for p in GOVERNANCE_PREFIXES) or filename in GOVERNANCE_FILES:
+        return True
+
+    # 2. Regras
+    if filename in RULES_FILES or any(filename.startswith(p) for p in RULES_PREFIXES):
+        return True
+
+    # 3. Tasks / Workflows
+    if any(filename.startswith(p) for p in TASKS_PREFIXES) or filename in TASKS_FILES:
+        return True
+
+    # 4. Outros sensíveis (Infraestrutura, root broker, preços)
+    if filename in SENSITIVE_FILES or is_protected_path(filename):
+        return True
+
+    # 5. Documentos com diretivas de governança / trava
+    if filename == "docs/knowledge/host-access.md":
+        if patch is None:
+            return True  # uninspectable policy change
+        for line in patch.splitlines():
+            if (line.startswith("+") and not line.startswith("+++")) or (line.startswith("-") and not line.startswith("---")):
+                if any(marker in line for marker in POLICY_DIRECTIVE_MARKERS):
+                    return True
+
+    return False
+
+
+def requires_dual_approval(files: list[dict | str]) -> bool:
+    """True if PR introduces locks, governance changes, agent rules, tasks or sensitive items."""
     for f in files:
-        if isinstance(f, dict) and is_lock_insertion(f):
+        if is_protected_file(f):
             return True
     return False
 
 
-requires_desktop_lock_dual_approval = requires_lock_dual_approval
+requires_lock_dual_approval = requires_dual_approval
+requires_desktop_lock_dual_approval = requires_dual_approval
 
 
 def is_protected_path(path: str) -> bool:
@@ -130,7 +220,7 @@ def verify_approvals(reviews: list[dict], required_users: set[str] | frozenset[s
     return True, "dual_owner_review_approved_exact_head" if len(required_users) > 1 else "owner_review_approved_exact_head"
 
 
-def decide(files: object, reviews: object, head_sha: str, changed_files: object = None) -> tuple[bool, str]:
+def decide(files: object, reviews: object, head_sha: str, changed_files: object = None, pr_author: str | None = None) -> tuple[bool, str]:
     """Fail closed for untrusted/incomplete GitHub pages and stale approvals."""
     if not isinstance(head_sha, str) or not SHA40.fullmatch(head_sha):
         return False, "invalid_head_sha"
@@ -143,9 +233,13 @@ def decide(files: object, reviews: object, head_sha: str, changed_files: object 
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "pr_files_invalid"
 
-    # Priority Check: Does this PR attempt to introduce any locks or restrictions?
-    if requires_lock_dual_approval(files):
-        return verify_approvals(reviews, DUAL_REQUIRED_REVIEWERS, head_sha)
+    # Priority Check: Does this PR touch locks, governance, rules, tasks, or sensitive actions?
+    if requires_dual_approval(files):
+        required = set(DUAL_REQUIRED_REVIEWERS)
+        if pr_author and pr_author.casefold() in {u.casefold() for u in required}:
+            # GitHub forbids PR authors from reviewing their own PR.
+            required = {u for u in required if u.casefold() != pr_author.casefold()}
+        return verify_approvals(reviews, required, head_sha)
 
     # Standard Check: VM deletion or price changes require shopvivaliz-human
     protected = sorted({f["filename"] for f in files if is_protected_path(f["filename"])})
@@ -198,11 +292,11 @@ def main(argv=None) -> int:
         files = github_json(args.repo, f"/pulls/{args.pr}/files?per_page=100", token)
         if not isinstance(files, list) or len(files) >= 100:
             raise ValueError("pr_files_unavailable_or_incomplete")
-        protected = (any(is_protected_path(f.get("filename", "")) for f in files if isinstance(f, dict))
-                     or requires_lock_dual_approval(files))
+        protected = requires_dual_approval(files)
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
-        approved, reason = decide(files, reviews, args.head, pr.get("changed_files"))
+        pr_author = pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None
+        approved, reason = decide(files, reviews, args.head, pr.get("changed_files"), pr_author)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         print("OWNER_REVIEW_GATE=DENIED reason=github_verification_unavailable")
         print(f"OWNER_REVIEW_DIAGNOSTIC={type(exc).__name__}")

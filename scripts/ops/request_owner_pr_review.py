@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 from scripts.ops.owner_approved_merge_queue import protected
 from scripts.quality.verify_owner_protected_pr_review import (
     is_protected_path,
+    requires_dual_approval,
     requires_lock_dual_approval,
     requires_desktop_lock_dual_approval,
 )
@@ -47,7 +48,7 @@ def requires_owner(files: object, labels: object) -> bool:
         raise ValueError("labels_invalid")
     if any(label["name"].casefold() in OWNER_LABELS for label in labels):
         return True
-    if requires_lock_dual_approval(files):
+    if requires_dual_approval(files):
         return True
     for f in files:
         if not isinstance(f, dict) or not isinstance(f.get("filename"), str):
@@ -87,11 +88,14 @@ def decision(pr: dict, files: list, reviews: list, expected_sha: str) -> str:
         if isinstance(r, dict) and isinstance(r.get("login"), str)
     }
 
+    author = pr.get("user", {}).get("login", "") if isinstance(pr.get("user"), dict) else ""
     needed_reviewers = (
         {HUMAN, OPERATOR}
-        if requires_lock_dual_approval(files)
+        if requires_dual_approval(files)
         else {HUMAN}
     )
+    if author and author.casefold() in {u.casefold() for u in needed_reviewers}:
+        needed_reviewers = {u for u in needed_reviewers if u.casefold() != author.casefold()}
 
     if needed_reviewers <= requested_logins:
         return "owner_already_requested"
@@ -173,9 +177,9 @@ def run(number: int, expected_sha: str, token: str) -> int:
         current = github(f"/pulls/{number}", token)
         if current.get("head", {}).get("sha") != expected_sha or current.get("state") != "open":
             raise ValueError("pr_changed_before_request")
-        reviewers_to_request = (
-            [HUMAN, OPERATOR] if requires_lock_dual_approval(files) else [HUMAN]
-        )
+        author = current.get("user", {}).get("login", "") if isinstance(current.get("user"), dict) else ""
+        raw_reviewers = [HUMAN, OPERATOR] if requires_dual_approval(files) else [HUMAN]
+        reviewers_to_request = [u for u in raw_reviewers if u.casefold() != author.casefold()]
         already_requested = {
             r.get("login", "").casefold()
             for r in current.get("requested_reviewers", [])

@@ -17,24 +17,45 @@ def review(login="shopvivaliz-human", state="APPROVED", commit=HEAD, at="2026-11
 
 
 class OwnerRequiredReviewGateTests(unittest.TestCase):
-    def decide(self, names, reviews=None, head=HEAD):
+    def decide(self, names, reviews=None, head=HEAD, pr_author=None):
         files = [{"filename": n, "status": "added"} for n in names]
-        return GATE.decide(files, [] if reviews is None else reviews, head)
+        return GATE.decide(files, [] if reviews is None else reviews, head, pr_author=pr_author)
 
     def test_normal_technical_pr_remains_autonomous(self):
         for path in ("apps/shopvivaliz-web-agent/src/browser.mjs", "docs/ops/notes.md"):
             self.assertEqual(self.decide([path]), (True, "non_protected_pr"))
 
-    def test_security_and_gate_files_no_longer_require_human(self):
-        for path in ("security/owner-approvals/3539.json",
-                     "security/requests/web-agent-owner-grant-corrective-20261102.md",
-                     ".github/CODEOWNERS",
-                     ".github/workflows/mandatory-validation-gate.yml",
-                     "scripts/quality/verify_owner_protected_pr_review.py"):
-            with self.subTest(path=path):
-                self.assertEqual(self.decide([path]), (True, "non_protected_pr"))
+    def test_security_governance_rules_and_tasks_require_dual_approval(self):
+        protected_targets = (
+            "security/owner-approvals/3539.json",
+            "security/requests/web-agent-owner-grant-corrective-20261102.md",
+            ".github/CODEOWNERS",
+            ".github/workflows/mandatory-validation-gate.yml",
+            "scripts/quality/verify_owner_protected_pr_review.py",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "scripts/agent_task_state.py",
+        )
+        human = review(login="shopvivaliz-human", commit=HEAD)
+        operator = review(login="fredmourao-ai", commit=HEAD)
 
-    def test_vm_deletion_and_price_changes_require_human(self):
+        for path in protected_targets:
+            with self.subTest(path=path):
+                # Sem aprovacao -> bloqueia
+                res, reason = self.decide([path])
+                self.assertFalse(res)
+                self.assertEqual(reason, "dual_owner_approval_missing")
+
+                # Somente uma conta -> bloqueia
+                self.assertFalse(self.decide([path], [human])[0])
+                self.assertFalse(self.decide([path], [operator])[0])
+
+                # Ambas aprovam -> passa
+                res, reason = self.decide([path], [human, operator])
+                self.assertTrue(res)
+                self.assertEqual(reason, "dual_owner_review_approved_exact_head")
+
+    def test_vm_deletion_and_price_changes_require_dual_approval(self):
         for path in ("scripts/ops/terminate-oci-instance.sh",
                      "deploy/oci/destroy-vm.sh",
                      "scripts/ops/vm-delete-old.py",
@@ -45,13 +66,18 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 self.assertEqual(self.decide([path])[0], False)
 
     def test_human_owner_exact_head_unblocks_only_protected_pr(self):
+        human = review(login="shopvivaliz-human", commit=HEAD)
+        operator = review(login="fredmourao-ai", commit=HEAD)
         self.assertEqual(self.decide(["includes/pricing-sync.php"],
-                                     [review()]), (True, "owner_review_approved_exact_head"))
+                                     [human, operator]), (True, "dual_owner_review_approved_exact_head"))
         self.assertEqual(self.decide(["includes/pricing-sync.php", "docs/other.md"],
-                                     [review()])[0], True)
+                                     [human, operator])[0], True)
+        # Se fredmourao-ai e o autor do PR, apenas a aprovacao de shopvivaliz-human e exigida
+        self.assertEqual(self.decide(["includes/pricing-sync.php"],
+                                     [human], pr_author="fredmourao-ai"), (True, "owner_review_approved_exact_head"))
 
     def test_technical_actor_not_a_human_review(self):
-        for login in ("fredmourao-ai", "github-actions[bot]", "another-user"):
+        for login in ("github-actions[bot]", "another-user"):
             self.assertEqual(self.decide(["includes/pricing-sync.php"],
                                          [review(login=login)])[0], False)
 
@@ -61,10 +87,11 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
         approvals = [review(), review(state="CHANGES_REQUESTED",
                                       at="2026-11-02T19:02:00Z")]
         self.assertEqual(self.decide(["includes/pricing-sync.php"],
-                                     approvals), (False, "latest_owner_review_not_approved"))
+                                     approvals, pr_author="fredmourao-ai"), (False, "latest_owner_review_not_approved"))
 
     def test_comments_do_not_override_owner_approval(self):
-        approvals = [review(), review(state="COMMENTED", at="2026-11-02T19:05:00Z")]
+        approvals = [review(login="shopvivaliz-human"), review(login="fredmourao-ai"),
+                     review(state="COMMENTED", at="2026-11-02T19:05:00Z")]
         self.assertTrue(self.decide(["includes/pricing-sync.php"], approvals)[0])
 
     def test_invalid_or_incomplete_github_pages_fail_closed(self):
