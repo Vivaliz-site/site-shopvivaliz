@@ -25,6 +25,8 @@ _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
 _MIN_REQUEST_INTERVAL = 1.10
 DETAIL_CACHE_MAX_AGE_SECONDS = 2 * 60 * 60
+# Any schema change must refresh previously compacted ERP details before reuse.
+PUBLIC_PRODUCT_SCHEMA_VERSION = 2
 AMAZON_PRICE_LIST_ID = 991
 CENT = Decimal('0.01')
 _UNCHECKED_CACHE_REVISION = object()
@@ -38,6 +40,40 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
     brand = item.get("marca") if isinstance(item.get("marca"), dict) else {}
     dimensions = item.get("dimensoes") if isinstance(item.get("dimensoes"), dict) else {}
     seo = item.get("seo") if isinstance(item.get("seo"), dict) else {}
+    # Public variant relationships are needed to keep a variation connected to
+    # its ERP parent. Keep only identity and selectable grade attributes;
+    # never copy nested prices, costs, inventory, suppliers or tax objects.
+    parent_data = item.get("produtoPai") if isinstance(item.get("produtoPai"), dict) else {}
+    parent_link = None
+    if parent_data.get("id") not in (None, ""):
+        parent_link = {
+            "id": parent_data["id"],
+            "sku": str(parent_data.get("sku") or "").strip(),
+            "descricao": str(parent_data.get("descricao") or "").strip(),
+            "tipo": str(parent_data.get("tipo") or "").strip(),
+        }
+    public_variations = []
+    for variation in item.get("variacoes", []) if isinstance(item.get("variacoes"), list) else []:
+        if not isinstance(variation, dict):
+            continue
+        variation_id = variation.get("id")
+        variation_sku = str(variation.get("sku") or "").strip()
+        if variation_id in (None, "") and not variation_sku:
+            continue
+        grade = []
+        for attribute in (variation.get("grade") if isinstance(variation.get("grade"), list) else [])[:24]:
+            if not isinstance(attribute, dict):
+                continue
+            key = str(attribute.get("chave") or "").strip()
+            value = str(attribute.get("valor") or "").strip()
+            if key and value:
+                grade.append({"chave": key, "valor": value})
+        public_variations.append({
+            "id": variation_id,
+            "sku": variation_sku,
+            "descricao": str(variation.get("descricao") or "").strip(),
+            "grade": grade,
+        })
     attachments = []
     for attachment in item.get("anexos", []) if isinstance(item.get("anexos"), list) else []:
         if isinstance(attachment, dict) and str(attachment.get("url", "")).startswith("https://"):
@@ -61,6 +97,9 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "id": item.get("id"),
         "sku": str(item.get("sku") or item.get("codigo") or "").strip(),
         "tipo": str(item.get("tipo") or "P"),
+        "tipoVariacao": str(item.get("tipoVariacao") or ""),
+        "produtoPai": parent_link,
+        "variacoes": public_variations,
         "kit": kit_composition,
         "descricao": str(item.get("descricao") or item.get("nome") or "").strip(),
         "descricaoComplementar": str(item.get("descricaoComplementar") or item.get("descricao_complementar") or "").strip(),
@@ -79,10 +118,11 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "estoque": {"quantidade": quantity},
         "estoque_disponivel": quantity,
         "categoria": {
+            "id": category.get("id"),
             "nome": str(category.get("nome") or ""),
             "caminhoCompleto": str(category.get("caminhoCompleto") or ""),
         },
-        "marca": {"nome": str(brand.get("nome") or "")},
+        "marca": {"id": brand.get("id"), "nome": str(brand.get("nome") or "")},
         "dimensoes": {
             "largura": float(dimensions.get("largura") or 0),
             "altura": float(dimensions.get("altura") or 0),
@@ -100,6 +140,7 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "sync_source": "tiny_v3",
         "_olist_updated_at": str(item.get("_olist_updated_at") or "").strip(),
         "_detail_synced_at": str(item.get("_detail_synced_at") or datetime.now(timezone.utc).isoformat()),
+        "_cache_schema_version": PUBLIC_PRODUCT_SCHEMA_VERSION,
     }
 
 
@@ -334,6 +375,8 @@ def load_previous_cache() -> dict[str, dict[str, Any]]:
 
 
 def detail_cache_is_fresh(cached: dict[str, Any], current_marker: str, now: datetime | None = None) -> bool:
+    if cached.get("_cache_schema_version") != PUBLIC_PRODUCT_SCHEMA_VERSION:
+        return False
     cached_marker = str(cached.get("_olist_updated_at") or "").strip()
     if not current_marker or cached_marker != current_marker:
         return False
