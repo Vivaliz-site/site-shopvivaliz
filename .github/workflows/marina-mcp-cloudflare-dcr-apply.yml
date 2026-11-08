@@ -71,7 +71,6 @@ jobs:
           umask 077
           python3 -m pip install --disable-pip-version-check -q 'requests==2.32.5'
           backup="$RUNNER_TEMP/marina-mcp-oauth-dcr-before-$GITHUB_RUN_ID.json"
-          trap 'rm -f "$backup"' EXIT
           python3 scripts/marina_mcp_oauth_dcr.py \
             --apply \
             --app-id 961c1049-6e70-46ae-bcfa-7827fbdf7553 \
@@ -84,3 +83,5 @@ jobs:
           python3 -m pip install --disable-pip-version-check -q 'requests==2.32.5'
           python3 scripts/marina_mcp_oauth_dcr.py
           echo "MCP_DCR_PUBLIC_DISCOVERY=PASS"
+          rm -f "$RUNNER_TEMP/marina-mcp-oauth-dcr-before-$GITHUB_RUN_ID.json"
+          echo "PRIVATE_DCR_BACKUP_REMOVED_AFTER_PUBLIC_GREEN=true"
