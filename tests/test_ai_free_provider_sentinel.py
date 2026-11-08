@@ -35,12 +35,13 @@ class Tests(unittest.TestCase):
             wrapper = root / "run_background_gemini.py"
             router = root / "autonomous-provider-failover.sh"
             wrapper.write_text(
-                "FREE_TIER_BILLING_GUARD_V1\\n"
-                "free_tier_approved_credentials(\\n"
-                "background_gemini_error=free_tier_not_verified\\n"
-                "SHOPVIVALIZ_RESUME_BACKGROUND\\n"
+                "FREE_TIER_BILLING_GUARD_V1\n"
+                'if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":\n'
+                "credentials = free_tier_approved_credentials(credentials, tier_attestation_file)\n"
+                "if not credentials:\n"
+                'print("background_gemini_error=free_tier_not_verified", file=sys.stderr)\n'
             )
-            router.write_text("env SHOPVIVALIZ_RESUME_BACKGROUND=1\\n")
+            router.write_text("env SHOPVIVALIZ_RESUME_BACKGROUND=1\n")
             self.assertTrue(s.gemini_free_billing_guard_present(root))
             router.write_text("python3 run_background_gemini.py\\n")
             self.assertFalse(s.gemini_free_billing_guard_present(root))
