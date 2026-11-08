@@ -1,13 +1,16 @@
 <#
-Decisão do proprietário (2026-11-08): desativação do encerramento forçado de sessões de CLI.
+Closes only interactive Claude Code/Codex CLI processes older than 24 hours.
+Never closes Claude Desktop, ChatGPT desktop, MCP services or background workers.
+Dry-run by default. Logs contain no command lines or secrets.
 #>
 param(
   [switch]$Apply,
   [int]$MaxAgeHours=24,
   [string]$FixturePath=''
 )
-Write-Output "SESSION_TTL_DISABLED_BY_OWNER"
-return
+$ErrorActionPreference='Stop'
+if($MaxAgeHours -lt 1){throw 'MaxAgeHours must be positive'}
+if($Apply -and $FixturePath){throw 'Fixtures may be used only for dry-run tests'}
 
 function Get-AgentKind($process, $index) {
   $name=([string]$process.Name).ToLowerInvariant()

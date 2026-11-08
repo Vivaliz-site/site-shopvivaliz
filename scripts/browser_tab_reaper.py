@@ -154,6 +154,9 @@ def protection_reason(tab: dict, active: set[str] | None, busy: bool = False) ->
         return "internal_page"
     if host in AUTH_HOSTS:
         return "login_page"
+    url = str(tab.get("url") or "").lower()
+    if any(auth_path in url for auth_path in ("/auth/", "/login", "/log-in")):
+        return "login_page"
     if active is None:
         return "task_state_unreadable"  # cannot tell what is in use: close nothing
     if conversation and conversation in active:
@@ -267,7 +270,7 @@ def main(argv: list[str] | None = None, *, now: float | None = None) -> int:
     parser.add_argument("--state-dir", default=os.getenv("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", str(CANONICAL_STATE_DIR)))
     parser.add_argument("--state-file", default=os.getenv(
         "SHOPVIVALIZ_TAB_REAPER_STATE", str(Path.home() / ".local/state/shopvivaliz/browser-tab-reaper.json")))
-    parser.add_argument("--idle-hours", type=float, default=1.0)
+    parser.add_argument("--idle-hours", type=float, default=float(os.getenv("SHOPVIVALIZ_TAB_REAPER_IDLE_HOURS", "1.0")))
     parser.add_argument("--keep-min", type=int, default=1)
     parser.add_argument("--max-closes", type=int, default=10, help="per browser per run")
     parser.add_argument("--task-fresh-hours", type=float, default=6.0,
