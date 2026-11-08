@@ -86,19 +86,22 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         pr,grant,args=fixture()
         pr["merged_by"]={"login":"fredmourao-ai"}
         self.assertFalse(MODULE.decide(pr,grant,**args)[0])
-    def test_auto_queue_requires_human_review_exact_head_and_official_green_checks(self):
+    def test_auto_queue_requires_dual_review_exact_head_and_official_green_checks(self):
         pr={"state":"open","draft":False,"user":{"login":"shopvivaliz-ci-bot"},
             "base":{"ref":"main"},"head":{"sha":HEAD,"repo":{"full_name":REPO}},
             "labels":[{"name":"no-auto-merge"}]}
         files=[{"filename":"security/owner-approvals/123.json"}]
         review=[{"user":{"login":"shopvivaliz-human"},"state":"APPROVED","commit_id":HEAD,
-                 "submitted_at":"2026-11-02T20:00:00Z"}]
+                 "submitted_at":"2026-11-02T20:00:00Z"},
+                {"user":{"login":"fredmourao-ai"},"state":"APPROVED","commit_id":HEAD,
+                 "submitted_at":"2026-11-02T20:01:00Z"}]
         checks=[{"name":n,"status":"completed","conclusion":"success",
                  "app":{"id":15368},"id":i+1} for i,n in enumerate(sorted(RUNNER.REQUIRED))]
         rules=[{"type":t,"parameters":{"required_status_checks":[{"context":n,"integration_id":15368}
                           for n in RUNNER.REQUIRED]}} if t=="required_status_checks" else {"type":t}
                           for t in ("pull_request","non_fast_forward","required_status_checks","merge_queue")]
         self.assertEqual(RUNNER.eligible(pr,files,review,checks,rules,specialized_check_completed=True)[0],True)
+        self.assertFalse(RUNNER.eligible(pr,files,review[:1],checks,rules,specialized_check_completed=True)[0])
         self.assertFalse(RUNNER.eligible(pr,files,[],checks,rules,specialized_check_completed=True)[0])
         self.assertFalse(RUNNER.eligible(pr,files,review,checks,rules[:-1],specialized_check_completed=True)[0])
         self.assertFalse(RUNNER.eligible(pr,files,review,checks[:-1],rules,specialized_check_completed=True)[0])
