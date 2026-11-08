@@ -2171,7 +2171,7 @@ def browser_open_command(url: str) -> str:
 
 
 def browser_controls_expression() -> str:
-    return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button],[role=menuitem]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
+    return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button],[role=menuitem]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',haspopup:e.getAttribute('aria-haspopup')||'',data_state:e.getAttribute('data-state')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
 
 
 def browser_controls_command(tab_id: str) -> str:
@@ -2234,7 +2234,10 @@ def browser_click_control_command(tab_id: str, index: int) -> str:
         f"const e=controls[{idx}];if(!e)throw new Error('control_index_not_found');"
         "if(typeof e.focus==='function')e.focus({preventScroll:true});"
         f"{_CORPORATE_LOGOUT_CLICK_JS}"
-        f"e.click();if(typeof e.focus==='function')e.focus({{preventScroll:true}});return {{clicked:true,index:{idx}}}}})()"
+        "const radixMenu=e.getAttribute('aria-haspopup')==='menu'&&/^(open|closed)$/.test(e.getAttribute('data-state')||'');"
+        "if(radixMenu){e.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerId:1,pointerType:'mouse',button:0,buttons:1}));}"
+        "else{e.click();if(typeof e.focus==='function')e.focus({preventScroll:true});}"
+        f"return {{clicked:true,index:{idx}}}}})()"
     )
     return _browser_cdp_command(tab_id, expression)
 
