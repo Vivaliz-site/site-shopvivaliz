@@ -15,7 +15,7 @@ spec.loader.exec_module(ttl)
 
 class SessionTtlTests(unittest.TestCase):
     def p(self, pid, ppid=1, age=90000, name="claude", uid=None, cgroup="0::/user.slice/session-1.scope", args=None, exe=None):
-        uid = os.geteuid() if uid is None else uid
+        uid = getattr(os, "geteuid", lambda: 1000)() if uid is None else uid
         args = tuple(args or ["/home/ubuntu/.local/bin/" + name])
         exe = exe or "/home/ubuntu/.local/bin/" + name
         return ttl.Process(pid, ppid, uid, age, args, exe, cgroup, pid * 10)
@@ -25,7 +25,7 @@ class SessionTtlTests(unittest.TestCase):
         self.assertEqual([p.pid for p, _ in ttl.targets(items, 86400)], [11, 13])
 
     def test_reject_root_other_user_and_background_service(self):
-        user = os.geteuid()
+        user = getattr(os, "geteuid", lambda: 1000)()
         if user == 0:
             self.skipTest("Run tests as interactive non-root user")
         items = [self.p(1, uid=0), self.p(2, uid=user + 99),
