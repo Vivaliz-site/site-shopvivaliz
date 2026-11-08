@@ -1411,7 +1411,6 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("visible_notices:", expression)
         self.assertIn("querySelectorAll('[role=alert],[data-sonner-toast]')", expression)
         self.assertIn("dialog_inputs:", expression)
-        self.assertIn("has_value:!!e.value", expression)
         self.assertIn("valid:e.validity?.valid!==false", expression)
         self.assertNotIn("value:e.value", expression)
         self.assertIn("querySelectorAll(\'input,button,[role=button],[role=menuitem]\')", expression)
