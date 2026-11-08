@@ -138,7 +138,13 @@ def free_router_present() -> bool:
     script = entry.parent / "autonomous-provider-failover.sh"
     try:
         data = script.read_text()
-        return "FREE_PROVIDER_FALLBACK_V2" in data and "BACKGROUND_ORDER=(gemini ollama claude_haiku gpt_luna)" in data
+        return (
+            "FREE_PROVIDER_FALLBACK_V2" in data
+            and "BACKGROUND_ORDER=(gemini ollama)" in data
+            and "background_chain=gemini_free,ollama_local_only" in data
+            and "claude_haiku" not in data
+            and "gpt_luna" not in data
+        )
     except OSError:
         return False
 
@@ -154,14 +160,15 @@ def gemini_free_billing_guard_present(script_dir: Path) -> bool:
         router = (script_dir / "autonomous-provider-failover.sh").read_text()
     except OSError:
         return False
-    required_runner = (
-        "FREE_TIER_BILLING_GUARD_V1",
-        "free_tier_approved_credentials(",
-        "background_gemini_error=free_tier_not_verified",
-        "SHOPVIVALIZ_RESUME_BACKGROUND",
+    required_runner_lines = (
+        'if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":',
+        "credentials = free_tier_approved_credentials(credentials, tier_attestation_file)",
+        "if not credentials:",
+        'print("background_gemini_error=free_tier_not_verified", file=sys.stderr)',
     )
     return (
-        all(token in runner for token in required_runner)
+        "FREE_TIER_BILLING_GUARD_V1" in runner
+        and all(line in {item.strip() for item in runner.splitlines()} for line in required_runner_lines)
         and 'env SHOPVIVALIZ_RESUME_BACKGROUND=1' in router
     )
 
