@@ -236,7 +236,7 @@ final class BlogArticleRepository
         // Legacy category thumbnails and generated SVG templates are not
         // editorial photography. Replace them even when the file exists.
         if (preg_match('~^/public/assets/category-images/cat-(rodizios|jardim|ferramentas|ferragens|organizacao)\.jpg$~', $path, $matches) === 1) {
-            return '/public/assets/blog/category-editorial/' . $matches[1] . '.jpg';
+            return '/public/assets/blog/category-editorial/' . $matches[1] . ($matches[1] === 'ferramentas' ? '-v2' : '') . '.jpg';
         }
         if (preg_match('~^/public/assets/blog/[a-z0-9-]+\.svg$~i', $path) === 1) {
             return $this->fallbackImageFor($article);
@@ -267,7 +267,7 @@ final class BlogArticleRepository
         $rules = [
             '/rodizio|rodizios|roda|rodas/' => '/public/assets/blog/category-editorial/rodizios.jpg',
             '/jardim|jardinagem|planta|plantas/' => '/public/assets/blog/category-editorial/jardim.jpg',
-            '/ferramenta|ferramentas|reparo|reparos|conserto|consertos/' => '/public/assets/blog/category-editorial/ferramentas.jpg',
+            '/ferramenta|ferramentas|reparo|reparos|conserto|consertos/' => '/public/assets/blog/category-editorial/ferramentas-v2.jpg',
             '/ferragem|ferragens|fixador|fixadores|bucha|buchas|parafuso|parafusos|cadeado|cadeados|dobradica|puxador|gancho|suporte/' => '/public/assets/blog/category-editorial/ferragens.jpg',
             '/organizacao|organizar|organizador|organizadores|armario|cozinha|lavanderia|garagem|estoque|caixa|quarto|limpeza|acessorio|acessorios/' => '/public/assets/blog/category-editorial/organizacao.jpg',
         ];
