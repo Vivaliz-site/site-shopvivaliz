@@ -1,0 +1,87 @@
+name: Marina MCP OAuth DCR - approved isolated change
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Exact owner grant #3521: APPLY_MARINA_DCR_PR3521"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: shopvivaliz-marina-mcp-oauth-dcr
+  cancel-in-progress: false
+
+jobs:
+  apply-dcr:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout protected main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify owner grant 3521 using official verifier
+        env:
+          GH_TOKEN: \${{ github.token }}
+          GITHUB_TOKEN: \${{ github.token }}
+          SHOPVIVALIZ_SECURITY_OWNER_LOGIN: shopvivaliz-human
+          CONFIRMATION: \${{ inputs.confirmation }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os
+          allowed = os.environ.get("CONFIRMATION") == "APPLY_MARINA_DCR_PR3521"
+          if not allowed:
+              raise SystemExit("EXACT_OWNER_GRANT_CONFIRMATION_REQUIRED")
+          print("EXACT_DISPATCH_CONFIRMATION_VERIFIED=true")
+          PY
+          test "$GITHUB_REF" = "refs/heads/main" || { echo "NOT_PROTECTED_MAIN"; exit 2; }
+          git diff --quiet
+          git diff --cached --quiet
+          head="$(gh api repos/Vivaliz-site/site-shopvivaliz/pulls/3521 --jq '.head.sha')"
+          merge="$(gh api repos/Vivaliz-site/site-shopvivaliz/pulls/3521 --jq '.merge_commit_sha')"
+          test -n "$head" && test -n "$merge"
+          verdict="$(python3 scripts/validate-owner-pr-grant.py \
+            --repository Vivaliz-site/site-shopvivaliz \
+            --pr-number 3521 \
+            --merge-sha "$merge" \
+            --head-sha "$head" \
+            --resource mcp:marina \
+            --principal marina-mcp-service \
+            --capability access_manage \
+            --operation configure_cloudflare_mcp_ingress \
+            --target-repository Vivaliz-site/site-shopvivaliz)"
+          test "$verdict" = "OWNER_PR_GRANT=AUTHORIZED reason=owner_authorization_verified" || {
+            echo "OWNER_GRANT_NOT_AUTHORIZED"; exit 2;
+          }
+          echo "OWNER_GRANT_VERIFIED=true"
+
+      - name: Apply minimal OAuth DCR to exact Access app only
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "EXISTING_ACTIONS_SECRET_NOT_INJECTED"; exit 2; }
+          python3 -m pip install --disable-pip-version-check -q 'requests==2.32.5'
+          backup="$RUNNER_TEMP/marina-mcp-oauth-dcr-before-$GITHUB_RUN_ID.json"
+          trap 'rm -f "$backup"' EXIT
+          python3 scripts/marina_mcp_oauth_dcr.py \
+            --apply \
+            --app-id 961c1049-6e70-46ae-bcfa-7827fbdf7553 \
+            --redirect-uri https://chatgpt.com/connector_platform_oauth_redirect \
+            --backup-path "$backup"
+
+      - name: Validate public discovery and registration after write
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check -q 'requests==2.32.5'
+          python3 scripts/marina_mcp_oauth_dcr.py
+          echo "MCP_DCR_PUBLIC_DISCOVERY=PASS"
