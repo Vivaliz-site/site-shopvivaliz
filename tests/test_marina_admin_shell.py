@@ -78,6 +78,23 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(result, {"ok": False, "reason": "audit_unavailable"})
         self.assertEqual(called, [])
 
+    def test_unexpected_runner_exception_closes_audit_pair(self):
+        def runner(argv, **kwargs):
+            raise OSError("synthetic launch failure")
+
+        for as_root in (False, True):
+            with self.subTest(as_root=as_root):
+                self.audit_entries.clear()
+                with self.assertRaises(OSError):
+                    shell.run_admin_shell({"command": "id -u", "as_root": as_root},
+                                          home="/tmp", audit=self.audit, runner=runner)
+                self.assertEqual([e["event"] for e in self.audit_entries], ["start", "end"])
+                final = self.audit_entries[-1]
+                self.assertIsNone(final["exit_code"])
+                self.assertFalse(final["timed_out"])
+                self.assertEqual(final["outcome"], "execution_error")
+                self.assertNotIn("id -u", json.dumps(self.audit_entries))
+
     def test_timeout_is_reported_not_raised(self):
         def runner(argv, **kwargs):
             raise subprocess.TimeoutExpired(argv, 1)
