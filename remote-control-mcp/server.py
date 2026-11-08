@@ -2553,9 +2553,6 @@ MUTATING_RUNTIME_ACTIONS = {
     "browser_click_control": "browser_click_control",
     "browser_type": "browser_type",
     "service_action": "service_action",
-    "desktop_open": "desktop_open",
-    "desktop_click": "desktop_click",
-    "desktop_type": "desktop_type",
 }
 
 def _durable_handoff_enabled() -> bool:

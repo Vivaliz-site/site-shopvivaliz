@@ -262,7 +262,7 @@ function sv_webhook_job_dispatch_mercadopago(array $payload): array
             'topic' => $isOrder ? 'order' : 'payment',
         ]);
         $stmt = $pdo->prepare(
-            'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
+            'UPDATE orders SET status = :status, order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
              WHERE order_number = :order_number'
         );
         $stmt->execute([
@@ -529,7 +529,7 @@ function sv_webhook_job_dispatch_infinitepay(array $payload): array
             'topic' => 'payment',
         ]);
         $stmt = $pdo->prepare(
-            'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
+            'UPDATE orders SET status = :status, order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
              WHERE order_number = :order_number'
         );
         $stmt->execute([

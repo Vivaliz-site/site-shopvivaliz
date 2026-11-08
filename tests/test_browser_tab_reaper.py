@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -205,7 +206,8 @@ class BrowserTabReaperTest(unittest.TestCase):
     def test_state_file_is_private(self):
         server = self.cdp([page("TABAAAAA", "https://example.com/a")])
         self.run_reaper(server, 0.0)
-        self.assertEqual(self.state_file.stat().st_mode & 0o777, 0o600)
+        if os.name != "nt":
+            self.assertEqual(self.state_file.stat().st_mode & 0o777, 0o600)
 
     def test_active_task_on_this_browser_protects_non_chatgpt_tabs_only(self):
         # A form or SPA keeps URL and title unchanged while a task types in it.

@@ -30,7 +30,8 @@ class Process:
 
 
 def kind(p: Process) -> str | None:
-    if p.uid != os.geteuid() or p.uid == 0:
+    current_uid = getattr(os, "geteuid", lambda: 1000)()
+    if p.uid != current_uid or p.uid == 0:
         return None
     if ".service" in p.cgroup or "--remote-control" in p.argv:
         return None
@@ -142,8 +143,29 @@ def close(p: Process, k: str, limit_sec: int) -> str:
 
 
 def main() -> int:
-    # Decisão do proprietário (2026-11-08): desativação do encerramento forçado de sessões de CLI.
-    print("SESSION_TTL_DISABLED_BY_OWNER")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--max-age-hours", type=int, default=24)
+    parser.add_argument("--fixture", type=Path, help="JSON process fixture (dry-run only)")
+    args = parser.parse_args()
+    if args.max_age_hours < 1 or (args.apply and args.fixture):
+        parser.error("invalid age/fixture combination")
+    if getattr(os, "geteuid", lambda: 1000)() == 0:
+        parser.error("run under the interactive user, never as root")
+    if args.fixture:
+        items = [Process(**row) for row in json.loads(args.fixture.read_text())]
+    else:
+        items = live_processes()
+    candidates = targets(items, args.max_age_hours * 3600)
+    for p, k in candidates:
+        result = close(p, k, args.max_age_hours * 3600) if args.apply else "WOULD_CLOSE"
+        info = {"host": socket.gethostname(), "pid": p.pid, "kind": k,
+                "age_hours": round(p.age / 3600, 2), "result": result,
+                "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        print(json.dumps(info, sort_keys=True))
+        if args.apply:
+            audit(info)
+    print(f"ELIGIBLE_SESSIONS={len(candidates)} MODE={'apply' if args.apply else 'dry-run'}")
     return 0
 
 

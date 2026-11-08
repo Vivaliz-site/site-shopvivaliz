@@ -127,11 +127,24 @@ else:
         "task_state_signature",
         "task_state_advanced",
         "SHOPVIVALIZ_RESUME_BACKGROUND",
-        "BACKGROUND_ORDER=(gemini ollama claude_haiku gpt_luna)",
-
+        "BACKGROUND_ORDER=(gemini ollama)",
+        "background_chain=gemini_free,ollama_local_only",
     ):
         if token not in fallback_text:
             errors.append(f"scripts/autonomous-provider-failover.sh: missing {token}")
+
+runner_path = ROOT / "scripts" / "run_background_gemini.py"
+if not runner_path.is_file():
+    errors.append("missing scripts/run_background_gemini.py")
+else:
+    runner_text = runner_path.read_text(encoding="utf-8", errors="replace")
+    for token in (
+        "FREE_TIER_BILLING_GUARD_V1",
+        "free_tier_approved_credentials(",
+        "background_gemini_error=free_tier_not_verified",
+    ):
+        if token not in runner_text:
+            errors.append(f"scripts/run_background_gemini.py: missing {token}")
 
 if not STATE.is_file():
     errors.append("missing scripts/agent_task_state.py")

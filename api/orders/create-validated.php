@@ -63,7 +63,7 @@ $shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $body
 $serviceId = trim((string)($body['shipping_service'] ?? ''));
 $quoteId = trim((string)($body['shipping_quote_id'] ?? ''));
 $expiresAt = (int)($body['shipping_expires_at'] ?? 0);
-if (strlen($shippingCep) !== 8 || $shippingTotal <= 0 || $serviceId === '' || $quoteId === '' || $expiresAt <= 0) {
+if (strlen($shippingCep) !== 8 || $shippingTotal < 0 || $serviceId === '' || $quoteId === '' || $expiresAt <= 0) {
     svq_fail(422,'shipping_quote_required','Selecione uma cotação de frete válida antes de finalizar.');
 }
 if ($expiresAt < time()) svq_fail(409,'shipping_quote_expired','A cotação de frete expirou. Calcule novamente no carrinho.');
