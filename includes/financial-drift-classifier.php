@@ -94,6 +94,10 @@ function svfd_report_verdict(array $summary): array
         && (int)($summary['mysql_unavailable'] ?? 0) === 0
         && (int)($summary['unverified'] ?? 0) === 0
         && (int)($summary['erp_checks_skipped_rate_limit'] ?? 0) === 0
+        // Caller inspected only payment/ERP pairs with both IDs. A missing
+        // ID is a coverage gap even if all available pairs reconciled.
+        // Never return evidence_complete=true alongside coverage_limited=true.
+        && (int)($summary['without_provider_id'] ?? 0) === 0
         && !$rateLimited;
 
     $p0 = (int)($summary['discrepancy'] ?? 0) > 0

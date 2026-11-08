@@ -30,6 +30,24 @@ $complete = [
     'unverified' => 0,
 ];
 fdv_check('known real P0 remains P0', $complete, 'P0_FINANCIAL_DRIFT_FOUND', 0, true);
+// Actual Marina readback 08/11: 29 local site files but 26 missing
+// provider/ERP IDs; the former verdict incorrectly claimed evidence_complete
+// even as coverage_limited=true. A verified P0 stays P0, but NOT complete.
+$missingIdentity = array_replace($complete, ['without_provider_id' => 26]);
+fdv_check('known P0 with 26 unverifiable orders is still P0 but evidence is incomplete',
+    $missingIdentity, 'P0_FINANCIAL_DRIFT_FOUND', 2, false);
+$missingWithoutP0 = array_replace($missingIdentity, [
+    'discrepancy' => 0, 'mysql_missing_evidence' => 0,
+]);
+fdv_check('unverifiable provider ID cannot create a clean financial verdict',
+    $missingWithoutP0, 'INCOMPLETE_EVIDENCE', 2, false);
+$coverage = svfd_report_verdict($missingIdentity);
+if ($coverage['coverage_limited'] !== true || $coverage['evidence_complete'] !== false) {
+    fwrite(STDERR, "FAIL coverage_limited/evidence_complete must never be contradictory
+");
+    exit(1);
+}
+
 fdv_check('ERP HTTP 429 cannot produce a clean report', array_replace($complete, [
     'erp_verified'=>0, 'discrepancy'=>0, 'mysql_missing_evidence'=>0,
     'api_errors'=>1, 'erp_rate_limited'=>1, 'erp_checks_skipped_rate_limit'=>1
@@ -68,4 +86,4 @@ foreach (['erp_rate_limited', 'erp_checks_skipped_rate_limit', 'svfd_report_verd
         exit(1);
     }
 }
-echo "PASS: 10 verdict fixtures and rate-limit visibility contract.\n";
+echo "PASS: 12 verdict fixtures, missing-provider coverage and rate-limit visibility contract.\n";
