@@ -78,7 +78,7 @@ class CredentialPoolTests(unittest.TestCase):
 
         self.assertEqual(keys, ["key-from-file", "second-key"])
 
-    def test_credential_preflight_reports_only_verified_free_key_counts(self):
+    def test_credential_preflight_reports_count_not_values(self):
         fake_env = {
             "GEMINI_API_KEY": "secret-one",
             "GOOGLE_GEMINI_API_KEY": "secret-two",
