@@ -1055,30 +1055,21 @@ retomada automática e use a rota operacional auditável que consiga registrar o
 1. **Acesso a hosts pelo MCP com funcoes admin.** Instrucao expressa do proprietario: o acesso dos agentes e automacoes aos hosts ocorre pelo MCP com ferramentas administrativas. Marina: servidor MCP `shopvivaliz-marina-admin` (`marina_admin_shell`, `as_root` auditado) ou `python3 scripts/marina_mcp_agent_client.py preflight|tools|call`. Backend: Remote Control MCP `admin_command_run` com `host="always-free-arm-1787907847-26"`. Procedimento e evidencias: `docs/knowledge/marina-mcp-admin-agent-access.md` (prevalece sobre trechos antigos de "MCP Marina inativo/NAO APTO"). Rode `preflight` antes de agir; se as credenciais estiverem ausentes (`ready: false`), registre `NOT_PROVISIONED`, peca o provisionamento por canal seguro e nao crie, copie nem peca segredos no chat.
 2. **Aliases SSH do laptop sao pessoais.** `shopvivaliz-a1-backend`, `shopvivaliz-a1-backend-raw`, `shopvivaliz-a1-marina` e `shopvivaliz-a1-marina-raw` pertencem ao proprietario; automacoes, workflows, timers e triggers nao podem usar essas sessoes. Automacao usa identidade propria (servico/MCP), separada das contas pessoais (`fredmourao`, `marinaofaleiro`). Privilegio Unix admin (sudo) para o usuario de automacao exige OK explicito do proprietario.
 3. **Modelo padrao Codex/OpenAI = `gpt-6-luna`** (modelo de pensamento) em todo host, no lugar de `gpt-5.6-terra`. Os modelos anteriores continuam aceitos na allowlist do bridge durante a transicao. Fonte: `docs/knowledge/ai-squad.md`.
-4. **Ordem de fallback pago em automacoes continuas (decisao do proprietario):** Gemini Flash > ChatGPT normal > Claude Code Haiku 5.5 (`claude-haiku-5-5`) > GPT 6 Luna (`gpt-6-luna`). Claude Code e Codex autenticam por **login (assinatura), nunca por chave de API**. Cada degrau exige timeout, limite de tentativas, lease/checkpoint e condicao de saida. O sentinela, o roteador (`scripts/autonomous-provider-failover.sh`) e os testes ainda refletem a politica anterior (V2 abaixo); alinha-los e trabalho da PR de implementacao, e ate la o codigo vigente prevalece em runtime.
+4. **Ordem de automacao gratuita (decisao do proprietario):** rotinas autonomas/recorrentes usam Gemini Flash somente com elegibilidade Free comprovada para a credencial exata; depois Ollama local. Se ambos falharem, preservar `RUNNING` e aguardar retomada, sem fallback pago. ChatGPT normal/Work seguem a ordem de retomada foreground; Claude, GPT/OpenAI e Codex ficam fora de daemon, cron, watcher, autorepair, polling e retry, e so podem ser usados em tarefa finita mediante autorizacao humana explicita. Codex permanece a ultima opcao.
 5. **Navegadores de agente nao ficam abertos abandonados:** manter somente a aba necessaria para persistir o login. Executor: `scripts/browser_tab_reaper.py` (timer horario; dry-run por padrao, fecha apenas com `SHOPVIVALIZ_TAB_REAPER_APPLY=1`, que so se ativa com OK do proprietario). Detalhes: `docs/ops/browser-tab-reaper.md`.
 <!-- /OWNER_DIRECTIVES_20261105 -->
 
 <!-- FREE_PROVIDER_FALLBACK_V2 -->
 ## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
-- Cadeia de background (decisao do proprietario, 2026-11-05): Gemini Flash >
-  Ollama local > Claude Code Haiku 5.5 (`claude-haiku-5-5`, login, nunca API key)
-  > GPT 6 Luna (`gpt-6-luna`, login, nunca API key). Cada degrau pago roda uma
-  unica tentativa com timeout (`BACKGROUND_TIER_TIMEOUT`, padrao 900 s).
-  O ChatGPT normal fica no despachante, com lease.
-- Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
-  nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
-- Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
-  ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
-- Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
-  interativa, finita, com aprovacao humana explicita e controle de cota.
-- Fora da cadeia acima, nenhum cron, controller, worker ou bridge pode promover
-  fallback pago por variavel de ambiente legada ou healthcheck.
-- Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
-  e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
-- Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
-  ignora paid fallback=1 e bridges pagos negam acesso por padrao.
-<!-- /FREE_PROVIDER_FALLBACK_V2 -->
+- Cadeia de background: Gemini Flash somente com credencial/projeto comprovadamente elegivel ao nivel gratuito > Ollama local. Sao os unicos provedores de IA permitidos em daemon, cron/timer, watcher, autorepair, polling, retries e outras rotinas autonomas.
+- O runner Gemini valida a elegibilidade Free da credencial exata por attestation atual; sem prova Free, com quota esgotada, erro de billing ou indisponibilidade, segue para Ollama local.
+- Se Gemini Free e Ollama nao produzirem progresso, preservar RUNNING/checkpoint e aguardar retomada autorizada. Nunca acionar Claude, GPT/OpenAI ou Codex automaticamente.
+- ChatGPT comum e ChatGPT Work seguem a ordem CHATGPT_RESUME_ORDER_V5 na retomada foreground; nao sao fallback pago silencioso de rotinas persistentes.
+- Claude, GPT/OpenAI e Codex ficam fora de qualquer automacao recorrente e so podem ser usados em tarefa finita apos autorizacao humana explicita, com timeout, limite de tentativas e condicao de saida. Codex permanece a ultima opcao.
+- Cron, controller, worker, bridge, healthcheck e variaveis de ambiente legadas nao podem promover fallback pago.
+- Em caso de cota gratuita esgotada: registrar motivo seguro, preservar RUNNING e aguardar proxima retomada autorizada, sem cobranca silenciosa.
+- Prevenir recorrencia: instaladores mantem paid fallback=0; execucao background ignora flags legadas e bridges pagos negam acesso por padrao.
+
 
 <!-- BACKEND_IO_PRESSURE_ADMISSION_V1 -->
 ## Gate obrigatorio contra saturacao de I/O da VM backend (todos os agentes)
