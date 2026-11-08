@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime, timezone
+
+# Fixed wall-clock for expiry/lease regression: production expiry checks remain strict.
+class FixedDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 11, 7, 21, 0, tzinfo=timezone.utc)
+
 import importlib.util
 import json
 import os
@@ -23,13 +30,6 @@ HEAD = "a" * 40
 MERGE = "b" * 40
 TOKEN = "mock-technical-token-not-for-production"
 NOW = datetime(2026, 11, 1, 22, 0, tzinfo=timezone.utc)
-
-
-class FrozenDateTime(datetime):
-    """Keep issuance tests anchored to the fixture date, not the wall clock."""
-    @classmethod
-    def now(cls, tz=None):
-        return NOW if tz is not None else NOW.replace(tzinfo=None)
 
 
 def grant():
@@ -138,8 +138,8 @@ class PluginPermissionLeaseTests(unittest.TestCase):
                         "expires_at_epoch": 1234567}
             with patch.object(m, "STATE_ROOT", root), \
                  patch.object(m, "LEDGER_DIR", root / "_desktop-plugin-permission-approvals"), \
-                 patch.object(m.runtime_lock, "acquire_runtime_lock", side_effect=issue), \
-                 patch.object(m, "datetime", FrozenDateTime):
+                 patch.object(m, "datetime", FixedDatetime), \
+                 patch.object(m.runtime_lock, "acquire_runtime_lock", side_effect=issue):
                 first = m.issue_one_use(PR, proof)
                 self.assertEqual("SCOPED_RUNTIME_LEASE_ISSUED", first["status"])
                 self.assertEqual([("maintenance", f"shopvivaliz-plugin-permissions:{PR}",
@@ -154,8 +154,7 @@ class PluginPermissionLeaseTests(unittest.TestCase):
         proof = {"pr_number": PR, "head_sha": HEAD, "merge_sha": MERGE, "expires_at_utc": "2026-10-30T00:00:00Z"}
         with tempfile.TemporaryDirectory() as temp, patch.object(m, "STATE_ROOT", Path(temp)), \
              patch.object(m, "LEDGER_DIR", Path(temp) / "_desktop-plugin-permission-approvals"), \
-             patch.object(m.runtime_lock, "acquire_runtime_lock") as acquire, \
-             patch.object(m, "datetime", FrozenDateTime):
+             patch.object(m.runtime_lock, "acquire_runtime_lock") as acquire:
             with self.assertRaisesRegex(m.PermissionMaintenanceDenied, "owner_grant_expired_before_issuance"):
                 m.issue_one_use(PR, proof)
             acquire.assert_not_called()
@@ -165,9 +164,9 @@ class PluginPermissionLeaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(m, "STATE_ROOT", Path(temp)), \
              patch.object(m, "LEDGER_DIR", Path(temp) / "_desktop-plugin-permission-approvals"), \
+             patch.object(m, "datetime", FixedDatetime), \
              patch.object(m.runtime_lock, "acquire_runtime_lock",
-                          side_effect=m.runtime_lock.RuntimeLockConflict("occupied")), \
-             patch.object(m, "datetime", FrozenDateTime):
+                          side_effect=m.runtime_lock.RuntimeLockConflict("occupied")):
             with self.assertRaisesRegex(m.PermissionMaintenanceDenied, "runtime_lock_busy_or_unavailable"):
                 m.issue_one_use(PR, proof)
 
