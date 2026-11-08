@@ -7,8 +7,9 @@ require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/catalog-image-enrich.php';
 require_once __DIR__ . '/includes/product-seo.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
+require_once __DIR__ . '/includes/google-merchant-image-priority.php';
 require_once __DIR__ . '/includes/feed-cache.php';
-svfc_start('google-merchant', 60, array_merge(svfc_default_catalog_dependencies(), ['google-merchant-feed.php', 'includes/google-shopping-feed-utils.php', 'includes/catalog-image-enrich.php', 'includes/feed-cache.php', 'includes/product-seo.php']));
+svfc_start('google-merchant', 60, array_merge(svfc_default_catalog_dependencies(), ['google-merchant-feed.php', 'includes/google-shopping-feed-utils.php', 'includes/catalog-image-enrich.php', 'includes/google-merchant-image-priority.php', 'includes/feed-cache.php', 'includes/product-seo.php']));
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -248,6 +249,11 @@ foreach ($products as $product) {
         $additionalImages[] = $candidateImage;
         if (count($additionalImages) >= 10) break;
     }
+
+    // Prefer verified compliant ERP alternatives for the four affected Merchant SKUs.
+    $verifiedImages = svgm_promote_verified_erp_image($id, $image, $additionalImages);
+    $image = $verifiedImages['primary'];
+    $additionalImages = $verifiedImages['additional'];
 
     $availability = $stock > 0 ? 'in_stock' : 'out_of_stock';
     $originalPrice = round((float)($product['original_price'] ?? $product['compare_at_price'] ?? $product['preco_de'] ?? 0), 2);
