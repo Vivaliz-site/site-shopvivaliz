@@ -129,6 +129,9 @@ else:
         "SHOPVIVALIZ_RESUME_BACKGROUND",
         "BACKGROUND_ORDER=(gemini ollama)",
         "background_chain=gemini_free,ollama_local_only",
+        "FREE_TIER_BILLING_GUARD_V1",
+        "free_tier_approved_credentials(",
+        "background_gemini_error=free_tier_not_verified",
 
     ):
         if token not in fallback_text:
