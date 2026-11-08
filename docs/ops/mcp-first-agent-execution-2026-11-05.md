@@ -1,3 +1,11 @@
+<!-- OWNER_EXISTING_CREDENTIAL_DISCOVERY_20261107 -->
+## Credenciais existentes: descoberta obrigatoria antes de pedir ao operador
+
+Ao encontrar erro de login, token, RBAC ou conexao, nao presumir credencial ausente. Usar primeiro o MCP administrativo realmente exposto; consultar o runbook de hosts e os workflows GitHub existentes (em especial `.github/workflows/shopvivaliz-remote-access.yml`). Consultar **somente metadados e nomes** de secrets na conta/host autorizados; invocar probe read-only pela via oficial que ja possui credencial, e distinguir claramente `present`, `valid`, `scope_verified`, `read_only` e `write_authorized`. Se o provedor retornar 401/403, nao contornar negativa com outro token/conta ou transporte. Fluxos administrativos P2 continuam sujeitos a revisao e controles do provedor.
+
+Exemplo testado: run GitHub Actions [42429462524](https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/42429462524), `secure_mcp_cloudflare_access_probe`, passou com `CLOUDFLARE_ACCESS_APPS_READ=true`, `CLOUDFLARE_ACCESS_SERVICE_TOKENS_READ=true`, `CLOUDFLARE_ACCESS_MANAGED_OAUTH_CAPABLE=true`. Isso e credencial de **leitura**, nao evidencia de poder para editar Access app nem para ativar OAuth DCR. Depois do probe, consultar PR #3810 (inspecao da aplicacao exata), e o script de reparo ja integrado da PR #3808. Nao usar Opera como dependencia e nao pedir consentimento repetido.
+<!-- /OWNER_EXISTING_CREDENTIAL_DISCOVERY_20261107 -->
+
 # Execucao MCP primeiro — contrato dos agentes ShopVivaliz (2026-11-05)
 
 <!-- SHOPVIVALIZ_MCP_FIRST_ATTEMPT_V2 -->
