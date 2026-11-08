@@ -437,12 +437,13 @@ def run(
         print("background_gemini_error=credential_missing", file=sys.stderr)
         return 78
 
-    # Decisão do proprietário (2026-11-08): remoção do bloqueio de free_tier_billing_guard
-    # if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
-    #     credentials = free_tier_approved_credentials(credentials, tier_attestation_file)
-    #     if not credentials:
-    #         print("background_gemini_error=free_tier_not_verified", file=sys.stderr)
-    #         return 78
+    # Background automation is strictly Free-tier: verify the exact key against
+    # a recent owner-confirmed Google AI Studio attestation before any API request.
+    if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+        credentials = free_tier_approved_credentials(credentials, tier_attestation_file)
+        if not credentials:
+            print("background_gemini_error=free_tier_not_verified", file=sys.stderr)
+            return 78
 
     executable = _resolve_binary(gemini_bin)
     if not executable:
