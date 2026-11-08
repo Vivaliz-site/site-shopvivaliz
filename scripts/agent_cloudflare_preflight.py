@@ -12,12 +12,13 @@ import shutil
 import subprocess
 
 SECRET_NAME = "CLOUDFLARE_API_TOKEN"
+SECRET_CHOICES = ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_DNS_EDIT_TOKEN", "CLOUDFLARE_MARINA_TUNNEL_TOKEN")
 REPO = "Vivaliz-site/site-shopvivaliz"
 
 
-def has_cloudflare_secret(names):
+def has_cloudflare_secret(names, secret_name=SECRET_NAME):
     """Require exact Actions secret name, not a similarly named token."""
-    return SECRET_NAME in names
+    return secret_name in names
 
 
 def decide_route(*, github, process, local_file, browser):
@@ -48,7 +49,7 @@ def decide_route(*, github, process, local_file, browser):
     }
 
 
-def github_secret_state(repo=REPO):
+def github_secret_state(repo=REPO, secret_name=SECRET_NAME):
     """Only list secret names, authenticated as the authorized gh OS user."""
     if not shutil.which("gh"):
         return "unknown"
@@ -62,7 +63,7 @@ def github_secret_state(repo=REPO):
         return "unknown"
     if run.returncode != 0:
         return "unknown"  # API 403, expired gh session != secret absent.
-    return "present" if has_cloudflare_secret(set(run.stdout.splitlines())) else "absent"
+    return "present" if has_cloudflare_secret(set(run.stdout.splitlines()), secret_name) else "absent"
 
 
 def local_file_state(paths):
@@ -82,18 +83,19 @@ def local_file_state(paths):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=REPO)
+    parser.add_argument("--required-secret", choices=SECRET_CHOICES, default=SECRET_NAME)
     parser.add_argument("--local-file", action="append", default=[], help="Known protected path (presence check only)")
     parser.add_argument("--browser", choices=("authenticated", "absent", "unknown"), default="unknown",
                         help="Use authenticated only if a live UI identity check already passed")
     args = parser.parse_args()
     sources = {
-        "github": github_secret_state(args.repo),
-        "process": "present" if os.environ.get(SECRET_NAME) else "absent",
+        "github": github_secret_state(args.repo, args.required_secret),
+        "process": "present" if os.environ.get(args.required_secret) else "absent",
         "local_file": local_file_state(args.local_file),
         "browser": args.browser,
     }
     result = decide_route(**sources)
-    print(json.dumps({"provider": "cloudflare", "source_status": sources, **result,
+    print(json.dumps({"provider": "cloudflare", "required_secret": args.required_secret, "source_status": sources, **result,
                       "provider_api_scope_verified": False}, sort_keys=True))
     # A route plan is a diagnostic, not a provider operation or a secret grant.
     return 0
