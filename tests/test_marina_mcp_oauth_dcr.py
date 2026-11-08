@@ -98,6 +98,25 @@ class Tests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 dcr.save_private_backup(path, APP)
 
+    def test_missing_process_token_does_not_claim_credential_unprovisioned(self):
+        from contextlib import redirect_stderr, redirect_stdout
+        from io import StringIO
+        import os
+        import sys
+        from unittest.mock import patch
+
+        output, errors = StringIO(), StringIO()
+        argv = ["marina_mcp_oauth_dcr.py", "--apply", "--app-id", APP_ID,
+                "--redirect-uri", CALLBACK, "--backup-path", "/tmp/not-written.json"]
+        with patch.object(dcr, "probe", return_value=False), \
+             patch.object(sys, "argv", argv), \
+             patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": ""}), \
+             redirect_stdout(output), redirect_stderr(errors):
+            status = dcr.main()
+        self.assertEqual(status, 3)
+        self.assertIn("provider_credential_not_in_current_process", errors.getvalue())
+        self.assertNotIn("provider_credential_not_provisioned", errors.getvalue())
+
     def test_probe_detects_missing_dcr(self):
         original = dcr.api_json
         def fake(url, **kwargs):
