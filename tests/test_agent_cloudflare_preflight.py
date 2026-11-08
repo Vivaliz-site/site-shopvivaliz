@@ -39,4 +39,27 @@ class CloudflareCredentialPreflightTests(unittest.TestCase):
         self.assertFalse(module.has_cloudflare_secret({'CLOUDFLARE_API_TOKEN_OLD'}))
         self.assertTrue(module.has_cloudflare_secret({'CLOUDFLARE_API_TOKEN'}))
 
+    def test_dns_and_tunnel_names_are_checked_independently(self):
+        names = {"CLOUDFLARE_API_TOKEN", "CLOUDFLARE_MARINA_TUNNEL_TOKEN"}
+        self.assertFalse(module.has_cloudflare_secret(names, "CLOUDFLARE_DNS_EDIT_TOKEN"))
+        self.assertTrue(module.has_cloudflare_secret(names, "CLOUDFLARE_MARINA_TUNNEL_TOKEN"))
+
+    def test_dns_context_does_not_accept_unrelated_api_token(self):
+        import io
+        import json
+        import os
+        import sys
+        from unittest.mock import patch
+        from contextlib import redirect_stdout
+        out = io.StringIO()
+        with patch.object(module, "github_secret_state", return_value="unknown"), \
+             patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "fake-api-value", "CLOUDFLARE_DNS_EDIT_TOKEN": ""}, clear=True), \
+             patch.object(sys, "argv", ["agent_cloudflare_preflight.py", "--required-secret", "CLOUDFLARE_DNS_EDIT_TOKEN"]), \
+             redirect_stdout(out):
+            module.main()
+        result = json.loads(out.getvalue())
+        self.assertEqual(result["required_secret"], "CLOUDFLARE_DNS_EDIT_TOKEN")
+        self.assertEqual(result["source_status"]["process"], "absent")
+        self.assertFalse(result["request_new_credential"])
+
 if __name__ == '__main__': unittest.main()
