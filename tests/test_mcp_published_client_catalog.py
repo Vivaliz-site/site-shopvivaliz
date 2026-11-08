@@ -102,7 +102,10 @@ class PublishedMcpCatalogTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = (ROOT / path).read_text(encoding="utf-8")
-                first = text[:2100]
+                # Credential-route preflights now precede the published
+                # client catalog contract in two agent entrypoints. Keep the
+                # contract near the top, but don't require fixed byte offsets.
+                first = text[:9000]
                 self.assertIn("<!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->", first)
                 self.assertIn("CHATGPT_CLIENT_ADMIN_COMMAND_PARITY=APTO_NESTA_SESSAO", first)
                 self.assertIn("PARIDADE_TOTAL_MCP_RDC=NAO_CERTIFICADA", first)
