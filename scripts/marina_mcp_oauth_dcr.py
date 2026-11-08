@@ -5,6 +5,8 @@ Default is read-only, credential-free OAuth discovery. A write requires
 --apply, the exact existing Cloudflare Access app ID, the exact ChatGPT
 callback URI, an exclusive private backup path, and a provider-authorized
 CLOUDFLARE_API_TOKEN environment variable. No secrets are printed.
+If absent in this process, run scripts/agent_cloudflare_preflight.py first:
+GitHub Actions may already contain the secret in an authorized workflow context.
 """
 import argparse
 import copy
@@ -135,7 +137,7 @@ def main():
             raise DcrError("exact_app_id_and_backup_required")
         token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
         if not token:
-            raise DcrError("provider_credential_not_provisioned")
+            raise DcrError("provider_credential_not_in_current_process")
         old = app_get(token, args.app_id)
         updated = plan(old, args.app_id, callback)
         if updated != old:
