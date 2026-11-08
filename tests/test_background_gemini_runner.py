@@ -545,15 +545,15 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)
             env_file = workspace / ".env"
-            env_file.write_text("GEMINI_API_KEY=fixture-secret\\n", encoding="utf-8")
+            env_file.write_text("GEMINI_API_KEY=fixture-secret\n", encoding="utf-8")
             prompt_file = workspace / "prompt.txt"
             prompt_file.write_text("continue task", encoding="utf-8")
             invoked = workspace / "gemini-was-invoked"
             gemini_bin = workspace / "gemini"
             gemini_bin.write_text(
-                "#!/bin/sh\\n"
-                f'touch "{invoked}"\\n'
-                "exit 0\\n",
+                "#!/bin/sh\n"
+                f'touch "{invoked}"\n'
+                "exit 0\n",
                 encoding="utf-8",
             )
             gemini_bin.chmod(0o755)
@@ -587,7 +587,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             workspace = Path(tmp)
             secret = "fixture-secret"
             env_file = workspace / ".env"
-            env_file.write_text(f"GEMINI_API_KEY={secret}\\n", encoding="utf-8")
+            env_file.write_text(f"GEMINI_API_KEY={secret}\n", encoding="utf-8")
             prompt_file = workspace / "prompt.txt"
             prompt_file.write_text("continue task", encoding="utf-8")
             attestation = workspace / "gemini-free-tier.json"
@@ -604,7 +604,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             )
             attestation.chmod(0o600)
             gemini_bin = workspace / "gemini"
-            gemini_bin.write_text("#!/bin/sh\\nexit 0\\n", encoding="utf-8")
+            gemini_bin.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             gemini_bin.chmod(0o755)
 
             previous_cwd = Path.cwd()
