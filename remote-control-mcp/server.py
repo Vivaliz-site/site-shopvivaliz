@@ -230,6 +230,7 @@ AUDIT_SAFE_ARG_KEYS = frozenset({
     "owner_kind", "owner_id", "state", "reason", "url",
     "expected_last_checked_at", "rules_count", "audit_id_count",
     "next_action_length", "approval_id", "signed_approval_redacted",
+    "checkpoint_version",
     "email_sha256",
 })
 
