@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "pr_conflict_gemini_healer.py"
+sys.path.insert(0, str(MODULE_PATH.parent))
 spec = importlib.util.spec_from_file_location("pr_conflict_gemini_healer", MODULE_PATH)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
@@ -77,22 +78,53 @@ class CredentialPoolTests(unittest.TestCase):
 
         self.assertEqual(keys, ["key-from-file", "second-key"])
 
-    def test_credential_preflight_reports_count_not_values(self):
+    def test_credential_preflight_reports_only_verified_free_key_counts(self):
         fake_env = {
             "GEMINI_API_KEY": "secret-one",
             "GOOGLE_GEMINI_API_KEY": "secret-two",
         }
-        with patch.object(module, "credential_environment", return_value=fake_env), patch(
-            "builtins.print"
-        ) as printer:
+        with patch.object(module, "credential_environment", return_value=fake_env), patch.object(
+            module, "free_tier_approved_credentials",
+            side_effect=lambda credentials, _attestation: credentials,
+        ), patch("builtins.print") as printer:
             code = module.credential_preflight()
 
         self.assertEqual(code, 0)
         rendered = "\n".join(" ".join(map(str, call.args)) for call in printer.call_args_list)
         self.assertIn("gemini_credentials_configured=2", rendered)
+        self.assertIn("gemini_free_tier_credentials_approved=2", rendered)
+        self.assertIn("gemini_free_tier_models_approved=2", rendered)
         self.assertIn("secret_values_printed=false", rendered)
         self.assertNotIn("secret-one", rendered)
         self.assertNotIn("secret-two", rendered)
+
+    def test_credential_preflight_fails_closed_without_free_tier_attestation(self):
+        fake_env = {"GEMINI_API_KEY": "secret-one"}
+        with patch.object(module, "credential_environment", return_value=fake_env), patch.object(
+            module, "free_tier_approved_credentials", return_value=[]
+        ), patch("builtins.print") as printer:
+            code = module.credential_preflight()
+
+        self.assertEqual(code, 4)
+        rendered = "\n".join(" ".join(map(str, call.args)) for call in printer.call_args_list)
+        self.assertIn("gemini_free_tier_credentials_approved=0", rendered)
+        self.assertIn("secret_values_printed=false", rendered)
+        self.assertNotIn("secret-one", rendered)
+
+    def test_paid_models_are_excluded_from_free_conflict_healer(self):
+        self.assertEqual(
+            module.free_tier_models({"GEMINI_CONFLICT_MODELS": "gemini-2.5-pro;gemini-2.5-flash"}),
+            ["gemini-2.5-flash"],
+        )
+
+    def test_main_never_calls_gemini_without_attested_free_key(self):
+        fake_env = {"GEMINI_API_KEY": "secret-one"}
+        with patch.object(module, "conflicted_files", return_value=["example.php"]), patch.object(
+            module, "credential_environment", return_value=fake_env
+        ), patch.object(module, "free_tier_approved_credentials", return_value=[]), patch.object(
+            module, "call_gemini", side_effect=AssertionError("unverified key must not call Gemini")
+        ), patch("builtins.print"):
+            self.assertEqual(module.main(), 6)
 
     def test_default_models_prefer_current_stable_flash(self):
         self.assertEqual(module.configured_models({})[0], "gemini-3.6-flash")
