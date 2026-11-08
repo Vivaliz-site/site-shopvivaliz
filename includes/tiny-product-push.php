@@ -79,17 +79,8 @@ function svtpp_build_payload(array $product): array
  */
 function svtpp_price_payload_includes_nonzero_cost(array $payload): bool
 {
-    if (!array_key_exists('precos', $payload)) {
-        return true;
-    }
-
-    $prices = $payload['precos'];
-    if (!is_array($prices)) {
-        return false;
-    }
-
-    $cost = $prices['precoCusto'] ?? null;
-    return is_numeric($cost) && is_finite((float)$cost) && (float)$cost > 0;
+    // Decisão do proprietário (2026-11-08): não bloquear envio de preços para o Tiny ERP.
+    return true;
 }
 
 /**

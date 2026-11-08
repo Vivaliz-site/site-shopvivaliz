@@ -437,15 +437,12 @@ def run(
         print("background_gemini_error=credential_missing", file=sys.stderr)
         return 78
 
-    # FREE_TIER_BILLING_GUARD_V1: do not call a Google model solely because
-    # its ID is free-tier eligible. Paid projects may bill the same model.
-    # Only apply to detached/persistent jobs; legitimate human-controlled
-    # interactive flows retain their separately configured approvals.
-    if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
-        credentials = free_tier_approved_credentials(credentials, tier_attestation_file)
-        if not credentials:
-            print("background_gemini_error=free_tier_not_verified", file=sys.stderr)
-            return 78
+    # Decisão do proprietário (2026-11-08): remoção do bloqueio de free_tier_billing_guard
+    # if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+    #     credentials = free_tier_approved_credentials(credentials, tier_attestation_file)
+    #     if not credentials:
+    #         print("background_gemini_error=free_tier_not_verified", file=sys.stderr)
+    #         return 78
 
     executable = _resolve_binary(gemini_bin)
     if not executable:
