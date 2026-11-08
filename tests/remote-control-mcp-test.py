@@ -1409,6 +1409,8 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("openai.com", tabs)
         self.assertIn("[REDACTED_EMAIL]", expression)
         self.assertIn("querySelectorAll(\'input,button,[role=button],[role=menuitem]\')", expression)
+        self.assertIn("haspopup:e.getAttribute('aria-haspopup')", expression)
+        self.assertIn("data_state:e.getAttribute('data-state')", expression)
         daybreak = m.browser_navigate_command("ABC123", "https://openai.com/form/enterprise-trusted-access-for-cyber/")
         self.assertIn("openai.com", daybreak)
         # Policy: any https site is navigable; credential-bearing queries stay denied.
@@ -1469,6 +1471,11 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("controls[2]", expression)
         self.assertIn("control_index_not_found", expression)
         self.assertIn(".focus({preventScroll:true})", expression)
+        self.assertIn("new PointerEvent('pointerdown'", expression)
+        self.assertIn("radixMenu=e.getAttribute('aria-haspopup')==='menu'", expression)
+        self.assertIn("e.dispatchEvent(", expression)
+        self.assertIn("else{e.click();", expression)
+        self.assertLess(expression.index("denyCorporateLogout(e)"), expression.index("new PointerEvent('pointerdown'"))
         self.assertLess(expression.index(".focus({preventScroll:true})"), expression.index("e.click()"))
         with self.assertRaisesRegex(ValueError, "invalid_control_index"):
             m.browser_click_control_command("ABC123", 120)
