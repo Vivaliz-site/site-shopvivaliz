@@ -54,3 +54,6 @@ Promise.all([firstConsumer, secondConsumer])
     console.error('FAIL:', error && error.stack ? error.stack : error);
     process.exitCode = 1;
   });
+
+// The Quality Gate runs this script; cover settled PDP quotes as well.
+require('./pdp-shipping-quote-dedupe.test.cjs');
