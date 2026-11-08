@@ -28,7 +28,9 @@ class CredentialRouteContract(unittest.TestCase):
     def test_policies_distinguish_read_and_write(self):
         doc=(ROOT/"docs/ops/mcp-first-agent-execution-2026-11-05.md").read_text(encoding="utf-8")
         self.assertIn("write_authorized",doc)
-        self.assertIn("nao evidencia de poder para editar",doc)
+        self.assertIn("nao de poder para editar",doc)
+        self.assertIn("heuristico",doc)
+        self.assertIn("MCP_NOT_APPLICABLE",doc)
         self.assertIn("Nao usar Opera",doc)
 
 if __name__ == "__main__":
