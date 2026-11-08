@@ -168,7 +168,7 @@ def gemini_free_billing_guard_present(script_dir: Path) -> bool:
     )
     return (
         "FREE_TIER_BILLING_GUARD_V1" in runner
-        and all(line in runner.splitlines() for line in required_runner_lines)
+        and all(line in {item.strip() for item in runner.splitlines()} for line in required_runner_lines)
         and 'env SHOPVIVALIZ_RESUME_BACKGROUND=1' in router
     )
 
