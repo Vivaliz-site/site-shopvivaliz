@@ -123,7 +123,7 @@ class CredentialPoolTests(unittest.TestCase):
             module, "credential_environment", return_value=fake_env
         ), patch.object(module, "free_tier_approved_credentials", return_value=[]), patch.object(
             module, "call_gemini", side_effect=AssertionError("unverified key must not call Gemini")
-        ), patch("builtins.print"):
+        ), patch("builtins.print"), patch.object(module.sys, "argv", ["pr_conflict_gemini_healer.py"]):
             self.assertEqual(module.main(), 6)
 
     def test_default_models_prefer_current_stable_flash(self):
