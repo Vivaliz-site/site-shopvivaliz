@@ -358,6 +358,9 @@ function funnelClientId() {
   // Keep this snapshot separate from add_to_cart, whose writers dispatch their
   // dedicated event after the same persistence boundary.
   var removalCartSnapshot = readCart();
+  // Only an actual remove/minus click can authorize one removal event.
+  // Checkout clears, stock reconciliation and replay events are not user removals.
+  var pendingRemovalClickKey = '';
   var pendingCrossTabCartStorage = false;
   if (typeof window.addEventListener === 'function') {
     // Capture at the same window before the shared cart-persistence script's
@@ -374,6 +377,8 @@ function funnelClientId() {
     var nextCart = readCart();
     var previousCart = removalCartSnapshot;
     removalCartSnapshot = nextCart;
+    var userRemovedKey = pendingRemovalClickKey;
+    pendingRemovalClickKey = '';
     var detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
     // Another tab already attributes its own user action. Do not double-count
     // the storage event that updates this tab's cart UI.
@@ -381,6 +386,7 @@ function funnelClientId() {
       pendingCrossTabCartStorage = false;
       return;
     }
+    if (!userRemovedKey) return;
 
     var prior = cartQuantities(previousCart);
     var current = cartQuantities(nextCart);
@@ -388,7 +394,7 @@ function funnelClientId() {
     previousCart.forEach(function (product) {
       if (!product || typeof product !== 'object') return;
       var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
-      if (!key || seen[key]) return;
+      if (!key || seen[key] || key !== userRemovedKey) return;
       seen[key] = true;
       var removed = Math.floor(number(prior[key]) - number(current[key]));
       if (removed <= 0) return;
@@ -410,6 +416,26 @@ function funnelClientId() {
     document.addEventListener('click', function (event) {
       // add_to_cart is emitted by the committed cart event below, not by
       // click intent. Cart persistence can fail before the item is added.
+      // For removal, click intent is a short-lived attribution guard only;
+      // event emission still requires a successful persisted quantity decrease.
+      var removeButton = event.target && event.target.closest
+        ? event.target.closest('.btn-remove[data-remove],.qty-btn[data-delta="-1"]')
+        : null;
+      if (removeButton) {
+        var cartIndex = removeButton.getAttribute('data-remove');
+        if (cartIndex === null) cartIndex = removeButton.getAttribute('data-idx');
+        var index = Number(cartIndex);
+        var beforeCart = readCart();
+        var beforeItem = Number.isInteger(index) && index >= 0 ? beforeCart[index] : null;
+        var key = beforeItem && String(beforeItem.sku || beforeItem.item_id
+          || beforeItem.olist_product_id || '').trim();
+        if (key) {
+          pendingRemovalClickKey = key;
+          Promise.resolve().then(function () {
+            if (pendingRemovalClickKey === key) pendingRemovalClickKey = '';
+          });
+        }
+      }
 
       var checkout = event.target && event.target.closest ? event.target.closest('#btn-checkout,.btn-checkout') : null;
       if (checkout) {
