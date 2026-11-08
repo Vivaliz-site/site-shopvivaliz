@@ -217,6 +217,42 @@ SECRET_PATTERNS = (
         r"(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|[^\s]+)"
     ),
 )
+
+# Only synthetic, non-secret audit metadata is allowed back to MCP clients.
+# Unexpected/nested inputs must not become a side channel through audit_recent.
+AUDIT_SAFE_ARG_KEYS = frozenset({
+    "host", "service", "session", "action", "tab_id", "task_id",
+    "request_id", "command_sha256", "timeout", "timeout_seconds",
+    "wait_seconds", "max_bytes", "limit", "lines", "durable",
+    "press_enter", "submit", "button", "clicks", "operation", "method",
+    "runtime_lease_id", "runtime_fencing_token", "conversation_lease_id",
+    "conversation_fencing_token", "fencing_token", "lease_id",
+    "owner_kind", "owner_id", "state", "reason", "url",
+    "expected_last_checked_at", "rules_count", "audit_id_count",
+    "next_action_length", "approval_id", "signed_approval_redacted",
+    "email_sha256",
+})
+
+JSON_CREDENTIAL_RE = re.compile(
+    r'(?i)("(?:[a-z0-9]+[_-])*(?:access[_-]?token|refresh[_-]?token|'
+    r'auth[_-]?token|api[_-]?key|client[_-]?secret|service[_-]?token|'
+    r'password|passwd|private[_-]?key|cookie|totp(?:[_-]?secret)?|otp|'
+    r'authorization|token|secret)"\s*:\s*")(?:\\.|[^"\\])*(")'
+)
+ENV_CREDENTIAL_RE = re.compile(
+    r"(?i)(\b(?:[a-z0-9]+[_-])*(?:access[_-]?token|refresh[_-]?token|"
+    r"auth[_-]?token|api[_-]?key|client[_-]?secret|service[_-]?token|"
+    r"password|passwd|private[_-]?key|cookie|totp(?:[_-]?secret)?|otp)"
+    r"\s*=\s*)(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|[^\s,;]+)"
+)
+
+def public_error_code(exc: Exception) -> str:
+    """Return only a stable symbolic error, never arbitrary exception text."""
+    message = str(exc)
+    if re.fullmatch(r"[a-z][a-z0-9_]{2,95}", message):
+        return message
+    return "internal_error"
+
 STOP_EVENT = threading.Event()
 
 
@@ -238,6 +274,8 @@ def is_authorized(authorization: str, token: str | None = None) -> bool:
 
 def redact_text(value: str) -> str:
     out = value
+    out = JSON_CREDENTIAL_RE.sub(lambda m: m.group(1) + "[REDACTED]" + m.group(2), out)
+    out = ENV_CREDENTIAL_RE.sub(lambda m: m.group(1) + "[REDACTED]", out)
     for pattern in SECRET_PATTERNS:
         if pattern.groups:
             out = pattern.sub(lambda m: m.group(1) + "[REDACTED]", out)
@@ -1356,7 +1394,28 @@ def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     if tool == "browser_navigate" and "url" in safe_args:
         parsed = urlsplit(str(safe_args["url"]))
         safe_args["url"] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
-    return safe_args
+    scrubbed: dict[str, Any] = {}
+    redacted_fields = 0
+    for key, value in safe_args.items():
+        if key.endswith("_length") and isinstance(value, int):
+            scrubbed[key] = value
+        elif key not in AUDIT_SAFE_ARG_KEYS:
+            redacted_fields += 1
+        elif isinstance(value, (dict, list, tuple, set)):
+            scrubbed[key] = {"redacted_nested": True, "item_count": len(value)}
+        elif key == "url" and isinstance(value, str):
+            parsed = urlsplit(value)
+            if parsed.username is not None or parsed.password is not None:
+                scrubbed[key] = "[REDACTED_URL]"
+            else:
+                scrubbed[key] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+        elif isinstance(value, str):
+            scrubbed[key] = redact_text(value) if len(value) <= 256 else "[REDACTED_LONG_VALUE]"
+        else:
+            scrubbed[key] = value
+    if redacted_fields:
+        scrubbed["redacted_field_count"] = redacted_fields
+    return scrubbed
 
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str, *, output: dict[str, Any] | None = None) -> str:
@@ -2812,6 +2871,9 @@ def execute_tool(
             reconcile_task(row)
             row = load_task(tid)
         result = dict(row)
+        # The queue retains commands for execution, but status is not a command
+        # retrieval API: do not return raw shell text to ChatGPT/MCP clients.
+        result.pop("command", None)
         if result["state"] == "queued":
             result.update(queued_task_context(tid))
         heartbeat = result.get("heartbeat_at")
@@ -3296,8 +3358,9 @@ class Handler(BaseHTTPRequestHandler):
                     audit(name, host, args, False, "client_disconnected_command_cancelled")
                     raise
                 except Exception as exc:
-                    aid = audit(name, host, args, False, str(exc))
-                    output = {"error": str(exc), "audit_id": aid}
+                    error_code = public_error_code(exc)
+                    aid = audit(name, host, args, False, error_code)
+                    output = {"error": error_code, "audit_id": aid}
                     result = {
                         "content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}],
                         "structuredContent": output,
