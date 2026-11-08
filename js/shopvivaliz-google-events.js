@@ -340,7 +340,8 @@ function funnelClientId() {
     var key = String(product.sku || product.item_id || product.olist_product_id || '').trim();
     var delta = Math.floor(number(nextQuantities[key]) - number(previous[key]));
     if (delta < 1) return;
-    var item = itemFromProduct(Object.assign({}, product, { quantity: delta }));
+    var item = itemFromProduct(product);
+    item.quantity = delta;
     push('add_to_cart', {
       currency: 'BRL',
       value: number(item.price) * item.quantity,
