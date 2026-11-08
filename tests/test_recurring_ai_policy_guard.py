@@ -352,6 +352,8 @@ class RecurringAiPolicyGuardTests(unittest.TestCase):
         self.assertIn("DEFAULT_TIER_ATTESTATION", healer)
         self.assertIn("is_flash_free_tier_eligible", healer)
         self.assertIn("--credential-preflight", wrapper)
+        self.assertIn("/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env", wrapper)
+        self.assertNotIn("/home/ubuntu/shopvivaliz-deploy/shared/.env", wrapper)
         self.assertIn("conflict_ai_route=verified_free_gemini", wrapper)
         self.assertIn("conflict_ai_route=free_loopback_ollama", wrapper)
         self.assertIn("gemini_free_tier_not_verified_fallback=ollama", wrapper)
