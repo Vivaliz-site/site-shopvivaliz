@@ -127,7 +127,8 @@ else:
         "task_state_signature",
         "task_state_advanced",
         "SHOPVIVALIZ_RESUME_BACKGROUND",
-        "BACKGROUND_ORDER=(gemini ollama claude_haiku gpt_luna)",
+        "BACKGROUND_ORDER=(gemini ollama)",
+        "background_chain=gemini_free,ollama_local_only",
 
     ):
         if token not in fallback_text:
