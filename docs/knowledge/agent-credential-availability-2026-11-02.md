@@ -34,6 +34,13 @@ O PAT `SHOPVIVALIZ_GITHUB_TOKEN` existente pode ser utilizado para tarefas em di
 5. A permissao humana #3560 autoriza **apenas** `olist_browser_restart` na unit `amazon-returns-olist-erp-browser.service`; nao concede administracao geral. Revalidar o grant e a politica do provedor imediatamente antes de qualquer acao.
 6. Ao rotacionar ou revogar credenciais, atualizar **metadados** deste inventario e confirmar consumidores sem revelar o segredo. Nao supor que arquivos locais existam em sessoes futuras sem verificacao.
 
+## Cloudflare MCP Marina — descoberta de fontes confirmadas em 07/11/2026
+
+- **GitHub Actions:** o endpoint autenticado de nomes de secrets do repositorio retornou `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_DNS_EDIT_TOKEN` e `CLOUDFLARE_MARINA_TUNNEL_TOKEN`. A existencia do **nome** e confirmada, nao o valor, validade nem permissao `Access Apps: Edit`. Nao solicitar novamente criacao de token quando a fonte existente ainda pode ser usada pelo contexto/workflow autorizado.
+- **Laptop:** o Chrome no Fred-Win exibiu sessao autenticada na aplicacao `ShopVivaliz Marina MCP` no painel Cloudflare Zero Trust. Esta rota e por identidade/navegador proprio, nao por exportacao de cookies ou secrets.
+- **VM:** conferir arquivo/secret store somente por metadados (presenca, proprietario e modo) no host/identidade apropriado; a ausencia em um diretorio vasculhado **nao** prova ausencia nas demais fontes ou injeccao de runtime.
+- **Gate para agentes:** `python3 scripts/agent_cloudflare_preflight.py` em identidade GitHub CLI autorizada. O retorno `github_actions_existing_secret` significa preparar uso via workflow oficial que injete o secret; **nao** significa que a variavel esteja disponivel ao processo atual. O retorno `verify_existing_sources` impede diagnosticar ausencia com autenticacao/API de metadados ainda nao comprovadas. Ver `tests/test_agent_cloudflare_preflight.py`.
+- **Restricoes:** nao extrair/repassar credenciais nem contornar recusas de plataforma. Para corrigir OAuth DCR do MCP Marina, conferir grant da aplicacao Access, redirect URI exata, backup, preservacao de policy, e readback na UI e no endpoint publico antes de declarar aptidao.
 ## Referencias
 
 - `docs/ops/marina-root-broker-activation-2026-11-02.md`
