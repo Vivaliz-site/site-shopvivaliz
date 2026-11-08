@@ -58,6 +58,12 @@ public static class ShopVivalizDesktopInput {
         return GetPhysicalCursorPos(out cursor) && Math.Abs(cursor.X - x) <= 1 && Math.Abs(cursor.Y - y) <= 1;
     }
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(PhysicalPoint point);
+    [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    public static IntPtr RootAt(int x,int y) { return GetAncestor(WindowFromPoint(new PhysicalPoint {X=x,Y=y}),2); }
+    public static IntPtr RootAtCursor() { PhysicalPoint p; return GetPhysicalCursorPos(out p) ? RootAt(p.X,p.Y) : IntPtr.Zero; }
     [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 }
@@ -130,12 +136,15 @@ public static class ShopVivalizDesktopInput {
             if (-not [ShopVivalizDesktopInput]::IsPhysicalCursorAt($absoluteX, $absoluteY)) {
                 throw 'desktop_cursor_position_mismatch'
             }
+            $base.target_window = [string][ShopVivalizDesktopInput]::RootAt($absoluteX, $absoluteY)
+            $base.foreground_before_click = [string][ShopVivalizDesktopInput]::GetForegroundWindow()
             for ($i = 0; $i -lt $clicks; $i++) {
                 [ShopVivalizDesktopInput]::mouse_event([uint32]$flags[0], 0, 0, 0, [UIntPtr]::Zero)
                 Start-Sleep -Milliseconds 50
                 [ShopVivalizDesktopInput]::mouse_event([uint32]$flags[1], 0, 0, 0, [UIntPtr]::Zero)
                 Start-Sleep -Milliseconds 80
             }
+            $base.foreground_after_click = [string][ShopVivalizDesktopInput]::GetForegroundWindow()
             $base.x = $x
             $base.y = $y
             $base.button = $button
@@ -148,6 +157,18 @@ public static class ShopVivalizDesktopInput {
             if ([string]::IsNullOrEmpty($text)) { throw 'desktop_text_required' }
             if ($text.Length -gt 4096) { throw 'desktop_text_too_long' }
             try {
+                $base.foreground_before_type = [string][ShopVivalizDesktopInput]::GetForegroundWindow()
+                $base.cursor_window_before_type = [string][ShopVivalizDesktopInput]::RootAtCursor()
+                $target = [ShopVivalizDesktopInput]::RootAtCursor()
+                if ($target -eq [IntPtr]::Zero) { throw 'desktop_focus_target_unavailable' }
+                if ([ShopVivalizDesktopInput]::GetForegroundWindow() -ne $target) {
+                    [void][ShopVivalizDesktopInput]::SetForegroundWindow($target)
+                    Start-Sleep -Milliseconds 180
+                }
+                if ([ShopVivalizDesktopInput]::GetForegroundWindow() -ne $target) {
+                    throw 'desktop_focus_restore_failed'
+                }
+                $base.focus_restored = $true
                 [System.Windows.Forms.Clipboard]::SetText($text)
                 [System.Windows.Forms.SendKeys]::SendWait('^v')
                 # Paste delivery can be asynchronous in Chromium. Keep the clipboard
@@ -159,6 +180,7 @@ public static class ShopVivalizDesktopInput {
             } finally {
                 try { [System.Windows.Forms.Clipboard]::Clear() } catch { }
             }
+            $base.foreground_after_type = [string][ShopVivalizDesktopInput]::GetForegroundWindow()
             $base.typed_characters = $text.Length
             $base.press_enter = [bool]$request.press_enter
             Write-WorkerResponse $base
@@ -260,3 +282,4 @@ try {
     Write-JsonResponse @{ ok = $false; error = ([string]$_.Exception.Message) }
     exit 1
 }
+
