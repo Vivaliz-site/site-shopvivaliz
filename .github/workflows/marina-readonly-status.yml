@@ -14,13 +14,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: marina-readonly-status
-  cancel-in-progress: false
-
 jobs:
   status:
-    if: ${{ github.actor == 'fredmourao-ai' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 8
     env:

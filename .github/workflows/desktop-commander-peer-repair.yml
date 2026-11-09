@@ -12,10 +12,15 @@ on:
           - install_or_repair
           - amazon_support_reply
       case_ids:
-        description: IDs de casos Amazon existentes, separados por virgula (max 5; somente reabrir, dry-run)
+        description: IDs de casos Amazon existentes, separados por virgula (max 5; somente reabrir caso existente)
         required: false
         default: ''
         type: string
+      dry_run:
+        description: true = apenas ler e reportar; false = reabrir de fato o caso existente (um clique, confirmado por releitura)
+        required: false
+        default: true
+        type: boolean
   push:
     branches: [main]
     paths:
@@ -224,7 +229,7 @@ jobs:
   amazon-support-reopen-existing:
     # Backend ativa (navegador de agentes fica nela). Nao usa a origem aposentada.
     # Contrato: perfil EFEMERO copiado do real, somente reabrir caso existente
-    # (Reopen case / Reabrir caso), nunca abrir caso novo; escrita real desligada.
+    # (Reopen case / Reabrir caso), nunca abrir caso novo. dry_run e parametro do operador.
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'amazon_support_reply' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 10
@@ -236,6 +241,7 @@ jobs:
       - name: Reply to requested Amazon Seller Support cases
         env:
           CASE_IDS: ${{ inputs.case_ids }}
+          DRY_RUN: ${{ inputs.dry_run }}
           SELLER_CENTRAL_PROFILE: ${{ vars.SELLER_CENTRAL_PROFILE }}
           CASE_URL_TEMPLATE: ${{ vars.AMAZON_SUPPORT_CASE_URL_TEMPLATE }}
         shell: bash
@@ -273,13 +279,13 @@ jobs:
             sleep 1
           done
           [ "$ready" -eq 1 ] || fail "CDP_UNAVAILABLE" 75
-          export CASE_IDS CASE_URL_TEMPLATE
+          export CASE_IDS CASE_URL_TEMPLATE DRY_RUN
           node scripts/amazon-returns/support-case-probe.mjs > /tmp/shopvivaliz-amazon-support-probe.json || fail "PROBE_FAILED" 75
           if python3 -c 'import json,sys; sys.exit(0 if any(x.get("authenticated") for x in json.load(open("/tmp/shopvivaliz-amazon-support-probe.json"))) else 1)'; then
             echo "SELLER_CENTRAL_AUTH=AUTHENTICATED" | tee -a "$result.log"
           fi
           node scripts/amazon-returns/support-reopen-decision.mjs < /tmp/shopvivaliz-amazon-support-probe.json | tee -a "$result.log"
-          echo "AVAILABLE_ACTIONS=reportadas_acima_por_caso submitted=false dry_run=true" | tee -a "$result.log"
+          echo "AVAILABLE_ACTIONS=reportadas_acima_por_caso dry_run=$DRY_RUN" | tee -a "$result.log"
           echo 0 > "$result.rc"
 
       - name: Publish sanitized Amazon support audit

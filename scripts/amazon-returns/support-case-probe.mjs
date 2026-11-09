@@ -1,10 +1,14 @@
 #!/usr/bin/env node
-// Probe SOMENTE LEITURA de casos do Amazon Seller Support via CDP em perfil efemero.
-// Nunca clica, nunca digita, nunca envia. Emite um array JSON de snapshots em stdout
-// para support-reopen-decision.mjs. Sem URL/variaveis provisionadas, falha com exit 78.
-const ids = (process.env.CASE_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+// Probe do Amazon Seller Support via CDP em perfil EFEMERO.
+// Le o estado de cada caso e, com DRY_RUN=false, REABRE o caso existente (um unico
+// clique por caso, sem retentativa) e confirma por releitura. Nunca abre caso novo.
+// Sem URL/variaveis provisionadas, falha com exit 78.
+import { evaluateSupportReopen, REOPEN_RE } from './support-reopen-decision.mjs';
+
+const ids = [...new Set((process.env.CASE_IDS || '').split(',').map((s) => s.trim()).filter(Boolean))];
 const template = process.env.CASE_URL_TEMPLATE || '';
 const cdp = process.env.CDP_URL || 'http://127.0.0.1:9226';
+const dryRun = String(process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
 
 if (!template.includes('{case_id}') || ids.length === 0) {
   console.error('NOT_PROVISIONED=AMAZON_SUPPORT_CASE_URL_TEMPLATE');
@@ -20,6 +24,23 @@ if (!chromium) {
   process.exit(78);
 }
 
+async function readCase(page, id) {
+  const url = page.url();
+  const text = (await page.innerText('body').catch(() => '')).slice(0, 20000);
+  const authenticated = !/\/ap\/signin|\/ap\/mfa|signin/i.test(url);
+  return {
+    text,
+    authenticated,
+    mfa_required: /\/ap\/mfa|two-step verification|verifica[cç][aã]o em duas etapas/i.test(url + ' ' + text.slice(0, 2000)),
+    captcha_present: /captcha/i.test(text.slice(0, 4000)),
+    read_back_ok: authenticated && text.includes(id),
+    case_open: /\bstatus\s*[:\-]?\s*(open|aberto)\b/i.test(text),
+    buttons: await page.$$eval('button, a[role="button"], kat-button', (els) =>
+      els.map((e) => (e.innerText || e.getAttribute('label') || '').trim()).filter(Boolean).slice(0, 40)
+    ).catch(() => []),
+  };
+}
+
 const snapshots = [];
 const browser = await chromium.connectOverCDP(cdp);
 try {
@@ -30,16 +51,26 @@ try {
     try {
       await page.goto(template.replace('{case_id}', id), { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(1500);
-      const url = page.url();
-      const text = (await page.innerText('body').catch(() => '')).slice(0, 20000);
-      snap.authenticated = !/\/ap\/signin|\/ap\/mfa|signin/i.test(url);
-      snap.mfa_required = /\/ap\/mfa|two-step verification|verifica[cç][aã]o em duas etapas/i.test(url + ' ' + text.slice(0, 2000));
-      snap.captcha_present = /captcha/i.test(text.slice(0, 4000));
-      snap.read_back_ok = snap.authenticated && text.includes(id);
-      snap.case_open = /\bstatus\s*[:\-]?\s*(open|aberto)\b/i.test(text);
-      snap.buttons = await page.$$eval('button, a[role="button"], kat-button', (els) =>
-        els.map((e) => (e.innerText || e.getAttribute('label') || '').trim()).filter(Boolean).slice(0, 40)
-      ).catch(() => []);
+      const { text, ...state } = await readCase(page, id);
+      Object.assign(snap, state);
+
+      if (!dryRun && evaluateSupportReopen(snap, { dryRun: false }).status === 'REOPEN_ELIGIBLE') {
+        snap.reopen_attempted = true;
+        snap.reopen_clicked = false;
+        snap.reopen_verified = false;
+        try {
+          await page.getByRole('button', { name: REOPEN_RE }).first().click({ timeout: 10000 });
+          snap.reopen_clicked = true; // um unico clique; nao repetir em hipotese alguma
+          await page.waitForTimeout(3000);
+          await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+          await page.waitForTimeout(1500);
+          const after = await readCase(page, id);
+          const stillOffersReopen = after.buttons.some((label) => REOPEN_RE.test(label));
+          snap.reopen_verified = after.read_back_ok && (after.case_open || !stillOffersReopen);
+        } catch (error) {
+          snap.reopen_error = error?.name || 'Error';
+        }
+      }
     } catch (error) {
       snap.read_back_ok = false;
       snap.error_class = error?.name || 'Error';
