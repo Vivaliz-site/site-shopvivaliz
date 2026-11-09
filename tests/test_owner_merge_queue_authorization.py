@@ -90,7 +90,7 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         pr={"state":"open","draft":False,"user":{"login":"fredmourao-ai"},
             "base":{"ref":"main"},"head":{"sha":HEAD,"repo":{"full_name":REPO}},
             "labels":[{"name":"no-auto-merge"}]}
-        files=[{"filename":"security/owner-approvals/123.json"}]
+        files=[{"filename":"security/owner-approvals/123.json","patch":"@@ -1 +1 @@\n-old\n+novo"}]
         review=[{"user":{"login":"shopvivaliz-human"},"state":"APPROVED","commit_id":HEAD,
                  "submitted_at":"2026-11-02T20:00:00Z"}]
         checks=[{"name":n,"status":"completed","conclusion":"success",
@@ -111,7 +111,7 @@ class OwnerMergeQueueAuthorizationTests(unittest.TestCase):
         pr={"state":"open","draft":False,"user":{"login":"fredmourao-ai"},
             "base":{"ref":"main"},"head":{"sha":HEAD,"repo":{"full_name":REPO}},
             "labels":[]}
-        files=[{"filename":"docs/ops/release-notes.md"}]
+        files=[{"filename":"docs/ops/release-notes.md","patch":"@@ -1 +1 @@\n-old\n+novo"}]
         checks=[{"name":n,"status":"completed","conclusion":"success",
                  "app":{"id":15368},"id":i+1} for i,n in enumerate(sorted(RUNNER.REQUIRED))]
         rules=[{"type":t,"parameters":{"required_status_checks":[{"context":n,"integration_id":15368}
