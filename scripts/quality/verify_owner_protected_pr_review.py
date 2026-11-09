@@ -87,13 +87,13 @@ LOCK_PATTERNS = (
     re.compile(r"""(?:desktop_(?:open|click|type).*runtime_lock_required|runtime_lock_required.*desktop_(?:open|click|type))"""),
 
     # Generic MCP tool / runtime lock & lease additions
-    re.compile(r"""\bMUTATING_RUNTIME_ACTIONS\b"""),
+    re.compile(r"""\bMUTATING_RUNTIME_ACTIONS\b\s*(?:\.add|\+=|\|?=|:)"""),
     re.compile(r"""\bMUTATING_ACTIONS\b\s*(?:\.add|\+=|\|?=|:)"""),
     re.compile(r"""\bassert_runtime_lock\b"""),
     re.compile(r"""\b_assert_runtime_mutation\b"""),
-    re.compile(r"""['"]runtime_lock_required['"]"""),
-    re.compile(r"""\bruntime_lease_id\b"""),
-    re.compile(r"""\bruntime_fencing_token\b"""),
+    re.compile(r"""['"]runtime_lock_required['"]\s*:\s*(?:True|true|1)"""),
+    re.compile(r"""(?:\brequired\b.*\bruntime_lease_id\b|\bruntime_lease_id\b.*\brequired\b)"""),
+    re.compile(r"""(?:\brequired\b.*\bruntime_fencing_token\b|\bruntime_fencing_token\b.*\brequired\b)"""),
     re.compile(r"""\bassert_runtime_lease\b"""),
 
     # Command / tool / action restriction lists
