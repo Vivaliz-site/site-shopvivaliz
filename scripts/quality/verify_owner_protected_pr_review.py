@@ -165,7 +165,7 @@ def is_lock_insertion(f: dict) -> bool:
             continue
         if any(pattern.search(line) for pattern in LOCK_PATTERNS):
             return True
-        if filename == ".github/CODEOWNERS" and not line.startswith("#"):
+        if filename == ".github/CODEOWNERS" and re.search(r"\s+@[A-Za-z0-9_.-]+", line):
             return True
         if filename.startswith(".github/workflows/"):
             if re.match(r"(?i)^(?:if|needs|permissions|environment):", line):
