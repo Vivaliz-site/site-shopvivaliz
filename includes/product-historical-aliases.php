@@ -27,6 +27,14 @@ function sv_product_historical_alias_target(string $requestedSlug): ?string
             => 'vaso-antique-55-75l-macchiato-japi-jvaqma55',
         'vaso-decor-plantas-cilin-decore-34-28l-aco-corten-japi-168'
             => rawurldecode('vaso-decore-34-28l-a%C3%A7o-corten-japi-jvcdac34'),
+        'rodo-vedante-borracha-friso-porta-aluminio-100cm-vivaliz'
+            => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-100-cm-rodoved100'),
+        'rodo-vedante-borracha-friso-porta-aluminio-90cm-vivaliz'
+            => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-90-cm-ved90un'),
+        'rodo-vedante-borracha-friso-porta-aluminio-80cm-vivaliz'
+            => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-80-cm-ved80nh'),
+        'rodo-vedante-borracha-friso-porta-aluminio-70cm-vivaliz'
+            => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-70-cm-ved70'),
     ];
 
     return $aliases[$normalized] ?? null;
