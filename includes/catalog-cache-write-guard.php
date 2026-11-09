@@ -15,14 +15,14 @@ declare(strict_types=1);
 function svcc_nonpresentation_snapshot(array $payload): array
 {
     $allowed = [
-        'descricao', 'nome', 'name', 'categoria',
+        'descricao', 'nome', 'name', 'categoria', 'category',
         'descricaoComplementar', 'descricao_complementar', 'description',
         'images', 'imagens', 'gallery', 'galeria',
         'image_url', 'primary_image_url', 'imagem_principal_url', 'imagem',
     ];
     $walk = static function (array $node) use (&$walk, $allowed): array {
         if (array_is_list($node)) {
-            return array_map(static fn(mixed $item): mixed => is_array($item) ? $walk($item) : $item, $node);
+            return array_map(static fn(mixed $item): mixed => is_array($item) ? $walk($item) : (is_numeric($item) ? (float)$item : $item), $node);
         }
         // Only individual ERP products may have presentation fields removed
         // for comparison. Never omit top-level price/source provenance.
@@ -30,7 +30,11 @@ function svcc_nonpresentation_snapshot(array $payload): array
             foreach ($allowed as $key) unset($node[$key]);
         }
         foreach ($node as $key => $value) {
-            if (is_array($value)) $node[$key] = $walk($value);
+            if (is_array($value)) {
+                $node[$key] = $walk($value);
+            } elseif (is_numeric($value)) {
+                $node[$key] = (float)$value;
+            }
         }
         return $node;
     };

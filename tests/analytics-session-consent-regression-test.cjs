@@ -91,7 +91,7 @@ function funnelHarness(pathname, consent) {
     valid: false,
     matches: selector => selector === '#checkout-form',
     checkValidity() { return this.valid; },
-    querySelector: selector => selector.includes('payment_method') ? {value:'mercado_pago'} : null
+    querySelector(selector) { return selector.includes('payment_method') ? {value:this.paymentMethod || 'mercado_pago'} : null; }
   };
   const document = {
     readyState: 'loading',
@@ -276,6 +276,30 @@ check('Removal intent expires after event bubble, not during microtask checkpoin
   // Browser DOM listeners may run microtasks between capture and bubble.
   // Replacing this with Promise.resolve().then() broke a real headed click.
   assert.match(eventsSource, /setTimeout\(expireIntent,\s*0\)/);
+});
+
+check('Changed cart creates a distinct real checkout and payment milestone', () => {
+  const app=funnelHarness('/checkout', true);
+  app.submit(true);
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_payment_info').length, 1);
+  app.changeCart(2);
+  app.window.ShopVivalizGoogleEvents.trackCartEvent('begin_checkout', 'begin_checkout_cart');
+  app.submit(true);
+  assert.equal(app.beacons.filter(x => x.event_name === 'begin_checkout').length, 2,
+    'second cart state should be a new checkout rather than suppressed tab-wide');
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_payment_info').length, 2,
+    'new cart must not inherit tab-wide payment milestone');
+  app.submit(true);
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_payment_info').length, 2,
+    'retry of unchanged checkout must not double count');
+});
+check('Changing confirmed payment option creates a new valid payment-info milestone', () => {
+  const app=funnelHarness('/checkout', true);
+  app.submit(true);
+  app.form.paymentMethod='infinitepay';
+  app.submit(true);
+  assert.equal(app.beacons.filter(x => x.event_name === 'add_payment_info').length, 2);
+  assert.equal(app.gtagEvents.filter(x => x[1] === 'add_payment_info').length, 2);
 });
 
 process.exitCode=failures?1:0;

@@ -43,7 +43,7 @@ jobs:
         if: steps.request_change.outputs.changed == 'true'
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST || '127.0.0.1' }}
+          VM_HOST: '127.0.0.1' # Runner canonical da Marina; evitar secret global legado.
         shell: bash
         run: |
           set -euo pipefail
@@ -60,16 +60,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/vmkey ubuntu@"$vm_host" 'bash -s' -- "$JOB" <<'REMOTE'
+          ssh -o BatchMode=yes -o ConnectTimeout=5 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new -i ~/.ssh/vmkey ubuntu@"$vm_host" 'bash -s' -- "$JOB" <<'REMOTE'
           set -euo pipefail
           job="$1"
           site_env='/home/ubuntu/shopvivaliz-deploy/shared/.env'
           safet_env='/home/ubuntu/amazon-returns-deploy/shared/.env'
           recovered='/tmp/gmail-refresh-recovered.token'
+          # O callback grava em shared/private-oauth (fora do Apache PrivateTmp).
+          # Priorizar o token exato do job e preservar fallback historico.
+          persistent_token="/home/ubuntu/shopvivaliz-deploy/shared/private-oauth/shopvivaliz-google-ads-refresh/${job}.token"
           found=''
-          while IFS= read -r candidate; do
-            if sudo test -s "$candidate"; then found="$candidate"; break; fi
-          done < <(sudo find /tmp /var/tmp -type f -path "*/shopvivaliz-google-ads-refresh/${job}.token" 2>/dev/null | head -20)
+          if sudo test -s "$persistent_token"; then
+            found="$persistent_token"
+          else
+            while IFS= read -r candidate; do
+              if sudo test -s "$candidate"; then found="$candidate"; break; fi
+            done < <(sudo find /tmp /var/tmp -type f -path "*/shopvivaliz-google-ads-refresh/${job}.token" 2>/dev/null | head -20)
+          fi
           [ -n "$found" ] || { echo 'GMAIL_OAUTH_CALLBACK_TOKEN_NOT_FOUND'; exit 3; }
           sudo cp "$found" "$recovered"
           sudo chown ubuntu:ubuntu "$recovered"

@@ -2,7 +2,7 @@
 import unittest
 from pathlib import Path
 
-from scripts.google_ads_review_campaigns import zero_delivery_classification, inspect_zero_delivery
+from scripts.google_ads_review_campaigns import zero_delivery_classification, inspect_zero_delivery, classify_auth_error
 
 
 class DummyEnum:
@@ -71,6 +71,13 @@ class ZeroDeliveryTests(unittest.TestCase):
         self.assertTrue(all(q.lstrip().upper().startswith("SELECT ") for q in fake.queries))
         self.assertTrue(all("campaign.id = 23900755807" in q for q in fake.queries))
         self.assertIn("LIMIT 100", fake.queries[0])
+        self.assertIn("AND ad_group.status = ENABLED", fake.queries[0], "Paused ad groups must not inflate active keyword counts")
+
+    def test_absent_sdk_is_not_misclassified_as_bad_oauth_credentials(self):
+        try:
+            raise ModuleNotFoundError("No module named google", name="google")
+        except ModuleNotFoundError as exc:
+            self.assertEqual(classify_auth_error(exc), "GOOGLE_ADS_SDK_NOT_INSTALLED")
 
     def test_no_campaign_mutation_in_readonly_module(self):
         module = Path(__file__).resolve().parents[2] / "scripts/google_ads_review_campaigns.py"
