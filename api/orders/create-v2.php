@@ -288,7 +288,16 @@ $shippingService = trim((string)($body['shipping_service'] ?? ''));
 $shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $cep));
 $items = is_array($body['items'] ?? null) ? $body['items'] : [];
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($deviceId) > 255 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120) {
+$gclid = trim((string)($body['gclid'] ?? ($_COOKIE['sv_gclid'] ?? ($_GET['gclid'] ?? ''))));
+$gbraid = trim((string)($body['gbraid'] ?? ($_COOKIE['sv_gbraid'] ?? ($_GET['gbraid'] ?? ''))));
+$wbraid = trim((string)($body['wbraid'] ?? ($_COOKIE['sv_wbraid'] ?? ($_GET['wbraid'] ?? ''))));
+$dclid = trim((string)($body['dclid'] ?? ($_COOKIE['sv_dclid'] ?? ($_GET['dclid'] ?? ''))));
+$utmSource = trim((string)($body['utm_source'] ?? ($_COOKIE['sv_utm_source'] ?? ($_GET['utm_source'] ?? ''))));
+$utmMedium = trim((string)($body['utm_medium'] ?? ($_COOKIE['sv_utm_medium'] ?? ($_GET['utm_medium'] ?? ''))));
+$utmCampaign = trim((string)($body['utm_campaign'] ?? ($_COOKIE['sv_utm_campaign'] ?? ($_GET['utm_campaign'] ?? ''))));
+$utmContent = trim((string)($body['utm_content'] ?? ($_COOKIE['sv_utm_content'] ?? ($_GET['utm_content'] ?? ''))));
+
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($deviceId) > 255 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120 || strlen($gclid) > 255 || strlen($gbraid) > 255 || strlen($wbraid) > 255 || strlen($dclid) > 255 || strlen($utmSource) > 255 || strlen($utmMedium) > 255 || strlen($utmCampaign) > 255 || strlen($utmContent) > 255) {
     svo_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
 
@@ -469,6 +478,23 @@ $record = [
     'created_at' => date('c'),
     'source' => 'site_checkout',
 ];
+
+if ($gclid !== '' && preg_match('/^[A-Za-z0-9._-]+$/', $gclid) === 1) {
+    $record['gclid'] = $gclid;
+}
+if ($gbraid !== '' && preg_match('/^[A-Za-z0-9._-]+$/', $gbraid) === 1) {
+    $record['gbraid'] = $gbraid;
+}
+if ($wbraid !== '' && preg_match('/^[A-Za-z0-9._-]+$/', $wbraid) === 1) {
+    $record['wbraid'] = $wbraid;
+}
+if ($dclid !== '' && preg_match('/^[A-Za-z0-9._-]+$/', $dclid) === 1) {
+    $record['dclid'] = $dclid;
+}
+if ($utmSource !== '') $record['utm_source'] = substr($utmSource, 0, 100);
+if ($utmMedium !== '') $record['utm_medium'] = substr($utmMedium, 0, 100);
+if ($utmCampaign !== '') $record['utm_campaign'] = substr($utmCampaign, 0, 100);
+if ($utmContent !== '') $record['utm_content'] = substr($utmContent, 0, 100);
 
 $dir = svo_order_dir();
 if ($dir === '') {
