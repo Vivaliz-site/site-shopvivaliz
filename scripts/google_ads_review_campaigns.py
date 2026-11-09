@@ -43,6 +43,8 @@ def is_missing_or_placeholder(value: str) -> bool:
 
 
 def classify_auth_error(exc: Exception) -> str:
+    if isinstance(exc, ModuleNotFoundError) and (exc.name == "google" or (exc.name or "").startswith("google.ads")):
+        return "GOOGLE_ADS_SDK_NOT_INSTALLED"
     text = str(exc).casefold()
     if "invalid_client" in text or "oauth client was not found" in text:
         return "OAUTH_CLIENT_INVALID_OR_DELETED"
@@ -99,7 +101,8 @@ def inspect_zero_delivery(service, customer_id: str, campaign_id: int, status: s
         "SELECT ad_group_criterion.primary_status,ad_group_criterion.primary_status_reasons "
         "FROM keyword_view "
         f"WHERE campaign.id = {int(campaign_id)} "
-        "AND ad_group_criterion.status = ENABLED LIMIT 100"
+        "AND ad_group_criterion.status = ENABLED "
+        "AND ad_group.status = ENABLED LIMIT 100"
     )
     states = []
     reason_counts = {}
@@ -137,9 +140,13 @@ def main() -> int:
     try:
         client = build_client()
     except Exception as exc:
-        print("AUTH_NOT_READY")
-        print("reason=" + classify_auth_error(exc))
-        print("action=repair OAuth client/refresh token in the secure secret store, then rerun")
+        reason = classify_auth_error(exc)
+        print("DEPENDENCY_NOT_READY" if reason == "GOOGLE_ADS_SDK_NOT_INSTALLED" else "AUTH_NOT_READY")
+        print("reason=" + reason)
+        if reason == "GOOGLE_ADS_SDK_NOT_INSTALLED":
+            print("action=use existing Google Ads SDK virtualenv for this read-only diagnostic")
+        else:
+            print("action=repair OAuth client/refresh token in the secure secret store, then rerun")
         return 1
 
     customer_id = os.environ["GOOGLE_ADS_CUSTOMER_ID"].replace("-", "").strip()
