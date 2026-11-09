@@ -130,22 +130,22 @@ def _patch_delta(patch: str) -> list[str]:
 
 # A changed file name by itself never means a new restriction.
 RESTRICTIVE_DIRECTIVE = re.compile(
-    r"(?i)(?:\\b(?:bloquei(?:o|a|ar)|trava(?:r|s)?|restri(?:cao|ção|coes|ções|ngir)|"
+    r"(?i)(?:\b(?:bloquei(?:o|a|ar)|trava(?:r|s)?|restri(?:cao|ção|coes|ções|ngir)|"
     r"proibid[oa]s?|vedad[oa]s?|impedir|impedimento|negar|negad[oa]|"
-    r"blocked|blocking|restricted|restrict|forbid|prohibit|disallow|deny)\\b|"
-    r"\\b(?:nao|não)\\s+(?:pode|deve|executar|permitir)|"
-    r"\\b(?:must not|shall not|deny by default|fail.closed))"
+    r"blocked|blocking|restricted|restrict|forbid|prohibit|disallow|deny)\b|"
+    r"\b(?:nao|não)\s+(?:pode|deve|executar|permitir)|"
+    r"\b(?:must not|shall not|deny by default|fail.closed))"
 )
 EXECUTION_CONTEXT = re.compile(
     r"(?i)(?:execu|comand|process|deploy|merge|aprov|revis|agent|agente|"
     r"tool|ferrament|workflow|task|tarefa|ci|mcp|permiss|acess|login|gate|"
-    r"protec|runtime|servic|branch|pr\\b)"
+    r"protec|runtime|servic|branch|pr\b)"
 )
 NEW_GATING_CODE = re.compile(
-    r"(?i)(?:\\b(?:deny|forbid|blocked|restricted|disallow)\\b|"
-    r"\\breturn\\s+False\\b|\\braise\\s+(?:PermissionError|AuthorizationError)|"
-    r"\\b(?:required_approving_review_count|required_status_checks|"
-    r"required_reviewers|branch_protection|enforcement)\\b)"
+    r"(?i)(?:\b(?:deny|forbid|blocked|restricted|disallow)\b|"
+    r"\breturn\s+False\b|\braise\s+(?:PermissionError|AuthorizationError)|"
+    r"\b(?:required_approving_review_count|required_status_checks|"
+    r"required_reviewers|branch_protection|enforcement)\b)"
 )
 
 
@@ -172,9 +172,9 @@ def is_lock_insertion(f: dict) -> bool:
                 return True
             if NEW_GATING_CODE.search(line):
                 return True
-        if filename in (RULES_FILES | GOVERNANCE_FILES | TASKS_FILES | SENSITIVE_FILES) \\
+        if (filename in (RULES_FILES | GOVERNANCE_FILES | TASKS_FILES | SENSITIVE_FILES)
                 or any(filename.startswith(p) for p in
-                       (GOVERNANCE_PREFIXES + RULES_PREFIXES)):
+                       (GOVERNANCE_PREFIXES + RULES_PREFIXES))):
             if RESTRICTIVE_DIRECTIVE.search(line) and EXECUTION_CONTEXT.search(line):
                 return True
             if filename in (TASKS_FILES | SENSITIVE_FILES) and NEW_GATING_CODE.search(line):
