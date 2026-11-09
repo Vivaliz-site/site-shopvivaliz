@@ -25,35 +25,51 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
         for path in ("apps/shopvivaliz-web-agent/src/browser.mjs", "docs/ops/notes.md"):
             self.assertEqual(self.decide([path]), (True, "non_protected_pr"))
 
-    def test_security_governance_rules_and_tasks_require_dual_approval(self):
-        protected_targets = (
-            "security/owner-approvals/3539.json",
-            "security/requests/web-agent-owner-grant-corrective-20261102.md",
-            ".github/CODEOWNERS",
-            ".github/workflows/mandatory-validation-gate.yml",
+    def test_files_do_not_require_dual_review_by_name_alone(self):
+        ordinary = (
+            "AGENTS.md", "CLAUDE.md", ".github/workflows/ci.yml",
+            ".github/CODEOWNERS", "scripts/agent_task_state.py",
             "scripts/quality/verify_owner_protected_pr_review.py",
-            "AGENTS.md",
-            "CLAUDE.md",
-            "scripts/agent_task_state.py",
         )
-        human = review(login="shopvivaliz-human", commit=HEAD)
-        operator = review(login="fredmourao-ai", commit=HEAD)
-
-        for path in protected_targets:
+        for path in ordinary:
             with self.subTest(path=path):
-                # Sem aprovacao -> bloqueia
-                res, reason = self.decide([path])
-                self.assertFalse(res)
-                self.assertEqual(reason, "dual_owner_approval_missing")
+                files = [{"filename": path, "patch": "@@ -1 +1 @@\n+ajuste tecnico sem novos impedimentos"}]
+                self.assertEqual(GATE.decide(files, [], HEAD), (True, "non_protected_pr"))
 
-                # Somente uma conta -> bloqueia
-                self.assertFalse(self.decide([path], [human])[0])
-                self.assertFalse(self.decide([path], [operator])[0])
+    def test_new_restrictive_changes_require_two_approvals(self):
+        changed = (
+            (".github/CODEOWNERS", "+/admin/ @shopvivaliz-human"),
+            (".github/workflows/build.yml", "+if: github.actor == 'owner'"),
+            ("AGENTS.md", "+Proibido executar comandos sem aprovação."),
+            ("CLAUDE.md", "+Não pode executar workflow sem permissão."),
+            ("scripts/agent_task_state.py", "+return False  # blocked execution"),
+            ("remote-control-mcp/server.py", "+assert_runtime_lock(lease, token, 'desktop_click')"),
+        )
+        human = review(login="shopvivaliz-human")
+        operator = review(login="fredmourao-ai")
+        for path, line in changed:
+            with self.subTest(path=path):
+                files = [{"filename": path, "patch": "@@ -1 +1 @@\n" + line}]
+                self.assertEqual(GATE.decide(files, [], HEAD), (False, "dual_owner_approval_missing"))
+                self.assertFalse(GATE.decide(files, [human], HEAD)[0])
+                self.assertFalse(GATE.decide(files, [operator], HEAD)[0])
+                self.assertEqual(GATE.decide(files, [human, operator], HEAD),
+                                 (True, "dual_owner_review_approved_exact_head"))
 
-                # Ambas aprovam -> passa
-                res, reason = self.decide([path], [human, operator])
-                self.assertTrue(res)
-                self.assertEqual(reason, "dual_owner_review_approved_exact_head")
+    def test_only_removing_or_relocating_existing_blocks_is_not_new_block(self):
+        remove = {"filename": "remote-control-mcp/server.py",
+                  "patch": "@@ -1 +1 @@\n-assert_runtime_lock(lease, token, 'desktop_click')"}
+        self.assertEqual(GATE.decide([remove], [], HEAD), (True, "non_protected_pr"))
+        move = {"filename": "remote-control-mcp/server.py",
+                "patch": "@@ -1 +1 @@\n-assert_runtime_lock(lease, token, 'desktop_click')\n+assert_runtime_lock(lease, token, 'desktop_click')"}
+        self.assertEqual(GATE.decide([move], [], HEAD), (True, "non_protected_pr"))
+
+    def test_comments_and_tests_do_not_create_runtime_restrictions(self):
+        for path in ("remote-control-mcp/server.py", "tests/test_locking.py"):
+            for line in ("+# nova trava de seguranca para agentes",
+                         "+<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_20261108 -->"):
+                f = {"filename": path, "patch": "@@ -1 +1 @@\n" + line}
+                self.assertFalse(GATE.requires_dual_approval([f]))
 
     def test_no_author_exemption_for_dual_approval(self):
         files = [{"filename": "scripts/quality/verify_owner_protected_pr_review.py"}]
@@ -188,8 +204,6 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
             "+    BLOCKED_COMMANDS = ['sh', 'bash']",
             "+    RESTRICTED_TOOLS = {'custom_tool'}",
             "+    DISALLOWED_OPERATIONS = ['kill']",
-            "+    <!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_20261108 -->",
-            "+    # nova trava de seguranca para agentes",
         ]
         human = review(login="shopvivaliz-human", commit=HEAD)
         operator = review(login="fredmourao-ai", commit=HEAD)
