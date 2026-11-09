@@ -87,7 +87,7 @@ def decision(pr: dict, files: list, reviews: list, expected_sha: str) -> str:
     if author and author.casefold() in {u.casefold() for u in needed_reviewers}:
         if requires_dual_approval(files):
             return "protected_pr_requires_independent_author"
-        return "protected_pr_requires_independent_author"
+        needed_reviewers = {u for u in needed_reviewers if u.casefold() != author.casefold()}
 
     if needed_reviewers <= requested_logins:
         return "owner_already_requested"
@@ -170,7 +170,8 @@ def run(number: int, expected_sha: str, token: str) -> int:
         if current.get("head", {}).get("sha") != expected_sha or current.get("state") != "open":
             raise ValueError("pr_changed_before_request")
         author = current.get("user", {}).get("login", "") if isinstance(current.get("user"), dict) else ""
-        reviewers_to_request = [HUMAN, OPERATOR] if requires_dual_approval(files) else [HUMAN]
+        raw_reviewers = [HUMAN, OPERATOR] if requires_dual_approval(files) else [HUMAN]
+        reviewers_to_request = [u for u in raw_reviewers if u.casefold() != author.casefold()]
         already_requested = {
             r.get("login", "").casefold()
             for r in current.get("requested_reviewers", [])

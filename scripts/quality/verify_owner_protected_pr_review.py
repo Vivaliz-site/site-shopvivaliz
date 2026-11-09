@@ -125,13 +125,23 @@ TEXT_EXTENSIONS = (
 )
 
 
+def is_governance_candidate(path: str) -> bool:
+    return (
+        path in RULES_FILES
+        or any(path.startswith(p) for p in RULES_PREFIXES)
+        or path in GOVERNANCE_FILES
+        or any(path.startswith(p) for p in GOVERNANCE_PREFIXES)
+        or path in TASKS_FILES
+        or any(path.startswith(p) for p in TASKS_PREFIXES)
+        or path in SENSITIVE_FILES
+    )
+
+
 def missing_inspectable_patch(files: list[dict]) -> bool:
-    """Diff textual ausente impede a classificacao; nao exige revisores por caminho."""
+    """Diff textual ausente em arquivos de governança/regras/tasks impede a classificação."""
     for f in files:
         path = f.get("filename", "")
-        if f.get("status") != "removed" and (
-            path.endswith(TEXT_EXTENSIONS) or path in RULES_FILES
-        ) and not isinstance(f.get("patch"), str):
+        if f.get("status") != "removed" and is_governance_candidate(path) and not isinstance(f.get("patch"), str):
             return True
     return False
 
