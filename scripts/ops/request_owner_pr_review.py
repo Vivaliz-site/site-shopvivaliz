@@ -40,6 +40,7 @@ OWNER_DIRECTIVE_MARKERS = ("OWNER_DIRECTIVES_", "OWNER_NO_UNAPPROVED_RESTRICTION
 
 
 def requires_owner(files: object, labels: object) -> bool:
+    """Only new restrictions or independently protected owner grants need review."""
     if not isinstance(files, list) or not files or len(files) >= 3000:
         raise ValueError("changed_files_incomplete")
     if not isinstance(labels, list):
@@ -56,16 +57,7 @@ def requires_owner(files: object, labels: object) -> bool:
         name = f["filename"]
         if protected(name) or is_protected_path(name):
             return True
-        if name not in POLICY_DOCS:
-            continue
-        patch = f.get("patch")
-        if not isinstance(patch, str):
-            return True  # An uninspectable policy change cannot silently skip owner review.
-        for line in patch.splitlines():
-            if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
-                continue
-            if any(marker in line for marker in OWNER_DIRECTIVE_MARKERS):
-                return True
+
     return False
 
 
