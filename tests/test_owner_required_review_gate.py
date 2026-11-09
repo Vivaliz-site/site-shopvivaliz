@@ -37,20 +37,20 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
         for caminho in caminhos:
             with self.subTest(caminho=caminho):
                 arquivo = {"filename": caminho, "status": "modified",
-                           "patch": "@@ -1 +1 @@\\n-linha antiga\\n+Atualização de texto e correção técnica"}
+                           "patch": "@@ -1 +1 @@\n-linha antiga\n+Atualização de texto e correção técnica"}
                 self.assertFalse(GATE.requires_dual_approval([arquivo]))
                 self.assertEqual(GATE.decide([arquivo], [], HEAD), (True, "non_protected_pr"))
 
     def test_politica_restritiva_nova_exige_ambas_as_revisoes(self):
         casos = (
             {"filename": "AGENTS.md",
-             "patch": "@@ -1 +1 @@\\n+> É proibido executar comandos externos pelos agentes"},
+             "patch": "@@ -1 +1 @@\n+> É proibido executar comandos externos pelos agentes"},
             {"filename": "docs/knowledge/agent-rules.md",
-             "patch": "@@ -1 +1 @@\\n+> Fica proibido utilizar ferramenta administrativa"},
+             "patch": "@@ -1 +1 @@\n+> Fica proibido utilizar ferramenta administrativa"},
             {"filename": ".github/workflows/mandatory-validation-gate.yml",
-             "patch": "@@ -1 +1 @@\\n+    BLOCKED_COMMANDS = ['curl']"},
+             "patch": "@@ -1 +1 @@\n+    BLOCKED_COMMANDS = ['curl']"},
             {"filename": "scripts/ops/owner_approved_merge_queue.py",
-             "patch": "@@ -1 +1 @@\\n+    assert_runtime_lock(lease, token, 'deploy')"},
+             "patch": "@@ -1 +1 @@\n+    assert_runtime_lock(lease, token, 'deploy')"},
         )
         human = review(login="shopvivaliz-human")
         operator = review(login="fredmourao-ai")
@@ -63,7 +63,7 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
 
     def test_revisores_nao_podem_ser_autores_da_pr_protegida(self):
         f = {"filename": "remote-control-mcp/server.py",
-             "patch": "@@ -1 +1 @@\\n+    BLOCKED_COMMANDS = ['sh']"}
+             "patch": "@@ -1 +1 @@\n+    BLOCKED_COMMANDS = ['sh']"}
         reviews = [review(login="shopvivaliz-human"), review(login="fredmourao-ai")]
         for autor in ("shopvivaliz-human", "fredmourao-ai"):
             self.assertEqual(GATE.decide([f], reviews, HEAD, pr_author=autor),
@@ -77,10 +77,10 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
 
     def test_remocao_de_trava_e_marcador_isolado_nao_criam_nova_trava(self):
         f = {"filename": "remote-control-mcp/server.py",
-             "patch": "@@ -1 +0 @@\\n-    BLOCKED_COMMANDS = ['sh']"}
+             "patch": "@@ -1 +0 @@\n-    BLOCKED_COMMANDS = ['sh']"}
         self.assertFalse(GATE.requires_dual_approval([f]))
         marcador = {"filename": "docs/knowledge/agent-rules.md",
-                    "patch": "@@ -1 +1 @@\\n+<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_20261108 -->"}
+                    "patch": "@@ -1 +1 @@\n+<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_20261108 -->"}
         self.assertFalse(GATE.requires_dual_approval([marcador]))
 
     def test_vm_deletion_and_price_changes_require_human(self):
