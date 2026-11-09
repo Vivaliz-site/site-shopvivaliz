@@ -71,6 +71,19 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 f = {"filename": path, "patch": "@@ -1 +1 @@\n" + line}
                 self.assertFalse(GATE.requires_dual_approval([f]))
 
+    def test_new_optional_fields_do_not_automatically_block_execution(self):
+        innocuous = [
+            "+config = {'runtime_lock_required': False}",
+            "+runtime_lease_id = args.get('runtime_lease_id')",
+            "+runtime_fencing_token = args.get('runtime_fencing_token')",
+            "+MUTATING_RUNTIME_ACTIONS = existing_actions",
+        ]
+        for line in innocuous:
+            with self.subTest(line=line):
+                f = {"filename": "remote-control-mcp/server.py",
+                     "patch": "@@ -1 +1 @@\n" + line}
+                self.assertFalse(GATE.requires_dual_approval([f]))
+
     def test_no_author_exemption_for_dual_approval(self):
         files = [{"filename": "scripts/quality/verify_owner_protected_pr_review.py"}]
         approvals = [review(login="shopvivaliz-human"), review(login="fredmourao-ai")]
