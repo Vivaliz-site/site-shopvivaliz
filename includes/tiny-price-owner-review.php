@@ -198,6 +198,9 @@ function svtpp_apply_owner_approved_price(
         }
         $oldSale = $cents($before['sale_price'] ?? null);
         $oldPromo = $cents($before['promotional_price'] ?? null);
+        if ($saleCents === $oldSale && $promoCents === $oldPromo) {
+            throw new RuntimeException('PRICE_REVIEW_NO_PRICE_CHANGE');
+        }
 
         $persist = static function (array $next) use ($fp): void {
             $encoded = json_encode($next, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
