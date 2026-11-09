@@ -44,4 +44,17 @@ assert_test(str_contains($redirect, 'gclid=TestGclid123'), "Redirect path must p
 assert_test(str_contains($redirect, 'utm_source=google'), "Redirect path must preserve utm_source parameter: {$redirect}");
 assert_test(!str_contains($redirect, 'slug='), "Redirect path must not leak internal rewrite slug parameter: {$redirect}");
 
+// 3. Check resolution in produto-slug-route.php controller functions
+require_once __DIR__ . '/../includes/product-historical-aliases.php';
+require_once __DIR__ . '/../produto-slug-route.php';
+
+foreach ($testSlugs as $slug => $expectedSku) {
+    $row = sv_product_route_catalog_row_by_sku_suffix($slug);
+    $resolvedSku = (string)($row['sku'] ?? '');
+    assert_test(
+        strcasecmp($resolvedSku, $expectedSku) === 0,
+        "produto-slug-route SKU suffix '{$slug}' must resolve to SKU '{$expectedSku}' (got '{$resolvedSku}')"
+    );
+}
+
 fwrite(STDOUT, "All product slug canonical redirect tests passed successfully.\n");
