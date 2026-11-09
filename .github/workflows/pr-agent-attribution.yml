@@ -1,0 +1,26 @@
+name: Identificação do agente na PR
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  validar-identificacao:
+    name: Conferir nome do agente no título
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Obter somente código confiável do branch principal
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Identificar agente declarado na abertura da PR
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          python3 scripts/quality/check_pr_agent_title.py --title "$PR_TITLE" --author "$PR_AUTHOR"
