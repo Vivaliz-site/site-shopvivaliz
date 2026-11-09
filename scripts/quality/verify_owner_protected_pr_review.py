@@ -102,7 +102,6 @@ LOCK_PATTERNS = (
     re.compile(r"""raise\s+(?:\w+Error|Exception)\(['"].*(?:runtime_lock|lock_required|action_blocked|command_blocked|operacao_bloqueada|trava_obrigatoria).*['"]\)"""),
 
     # Policy / prompt restriction markers
-    re.compile(r"""<!--\s*(?:DESKTOP_GUI_LOCK_PROHIBITION_|OWNER_NO_UNAPPROVED_RESTRICTIONS_|LOCK_INSERTION_RESTRICTION_|ALL_LOCK_INSERTION_DUAL_APPROVAL_)"""),
     re.compile(r"""(?i)\b(?:nova\s+trava|novo\s+bloqueio|bloqueio\s+de\s+ferramenta|trava\s+de\s+seguranca)\b"""),
 )
 DESKTOP_LOCK_PATTERNS = LOCK_PATTERNS
@@ -110,8 +109,8 @@ DESKTOP_LOCK_PATTERNS = LOCK_PATTERNS
 
 # Classificacao por EFEITO do diff, nunca somente pelo caminho.
 POLICY_DENIAL_PATTERNS = (
-    re.compile(r"(?i)\\b(?:proibid[oa]|vedad[oa]|bloque(?:ar|ia|ado|ada)|imped(?:ir|e)|restringir)\\b.{0,140}\\b(?:execu[cç][aã]o|processo|comando|ferramenta|acesso|agente|workflow|deploy|merge)\\b"),
-    re.compile(r"(?i)\\b(?:n[aã]o\\s+(?:deve|pode|poder[aá])|fica\\s+proibido)\\b.{0,120}\\b(?:executar|acessar|utilizar|invocar|integrar|mesclar|publicar)\\b"),
+    re.compile(r"(?i)\b(?:proibid[oa]|vedad[oa]|bloque(?:ar|ia|ado|ada)|imped(?:ir|e)|restringir)\b.{0,140}\b(?:execu[cç][aã]o|processo|comando|ferramenta|acesso|agente|workflow|deploy|merge)\b"),
+    re.compile(r"(?i)\b(?:n[aã]o\s+(?:deve|pode|poder[aá])|fica\s+proibido)\b.{0,120}\b(?:executar|acessar|utilizar|invocar|integrar|mesclar|publicar)\b"),
 )
 TEXT_EXTENSIONS = (
     ".md", ".rst", ".txt", ".py", ".sh", ".php", ".js", ".jsx", ".ts",
