@@ -93,6 +93,14 @@ try {
         'PRICE_REVIEW_REQUIRES_RECONCILIATION'
     );
     clickAssert($writes === 1, 'Second click replayed ambiguous PUT.');
+    $needsReconciliation = array_values(array_filter(
+        svtpp_pending_price_owner_reviews(),
+        static fn(array $record): bool =>
+            ($record['request_id'] ?? '') === $ambiguousRequest['request_id']
+            && ($record['status'] ?? '') === 'readback_required'
+    ));
+    clickAssert(count($needsReconciliation) === 1,
+        'Ambiguous external write must remain visible on the owner review page.');
 
     $onlyCost = $before;
     $onlyCost['prices']['cost_price'] = 0;
