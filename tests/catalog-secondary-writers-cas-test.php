@@ -33,7 +33,9 @@ try {
     $image['itens'][0]['image_url'] = '/images/new.webp';
     svcc_write_presentation_if_current($path, $original, $json($image));
     $assert(is_file($root . '/olist-erp-webhook.lock'), 'secondary writer must use canonical cross-language lock');
-    $assert((fileperms($path) & 0777) === 0660, 'new cache must be group writable by Olist PHP and Ubuntu daemon');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        $assert((fileperms($path) & 0777) === 0660, 'new cache must be group writable by Olist PHP and Ubuntu daemon');
+    }
 
     $after = json_decode((string)file_get_contents($path), true);
     $assert(($after['itens'][0]['precos']['preco'] ?? 0) === 45.01, 'presentation update changed ERP price');
@@ -80,6 +82,20 @@ try {
 
     $before = (string)file_get_contents($path);
     $assert($before === $json($image), 'failed updates must preserve last valid catalog');
+
+    // Numeric parity check: Python float (e.g. 0.0, 10.0) reserialized by PHP as integer (0, 10)
+    $pythonRaw = '{"price_list_id":991,"price_source":"olist_tiny_amazon","total":1,"timestamp":"2026-10-29T21:00:00Z","itens":[{"sku":"TEST-AMAZON-991","_price_list_id":991,"_price_source":"olist_tiny_amazon","precos":{"preco":45.0,"precoPromocional":0.0},"estoque_disponivel":142,"dimensoes":{"largura":10.0},"image_url":"/images/new.webp","descricao":"Name from ERP"}]}';
+    file_put_contents($path, $pythonRaw);
+    $phpReserialized = $initial;
+    $phpReserialized['itens'][0]['image_url'] = '/images/newer.webp';
+    $phpReserialized['itens'][0]['category'] = 'Decor';
+    $phpReserialized['itens'][0]['precos']['preco'] = 45;
+    $phpReserialized['itens'][0]['precos']['precoPromocional'] = 0;
+    $phpReserialized['itens'][0]['dimensoes'] = ['largura' => 10];
+    svcc_write_presentation_if_current($path, $pythonRaw, $json($phpReserialized));
+    $afterNumeric = json_decode((string)file_get_contents($path), true);
+    $assert(($afterNumeric['itens'][0]['image_url'] ?? '') === '/images/newer.webp', 'presentation update must succeed with float/int parity');
+    $assert(($afterNumeric['itens'][0]['category'] ?? '') === 'Decor', 'presentation update must accept category field');
 
     $metadataSrc = (string)file_get_contents(dirname(__DIR__) . '/agents/v9.2.84/app/CatalogMetadataAgent.php');
     $imageSrc = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-image-studio/src/OmnichannelImagePublisher.php');
