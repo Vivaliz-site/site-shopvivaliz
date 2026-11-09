@@ -43,7 +43,7 @@ jobs:
         if: steps.request_change.outputs.changed == 'true'
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST || '127.0.0.1' }}
+          VM_HOST: '127.0.0.1' # Runner canonical da Marina; evitar secret global legado.
         shell: bash
         run: |
           set -euo pipefail
@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/vmkey ubuntu@"$vm_host" 'bash -s' -- "$JOB" <<'REMOTE'
+          ssh -o BatchMode=yes -o ConnectTimeout=5 -o ConnectionAttempts=1 -o StrictHostKeyChecking=accept-new -i ~/.ssh/vmkey ubuntu@"$vm_host" 'bash -s' -- "$JOB" <<'REMOTE'
           set -euo pipefail
           job="$1"
           site_env='/home/ubuntu/shopvivaliz-deploy/shared/.env'
