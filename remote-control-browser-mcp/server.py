@@ -16,7 +16,10 @@ import io
 import json
 import os
 from pathlib import Path
-import pwd
+try:
+    import pwd
+except ImportError:
+    pwd = None  # type: ignore
 import re
 import shutil
 import struct
@@ -97,6 +100,8 @@ URL_RE = re.compile(r"^https?://", re.I)
 
 
 def gui_prefix() -> list[str]:
+    if pwd is None:
+        raise RuntimeError("browser_gui_user_missing")
     try:
         info = pwd.getpwnam(GUI_USER)
     except KeyError as exc:
@@ -344,10 +349,11 @@ def native_desktop_bridge(host: str, payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-# Isolated Linux GUI surface for the backend: a dedicated Xvfb display owned by
-# the MCP user, with its own xauth cookie. It never attaches to another user's
-# session (fredconsole/lightdm), never uses sudo and never runs with -ac.
+# Isolated Linux GUI surface for the backend and Marina: dedicated Xvfb displays owned by
+# the MCP user, with their own xauth cookies. They never attach to another user's
+# session (fredconsole/lightdm), never use sudo and never run with -ac.
 BACKEND_GUI_HOST = "always-free-arm-1787907847-26"
+MARINA_GUI_HOST = "marina-a1-4c24g"
 LINUX_GUI_HOSTS = {
     BACKEND_GUI_HOST: {
         "display": os.environ.get("SHOPVIVALIZ_BACKEND_GUI_DISPLAY", ":97"),
@@ -357,6 +363,14 @@ LINUX_GUI_HOSTS = {
         "xauthority": os.environ.get(
             "SHOPVIVALIZ_BACKEND_GUI_XAUTHORITY",
             "/home/ubuntu/.shopvivaliz/secrets/gui-xvfb.xauth",
+        ),
+    },
+    MARINA_GUI_HOST: {
+        "display": os.environ.get("SHOPVIVALIZ_MARINA_GUI_DISPLAY", ":99"),
+        "geometry": (1280, 800),
+        "xauthority": os.environ.get(
+            "SHOPVIVALIZ_MARINA_GUI_XAUTHORITY",
+            "/home/ubuntu/.shopvivaliz/secrets/marina-gui-xvfb.xauth",
         ),
     },
 }
