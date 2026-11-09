@@ -11,6 +11,11 @@ on:
         options:
           - install_or_repair
           - amazon_support_reply
+      case_ids:
+        description: IDs de casos Amazon existentes, separados por virgula (max 5; somente reabrir, dry-run)
+        required: false
+        default: ''
+        type: string
   push:
     branches: [main]
     paths:
@@ -97,7 +102,7 @@ jobs:
                echo PEER_PROVIDER_CONNECTED=true
              '\'''
 
-      - name: Reply to requested Amazon Seller Support cases
+      - name: RETIRED legacy reply (host aposentado; job barrado por if false)
         if: steps.request.outputs.action == 'amazon_support_reply'
         shell: bash
         run: |
@@ -158,7 +163,7 @@ jobs:
           printf '%s\\n' "$rc" >/tmp/shopvivaliz-amazon-support-result.rc
           exit "$rc"
 
-      - name: Publish sanitized Amazon support audit
+      - name: RETIRED legacy publish (job barrado por if false)
         if: always() && steps.request.outputs.action == 'amazon_support_reply'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -215,3 +220,76 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/shopvivaliz-amazon-support-result.log /tmp/shopvivaliz-amazon-support-result.rc
+
+  amazon-support-reopen-existing:
+    # Backend ativa (navegador de agentes fica nela). Nao usa a origem aposentada.
+    # Contrato: perfil EFEMERO copiado do real, somente reabrir caso existente
+    # (Reopen case / Reabrir caso), nunca abrir caso novo; escrita real desligada.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'amazon_support_reply' }}
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reply to requested Amazon Seller Support cases
+        env:
+          CASE_IDS: ${{ inputs.case_ids }}
+          SELLER_CENTRAL_PROFILE: ${{ vars.SELLER_CENTRAL_PROFILE }}
+          CASE_URL_TEMPLATE: ${{ vars.AMAZON_SUPPORT_CASE_URL_TEMPLATE }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          result=/tmp/shopvivaliz-amazon-support-result
+          : > "$result.log"
+          fail() { echo "$1" | tee -a "$result.log"; echo "$2" > "$result.rc"; exit "$2"; }
+          # Estados: Reopen case / Reabrir caso -> WOULD_REOPEN (dry-run);
+          # sem acao de reabrir -> TERMINAL_NO_REOPEN_ACTION; leitura falha -> READ_BACK_FAILED.
+          test "$(hostname)" = "always-free-arm-1787907847-26" || fail "HOST_IDENTITY_MISMATCH" 70
+          [ -n "${SELLER_CENTRAL_PROFILE:-}" ] && [ -d "$SELLER_CENTRAL_PROFILE" ] || fail "NOT_PROVISIONED=SELLER_CENTRAL_PROFILE" 78
+          [ -n "${CASE_URL_TEMPLATE:-}" ] || fail "NOT_PROVISIONED=AMAZON_SUPPORT_CASE_URL_TEMPLATE" 78
+          IFS=',' read -r -a ids <<< "$CASE_IDS"
+          { [ "${#ids[@]}" -ge 1 ] && [ "${#ids[@]}" -le 5 ]; } || fail "INVALID_CASE_IDS" 64
+          for id in "${ids[@]}"; do [[ "$id" =~ ^[0-9]{6,20}$ ]] || fail "INVALID_CASE_ID" 64; done
+          chrome="$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)"
+          [ -n "$chrome" ] || fail "NOT_PROVISIONED=chromium" 78
+          support_profile="$(mktemp -d /tmp/shopvivaliz-amazon-support-profile.XXXXXX)"
+          chrome_pid=""
+          cleanup() { [ -z "$chrome_pid" ] || kill "$chrome_pid" 2>/dev/null || true; rm -rf "$support_profile"; }
+          trap cleanup EXIT
+          cp -a "$SELLER_CENTRAL_PROFILE/." "$support_profile/"
+          rm -f "$support_profile/SingletonLock" "$support_profile/SingletonCookie" "$support_profile/SingletonSocket"
+          "$chrome" --headless=new --no-first-run --user-data-dir="$support_profile" --remote-debugging-port=9226 about:blank >/dev/null 2>&1 &
+          chrome_pid=$!
+          ready=0
+          for _ in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:9226/json/version >/dev/null 2>&1; then ready=1; break; fi
+            sleep 1
+          done
+          [ "$ready" -eq 1 ] || fail "CDP_UNAVAILABLE" 75
+          export CASE_IDS CASE_URL_TEMPLATE
+          node scripts/amazon-returns/support-case-probe.mjs > /tmp/shopvivaliz-amazon-support-probe.json || fail "PROBE_FAILED" 75
+          if python3 -c 'import json,sys; sys.exit(0 if any(x.get("authenticated") for x in json.load(open("/tmp/shopvivaliz-amazon-support-probe.json"))) else 1)'; then
+            echo "SELLER_CENTRAL_AUTH=AUTHENTICATED" | tee -a "$result.log"
+          fi
+          node scripts/amazon-returns/support-reopen-decision.mjs < /tmp/shopvivaliz-amazon-support-probe.json | tee -a "$result.log"
+          echo "AVAILABLE_ACTIONS=reportadas_acima_por_caso submitted=false dry_run=true" | tee -a "$result.log"
+          echo 0 > "$result.rc"
+
+      - name: Publish sanitized Amazon support audit
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          {
+            echo "### Amazon Seller Support (somente leitura / dry-run)"
+            echo "run_id=$GITHUB_RUN_ID sha=$GITHUB_SHA rc=$(cat /tmp/shopvivaliz-amazon-support-result.rc 2>/dev/null || echo 99)"
+            echo '```'
+            grep -E '^(\{|SELLER_CENTRAL_AUTH|AVAILABLE_ACTIONS|NOT_PROVISIONED|HOST_IDENTITY|INVALID|CDP_|PROBE_)' /tmp/shopvivaliz-amazon-support-result.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/shopvivaliz-amazon-support-result.log /tmp/shopvivaliz-amazon-support-result.rc /tmp/shopvivaliz-amazon-support-probe.json
