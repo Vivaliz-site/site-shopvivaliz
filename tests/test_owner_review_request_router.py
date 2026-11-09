@@ -23,8 +23,13 @@ class OwnerReviewRouterTests(unittest.TestCase):
         self.assertEqual(decision(pr(), files, [], SHA), "request_owner_review")
 
     def test_owner_policy_directive_requires_review(self):
-        files = [{"filename": "AGENTS.md", "patch": "@@ -1 +1 @@\n+<!-- OWNER_DIRECTIVES_20261105 -->"}]
+        files = [{"filename": "AGENTS.md", "patch": "@@ -1 +1 @@\n+Proibido executar comandos sem aprovação."}]
         self.assertEqual(decision(pr(), files, [], SHA), "request_owner_review")
+
+    def test_language_only_and_ordinary_rules_do_not_request_review(self):
+        files = [{"filename": "AGENTS.md",
+                  "patch": "@@ -1 +1 @@\n+Todas as PRs devem ser redigidas em português brasileiro."}]
+        self.assertEqual(decision(pr(), files, [], SHA), "common_pr_no_owner_review")
 
     def test_common_docs_do_not_request_human(self):
         files = [{"filename": "docs/knowledge/host-access.md", "patch": "@@ -1 +1 @@\n+normal host docs link"}]
