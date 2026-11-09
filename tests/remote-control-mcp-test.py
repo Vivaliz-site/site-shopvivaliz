@@ -668,7 +668,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             self.assertTrue(specs[name]["annotations"]["destructiveHint"])
         for name in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
             host = specs[name]["inputSchema"]["properties"]["host"]
-            self.assertEqual(set(host["enum"]), {"Fred-Win", "KOCEPSV", "always-free-arm-1787907847-26"})
+            self.assertEqual(set(host["enum"]), {"Fred-Win", "KOCEPSV", "always-free-arm-1787907847-26", "marina-a1-4c24g"})
             for forbidden in ("rustdesk_id", "display", "window", "selector", "command"):
                 self.assertNotIn(forbidden, specs[name]["inputSchema"]["properties"])
         self.assertEqual(specs["desktop_health"]["inputSchema"]["required"], ["host"])
@@ -694,7 +694,8 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(m.validate_desktop_host("KOCEPSV")["platform"], "windows")
         self.assertEqual(m.validate_desktop_host("Fred-Win")["platform"], "windows")
         self.assertEqual(m.validate_desktop_host("always-free-arm-1787907847-26")["platform"], "linux")
-        for host in ("marina-a1-4c24g", "shopvivaliz-free-a1", "unknown"):
+        self.assertEqual(m.validate_desktop_host("marina-a1-4c24g")["platform"], "linux")
+        for host in ("shopvivaliz-free-a1", "unknown"):
             with self.subTest(host=host):
                 with self.assertRaisesRegex(ValueError, "unsupported_desktop_host"):
                     m.validate_desktop_host(host)

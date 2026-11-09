@@ -6,14 +6,19 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
+
+if "fcntl" not in sys.modules:
+    sys.modules["fcntl"] = mock.MagicMock()
 
 ROOT = Path(__file__).resolve().parents[1]
 UNIT = ROOT / "deploy" / "systemd" / "shopvivaliz-gui-xvfb.service"
 INSTALLER = ROOT / "scripts" / "install-backend-gui-xvfb.sh"
 BACKEND = "always-free-arm-1787907847-26"
+MARINA = "marina-a1-4c24g"
 AC_FLAG = re.compile(r"(?<!\S)-ac(?!\S)")
 
 os.environ["SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER"] = str(ROOT / "remote-control-mcp" / "server.py")
@@ -66,9 +71,18 @@ class InstallerTests(unittest.TestCase):
 
 class BackendGeometryAndRoutingTests(unittest.TestCase):
     def test_backend_is_a_desktop_host_with_only_isolated_display(self):
-        self.assertEqual(set(m.base.DESKTOP_HOSTS), {"Fred-Win", "KOCEPSV", BACKEND})
+        self.assertEqual(set(m.base.DESKTOP_HOSTS), {"Fred-Win", "KOCEPSV", BACKEND, MARINA})
         self.assertEqual(m.LINUX_GUI_HOSTS[BACKEND]["geometry"], (1440, 900))
         self.assertEqual(m.LINUX_GUI_HOSTS[BACKEND]["display"], ":97")
+        self.assertEqual(m.LINUX_GUI_HOSTS[MARINA]["geometry"], (1280, 800))
+        self.assertEqual(m.LINUX_GUI_HOSTS[MARINA]["display"], ":99")
+
+    def test_desktop_tools_route_marina_to_linux_path(self):
+        with mock.patch.object(m, "linux_gui_health", return_value={"ok": True}) as health, \
+             mock.patch.object(m, "native_desktop_bridge") as bridge:
+            self.assertEqual(m.desktop_health({"host": MARINA}), {"ok": True})
+            health.assert_called_once_with(MARINA)
+            bridge.assert_not_called()
 
     def test_click_outside_geometry_is_rejected_before_any_subprocess(self):
         with mock.patch.object(m.subprocess, "run") as run:
