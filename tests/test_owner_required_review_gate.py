@@ -76,7 +76,6 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
             "+config = {'runtime_lock_required': False}",
             "+runtime_lease_id = args.get('runtime_lease_id')",
             "+runtime_fencing_token = args.get('runtime_fencing_token')",
-            "+MUTATING_RUNTIME_ACTIONS = existing_actions",
         ]
         for line in innocuous:
             with self.subTest(line=line):
