@@ -1,3 +1,7 @@
+<!-- AGENT_PR_TITLE_IDENTITY_V1_20261108 -->
+> **Regra do proprietario (08/11/2026) — identidade da IA no titulo de TODA PR de agente:** na criacao de uma PR ShopVivaliz, prefixar seu titulo em pt-BR com o agente executor REAL: `[GPT]`, `[Claude]`, `[Gemini]`, `[Codex]`, `[Copilot]`, `[Ollama]`, `[Auto-Healer]` ou `[Agente: Nome]`. A conta GitHub `fredmourao-ai` nao identifica qual modelo executou o trabalho. Na descricao, distinguir agente criador, contribuidores/revisores e identidade GitHub, sem inventar proveniencia. Em PRs antigas com origem desconhecida, informar `[Agente não identificado]`; nao aceitar esse marcador para PRs novas. A regra de titulo nao concede privilegio comercial e nao exige nova revisao humana por si so. Fonte: `docs/knowledge/agent-pr-attribution.md`.
+<!-- /AGENT_PR_TITLE_IDENTITY_V1_20261108 -->
+
 <!-- REGRA DO PROPRIETARIO: MCP PRIMEIRO: executar chamada MCP autorizada antes de rotas alternativas; respeitar MFA, RBAC, grants e leases; consultar docs/ops/mcp-first-agent-execution-2026-11-05.md. -->
 <!-- OWNER_CREDENTIAL_ROUTE_DISCOVERY_20261107 -->
 ## Descoberta autonoma de rotas e credenciais ja autorizadas
