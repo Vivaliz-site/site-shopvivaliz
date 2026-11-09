@@ -1,0 +1,85 @@
+name: Marina Read-Only Status
+
+# Diagnostico SOMENTE LEITURA da producao (marina-a1-4c24g), sem depender da
+# cota do Desktop Commander. Nao altera arquivo, servico, banco nem rede.
+# Exige identidade do host confirmada antes de qualquer leitura.
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Motivo auditavel
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 8
+    env:
+      MARINA_PUBLIC_IP: 137.131.173.240
+      MARINA_VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+      MARINA_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+      REASON: ${{ inputs.reason }}
+    steps:
+      - name: Read-only status of marina-a1-4c24g
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "AUDIT_REASON=${REASON//[^[:alnum:] _.,:;-]/}"
+          key="${RUNNER_TEMP}/marina-readonly-key"
+          hosts="${RUNNER_TEMP}/marina-readonly-known-hosts"
+          trap 'rm -f "$key" "$hosts"' EXIT
+          printf '%s\n' "$MARINA_VM_KEY" > "$key"
+          printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$hosts"
+          chmod 600 "$key" "$hosts"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" \
+              -o ConnectTimeout=10 -i "$key" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          host="$(hostname)"
+          echo "MARINA_HOSTNAME=$host"
+          if [ "$host" != "marina-a1-4c24g" ]; then echo "MARINA_IDENTITY=MISMATCH"; exit 70; fi
+          echo "MARINA_IDENTITY=OK user=$(id -un)"
+          uptime
+          echo "--- disco"; df -h / /home 2>/dev/null | awk 'NR==1||NR>1'
+          echo "--- release ativa"
+          cur=""
+          if cur="$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)"; then
+            echo "RELEASE_PATH=$cur"
+          else
+            echo "RELEASE_PATH=indisponivel"
+          fi
+          if [ -n "$cur" ] && [ -f "$cur/.release-sha" ]; then
+            echo "RELEASE_SHA=$(cat "$cur/.release-sha")"
+          else
+            echo "RELEASE_SHA=indisponivel"
+          fi
+          echo "--- cache de catalogo (metadados, sem conteudo)"
+          c=/home/ubuntu/shopvivaliz-deploy/shared/storage/products-cache-ativos.json
+          if [ -f "$c" ]; then
+            stat -c 'CACHE_SIZE=%s CACHE_MTIME=%y' "$c"
+            echo "CACHE_AGE_SECONDS=$(( $(date +%s) - $(stat -c %Y "$c") ))"
+            python3 - "$c" <<'PY'
+          import json, sys
+          try:
+              d = json.load(open(sys.argv[1]))
+              items = d if isinstance(d, list) else next((d[k] for k in ("itens","items","produtos","products","data") if isinstance(d.get(k), (list, dict))), [])
+              if isinstance(items, dict): items = items.get("itens") or items.get("items") or []
+              print("CACHE_JSON_VALID=true CACHE_ITEMS=%d" % len(items))
+          except Exception as e:
+              print("CACHE_JSON_VALID=false error=%s" % type(e).__name__)
+          PY
+          else
+            echo "CACHE_PRESENT=false"
+          fi
+          echo "--- servicos shopvivaliz-* (estado)"
+          systemctl list-units 'shopvivaliz-*' --all --no-legend --no-pager 2>/dev/null | awk '{print $1, $3, $4}' | head -60
+          echo "--- timers shopvivaliz-*"
+          systemctl list-timers 'shopvivaliz-*' --all --no-legend --no-pager 2>/dev/null | awk '{print $NF, "next="$1" "$2}' | head -40
+          echo "--- arquivos de backup recentes (nome, tamanho, data; sem conteudo)"
+          find /home/ubuntu /var/backups -maxdepth 3 -type f \( -iname '*backup*' -o -iname '*.sql.gz' -o -iname '*.sql' -o -iname '*.dump' \) -mtime -14 \
+            -printf '%TY-%Tm-%Td %TH:%TM %s %p\n' 2>/dev/null | sort -r | head -20
+          REMOTE

@@ -181,6 +181,9 @@ function json_response($data, $code = 200) {
 
 // Log de erro
 function log_error($message, $context = []) {
+    if (!is_dir(LOGS_PATH)) {
+        @mkdir(LOGS_PATH, 0775, true);
+    }
     error_log(json_encode([
         'timestamp' => date('c'),
         'message' => $message,
