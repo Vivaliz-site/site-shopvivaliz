@@ -108,19 +108,49 @@ LOCK_PATTERNS = (
 DESKTOP_LOCK_PATTERNS = LOCK_PATTERNS
 
 
+# Classificacao por EFEITO do diff, nunca somente pelo caminho.
+POLICY_DENIAL_PATTERNS = (
+    re.compile(r"(?i)\\b(?:proibid[oa]|vedad[oa]|bloque(?:ar|ia|ado|ada)|imped(?:ir|e)|restringir)\\b.{0,140}\\b(?:execu[cç][aã]o|processo|comando|ferramenta|acesso|agente|workflow|deploy|merge)\\b"),
+    re.compile(r"(?i)\\b(?:n[aã]o\\s+(?:deve|pode|poder[aá])|fica\\s+proibido)\\b.{0,120}\\b(?:executar|acessar|utilizar|invocar|integrar|mesclar|publicar)\\b"),
+)
+TEXT_EXTENSIONS = (
+    ".md", ".rst", ".txt", ".py", ".sh", ".php", ".js", ".jsx", ".ts",
+    ".tsx", ".mjs", ".cjs", ".json", ".yml", ".yaml", ".toml", ".ini",
+    ".cfg", ".xml", ".sql", ".go", ".rb", ".rs", ".java",
+)
+
+
+def missing_inspectable_patch(files: list[dict]) -> bool:
+    """Diff textual ausente impede a classificacao; nao exige revisores por caminho."""
+    for f in files:
+        path = f.get("filename", "")
+        if f.get("status") != "removed" and (
+            path.endswith(TEXT_EXTENSIONS) or path in RULES_FILES
+        ) and not isinstance(f.get("patch"), str):
+            return True
+    return False
+
+
 def is_lock_insertion(f: dict) -> bool:
-    """Detect any attempt to introduce locks, blocks or restrictions."""
-    if not isinstance(f, dict):
+    """Detecta adicoes RESTRITIVAS reais, sem converter toda edicao em gate duplo."""
+    if not isinstance(f, dict) or not isinstance(f.get("patch"), str):
         return False
-    patch = f.get("patch")
-    if not isinstance(patch, str):
-        return False
-    for line in patch.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
-            added_line = line[1:].strip()
-            for pattern in LOCK_PATTERNS:
-                if pattern.search(added_line):
-                    return True
+    path = f.get("filename", "")
+    lines = f["patch"].splitlines()
+    removed = {line[1:].strip() for line in lines if line.startswith("-") and not line.startswith("---")}
+    for line in lines:
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        added = line[1:].strip()
+        if not added or added in removed:
+            continue  # linha movida/inalterada nao cria novo controle
+        if path.endswith((".md", ".rst", ".txt")):
+            if any(pattern.search(added) for pattern in POLICY_DENIAL_PATTERNS):
+                return True
+        elif path.startswith("tests/") or path.rsplit("/", 1)[-1].startswith("test_"):
+            continue  # exemplos/fixtures de teste nao sao regras de runtime
+        elif any(pattern.search(added) for pattern in LOCK_PATTERNS):
+            return True
     return False
 
 
@@ -128,52 +158,13 @@ is_desktop_gui_lock_restoration = is_lock_insertion
 
 
 def is_protected_file(f: dict | str) -> bool:
-    """Determine if file represents locks, governance, rules, tasks or sensitive items."""
-    if isinstance(f, dict):
-        filename = f.get("filename", "")
-        patch = f.get("patch")
-        if is_lock_insertion(f):
-            return True
-    elif isinstance(f, str):
-        filename = f
-        patch = None
-    else:
-        return False
-
-    # 1. Governança
-    if any(filename.startswith(p) for p in GOVERNANCE_PREFIXES) or filename in GOVERNANCE_FILES:
-        return True
-
-    # 2. Regras
-    if filename in RULES_FILES or any(filename.startswith(p) for p in RULES_PREFIXES):
-        return True
-
-    # 3. Tasks / Workflows
-    if any(filename.startswith(p) for p in TASKS_PREFIXES) or filename in TASKS_FILES:
-        return True
-
-    # 4. Outros meios de controle administrativo / broker
-    if filename in SENSITIVE_FILES:
-        return True
-
-    # 5. Documentos com diretivas de governança / trava
-    if filename == "docs/knowledge/host-access.md":
-        if patch is None:
-            return True  # uninspectable policy change
-        for line in patch.splitlines():
-            if (line.startswith("+") and not line.startswith("+++")) or (line.startswith("-") and not line.startswith("---")):
-                if any(marker in line for marker in POLICY_DIRECTIVE_MARKERS):
-                    return True
-
-    return False
+    """Somente uma adicao ou agravamento de trava exige dupla revisao."""
+    return isinstance(f, dict) and is_lock_insertion(f)
 
 
 def requires_dual_approval(files: list[dict | str]) -> bool:
-    """True if PR introduces locks, governance changes, agent rules, tasks or sensitive items."""
-    for f in files:
-        if is_protected_file(f):
-            return True
-    return False
+    """A revisao dupla nunca decorre apenas do nome do arquivo."""
+    return any(is_protected_file(f) for f in files)
 
 
 requires_lock_dual_approval = requires_dual_approval
@@ -233,12 +224,14 @@ def decide(files: object, reviews: object, head_sha: str, changed_files: object 
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "pr_files_invalid"
 
-    # Priority Check: Does this PR touch locks, governance, rules, tasks, or sensitive actions?
+    # Ausencia de diff textual e erro de classificacao, nao revisor obrigatorio.
+    if missing_inspectable_patch(files):
+        return False, "pr_text_patch_unavailable"
     if requires_dual_approval(files):
         required = set(DUAL_REQUIRED_REVIEWERS)
         if pr_author and pr_author.casefold() in {u.casefold() for u in required}:
-            # GitHub forbids PR authors from reviewing their own PR.
-            required = {u for u in required if u.casefold() != pr_author.casefold()}
+            # Nenhuma identidade pode aprovar sua propria PR no GitHub.
+            return False, "protected_author_must_be_independent"
         return verify_approvals(reviews, required, head_sha)
 
     # Standard Check: VM deletion or price changes require shopvivaliz-human
@@ -292,7 +285,9 @@ def main(argv=None) -> int:
         files = github_json(args.repo, f"/pulls/{args.pr}/files?per_page=100", token)
         if not isinstance(files, list) or len(files) >= 100:
             raise ValueError("pr_files_unavailable_or_incomplete")
-        protected = requires_dual_approval(files)
+        protected = requires_dual_approval(files) or any(
+            is_protected_path(f.get("filename", "")) for f in files if isinstance(f, dict)
+        )
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
         pr_author = pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None
