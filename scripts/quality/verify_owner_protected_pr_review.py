@@ -292,7 +292,7 @@ def main(argv=None) -> int:
         files = github_json(args.repo, f"/pulls/{args.pr}/files?per_page=100", token)
         if not isinstance(files, list) or len(files) >= 100:
             raise ValueError("pr_files_unavailable_or_incomplete")
-        protected = requires_dual_approval(files)
+        protected = requires_dual_approval(files) or any(is_protected_path(f["filename"]) for f in files if isinstance(f, dict) and isinstance(f.get("filename"), str))
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
         pr_author = pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None
