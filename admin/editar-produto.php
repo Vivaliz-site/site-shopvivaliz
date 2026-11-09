@@ -111,7 +111,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($reviewRequest['cost_zero']) {
                         $success .= ' Atenção: custo zerado ou ausente, sujeito à sua decisão.';
                     }
-                    $success .= ' <a href="/admin/precos-pendentes.php">Ver solicitações pendentes</a>.';
                 }
 
                 $tinyId = (int)($catalog[$index]['olist_product_id'] ?? $catalog[$index]['id'] ?? 0);
@@ -179,6 +178,7 @@ $produto = $index !== null ? $catalog[$index] : null;
         <div class="card">
             <?php if ($error !== ''): ?><div class="alert alert-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
             <?php if ($success !== ''): ?><div class="alert alert-success"><?= htmlspecialchars($success) ?></div><?php endif; ?>
+            <p><a href="/admin/precos-pendentes.php">Consultar solicitações comerciais pendentes (proprietário)</a></p>
 
             <?php if ($produto === null): ?>
                 <p>Produto não encontrado. <a href="/admin/produtos.php">Voltar para a lista</a>.</p>
