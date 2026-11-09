@@ -31,4 +31,4 @@ foreach ($cases as $id => [$product, $expected]) {
     }
 }
 
-echo "OK: Tiny PUT de produto nao aceita preco sem custo positivo\n";
+echo "OK: diagnostico de custo; preco requer autorizacao humana separada\n";
