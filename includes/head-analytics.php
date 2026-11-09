@@ -55,6 +55,8 @@ echo <<<'HTML'
     security_storage: 'granted',
     wait_for_update: 500
   });
+  window.gtag('set', 'url_passthrough', true);
+  window.gtag('set', 'ads_data_redaction', true);
 })();
 </script>
 HTML;

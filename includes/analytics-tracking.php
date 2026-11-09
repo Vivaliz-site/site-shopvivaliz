@@ -384,7 +384,7 @@ JS;
 
         if ($this->google_ads_id !== '') {
             $adsId = htmlspecialchars($this->google_ads_id, ENT_QUOTES, 'UTF-8');
-            $gtagConfigs[] = "  gtag('config', '{$adsId}');";
+            $gtagConfigs[] = "  gtag('config', '{$adsId}', { 'allow_enhanced_conversions': true });";
         }
 
         if ($gtagConfigs !== []) {
