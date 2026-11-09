@@ -45,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($index === null) {
         $error = 'Produto não encontrado no catálogo.';
     } else {
+        $originalProduct = $catalog[$index];
+        $reviewRequest = null;
         $catalog[$index]['name'] = trim((string)($_POST['name'] ?? $catalog[$index]['name'] ?? ''));
         $catalog[$index]['price'] = (float)($_POST['price'] ?? 0);
         $catalog[$index]['stock'] = (int)($_POST['stock'] ?? 0);
@@ -77,18 +79,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $prices['promotional_price'] = (float)($_POST['promotional_price'] ?? $prices['promotional_price'] ?? 0);
         $catalog[$index]['prices'] = $prices;
 
-        $written = file_put_contents($catalogPath, json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
-        if ($written === false) {
-            $error = 'Falha ao salvar (permissão de escrita no catálogo).';
-        } else {
-            $success = 'Produto atualizado com sucesso.';
+        // Stage commercial edits in private durable review storage. Never alter
+        // prices locally or in Tiny before explicit, separate owner validation.
+        try {
+            $reviewRequest = svtpp_request_price_owner_review(
+                $originalProduct, $catalog[$index], (int)($_SESSION['user_id'] ?? 0)
+            );
+            if ($reviewRequest !== null) {
+                $catalog[$index]['price'] = $originalProduct['price'] ?? 0;
+                $catalog[$index]['prices'] = $originalProduct['prices'] ?? [];
+            }
+        } catch (Throwable $e) {
+            $catalog[$index] = $originalProduct;
+            $error = 'Alteração comercial não aplicada: fila privada de validação indisponível ('
+                . $e->getMessage() . ').';
+        }
 
-            $tinyId = (int)($catalog[$index]['olist_product_id'] ?? $catalog[$index]['id'] ?? 0);
-            if ($tinyId > 0) {
-                $push = svtpp_push_product_update($tinyId, $catalog[$index]);
-                $success .= $push['ok']
-                    ? ' Sincronizado com o Tiny ERP.'
-                    : ' ⚠️ Não foi possível sincronizar com o Tiny ERP (' . $push['error'] . ') — alteração salva só localmente por enquanto.';
+        if ($error === '') {
+            $written = file_put_contents(
+                $catalogPath,
+                json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
+                LOCK_EX
+            );
+            if ($written === false) {
+                $error = 'Falha ao salvar (permissão de escrita no catálogo).';
+            } else {
+                $success = 'Dados não comerciais atualizados.';
+                if ($reviewRequest !== null) {
+                    $success .= ' Preços e custo permaneceram inalterados. Solicitação '
+                        . $reviewRequest['request_id'] . ' aguardando validação do proprietário.';
+                    if ($reviewRequest['cost_zero']) {
+                        $success .= ' Atenção: custo zerado ou ausente, sujeito à sua decisão.';
+                    }
+                    $success .= ' <a href="/admin/precos-pendentes.php">Ver solicitações pendentes</a>.';
+                }
+
+                $tinyId = (int)($catalog[$index]['olist_product_id'] ?? $catalog[$index]['id'] ?? 0);
+                if ($tinyId > 0) {
+                    $editorialOnly = $catalog[$index];
+                    unset($editorialOnly['price'], $editorialOnly['prices']);
+                    $push = svtpp_push_product_update($tinyId, $editorialOnly);
+                    $success .= $push['ok']
+                        ? ' Campos não comerciais sincronizados com Tiny ERP.'
+                        : ' Campos não comerciais não sincronizados com Tiny ERP ('
+                            . htmlspecialchars($push['error'], ENT_QUOTES, 'UTF-8') . ').';
+                }
             }
         }
     }
