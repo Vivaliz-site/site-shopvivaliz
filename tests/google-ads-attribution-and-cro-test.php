@@ -127,3 +127,32 @@ $validatedOrderSource = (string)file_get_contents(dirname(__DIR__) . '/api/order
 sv_test_assert(str_contains($schemaSource, 'attribution_json'), 'orders schema must persist consented attribution JSON.');
 sv_test_assert(str_contains($validatedOrderSource, 'attribution_json'), 'validated checkout must mirror attribution into MySQL.');
 sv_test_assert(str_contains($validatedOrderSource, "'attribution' => \$attribution"), 'order JSON must carry the canonical attribution object.');
+
+// Landing page banner and Google Ads attribution enhancements
+require_once dirname(__DIR__) . '/includes/catalog-landing-banner.php';
+$_GET['q'] = 'vedante';
+$vedanteBanner = svci_sales_landing_banner();
+sv_test_assert(str_contains($vedanteBanner, 'Rodo Vedante de Alumínio com Borracha Vivaliz'), 'Vedante search landing banner must highlight product trust.');
+sv_test_assert(str_contains($vedanteBanner, '70 cm, 80 cm, 90 cm e 100 cm'), 'Vedante search landing banner must list door sizes.');
+
+$_GET['q'] = 'rodo';
+$rodoBanner = svci_sales_landing_banner();
+sv_test_assert(str_contains($rodoBanner, 'Rodo Vedante de Alumínio com Borracha Vivaliz'), 'Rodo search query must also display the trust banner.');
+
+$_GET['q'] = 'antique';
+$antiqueBanner = svci_sales_landing_banner();
+sv_test_assert(str_contains($antiqueBanner, 'Vasos Antique Japi'), 'Antique query must display Antique banner.');
+
+$_GET['q'] = 'random_query_xyz';
+$emptyBanner = svci_sales_landing_banner();
+sv_test_assert($emptyBanner === '', 'Unrelated queries must return empty banner.');
+
+$headAnalyticsSource = (string)file_get_contents(dirname(__DIR__) . '/includes/head-analytics.php');
+sv_test_assert(str_contains($headAnalyticsSource, "window.gtag('set', 'url_passthrough', true);"), 'head-analytics must enable url_passthrough for gclid resilience.');
+sv_test_assert(str_contains($headAnalyticsSource, "window.gtag('set', 'ads_data_redaction', true);"), 'head-analytics must enable ads_data_redaction for Consent Mode v2.');
+
+$analyticsTrackingSource = (string)file_get_contents(dirname(__DIR__) . '/includes/analytics-tracking.php');
+sv_test_assert(str_contains($analyticsTrackingSource, "'allow_enhanced_conversions': true"), 'analytics-tracking must configure allow_enhanced_conversions.');
+
+fwrite(STDOUT, "ALL PASS: Google Ads attribution, CRO banner, and tracking enhancements verified.\n");
+
