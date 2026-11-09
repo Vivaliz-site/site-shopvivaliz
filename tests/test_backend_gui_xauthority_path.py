@@ -10,9 +10,13 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
+
+if "fcntl" not in sys.modules:
+    sys.modules["fcntl"] = mock.MagicMock()
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / "remote-control-browser-mcp" / "server.py"

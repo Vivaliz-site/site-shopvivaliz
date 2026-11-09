@@ -25,13 +25,13 @@ Segundo MCP privado derivado do Remote Control MCP canônico. Ele preserva as fe
 
 ## Ferramentas de desktop
 
-- `desktop_health(host)` — valida a rota gráfica correspondente ao host.
-- `desktop_open(host)` — prepara a rota gráfica: bridge interativo nativo no `Fred-Win`; sessão RustDesk protegida no `KOCEPSV`.
+- `desktop_health(host)` — valida a rota gráfica correspondente ao host (Fred-Win, KOCEPSV, backend always-free-arm-1787907847-26 e marina-a1-4c24g).
+- `desktop_open(host)` — prepara a rota gráfica: bridge interativo nativo no `Fred-Win`; sessão RustDesk protegida no `KOCEPSV`; display Xvfb isolado no backend (`:97`) e na Marina (`:99`).
 - `desktop_screenshot(host)` — captura a superfície gráfica restrita e retorna PNG.
 - `desktop_click(host,x,y,...)` — clique com coordenadas limitadas à superfície retornada por screenshot.
 - `desktop_type(host,text,...)` — digitação na superfície ativa; o texto nunca entra em argv nem no audit log.
 
-Somente `Fred-Win` e `KOCEPSV` são aceitos como alvos desktop. Não há parâmetro público para ID RustDesk, display, seletor de janela ou comando arbitrário.
+Os quatro hosts canônicos (`Fred-Win`, `KOCEPSV`, `always-free-arm-1787907847-26` e `marina-a1-4c24g`) são aceitos como alvos desktop com paridade funcional completa adaptada ao sistema operacional (Windows nativo/RustDesk ou display virtual isolado Linux). Não há parâmetro público para ID RustDesk, display, seletor de janela ou comando arbitrário.
 
 ### Fred-Win: bridge interativo nativo
 
