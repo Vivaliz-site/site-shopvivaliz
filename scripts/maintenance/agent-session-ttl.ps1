@@ -19,7 +19,7 @@ function Get-AgentKind($process, $index) {
   $parent=$index[[int]$process.ParentProcessId]
   $parentName=if($parent){([string]$parent.Name).ToLowerInvariant()}else{''}
   if($path -match '\\windowsapps\\|\\claude_desktop\\'){return $null}
-  if($cmd -match 'desktop-commander|extension-host|chrome-native-host|cowork-svc|--remote-control'){return $null}
+  if($cmd -match 'extension-host|chrome-native-host|cowork-svc|--remote-control'){return $null}
   if($parentName -match '^(services|svchost|taskhostw)\.exe$'){return $null}
 
   if($name -eq 'claude.exe'){

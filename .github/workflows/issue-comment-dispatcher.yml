@@ -126,11 +126,3 @@ jobs:
       contents: read
     uses: ./.github/workflows/codex-global-issue-comment-routing.yml
     secrets: inherit
-
-  dc-reauth:
-    needs: classify
-    if: needs.classify.outputs.route == 'dc_reauth'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/desktop-commander-reauth-runner.yml
-    secrets: inherit

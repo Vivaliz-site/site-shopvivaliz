@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-$workflow=(string)file_get_contents(dirname(__DIR__).'/.github/workflows/desktop-commander-peer-repair.yml');
+$workflow=(string)file_get_contents(dirname(__DIR__).'/.github/workflows/amazon-support-reopen.yml');
 $start=strpos($workflow,'- name: Reply to requested Amazon Seller Support cases');
 $end=strpos($workflow,'- name: Publish sanitized Amazon support audit');
 if($start===false||$end===false||$end<=$start){fwrite(STDERR,"Amazon reply block missing\n");exit(1);}

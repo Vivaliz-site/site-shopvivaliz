@@ -1,24 +1,6 @@
 <?php
 $errors = [];
-$installer = (string) @file_get_contents(__DIR__ . '/../scripts/install-vm-desktop-commander-service.sh');
 $fredWorkflow = (string) @file_get_contents(__DIR__ . '/../.github/workflows/fred-win-remote-action.yml');
-
-if ($installer === '') {
-    $errors[] = 'VM Desktop Commander installer missing';
-} else {
-    if (!str_contains($installer, "LEGACY_UNIT_TARGET='/etc/systemd/system/desktop-commander.service'")) {
-        $errors[] = 'installer must name the legacy VM unit file explicitly';
-    }
-    if (!preg_match('/rm\s+-f\s+"?\$LEGACY_UNIT_TARGET"?/', $installer)) {
-        $errors[] = 'installer must remove the legacy VM unit file';
-    }
-    if (!str_contains($installer, 'systemctl daemon-reload')) {
-        $errors[] = 'installer must reload systemd after retirement';
-    }
-    if (!str_contains($installer, "if systemctl cat \"\$LEGACY_SERVICE\" >/dev/null 2>&1; then")) {
-        $errors[] = 'installer must verify the legacy service is absent';
-    }
-}
 
 if ($fredWorkflow === '') {
     $errors[] = 'Fred-Win remote workflow missing';

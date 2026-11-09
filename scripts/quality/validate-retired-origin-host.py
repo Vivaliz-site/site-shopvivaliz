@@ -15,21 +15,14 @@ from pathlib import Path
 RETIRED_ORIGIN_IP = "10.0.1.112"
 
 BASELINE = frozenset({
-    ".github/workflows/dc-four-host-login-once.yml",
-    ".github/workflows/desktop-commander-24h-health.yml",
-    ".github/workflows/desktop-commander-peer-repair.yml",
-    ".github/workflows/desktop-commander-reauth-runner.yml",
     ".github/workflows/oci-bastion-private-access-bootstrap.yml",
     ".github/workflows/remote-control-mcp-bootstrap.yml",
     "config/tri-environment-sync.json",
     "remote-control-mcp/server.py",
     "scripts/chatgpt_continuity_nudge_dispatcher.py",
-    "scripts/desktop-commander-four-host-sentinel.sh",
     "scripts/oci-private-access-bootstrap.sh",
     "scripts/setup-iphone-private-ssh-relay.sh",
     "scripts/windows/marina-precutover-preflight.ps1",
-    "tests/desktop-commander-local-sentinel-contract-test.php",
-    "tests/desktop-commander-reauth-hosted-contract-test.php",
     "tests/iphone-private-ssh-relay-contract-test.py",
     "tests/oci-private-access-bootstrap-contract-test.php",
     "tests/remote-control-mcp-test.py",

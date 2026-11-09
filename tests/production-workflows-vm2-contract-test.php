@@ -4,12 +4,6 @@ $workflowDir = $root . '/.github/workflows';
 $legacyVm = '137.131.156.17';
 $productionPath = '/home/ubuntu/shopvivaliz-deploy';
 $allowedLegacyControl = [
-    'desktop-commander-24h-health.yml',
-    'desktop-commander-three-host-control-plane.yml',
-    'desktop-commander-three-host-quick-probe.yml',
-    'vm-desktop-commander-action.yml',
-    'vm-desktop-commander-connection-probe.yml',
-    'vm-desktop-commander-secure-recovery.yml',
     'fix-old-vm-mei-apache-20260825.yml',
     'fix-old-vm-mei-apache-http01-20260825.yml',
     'pr-conflict-auto-healer.yml',

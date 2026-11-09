@@ -44,7 +44,7 @@ jobs:
           token = os.environ['GH_TOKEN']
           req_path = pathlib.Path('ops/actions-run-index-request.json')
           request = json.loads(req_path.read_text(encoding='utf-8')) if req_path.exists() else {}
-          workflow = request.get('workflow', 'desktop-commander-24h-health.yml')
+          workflow = request.get('workflow', 'mandatory-validation-gate.yml')
           limit = max(1, min(int(request.get('limit', 10)), 100))
           url = f'https://api.github.com/repos/{repo}/actions/workflows/{workflow}/runs?per_page={limit}&branch=main'
           http = urllib.request.Request(url, headers={
