@@ -136,7 +136,11 @@ function sv_product_route_catalog_row_by_sku_suffix(string $requestedSlug): ?arr
         if ($rowSku === '') {
             continue;
         }
-        if ($requestedNorm === $rowSku || str_ends_with($requestedNorm, '-' . $rowSku)) {
+        $rowSkuAlnum = strtolower((string)preg_replace('/[^a-z0-9]+/', '', $rowSku));
+        if ($requestedNorm === $rowSku
+            || str_ends_with($requestedNorm, '-' . $rowSku)
+            || ($rowSkuAlnum !== '' && strlen($rowSkuAlnum) >= 3 && str_ends_with($requestedNorm, '-' . $rowSkuAlnum))
+        ) {
             if ($match !== null) {
                 // Ambiguous SKU suffixes must fail closed.
                 return null;
@@ -203,6 +207,10 @@ function sv_product_route_not_found(): never
     header('Cache-Control: no-store', true);
     require __DIR__ . '/404.php';
     exit;
+}
+
+if (defined('SV_PRODUCT_ROUTE_NO_EXEC') || (php_sapi_name() === 'cli' && empty($_SERVER['HTTP_HOST']) && !defined('SV_PRODUCT_ROUTE_EXEC'))) {
+    return;
 }
 
 $rawSlug = $_GET['slug'] ?? '';
