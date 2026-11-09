@@ -36,19 +36,22 @@ header('Cache-Control: no-cache, must-revalidate');
             Pedido Confirmado!
         </h1>
         <p style="font-size: 18px; color: var(--muted); margin-bottom: 32px; line-height: 1.6;">
-            Muito obrigado pela sua compra!<br>
-            Nossa equipe comercial entra em contato em breve para confirmar o frete e a forma de pagamento.
+            Muito obrigado pela sua preferência!<br>
+            Seu pedido foi registrado com sucesso e já está sendo preparado pela nossa equipe.
         </p>
 
         <div style="background: #f8fbff; border: 1px solid #d0e2f7; border-radius: 12px; padding: 24px; margin-bottom: 32px;">
             <p style="margin: 0; font-size: 14px; color: var(--muted); margin-bottom: 8px;">
                 <strong>Número do pedido:</strong>
             </p>
-            <p id="order-number" style="margin: 0; font-size: 18px; font-weight: 800; color: var(--ink); font-family: 'Courier New', monospace;">
-                —
-            </p>
+            <div style="display:flex;align-items:center;justify-content:center;gap:10px;">
+                <p id="order-number" style="margin: 0; font-size: 20px; font-weight: 800; color: var(--ink); font-family: 'Courier New', monospace;">
+                    —
+                </p>
+                <button type="button" id="copy-order-btn" style="background:#173B63;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">📋 Copiar</button>
+            </div>
             <p style="margin: 8px 0 0; font-size: 12px; color: var(--muted);">
-                (Você também receberá um e-mail com esta informação)
+                (Você também receberá um e-mail com os dados da sua compra)
             </p>
         </div>
 
@@ -96,9 +99,25 @@ header('Cache-Control: no-cache, must-revalidate');
 (function() {
     try {
         var params = new URLSearchParams(window.location.search);
-        var orderNumber = params.get('order') || '';
+        var orderNumber = params.get('order') || params.get('order_number') || '';
         if (orderNumber) {
-            document.getElementById('order-number').textContent = orderNumber;
+            var el = document.getElementById('order-number');
+            if (el) el.textContent = orderNumber;
+            var copyBtn = document.getElementById('copy-order-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function() {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(orderNumber);
+                    }
+                    copyBtn.textContent = '✅ Copiado!';
+                    setTimeout(function() { copyBtn.textContent = '📋 Copiar'; }, 2500);
+                });
+            }
+            if (typeof window.gtag === 'function') {
+                window.gtag('event', 'order_confirmed_view', {
+                    transaction_id: orderNumber
+                });
+            }
         }
     } catch (e) {
         console.error('Error displaying order number:', e);
