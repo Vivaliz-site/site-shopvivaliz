@@ -13,6 +13,14 @@ $expected = [
         => 'casinha-cachorro-52x41x40-astra-pet-azul-astrapetcasinhacachorroazul',
     'vaso-antique-44-70l-cimento-queimado-japi-546'
         => 'vaso-antique-44-70l-cimento-queimado-japi-jvaqcq44',
+    'rodo-vedante-borracha-friso-porta-aluminio-100cm-vivaliz'
+        => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-100-cm-rodoved100'),
+    'rodo-vedante-borracha-friso-porta-aluminio-90cm-vivaliz'
+        => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-90-cm-ved90un'),
+    'rodo-vedante-borracha-friso-porta-aluminio-80cm-vivaliz'
+        => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-80-cm-ved80nh'),
+    'rodo-vedante-borracha-friso-porta-aluminio-70cm-vivaliz'
+        => rawurldecode('rodo-vedante-porta-alum%C3%ADnio-vivaliz-70-cm-ved70'),
 ];
 
 foreach ($expected as $legacy => $canonical) {

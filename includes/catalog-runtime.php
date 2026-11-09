@@ -413,7 +413,7 @@ function svcr_products(): array
         $brand = is_scalar($brandValue) ? trim((string)$brandValue) : '';
         $products[] = [
             'id'=>(string)($item['id'] ?? $sku), 'sku'=>$sku, 'olist_product_id'=>(string)($item['id'] ?? $item['olist_product_id'] ?? ''),
-            'name'=>$name, 'slug'=>svcr_slug($name,$sku), 'description'=>svcr_clean_description($description), 'price'=>$price,
+            'name'=>$name, 'slug'=>svcr_slug($name,$sku), 'cached_slug'=>trim((string)($item['slug'] ?? '')), 'description'=>svcr_clean_description($description), 'price'=>$price,
             'original_price'=>svcr_item_original_price($item),
             'stock'=>max(0,(int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url'=>$image, 'images'=>$imagesList, 'images_count'=>count($imagesList), 'category'=>$categoryName, 'brand'=>$brand,

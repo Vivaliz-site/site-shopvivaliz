@@ -91,7 +91,11 @@ function sv_product_route_catalog_row_by_alias_slug(string $requestedSlug): ?arr
         $canonicalSlug = trim((string)($row['slug'] ?? ''));
         $sku = trim((string)($row['sku'] ?? ''));
         $name = trim((string)($row['name'] ?? ''));
+        $cachedSlug = trim((string)($row['cached_slug'] ?? ''));
         $aliases = [];
+        if ($cachedSlug !== '') {
+            $aliases[] = $cachedSlug;
+        }
         if ($name !== '' && $sku !== '') {
             $aliases[] = sv_product_route_slugify($name, $sku);
         }
