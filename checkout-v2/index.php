@@ -852,7 +852,18 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
 
             let paymentBlock = '<p class="muted">' + (response.payment_instructions || 'Pedido registrado com sucesso.') + '</p>';
             if (paymentMethod === 'pix') {
-                paymentBlock += '<div class="payment-help"><strong>Chave PIX:</strong> ' + pixKey + '<br><strong>Beneficiario:</strong> ' + pixName + '</div>';
+                paymentBlock += '<div class="payment-help" style="background:#f0fbf5;border:1px solid #c2eed5;border-radius:10px;padding:16px;margin:16px 0;text-align:left;">'
+                    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+                    + '<strong style="color:#0f8f62;font-size:16px;">🔑 Pagamento via PIX</strong>'
+                    + '<span style="font-weight:700;font-size:16px;color:#1F3A70;">' + totalLabel + '</span>'
+                    + '</div>'
+                    + '<div style="margin-bottom:8px;font-size:13px;color:#475569;">Beneficiário: <strong>' + pixName + '</strong></div>'
+                    + '<div style="display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:8px 12px;margin:8px 0;">'
+                    + '<code id="pix-key-val" style="flex:1;font-size:14px;font-weight:700;color:#1e293b;word-break:break-all;">' + pixKey + '</code>'
+                    + '<button type="button" id="copy-pix-btn" style="background:#0f8f62;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap;">📋 Copiar PIX</button>'
+                    + '</div>'
+                    + '<small id="pix-copy-hint" style="display:block;color:#0f8f62;font-size:12px;margin-top:4px;">Chave pronta para colar no app do seu banco.</small>'
+                    + '</div>';
             } else if (paymentMethod === 'boleto') {
                 paymentBlock += '<div class="payment-help"><strong>Boleto:</strong> a equipe vai emitir o boleto apos confirmar frete, estoque e dados do pedido.</div>';
             }
@@ -870,6 +881,51 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 + '<a class="ghost-btn" href="/catalogo">Voltar ao catalogo</a>'
                 + '</div>'
                 + '</section>';
+
+            var copyBtn = document.getElementById('copy-pix-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function () {
+                    var keyText = (document.getElementById('pix-key-val') || {}).textContent || pixKey;
+                    var onCopied = function () {
+                        copyBtn.textContent = '✅ Copiado!';
+                        copyBtn.style.background = '#15803d';
+                        var hint = document.getElementById('pix-copy-hint');
+                        if (hint) hint.textContent = 'Chave copiada com sucesso! Abra o app do seu banco e cole na opção Pix.';
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(keyText).then(onCopied, function () { fallbackCopy(keyText, onCopied); });
+                    } else {
+                        fallbackCopy(keyText, onCopied);
+                    }
+                });
+            }
+            function fallbackCopy(text, cb) {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); if (cb) cb(); } catch (e) {}
+                document.body.removeChild(ta);
+            }
+
+            try {
+                if (typeof window.triggerGooglePurchaseEvent === 'function') {
+                    window.triggerGooglePurchaseEvent(response.order_number, grandTotal, items);
+                }
+                if (typeof window.triggerGoogleAdsConversion === 'function') {
+                    window.triggerGoogleAdsConversion(response.order_number, grandTotal);
+                }
+                if (typeof window.gtag === 'function') {
+                    window.gtag('event', 'purchase_intent', {
+                        transaction_id: response.order_number,
+                        value: grandTotal,
+                        currency: 'BRL',
+                        payment_method: paymentMethod
+                    });
+                }
+            } catch (ignore) {}
         }
 
         if (documentInput) {
@@ -968,6 +1024,18 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 shipping_service: shippingQuote && shippingQuote.selected_option ? (shippingQuote.selected_option.id || '') : '',
                 shipping_cep: shippingQuote && shippingQuote.cep ? shippingQuote.cep : ''
             };
+
+            try {
+                var searchParams = new URLSearchParams(window.location.search || '');
+                ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+                    var val = searchParams.get(key) || localStorage.getItem('sv_' + key) || '';
+                    if (val) payload[key] = val;
+                });
+                ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'].forEach(function (key) {
+                    var val = searchParams.get(key) || localStorage.getItem('sv_' + key) || '';
+                    if (val) payload[key] = val;
+                });
+            } catch (ignore) {}
 
             fetch('/api/orders/create-v2.php', {
                 method: 'POST',

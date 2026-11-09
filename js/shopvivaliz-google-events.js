@@ -215,14 +215,49 @@ function funnelClientId() {
     sendFirstParty(eventName, params);
   }
 
+  function checkoutMilestoneSignature(eventName, params) {
+    // Tab-wide deduplication must not hide a genuinely changed cart, shipping
+    // choice or payment option. Only non-PII ecommerce fields are persisted.
+    if (['begin_checkout', 'add_shipping_info', 'add_payment_info'].indexOf(eventName) === -1) {
+      return null;
+    }
+    params = params || {};
+    var items = Array.isArray(params.items) ? params.items : [];
+    var products = items.map(function (item) {
+      return [
+        String(item.item_id || ''),
+        number(item.price),
+        Math.max(1, number(item.quantity) || 1)
+      ];
+    }).sort(function (a, b) {
+      var left = JSON.stringify(a);
+      var right = JSON.stringify(b);
+      return left < right ? -1 : (left > right ? 1 : 0);
+    });
+    var signature = {
+      currency: String(params.currency || 'BRL'),
+      value: number(params.value),
+      items: products
+    };
+    if (eventName === 'add_shipping_info') {
+      signature.shipping_tier = String(params.shipping_tier || '');
+    }
+    if (eventName === 'add_payment_info') {
+      signature.payment_type = String(params.payment_type || '');
+    }
+    return JSON.stringify(signature);
+  }
+
   function pushOnce(key, eventName, params) {
     // Do not burn the one-time milestone before analytics consent exists.
     // Consent can be granted while the visitor is already on this page.
     if (!analyticsConsentGranted()) return;
     var storageKey = 'sv_ga_once_' + key;
+    var signature = checkoutMilestoneSignature(eventName, params);
+    var marker = signature === null ? '1' : signature;
     try {
-      if (sessionStorage.getItem(storageKey) === '1') return;
-      sessionStorage.setItem(storageKey, '1');
+      if (sessionStorage.getItem(storageKey) === marker) return;
+      sessionStorage.setItem(storageKey, marker);
     } catch (error) {}
     push(eventName, params);
   }

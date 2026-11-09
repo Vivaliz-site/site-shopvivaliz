@@ -10,7 +10,13 @@ $checks=[
     'legacy/site service not restarted'=>!str_contains($workflow, 'systemctl restart shopvivaliz-amazon-returns.service'),
     'preserve original mode'=>str_contains($workflow, 'stat.S_IMODE'),
     'preserve original owner'=>str_contains($workflow, 'os.chown'),
-    'workflow checks whether OAuth request changed'=>str_contains($workflow, "git diff --name-only \"\\$BEFORE\" \"\\$GITHUB_SHA\" -- ops/gmail-oauth-finalize.json"),
+    'Gmail runner resolves to Marina loopback'=>str_contains($workflow, "VM_HOST: '127.0.0.1'"),
+    'Gmail workflow ignores global stale VM host'=>!str_contains($workflow, 'secrets.SHOPVIVALIZ_VM_HOST'),
+    'bounded noninteractive SSH to local runner'=>str_contains($workflow, 'ssh -o BatchMode=yes -o ConnectTimeout=5 -o ConnectionAttempts=1'),
+    'persistent private callback path'=>str_contains($workflow, '/home/ubuntu/shopvivaliz-deploy/shared/private-oauth/shopvivaliz-google-ads-refresh/'),
+    'prioritize canonical callback over legacy tmp'=>str_contains($workflow, 'if sudo test -s "$persistent_token"; then'),
+    'retain backward-compatible temporary fallback'=>str_contains($workflow, 'sudo find /tmp /var/tmp'),
+    'workflow checks whether OAuth request changed'=>str_contains($workflow, 'git diff --name-only "$BEFORE" "$GITHUB_SHA" -- ops/gmail-oauth-finalize.json'),
     'token install gated by real OAuth request'=>str_contains($workflow, "if: steps.request_change.outputs.changed == 'true'"),
 ];
 
