@@ -97,10 +97,10 @@ LOCK_PATTERNS = (
     re.compile(r"""\bassert_runtime_lease\b"""),
 
     # Regras de workflow, CODEOWNERS, RBAC e limites que alteram a execucao
-    re.compile(r"""(?i)^\\s*(?:required_approving_review_count|required_status_checks|permissions|deny|disabled|blocked|restricted|forbidden|disallowed|concurrency|timeout-minutes)\\s*[:=]"""),
-    re.compile(r"""(?i)\\braise\\s+(?:PermissionError|ForbiddenError|AccessDeniedError)\\b"""),
-    re.compile(r"""(?i)^\\s*if:\\s*(?:false|\\$\\{\\{)"""),
-    re.compile(r"""(?i)\\b(?:ALLOWED|ALLOWLIST|PERMITTED)_(?:COMMANDS|ACTIONS|TOOLS|OPERATIONS)\\b\\s*[:=]"""),
+    re.compile(r"""(?i)^\s*(?:required_approving_review_count|required_status_checks|permissions|deny|disabled|blocked|restricted|forbidden|disallowed|concurrency|timeout-minutes)\s*[:=]"""),
+    re.compile(r"""(?i)\braise\s+(?:PermissionError|ForbiddenError|AccessDeniedError)\b"""),
+    re.compile(r"""(?i)^\s*if:\s*(?:false|\$\{\{)"""),
+    re.compile(r"""(?i)\b(?:ALLOWED|ALLOWLIST|PERMITTED)_(?:COMMANDS|ACTIONS|TOOLS|OPERATIONS)\b\s*[:=]"""),
 
     # Command / tool / action restriction lists
     re.compile(r"""\b(?:BLOCKED|RESTRICTED|DISALLOWED|FORBIDDEN)_(?:COMMANDS|ACTIONS|TOOLS|OPERATIONS)\b"""),
@@ -149,7 +149,7 @@ def is_lock_insertion(f: dict) -> bool:
         added = line[1:].strip()
         if not added or added in removed:
             continue  # linha movida/inalterada nao cria novo controle
-        if path == ".github/CODEOWNERS" and re.match(r"^\\S+\\s+@", added):
+        if path == ".github/CODEOWNERS" and re.match(r"^\S+\s+@", added):
             return True  # novas exigencias CODEOWNERS podem travar merges
         if path.endswith((".md", ".rst", ".txt")):
             if any(pattern.search(added) for pattern in POLICY_DENIAL_PATTERNS):
