@@ -85,10 +85,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reviewRequest = svtpp_request_price_owner_review(
                 $originalProduct, $catalog[$index], (int)($_SESSION['user_id'] ?? 0)
             );
-            if ($reviewRequest !== null) {
-                $catalog[$index]['price'] = $originalProduct['price'] ?? 0;
-                $catalog[$index]['prices'] = $originalProduct['prices'] ?? [];
-            }
+            // Always restore the exact original commercial values, even if
+            // the submitted value rounds to the same cents. No hidden local
+            // price/cost mutation may be piggybacked on an editorial save.
+            $catalog[$index]['price'] = $originalProduct['price'] ?? 0;
+            $catalog[$index]['prices'] = $originalProduct['prices'] ?? [];
         } catch (Throwable $e) {
             $catalog[$index] = $originalProduct;
             $error = 'Alteração comercial não aplicada: fila privada de validação indisponível ('
