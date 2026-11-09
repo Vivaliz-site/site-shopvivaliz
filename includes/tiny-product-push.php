@@ -98,9 +98,6 @@ function svtpp_price_payload_includes_nonzero_cost(array $payload): bool
  */
 function svtpp_push_product_update(int $tinyProductId, array $product): array
 {
-    if (!svtop_tiny_credentials_configured()) {
-        return ['ok' => false, 'status' => 0, 'error' => 'credenciais_tiny_nao_configuradas'];
-    }
     if ($tinyProductId <= 0) {
         return ['ok' => false, 'status' => 0, 'error' => 'id_produto_invalido'];
     }
@@ -118,6 +115,10 @@ function svtpp_push_product_update(int $tinyProductId, array $product): array
             ? 'precos_aguardam_validacao_e_autorizacao_do_proprietario'
             : 'custo_zerado_ou_ausente_preco_aguarda_validacao_do_proprietario';
         return ['ok' => false, 'status' => 0, 'error' => $warning];
+    }
+
+    if (!svtop_tiny_credentials_configured()) {
+        return ['ok' => false, 'status' => 0, 'error' => 'credenciais_tiny_nao_configuradas'];
     }
 
     $token = svtop_tiny_get_token();
