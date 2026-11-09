@@ -117,7 +117,7 @@ function svtpp_pending_price_owner_reviews(): array
         $raw = @file_get_contents($file);
         $row = is_string($raw) ? json_decode($raw, true) : null;
         if (is_array($row) && ($row['schema'] ?? '') === 'SHOPVIVALIZ_PRICE_OWNER_REVIEW_V1'
-            && ($row['status'] ?? '') === 'pending_owner_review') {
+            && in_array(($row['status'] ?? ''), ['pending_owner_review', 'readback_required', 'applying'], true)) {
             $rows[] = $row;
         }
     }
