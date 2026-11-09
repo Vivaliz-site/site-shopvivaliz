@@ -221,5 +221,25 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 self.assertEqual(reason, "dual_owner_review_approved_exact_head")
 
 
+    def test_configuracoes_que_criam_barreiras_exigem_dupla_revisao(self):
+        casos = (
+            (".github/CODEOWNERS", "+* @shopvivaliz-human"),
+            (".github/workflows/gate.yml", "+    permissions: read-all"),
+            (".github/workflows/gate.yml", "+    required_approving_review_count: 2"),
+            (".github/workflows/gate.yml", "+    if: false"),
+            ("security/rules.json", "+    disabled: true"),
+            ("remote-control-mcp/server.py", "+    raise PermissionError('operation forbidden')"),
+        )
+        aprovadores = [review(login="shopvivaliz-human"),
+                       review(login="fredmourao-ai")]
+        for caminho, adicao in casos:
+            with self.subTest(caminho=caminho, adicao=adicao):
+                arquivo = {"filename": caminho, "status": "modified",
+                           "patch": "@@ -1,0 +1 @@\n" + adicao}
+                self.assertTrue(GATE.requires_dual_approval([arquivo]))
+                self.assertFalse(GATE.decide([arquivo], aprovadores[:1], HEAD)[0])
+                self.assertTrue(GATE.decide([arquivo], aprovadores, HEAD)[0])
+
+
 if __name__ == "__main__":
     unittest.main()
