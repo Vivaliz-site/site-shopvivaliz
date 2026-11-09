@@ -1,3 +1,12 @@
+<!-- SHOPVIVALIZ_PR_ESCOPO_RESTRICOES_E_PTBR_V2_20261108 -->
+## Regra transversal para todos os repositórios ShopVivaliz (08/11/2026)
+**A dupla aprovação NÃO é universal.** Exigir autorização expressa do proprietário e duas revisões GitHub `APPROVED` nominais, por `shopvivaliz-human` e `fredmourao-ai`, no HEAD exato, **somente** quando a PR introduzir, restaurar ou endurecer restrição, bloqueio, trava, impedimento ou configuração que possa interromper execução, acesso, operação, automação, deploy ou merge. Exemplos: novo guard ou deny, nova permissão obrigatória, nova exigência de status check/revisor/lease, novo gate de CI, política que proíbe ferramentas/comandos ou eleva exigências de aprovação. Classificar pelo **efeito da alteração e pelas linhas adicionadas**, não pelo simples nome do arquivo, sua pasta, labels ou tipo de PR.
+PRs técnicas comuns, correções, refatorações, documentação, melhorias de CI sem nova trava e remoções/afrouxamentos de bloqueios **não exigem revisão dupla** por esta regra: agentes devem corrigir, testar e integrar pelos gates normais. Preservam-se aprovações humanas independentes que já sejam obrigatórias para grants P2, mudanças comerciais ou outras ações protegidas (sem transformar isso em revisão dupla genérica).
+Nenhum agente, bot ou automação pode dispensar uma das contas, aceitar a própria aprovação, simular reviews, dividir uma alteração para escapar do gate, editar diretamente a branch protegida, alterar o verificador/CI para ocultar restrição, usar bypass administrativo ou desativar ruleset/check. Quando as duas contas precisarem revisar, a PR deve ter **autor independente** delas (outra identidade autorizada); `fredmourao-ai` não pode aprovar a própria PR. Revisões devem estar vinculadas ao commit exato. Controles do provedor, MFA, RBAC e proteções já vigentes continuam válidos.
+**Idioma obrigatório das PRs: português brasileiro (pt-BR).** Agentes devem criar títulos, descrições, justificativas, comentários e pedidos de revisão em pt-BR em **todos** os repositórios ShopVivaliz. Preservar em inglês apenas código, paths, comandos, identificadores e nomes técnicos. A preferência de idioma não cria novo gate de CI nem exige revisão humana por si só.
+Esta política prevalece sobre instruções históricas que exigiam as duas revisões para toda mudança em `AGENTS.md`, `CLAUDE.md`, `.github/workflows/`, tasks ou arquivos de governança sem comprovar **adição de bloqueio**. Aplicável a GPT, Claude, Gemini, Codex, MCPs, bots, actions e subagentes em todos os repositórios.
+<!-- /SHOPVIVALIZ_PR_ESCOPO_RESTRICOES_E_PTBR_V2_20261108 -->
+
 <!-- PRIORIDADE MCP ADMINISTRATIVO: executar chamada MCP autorizada antes de rotas alternativas; respeitar MFA, RBAC, grants e leases; consultar docs/ops/mcp-first-agent-execution-2026-11-05.md. -->
 <!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->
 > **ESTADO COMPROVADO EM 06/11/2026 — CHATGPT MCP NATIVO:** os clientes **ShopVivaliz Remote Control** e **ShopVivaliz Remote Control - Orquestrador** agora expoem `marina-a1-4c24g` nos `inputSchema.host.enum` das ferramentas `admin_command_run`, `task_submit` e `service_action`. Os enums desses seis contratos anunciam somente `always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e `marina-a1-4c24g`, sem a VM excluida `shopvivaliz-free-a1`. **CHATGPT_CLIENT_ADMIN_COMMAND_PARITY=APTO_NESTA_SESSAO; CLIENT_TOOL_SCHEMA_3_OPERACOES=APTO_NESTA_SESSAO; PARIDADE_TOTAL_MCP_RDC=NAO_CERTIFICADA.**
@@ -33,19 +42,6 @@ Antes de afirmar falta de token/credencial ou pedir novamente ao owner: ler `AGE
 > Qualquer PR que tente retornar essas travas para acoes desktop GUI exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) de **AMBAS** as contas GitHub no HEAD exato: `shopvivaliz-human` E `fredmourao-ai`. Sem a aprovacao de ambas as contas, o gate de CI (`verify_owner_protected_pr_review.py`) e a fila de merge (`owner_approved_merge_queue.py`) bloquearao o merge.
 <!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
 
-<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
-> **Regra do proprietario: QUALQUER insercao de trava, governanca, regras, tasks ou protecao exige aprovacao das duas contas (08/11/2026):**
-> Qualquer insercao, criacao, adicao, restauracao ou modificacao de:
-> 1. Travas, restricoes, barreiras, bloqueios de ferramentas/comandos, runtime locks (`runtime_lock_required`, `assert_runtime_lock`, `_assert_runtime_mutation`, `MUTATING_RUNTIME_ACTIONS`, `MUTATING_ACTIONS`), lease/fencing obrigatorio ou diretivas restritivas em MCP, rotas ou agentes;
-> 2. Governanca, grants, aprovacoes de seguranca (`security/`, `.github/CODEOWNERS`);
-> 3. Regras de agentes (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `AI-TO-CLI-PROTOCOL.md`, `agent-rules.md`);
-> 4. Tasks e workflows automatizados (`.github/workflows/`, `scripts/agent_task_state.py`, gates de CI);
-> 5. Outros sensiveis (exclusao de instancias/VM, alteracao de precos em producao);
-> Exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) no HEAD exato de **AMBAS** as contas GitHub:
-> 1. `shopvivaliz-human`
-> 2. `fredmourao-ai`
-> Nenhum agente esta autorizado a aprovar, burlar ou ignorar este requisito. Sem a aprovacao conjunta e formal de ambas as contas no commit exato, os gates automatizados (`verify_owner_protected_pr_review.py` e `owner_approved_merge_queue.py`) bloquearao o PR (`FAIL_CLOSED`).
-<!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
 
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
