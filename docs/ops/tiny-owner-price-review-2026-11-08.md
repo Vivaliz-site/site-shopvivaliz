@@ -20,12 +20,22 @@ produto pode legitimamente permanecer com custo zero após decisão do dono.
 - Custo zerado, custo positivo e mudanças promocionais seguem para análise
   do proprietário. A tela `/admin/precos-pendentes.php` é **somente leitura**
   e exige sessão admin **mais** `SHOPVIVALIZ_PRICE_OWNER_USER_ID` correspondente.
-- Propostas **não são tokens de aprovação**. Nem trocar status JSON, nem
-  acessar a página, nem aprovar a PR de código autoriza aplicar preço por bot.
-- Nesta etapa a aplicação de um valor aprovado continua **manual no ERP
-  Tiny/Olist autenticado**, por decisão expressa do proprietário para cada
-  proposta. A sincronização normal ERP → site acompanha a alteração oficial.
-  A ausência de interface automática de aplicação é intencional.
+- Uma proposta não é autorização. Somente o **POST CSRF de um clique do proprietário autenticado**
+  em `/admin/precos-pendentes.php` autoriza aplicar o preço exato sugerido.
+- O botão `Aprovar e aplicar` invoca `svtpp_apply_owner_approved_price` que:
+  verifica identidade exclusiva; faz GET oficial do produto/SKU/preço anterior;
+  grava duravelmente o estado `applying` antes da única escrita;
+  executa `PUT /produtos/{id}/preco` apenas com `preco` e `precoPromocional`;
+  faz GET novamente e exige paridade do valor aprovado. Um resultado ambíguo
+  permanece visível em `readback_required` sem novo PUT automático.
+- Custo zerado pode ser aprovado como informação da proposta, **sem** preenchimento fictício.
+  Este botão não modifica custo de aquisição e não se destina a aprovar
+  mudanças **somente** de custo. A aplicação do preço de venda não depende de
+  custo positivo quando o proprietário validou expressamente.
+- O botão é um único ato de autorização; não existe automação agendada de
+  precificação nem segunda confirmação. A sincronização ERP → site continua
+  pela rotina de **leitura** já existente. A aplicação em lista 991 e em
+  marketplaces externos exige confirmação de escopo e fluxos específicos.
 
 ## Configuração privada exigida ANTES da implantação
 
@@ -40,21 +50,24 @@ produto pode legitimamente permanecer com custo zero após decisão do dono.
    persistidas, portanto a edição comercial falha fechada sem escrita.
 4. Validar página admin autenticada, integridade da fila privada, campos
    antigos preservados, acesso negado a outros usuários, teste de custo zero,
-   e ausência de `PUT` comercial antes de integrar/deployar.
+   que `PUT` só ocorra **após** clique do proprietário e somente uma vez,
+   com GET anterior/posterior. Testar também estado de escrita ambígua.
 5. Não ativar por CI automático sem as revisões humanas da política vigente.
 
 ## Limites e próximos passos
 
-Este ajuste cobre **somente** a direção editor admin → Tiny e escrita local
-pelo editor de produto. Outras rotas de pricing (listas de preços Olist 991,
-workers, marketplaces, repricers e integrações) já têm fluxos próprios de
-autorização e devem ser auditadas separadamente antes de declarar conformidade
-global. Não trata uma autorização única de PR como autorização ilimitada
-para futuros preços. Sem validação do fornecedor e readback financeiro,
-não automatizar a aplicação pós-aprovação.
+Este ajuste cobre a fila do editor admin e o preço base do produto Tiny via
+endpoint específico `/produtos/{id}/preco`. **Não confirma** ainda que a API
+`ml-pricing-api` gere todas as sugestões ou que o clique publique os preços
+na tabela 991, Mercado Livre ou Amazon. Cada integração deve aplicar somente
+itens e valores exatos aprovados, respeitar a API externa e fazer readback.
+Nenhuma rotina de worker/reprecificação publica preços sem clique do proprietário.
 
 Prova pré-integração: teste local
 `php tests/tiny-price-owner-review-test.php` (propostas para custos zero
 e positivos, idempotência, armazenamento privado, veto a preço automático),
-`php tests/tiny-product-cost-payload-guard-test.php` e `php -l`.
+`php tests/tiny-product-cost-payload-guard-test.php`,
+`php tests/tiny-price-owner-click-apply-test.php` (aplicação uma vez por clique,
+custo zero, autorização, idempotência, divergência de GET e resultado ambíguo),
+e `php -l`.
 O ambiente ativo só fica apto após aprovações de GitHub, CI e E2E no admin.
