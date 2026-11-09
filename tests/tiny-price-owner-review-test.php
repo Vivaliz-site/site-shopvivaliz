@@ -36,6 +36,7 @@ try {
     priceCheck(is_array($first) && $first['cost_zero'] === true,
         'Zero-cost change must create a pending owner request.');
     $file = $testDir . '/price-' . $first['request_id'] . '.json';
+    priceCheck((fileperms($file) & 0077) === 0, 'Confidential pricing request file must not be group/world readable.');
     $data = json_decode((string)file_get_contents($file), true);
     priceCheck(is_array($data) && $data['status'] === 'pending_owner_review'
         && $data['before']['sale_price'] === '100.00'
