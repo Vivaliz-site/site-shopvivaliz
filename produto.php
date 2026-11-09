@@ -175,7 +175,18 @@ function sv_product_canonical_slug_redirect(string $requestedSlug, string $canon
         return null;
     }
 
-    return '/produto/' . rawurlencode($canonicalSlug);
+    $target = '/produto/' . rawurlencode($canonicalSlug);
+    $qs = '';
+    $rawQuery = trim((string)($_SERVER['QUERY_STRING'] ?? ''));
+    if ($rawQuery !== '') {
+        parse_str($rawQuery, $parsedQuery);
+        unset($parsedQuery['slug']);
+        if ($parsedQuery !== []) {
+            $qs = '?' . http_build_query($parsedQuery);
+        }
+    }
+
+    return $target . $qs;
 }
 
 function sv_product_find_slug(string $slug): array
@@ -189,8 +200,15 @@ function sv_product_find_slug(string $slug): array
         $cSlug = strtolower(sv_slugify((string)($row['name'] ?? ''), (string)($row['sku'] ?? '')));
         $legacyNameSlug = strtolower(svcr_slug((string)($row['name'] ?? ''), ''));
         $rSku  = strtolower(trim((string)($row['sku'] ?? '')));
+        $rSkuAlnum = strtolower((string)preg_replace('/[^a-z0-9]+/', '', $rSku));
 
-        if ($pSlug === $slugNorm || $cSlug === $slugNorm || $legacyNameSlug === $slugNorm || $rSku === $slugNorm || ($rSku !== '' && str_ends_with($slugNorm, '-' . $rSku))) {
+        if ($pSlug === $slugNorm
+            || $cSlug === $slugNorm
+            || $legacyNameSlug === $slugNorm
+            || $rSku === $slugNorm
+            || ($rSku !== '' && str_ends_with($slugNorm, '-' . $rSku))
+            || ($rSkuAlnum !== '' && strlen($rSkuAlnum) >= 3 && str_ends_with($slugNorm, '-' . $rSkuAlnum))
+        ) {
             return $row;
         }
     }
