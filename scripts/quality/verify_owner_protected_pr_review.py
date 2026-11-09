@@ -108,19 +108,80 @@ LOCK_PATTERNS = (
 DESKTOP_LOCK_PATTERNS = LOCK_PATTERNS
 
 
-def is_lock_insertion(f: dict) -> bool:
-    """Detect any attempt to introduce locks, blocks or restrictions."""
-    if not isinstance(f, dict):
-        return False
-    patch = f.get("patch")
-    if not isinstance(patch, str):
-        return False
+def _patch_delta(patch: str) -> list[str]:
+    """Only genuinely new executable directives count; moved lines do not."""
+    from collections import Counter
+    removed = Counter(
+        line[1:].strip()
+        for line in patch.splitlines()
+        if line.startswith("-") and not line.startswith("---")
+    )
+    added = []
     for line in patch.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
-            added_line = line[1:].strip()
-            for pattern in LOCK_PATTERNS:
-                if pattern.search(added_line):
-                    return True
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        new_line = line[1:].strip()
+        if removed[new_line]:
+            removed[new_line] -= 1
+        else:
+            added.append(new_line)
+    return added
+
+
+# A changed file name by itself never means a new restriction.
+RESTRICTIVE_DIRECTIVE = re.compile(
+    r"(?i)(?:\\b(?:bloquei(?:o|a|ar)|trava(?:r|s)?|restri(?:cao|ção|coes|ções|ngir)|"
+    r"proibid[oa]s?|vedad[oa]s?|impedir|impedimento|negar|negad[oa]|"
+    r"blocked|blocking|restricted|restrict|forbid|prohibit|disallow|deny)\\b|"
+    r"\\b(?:nao|não)\\s+(?:pode|deve|executar|permitir)|"
+    r"\\b(?:must not|shall not|deny by default|fail.closed))"
+)
+EXECUTION_CONTEXT = re.compile(
+    r"(?i)(?:execu|comand|process|deploy|merge|aprov|revis|agent|agente|"
+    r"tool|ferrament|workflow|task|tarefa|ci|mcp|permiss|acess|login|gate|"
+    r"protec|runtime|servic|branch|pr\\b)"
+)
+NEW_GATING_CODE = re.compile(
+    r"(?i)(?:\\b(?:deny|forbid|blocked|restricted|disallow)\\b|"
+    r"\\breturn\\s+False\\b|\\braise\\s+(?:PermissionError|AuthorizationError)|"
+    r"\\b(?:required_approving_review_count|required_status_checks|"
+    r"required_reviewers|branch_protection|enforcement)\\b)"
+)
+
+
+def is_lock_insertion(f: dict) -> bool:
+    """Evaluate additions, not any file touched, label or removed restriction."""
+    if not isinstance(f, dict) or not isinstance(f.get("patch"), str):
+        return False
+    filename = f.get("filename", "")
+    added_lines = _patch_delta(f["patch"])
+    if not added_lines:
+        return False
+    for line in added_lines:
+        if not line or line.startswith(("#", "//", "<!--", "*")):
+            continue
+        # Tests may document protected behavior without introducing a guard.
+        if filename.startswith(("tests/", "test/")):
+            continue
+        if any(pattern.search(line) for pattern in LOCK_PATTERNS):
+            return True
+        if filename == ".github/CODEOWNERS" and not line.startswith("#"):
+            return True
+        if filename.startswith(".github/workflows/"):
+            if re.match(r"(?i)^(?:if|needs|permissions|environment):", line):
+                return True
+            if NEW_GATING_CODE.search(line):
+                return True
+        if filename in (RULES_FILES | GOVERNANCE_FILES | TASKS_FILES | SENSITIVE_FILES) \\
+                or any(filename.startswith(p) for p in
+                       (GOVERNANCE_PREFIXES + RULES_PREFIXES)):
+            if RESTRICTIVE_DIRECTIVE.search(line) and EXECUTION_CONTEXT.search(line):
+                return True
+            if filename in (TASKS_FILES | SENSITIVE_FILES) and NEW_GATING_CODE.search(line):
+                return True
+        if filename == "docs/knowledge/host-access.md":
+            if RESTRICTIVE_DIRECTIVE.search(line) and EXECUTION_CONTEXT.search(line):
+                return True
     return False
 
 
@@ -128,52 +189,24 @@ is_desktop_gui_lock_restoration = is_lock_insertion
 
 
 def is_protected_file(f: dict | str) -> bool:
-    """Determine if file represents locks, governance, rules, tasks or sensitive items."""
-    if isinstance(f, dict):
-        filename = f.get("filename", "")
-        patch = f.get("patch")
-        if is_lock_insertion(f):
-            return True
-    elif isinstance(f, str):
-        filename = f
-        patch = None
-    else:
+    """Dual approval only for adding/tightening blockers, never path-only."""
+    if not isinstance(f, dict) or not isinstance(f.get("filename"), str):
         return False
-
-    # 1. Governança
-    if any(filename.startswith(p) for p in GOVERNANCE_PREFIXES) or filename in GOVERNANCE_FILES:
-        return True
-
-    # 2. Regras
-    if filename in RULES_FILES or any(filename.startswith(p) for p in RULES_PREFIXES):
-        return True
-
-    # 3. Tasks / Workflows
-    if any(filename.startswith(p) for p in TASKS_PREFIXES) or filename in TASKS_FILES:
-        return True
-
-    # 4. Outros meios de controle administrativo / broker
-    if filename in SENSITIVE_FILES:
-        return True
-
-    # 5. Documentos com diretivas de governança / trava
-    if filename == "docs/knowledge/host-access.md":
-        if patch is None:
-            return True  # uninspectable policy change
-        for line in patch.splitlines():
-            if (line.startswith("+") and not line.startswith("+++")) or (line.startswith("-") and not line.startswith("---")):
-                if any(marker in line for marker in POLICY_DIRECTIVE_MARKERS):
-                    return True
-
-    return False
+    if isinstance(f.get("patch"), str):
+        return is_lock_insertion(f)
+    filename = f["filename"]
+    # An unavailable diff for a control-plane file cannot silently hide a
+    # new denial. GitHub must supply a reviewable patch to distinguish scope.
+    return (filename in (RULES_FILES | GOVERNANCE_FILES | TASKS_FILES | SENSITIVE_FILES)
+            or filename == "docs/knowledge/host-access.md"
+            or filename == ".github/CODEOWNERS"
+            or any(filename.startswith(p) for p in
+                   (GOVERNANCE_PREFIXES + RULES_PREFIXES + TASKS_PREFIXES)))
 
 
 def requires_dual_approval(files: list[dict | str]) -> bool:
-    """True if PR introduces locks, governance changes, agent rules, tasks or sensitive items."""
-    for f in files:
-        if is_protected_file(f):
-            return True
-    return False
+    """Only new or tightened blocking policy/configuration needs both users."""
+    return any(is_protected_file(f) for f in files)
 
 
 requires_lock_dual_approval = requires_dual_approval
