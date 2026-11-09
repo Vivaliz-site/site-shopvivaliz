@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/tiny-order-push.php';
+require_once __DIR__ . '/tiny-price-owner-review.php';
 
 function svtpp_build_payload(array $product): array
 {
@@ -79,8 +80,17 @@ function svtpp_build_payload(array $product): array
  */
 function svtpp_price_payload_includes_nonzero_cost(array $payload): bool
 {
-    // Decisão do proprietário (2026-11-08): não bloquear envio de preços para o Tiny ERP.
-    return true;
+    if (!array_key_exists('precos', $payload)) {
+        return true;
+    }
+
+    $prices = $payload['precos'];
+    if (!is_array($prices)) {
+        return false;
+    }
+
+    $cost = $prices['precoCusto'] ?? null;
+    return is_numeric($cost) && is_finite((float)$cost) && (float)$cost > 0;
 }
 
 /**
@@ -88,9 +98,6 @@ function svtpp_price_payload_includes_nonzero_cost(array $payload): bool
  */
 function svtpp_push_product_update(int $tinyProductId, array $product): array
 {
-    if (!svtop_tiny_credentials_configured()) {
-        return ['ok' => false, 'status' => 0, 'error' => 'credenciais_tiny_nao_configuradas'];
-    }
     if ($tinyProductId <= 0) {
         return ['ok' => false, 'status' => 0, 'error' => 'id_produto_invalido'];
     }
@@ -99,8 +106,19 @@ function svtpp_push_product_update(int $tinyProductId, array $product): array
     }
 
     $payload = svtpp_build_payload($product);
-    if (!svtpp_price_payload_includes_nonzero_cost($payload)) {
-        return ['ok' => false, 'status' => 0, 'error' => 'preco_custo_nao_confirmado_para_put_produto'];
+    // The generic product PUT is not a channel for pricing changes. Even a
+    // positive cost does NOT authorize publication. A zero/absent cost means
+    // owner review, not a permanent rejection or silently fabricated cost.
+    // Only an explicitly owner-authorized ERP operation may change prices.
+    if (array_key_exists('precos', $payload)) {
+        $warning = svtpp_price_payload_includes_nonzero_cost($payload)
+            ? 'precos_aguardam_validacao_e_autorizacao_do_proprietario'
+            : 'custo_zerado_ou_ausente_preco_aguarda_validacao_do_proprietario';
+        return ['ok' => false, 'status' => 0, 'error' => $warning];
+    }
+
+    if (!svtop_tiny_credentials_configured()) {
+        return ['ok' => false, 'status' => 0, 'error' => 'credenciais_tiny_nao_configuradas'];
     }
 
     $token = svtop_tiny_get_token();
