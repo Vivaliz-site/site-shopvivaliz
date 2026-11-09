@@ -26,6 +26,7 @@ function svtpp_price_owner_review_dir(): string
     $dir = realpath($requested);
     $webRoot = realpath(dirname(__DIR__));
     if ($dir === false || !is_dir($dir) || !is_writable($dir)
+        || (fileperms($dir) & 0077) !== 0
         || $webRoot === false || $dir === $webRoot
         || str_starts_with($dir, $webRoot . DIRECTORY_SEPARATOR)) {
         throw new RuntimeException('PRICE_REVIEW_PRIVATE_DIRECTORY_INVALID');
@@ -75,7 +76,13 @@ function svtpp_request_price_owner_review(array $before, array $proposed, int $a
 
     // Exclusive create makes duplicate submissions idempotent without clobbering
     // a proposal. No web endpoint consumes this document as approval.
-    $handle = @fopen($file, 'x');
+    // Ensure there is no moment in which a cost file is world-readable.
+    $oldUmask = umask(0077);
+    try {
+        $handle = @fopen($file, 'x');
+    } finally {
+        umask($oldUmask);
+    }
     if ($handle === false) {
         $existing = @file_get_contents($file);
         $prior = is_string($existing) ? json_decode($existing, true) : null;
