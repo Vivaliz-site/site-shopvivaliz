@@ -101,18 +101,26 @@ function svtpp_review_html(mixed $value): string
                     <td>R$ <?= svtpp_review_html($request['before']['cost_price'] ?? '') ?></td>
                     <td>R$ <?= svtpp_review_html($request['proposed']['cost_price'] ?? '') ?></td>
                     <td><?= svtpp_review_html($request['before']['promotional_price'] ?? '') ?> → <?= svtpp_review_html($request['proposed']['promotional_price'] ?? '') ?></td>
-                    <td><?= !empty($request['warning_cost_zero']) ? '<strong class="warning">Custo zero: revisão obrigatória</strong>' : 'Aguardando autorização' ?></td>
+                    <td>
+                      <?php if (($request['status'] ?? '') !== 'pending_owner_review'): ?>
+                        <strong class="warning">Envio com resultado indefinido: conciliação obrigatória, sem reenvio</strong>
+                      <?php else: ?>
+                        <?= !empty($request['warning_cost_zero']) ? '<strong class="warning">Custo zero: revisão obrigatória</strong>' : 'Aguardando autorização' ?>
+                      <?php endif; ?>
+                    </td>
                     <td>
                       <?php $hasPriceChange = ($request['before']['sale_price'] ?? null) !== ($request['proposed']['sale_price'] ?? null)
                           || ($request['before']['promotional_price'] ?? null) !== ($request['proposed']['promotional_price'] ?? null); ?>
-                      <?php if ($hasPriceChange): ?>
+                      <?php if ($hasPriceChange && ($request['status'] ?? '') === 'pending_owner_review'): ?>
                         <form method="post">
                           <?= sv_csrf_input('owner-price-approval') ?>
                           <input type="hidden" name="request_id" value="<?= svtpp_review_html($request['request_id'] ?? '') ?>">
                           <button type="submit">Aprovar e aplicar</button>
                         </form>
                       <?php else: ?>
-                        <span>Somente custo: sem publicação de preço</span>
+                        <span><?= ($request['status'] ?? '') !== 'pending_owner_review'
+                            ? 'Aguardando conciliação externa; botão indisponível'
+                            : 'Somente custo: sem publicação de preço' ?></span>
                       <?php endif; ?>
                     </td>
                 </tr>
