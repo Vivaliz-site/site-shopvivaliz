@@ -50,8 +50,18 @@ jobs:
           echo "MARINA_IDENTITY=OK user=$(id -un)"
           uptime
           echo "--- disco"; df -h / /home 2>/dev/null | awk 'NR==1||NR>1'
-          echo "--- release ativa"; readlink -f /home/ubuntu/shopvivaliz-deploy/current || true
-          cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null | sed 's/^/RELEASE_SHA=/' || true
+          echo "--- release ativa"
+          cur=""
+          if cur="$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)"; then
+            echo "RELEASE_PATH=$cur"
+          else
+            echo "RELEASE_PATH=indisponivel"
+          fi
+          if [ -n "$cur" ] && [ -f "$cur/.release-sha" ]; then
+            echo "RELEASE_SHA=$(cat "$cur/.release-sha")"
+          else
+            echo "RELEASE_SHA=indisponivel"
+          fi
           echo "--- cache de catalogo (metadados, sem conteudo)"
           c=/home/ubuntu/shopvivaliz-deploy/shared/storage/products-cache-ativos.json
           if [ -f "$c" ]; then

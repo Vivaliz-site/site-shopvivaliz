@@ -256,7 +256,12 @@ jobs:
           [ -n "$chrome" ] || fail "NOT_PROVISIONED=chromium" 78
           support_profile="$(mktemp -d /tmp/shopvivaliz-amazon-support-profile.XXXXXX)"
           chrome_pid=""
-          cleanup() { [ -z "$chrome_pid" ] || kill "$chrome_pid" 2>/dev/null || true; rm -rf "$support_profile"; }
+          cleanup() {
+            if [ -n "$chrome_pid" ] && kill -0 "$chrome_pid" 2>/dev/null; then
+              kill "$chrome_pid"
+            fi
+            rm -rf "$support_profile"
+          }
           trap cleanup EXIT
           cp -a "$SELLER_CENTRAL_PROFILE/." "$support_profile/"
           rm -f "$support_profile/SingletonLock" "$support_profile/SingletonCookie" "$support_profile/SingletonSocket"
@@ -286,7 +291,11 @@ jobs:
             echo "### Amazon Seller Support (somente leitura / dry-run)"
             echo "run_id=$GITHUB_RUN_ID sha=$GITHUB_SHA rc=$(cat /tmp/shopvivaliz-amazon-support-result.rc 2>/dev/null || echo 99)"
             echo '```'
-            grep -E '^(\{|SELLER_CENTRAL_AUTH|AVAILABLE_ACTIONS|NOT_PROVISIONED|HOST_IDENTITY|INVALID|CDP_|PROBE_)' /tmp/shopvivaliz-amazon-support-result.log 2>/dev/null || true
+            if [ -f /tmp/shopvivaliz-amazon-support-result.log ]; then
+              awk '/^(\{|SELLER_CENTRAL_AUTH|AVAILABLE_ACTIONS|NOT_PROVISIONED|HOST_IDENTITY|INVALID|CDP_|PROBE_)/' /tmp/shopvivaliz-amazon-support-result.log
+            else
+              echo "RESULT_LOG=ausente"
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
