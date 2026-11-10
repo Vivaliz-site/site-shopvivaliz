@@ -31,9 +31,9 @@ if next_step != -1:
     step = step[:next_step]
 assert "shopvivaliz-free-a1" not in step, "diagnostic step targets the retired host"
 assert "RETIRED_HOST_TARGET_REMOVED_20261105" in step
-assert "AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=target_host_not_defined" in step
+assert "target_host = 'always-free-arm-1787907847-26'" in step, "diagnostic must target the backend host"
 assert "'host':target_host" in step
-assert step.index("target_host_not_defined") < step.index("urllib.request.Request("), \
+assert step.index("target_host = 'always-free-arm-1787907847-26'") < step.index("urllib.request.Request("), \
     "target check must run before any MCP request"
 assert "${{\n        false && (" in workflow
 

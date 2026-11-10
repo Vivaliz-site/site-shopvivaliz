@@ -1300,10 +1300,8 @@ jobs:
           # MCP allowlist, and the bootstrap job is fail-closed. There is no
           # valid central-MCP target, so fail explicitly instead of calling a
           # retired host. Define a reviewed target before re-enabling this step.
-          target_host = ''
-          if not target_host:
-              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=target_host_not_defined')
-              raise SystemExit(1)
+          # Alvo definido pelo proprietario (backend): o job continua desativado (false &&).
+          target_host = 'always-free-arm-1787907847-26'
 
           body = json.dumps({
               'jsonrpc':'2.0',
