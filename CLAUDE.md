@@ -4,6 +4,12 @@
 <!-- /AGENT_PR_TITLE_IDENTITY_V1_20261108 -->
 
 <!-- REGRA DO PROPRIETARIO: MCP PRIMEIRO: executar chamada MCP autorizada antes de rotas alternativas; respeitar MFA, RBAC, grants e leases; consultar docs/ops/mcp-first-agent-execution-2026-11-05.md. -->
+<!-- OWNER_PROVISIONING_SECURE_ROUTE_20261109 -->
+> **Regra do proprietário (09/11/2026) — Criação, injeção e solicitação de credenciais por rota segura:**
+> O agente pode criar, injetar ou solicitar valores de credenciais quando necessário para a operação, mas deve obrigatoriamente provisionar exclusivamente por rota segura (cofres protegidos, diretórios locais protegidos como `~/.shopvivaliz/secrets/` em modo restrito 0600/DPAPI, GitHub Actions secrets autenticados ou variáveis de ambiente de processo isolado).
+> É estritamente proibido expor, imprimir, comitar ou trafegar valores secretos em texto puro em logs públicos, repositórios git, PRs abertas ou chats sem proteção.
+<!-- /OWNER_PROVISIONING_SECURE_ROUTE_20261109 -->
+
 <!-- OWNER_CREDENTIAL_ROUTE_DISCOVERY_20261107 -->
 ## Descoberta autonoma de rotas e credenciais ja autorizadas
 
