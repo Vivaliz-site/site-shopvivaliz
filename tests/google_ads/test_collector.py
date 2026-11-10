@@ -104,6 +104,22 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(row["clicks"], 10.0)
         self.assertEqual(row["conversion_value"], 100.0)
 
+    def test_readonly_campaign_query_collects_auction_rank_and_budget_share(self):
+        query = WINDOW_QUERY_FIELDS["campaigns"]
+        self.assertIn("metrics.search_rank_lost_impression_share", query)
+        self.assertIn("metrics.search_budget_lost_impression_share", query)
+        self.assertIn("metrics.search_impression_share", query)
+        from scripts.google_ads.collector import _metric_row
+        converted = _metric_row(
+            {"metrics": {
+                "impressions": "0",
+                "searchRankLostImpressionShare": 0.9001,
+                "searchBudgetLostImpressionShare": 0,
+            }}
+        )
+        self.assertEqual(converted["search_rank_lost_impression_share"], 0.9001)
+        self.assertEqual(converted["search_budget_lost_impression_share"], 0.0)
+
     def test_failed_dataset_marks_partial_and_sanitizes_error(self):
         result = collect_account(FakeClient(fail_label="search_terms_7d"))
         self.assertTrue(result["partial"])

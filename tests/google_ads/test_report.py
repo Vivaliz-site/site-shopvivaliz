@@ -139,6 +139,28 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(finding["classification"], "REVIEW")
         self.assertIn("catalog_intent_not_reconciled", finding["blocked_by"])
 
+    def test_zero_impressions_rank_loss_is_observation_not_business_gate(self):
+        fixture = fixture_collected()
+        fixture["windows"]["30d"]["campaigns"] = [
+            {"campaign": {"id": "123", "status": "ENABLED"},
+             "impressions": 0, "clicks": 0, "cost": 0, "conversions": 0,
+             "search_rank_lost_impression_share": 0.9001,
+             "search_budget_lost_impression_share": 0.0},
+            {"campaign": {"id": "124", "status": "PAUSED"},
+             "impressions": 0, "clicks": 0, "cost": 0, "conversions": 0,
+             "search_rank_lost_impression_share": 0.9001},
+        ]
+        report = build_report(fixture, CONFIG)
+        signal = [
+            finding for finding in report["findings"]
+            if finding["type"] == "campaign_zero_delivery_rank_loss"
+        ]
+        self.assertEqual(len(signal), 1)
+        self.assertEqual(signal[0]["resource_id"], "123")
+        self.assertEqual(signal[0]["classification"], "OBSERVATION")
+        self.assertNotIn("blocked_by", signal[0])
+        self.assertEqual(report["mode"], "readonly")
+
     def test_customer_identifier_is_masked(self):
         report = build_report(fixture_collected(), CONFIG)
         self.assertEqual(report["customer"]["id"], "******7890")
