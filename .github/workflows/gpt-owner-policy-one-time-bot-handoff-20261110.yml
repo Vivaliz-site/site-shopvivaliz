@@ -1,0 +1,64 @@
+name: GPT - Reemissao unica da politica com autor GitHub independente
+on:
+  push:
+    branches:
+      - gpt/exclusividade-restricoes-20261110
+    paths:
+      - .github/workflows/gpt-owner-policy-one-time-bot-handoff-20261110.yml
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: gpt-owner-policy-one-time-bot-handoff-20261110
+  cancel-in-progress: false
+jobs:
+  reemitir:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 8
+    steps:
+      - name: Criar PR com identidade independente sem modificar politicas nem checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REPO=Vivaliz-site/site-shopvivaliz
+          DEST=gpt/exclusividade-proprietario-autor-independente-20261110
+          EXPECTED_CLEAN=3ce083dd1056765f20e41bd37fba6b3dbcb6b159
+          SOURCE_SHA=$(gh api -X GET "repos/$REPO/pulls/3887" --jq .head.sha)
+          test "$SOURCE_SHA" = "$GITHUB_SHA" || { echo 'PR source changed'; exit 35; }
+          BRANCH_SHA=$(gh api -X GET "repos/$REPO/git/ref/heads/$DEST" --jq .object.sha)
+          test "$BRANCH_SHA" = "$EXPECTED_CLEAN" || { echo 'Immutable clean branch differs'; exit 36; }
+          AGENTS_SHA=$(gh api -X GET "repos/$REPO/contents/AGENTS.md" -f ref="$DEST" --jq .sha)
+          CLAUDE_SHA=$(gh api -X GET "repos/$REPO/contents/CLAUDE.md" -f ref="$DEST" --jq .sha)
+          test "$AGENTS_SHA" = "$CLAUDE_SHA" || { echo 'Parity mismatch'; exit 37; }
+          if gh api -X GET "repos/$REPO/contents/.github/workflows/gpt-owner-policy-one-time-bot-handoff-20261110.yml" -f ref="$DEST" >/dev/null 2>&1; then
+            echo 'Temporary workflow unexpectedly present in destination'; exit 38
+          fi
+          EXISTING=$(gh api -X GET "repos/$REPO/pulls" -f "head=Vivaliz-site:$DEST" -f base=main -f state=open --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "ALREADY_CREATED_PR=$EXISTING"; exit 0
+          fi
+          BODY="$(cat <<'EOF'
+          ## Ordem do proprietário e autoria real
+          Agente executor: **GPT**; identidade que preparou os documentos originalmente: **fredmourao-ai**. Esta PR foi protocolada pela identidade **github-actions[bot]** por workflow oficial e de uso único, para cumprir o requisito existente de autor GitHub independente das contas revisoras. PR original: #3887.
+          
+          ## Conteúdo
+          - Aplica a declaração inicial de 10/11/2026: somente o proprietário pode adicionar ou aumentar bloqueios e restrições futuros, inclusive de governança.
+          - Documenta a exceção expressamente solicitada ao GPT para esta implantação inicial, sem prorrogação da exceção.
+          - Alinha AGENTS.md e CLAUDE.md byte a byte e preserva validação e proteções existentes.
+          
+          ## Revisão e execução
+          Solicitar APROVAÇÕES REAIS de shopvivaliz-human e fredmourao-ai no HEAD exato; o robô não aprova nem mescla a própria PR. Checkpoints e pipelines oficiais serão executados. Esta PR NÃO inclui o workflow temporário de criação, nem alterações de branch protection, grants, MFA ou regras de CI.
+          EOF
+          )"
+          RESULT=$(gh api -X POST "repos/$REPO/pulls" -f head="$DEST" -f base=main -f 'title=[GPT] docs: política exclusiva do proprietário com autoria independente' -f body="$BODY")
+          N=$(printf '%s' "$RESULT" | jq -r '.number')
+          AUTHOR=$(printf '%s' "$RESULT" | jq -r '.user.login')
+          URL=$(printf '%s' "$RESULT" | jq -r '.html_url')
+          case "$AUTHOR" in
+            "github-actions[bot]"|"github-actions") ;;
+            *) echo "Unexpected author identity: $AUTHOR; no merge"; exit 39 ;;
+          esac
+          printf 'INDEPENDENT_BOT_PR=%s AUTHOR=%s URL=%s\n' "$N" "$AUTHOR" "$URL"
