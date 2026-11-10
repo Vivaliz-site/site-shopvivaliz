@@ -1,0 +1,45 @@
+name: AI Squad Backend Installer
+
+# Manual only. Runs the AI Squad user-service installer on the backend runner
+# (label shopvivaliz-backend-browser). Paid inference stays disabled by default.
+on:
+  workflow_dispatch:
+    inputs:
+      install_claude:
+        description: Install the Claude bridge user service
+        type: boolean
+        default: true
+      install_codex:
+        description: Install the Codex bridge user service
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-squad-backend-install
+  cancel-in-progress: false
+
+jobs:
+  install:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse to run as a non-ubuntu user
+        run: |
+          set -euo pipefail
+          test "$(id -un)" = "ubuntu" || { echo "runner user must be ubuntu"; exit 1; }
+      - name: Install Claude bridge user service
+        if: ${{ inputs.install_claude }}
+        env:
+          SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED: "0"
+          SHOPVIVALIZ_PAID_BRIDGE_MODE: disabled
+        run: bash ops/ai-squad/install-claude-bridge-user-service.sh
+      - name: Install Codex bridge user service
+        if: ${{ inputs.install_codex }}
+        env:
+          SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED: "0"
+          SHOPVIVALIZ_PAID_BRIDGE_MODE: disabled
+        run: bash ops/ai-squad/install-codex-bridge-user-service.sh
