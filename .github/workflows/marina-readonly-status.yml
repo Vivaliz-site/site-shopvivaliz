@@ -95,8 +95,15 @@ jobs:
           echo "--- timers shopvivaliz-*"
           systemctl list-timers 'shopvivaliz-*' --all --no-legend --no-pager 2>/dev/null | awk 'NR<=40 {print $NF, "next="$1" "$2}'
           echo "--- arquivos de backup recentes (nome, tamanho, data; sem conteudo)"
-          find /home/ubuntu /var/backups -maxdepth 3 -type f \( -iname '*backup*' -o -iname '*.sql.gz' -o -iname '*.sql' -o -iname '*.dump' \) -mtime -14 \
-            -printf '%TY-%Tm-%Td %TH:%TM %s %p\n' 2>/dev/null | sort -r | awk 'NR<=20'
+          # find sai com 1 quando ha diretorio ilegivel; isso nao pode derrubar o diagnostico.
+          # O status e tratado explicitamente e reportado (BACKUP_SCAN_PARTIAL), nao ignorado.
+          if backups="$(find /home/ubuntu /var/backups -maxdepth 3 -type f \( -iname '*backup*' -o -iname '*.sql.gz' -o -iname '*.sql' -o -iname '*.dump' \) -mtime -14 \
+              -printf '%TY-%Tm-%Td %TH:%TM %s %p\n' 2>/dev/null)"; then
+            echo "BACKUP_SCAN=complete"
+          else
+            echo "BACKUP_SCAN_PARTIAL=true find_status=$? (diretorios ilegiveis; lista abaixo e parcial)"
+          fi
+          printf '%s\n' "$backups" | sort -r | awk 'NR<=20'
           echo "--- ultima execucao dos backups (resultado e horario)"
           for u in shopvivaliz-mysql-native-oci-backup.service shopvivaliz-db-backup.service; do
             systemctl show "$u" -p Result -p ExecMainStatus -p ExecMainExitTimestamp --no-pager | tr '\n' ' ' | sed "s#^#$u #"; echo
@@ -105,5 +112,10 @@ jobs:
           systemctl list-units '*desktop-commander*' --all --no-legend --no-pager | awk 'NR<=10 {print $1, $3, $4}'
           echo "--- solange rolla (units e diretorios; somente nomes)"
           systemctl list-units '*solange*' '*rolla*' --all --no-legend --no-pager | awk 'NR<=10 {print $1, $3, $4}'
-          find /home/ubuntu /var/lib /opt -maxdepth 2 \( -iname '*solange*' -o -iname '*rolla*' \) -printf '%TY-%Tm-%Td %p\n' 2>/dev/null | sort | awk 'NR<=10'
+          if solange="$(find /home/ubuntu /var/lib /opt -maxdepth 2 \( -iname '*solange*' -o -iname '*rolla*' \) -printf '%TY-%Tm-%Td %p\n' 2>/dev/null)"; then
+            echo "SOLANGE_SCAN=complete"
+          else
+            echo "SOLANGE_SCAN_PARTIAL=true find_status=$?"
+          fi
+          printf '%s\n' "$solange" | sort | awk 'NR<=10'
           REMOTE
