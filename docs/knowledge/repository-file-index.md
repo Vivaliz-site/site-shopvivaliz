@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5623 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -853,7 +853,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `.github/workflows/deploy-m365-runtime.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/deploy-mei-daily-base-sync.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/deploy-mei-verified-classification.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/desktop-commander-vm2-reauth.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/diagnose-erp-runtime-manual.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/ecommerce-excellence-audit.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/ecommerce-promo-production-verify.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -1170,16 +1169,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `.github/workflows/verify-contabilidade-melo-test-delivery.yml` | Governanca e integracao continua - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/verify-mei-base-sync-failclosed.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/vm-checkout-migration-scheduled.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-dc-auth-diagnose-once.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-dc-auth-once.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-dc-force-fresh-auth-once.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-dc-foreground-auth-once.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-dc-pty-auth-once.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-dc-read-code-once.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-dc-read-fresh-code-once.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-desktop-commander-authorize.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-desktop-commander-read-auth.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/vm-desktop-commander-secure-recovery.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/vm-legacy-runtime-cleanup.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/vm-m365-inspect.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/vm-maintenance-action.yml.disabled` | Governanca e integracao continua - Artefato de suporte. | ativo ou ainda nao classificado como legado |
@@ -2341,7 +2330,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `docs/CI-REMEDIATION-2026-07-25.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/CSS-EDITOR-SETUP.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/DEPLOY-ORACLE.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/DESKTOP-COMMANDER-24H.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ERP-OLIST-TINY-SOURCE-OF-TRUTH.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/FRED-WIN-PRIVATE-RELAY.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/FRED-WIN-TERMINAL-OPERATIONS.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2505,7 +2493,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `docs/operations/OCI-MIGRATION-FINAL-2026-08-29.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/operations/TWO-A1-RECOVERY-SPEC-2026-08-29.md` | Documentacao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `docs/operations/history/fredwin-last-result-20260818.json` | Documentacao - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
-| `docs/operations/history/vm-desktop-commander-last-status-20260824-shopvivaliz-ai.txt` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/operations/oci-agent-access.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/operations/recovery/2026-08-29-checksums.sha256` | Documentacao - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `docs/operations/recovery/2026-08-29-git-divergence.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -3237,8 +3224,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `ops/cloudflare-www-preserve-path-once.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/cloudflare-zone-settings-check.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/db_backup.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
-| `ops/desktopkocepsv-desktop-commander-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
-| `ops/fredwin-desktop-commander-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/fredwin-last-result.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/fredwin-observe-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/fredwin-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
@@ -3303,11 +3288,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `ops/systemd/shopvivaliz-chatgpt-browser.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `ops/systemd/shopvivaliz-continuity-state-backup.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `ops/systemd/shopvivaliz-continuity-state-backup.timer` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `ops/systemd/shopvivaliz-dc-four-host-sentinel.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `ops/systemd/shopvivaliz-dc-four-host-sentinel.timer` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `ops/systemd/shopvivaliz-desktop-commander-guardian.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `ops/systemd/shopvivaliz-desktop-commander-guardian.timer` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `ops/systemd/shopvivaliz-desktop-commander.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `ops/systemd/shopvivaliz-dev-browser.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `ops/systemd/shopvivaliz-login-integrity.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `ops/systemd/shopvivaliz-login-integrity.timer` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
@@ -3316,7 +3296,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `ops/systemd/shopvivaliz-routine-abandonment-monitor.timer` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `ops/systemd/shopvivaliz-virtual-display.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `ops/systemd/shopvivaliz-xvfb99.service` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `ops/vm-desktop-commander-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `ops/vm-maintenance-request.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `order-final.png` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `package-lock.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
@@ -3772,12 +3751,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `scripts/deploy-production.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/deploy-validator.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/deploy_production.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/desktop-commander-four-host-sentinel.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/desktop-commander-reauth-linux-once.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/desktop-commander-reauth-windows.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/desktopkocepsv-desktop-commander-runner.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/desktopkocepsv-desktop-commander-status.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/desktopkocepsv-desktop-commander-supervisor.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/desktopkocepsv-remote-bootstrap.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/desktopkocepsv-remote-control-ssh-bridge.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3805,12 +3778,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `scripts/force-execution.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-defender-block-state.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-defender-unblock-exact.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-desktop-commander-runner.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-desktop-commander-runner.ps1.bak-20260825-2130` | Ferramentas e rotinas de manutencao - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-desktop-commander-status.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-desktop-commander-supervisor.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-desktop-commander-supervisor.ps1.bak-20260825-2130` | Ferramentas e rotinas de manutencao - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-desktop-commander-task-guardian.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-email-audit.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-email-control.ps1.disabled` | Ferramentas e rotinas de manutencao - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-email-smtp-guard.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3824,9 +3791,7 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `scripts/fredwin-exo-ui-schedule-unblock.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-exo-ui-schedule.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-provision-m365-cert.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-rdc-fred-only-guardian.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-remote-bootstrap.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/fredwin-runtime-janitor.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-rustdesk-validate.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-ui-click-named.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/fredwin-ui-schedule-click.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3923,7 +3888,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `scripts/install-chatgpt-continuity-windows-bridge.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-codex-native-profile-failover.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-db-backup-service.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/install-desktop-commander-four-host-sentinel.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-disk-hygiene.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-fredwin-ai-session-guards.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-gemini-24x7-controller.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3939,7 +3903,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `scripts/install-shopee-logistics-worker.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-shopvivaliz-agent-service.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-shopvivaliz-backend-browser-runner.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/install-vm-desktop-commander-service.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install-zram-extra.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/install.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/integrations/__init__.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4054,7 +4017,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `scripts/ops/verify-mcp-published-client-catalog.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/optimize-performance.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/parallel-executor.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/patch-desktop-commander-session-persistence.mjs` | Ferramentas e rotinas de manutencao - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `scripts/performance-optimizer.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/pr_completion_scheduler.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/pr_conflict_gemini_healer.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4334,9 +4296,6 @@ Gerado deterministicamente a partir de 5664 arquivos versionados no indice Git. 
 | `scripts/verify_marketplace_upload.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/verify_secrets.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/version-manager.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/vm-desktop-commander-guardian.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/vm-desktop-commander-recover-session.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/vm-desktop-commander-supervisor.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/vulnerability-scanner.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/watchdog-health-check.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/windows-openssh-recovery.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |

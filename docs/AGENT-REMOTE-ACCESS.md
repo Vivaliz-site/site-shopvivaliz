@@ -1,3 +1,12 @@
+> **Desktop Commander (RDC) retirado do repositorio — ordem do proprietario, 2026-11-09.** Workflows, scripts,
+> units systemd, ops e testes do Desktop Commander foram removidos. **As rotas que o usavam passam a ser o MCP:**
+> `shopvivaliz-remote-control` (MCP central) para backend, Fred-Win e KOCEPSV, e `shopvivaliz-marina-admin`
+> (`marina_admin_shell`, inclusive `as_root`) para a Marina. Fallbacks continuam sendo os workflows de Actions
+> (`shopvivaliz-remote-access.yml`, `marina-readonly-status.yml`) e SSH privado/Tailscale. Onde este e outros documentos ainda
+> citarem "RDC"/"Desktop Commander" como rota, leia **MCP**; a citacao e historica e sera removida em revisao propria dos
+> textos de regras de agentes (que exige a aprovacao prevista para essa categoria). Unidades e tarefas do Desktop Commander
+> que ainda existam nos hosts devem ser desativadas com `scripts/retire-vm-legacy-runtime.sh`; o monitor de abandono as sinaliza.
+
 # Acesso remoto canônico dos agentes
 
 Este arquivo é leitura obrigatória antes de qualquer tarefa que envolva VM, runtime, navegador, serviço, deploy, logs ou recuperação operacional.
