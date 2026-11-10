@@ -1,0 +1,66 @@
+name: Hosts Read-only Inventory
+
+# Manual only. Read-only inventory of the backend and Marina hosts.
+# Changes nothing on either host.
+on:
+  workflow_dispatch:
+    inputs:
+      marina_host:
+        description: Marina address reachable from the backend
+        required: true
+        default: "100.118.170.46"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend inventory
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Read-only inventory (backend)
+        run: |
+          set -uo pipefail
+          echo "hostname=$(hostname)"
+          echo "user=$(id -un)"
+          echo "--- versions"
+          apache2 -v 2>/dev/null | head -n1 || echo "apache2: n/a"
+          php -v 2>/dev/null | head -n1 || echo "php: n/a"
+          mysql --version 2>/dev/null || echo "mysql: n/a"
+          echo "--- shopvivaliz services (running)"
+          systemctl list-units --type=service --state=running --no-pager --no-legend 'shopvivaliz*' || true
+          echo "--- disk"
+          df -h / | tail -n1
+          echo "--- memory"
+          free -m | head -n2
+
+  marina:
+    name: Marina inventory
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Read-only inventory (Marina over SSH)
+        env:
+          BACKEND_SSH_KEY: ${{ secrets.BACKEND_SSH_KEY }}
+          MARINA_HOST: ${{ inputs.marina_host }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$BACKEND_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          timeout 300 ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            "ubuntu@$MARINA_HOST" 'set -uo pipefail
+              echo "hostname=$(hostname)"
+              echo "user=$(id -un)"
+              echo "--- versions"
+              apache2 -v 2>/dev/null | head -n1 || echo "apache2: n/a"
+              php -v 2>/dev/null | head -n1 || echo "php: n/a"
+              mysql --version 2>/dev/null || echo "mysql: n/a"
+              echo "--- shopvivaliz services (running)"
+              systemctl list-units --type=service --state=running --no-pager --no-legend "shopvivaliz*" || true
+              echo "--- disk"
+              df -h / | tail -n1
+              echo "--- memory"
+              free -m | head -n2'
