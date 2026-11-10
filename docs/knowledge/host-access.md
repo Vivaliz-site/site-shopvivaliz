@@ -317,3 +317,24 @@ bootstrap ou recuperação. Catálogo de ferramenta não é prova de autorizaç�
 validar identidade, grant, lease/fencing e o resultado real de cada chamada.
 O host retirado `shopvivaliz-free-a1` nunca é alvo.
 <!-- /MCP_FOUR_HOST_PRIORITY_ROUTE_20261105 -->
+
+## Marina por SSH via backend (rota de fallback, documentada em 2026-11-10)
+
+**Ordem obrigatória:** MCP primeiro, sempre. Antes de qualquer SSH ou RDC, tentar a
+ferramenta MCP administrativa exposta na sessão (`admin_command_run`/`task_submit`
+do Remote Control central, ou `shopvivaliz-marina-admin` quando o grant permitir) e
+registrar o resultado real. Só usar a rota abaixo se o MCP não estiver exposto ou
+falhar de forma comprovada, e registrar esse motivo.
+
+**Rota SSH verificada (somente leitura, comprovada em 2026-11-10):**
+- Workflow manual `.github/workflows/marina-ssh-readonly-check.yml`, executado no
+  runner `shopvivaliz-backend-browser` (backend `always-free-arm-1787907847-26`).
+- Usa o secret do GitHub `BACKEND_SSH_KEY` (nome do secret apenas; o valor nunca é
+  impresso nem copiado). A chave vai para arquivo temporário `0600` e é removida ao fim.
+- Padrão de endereço: `100.118.170.46` (Tailscale), entrada `marina_host` do workflow.
+- Resultado comprovado: execução `42851903328`, `hostname=marina-a1-4c24g`, `user=ubuntu`.
+- Disparo: `gh workflow run marina-ssh-readonly-check.yml --ref main`, depois ler o log.
+
+**Limites:** esta rota é para leitura e diagnóstico. Qualquer alteração na Marina segue
+as regras de lease, fencing, grant e revisão humana descritas acima. Não criar cópias
+da chave, não colar a chave em chat, log ou PR, e não usar o alias pessoal do laptop.
