@@ -98,11 +98,11 @@ class ReportTests(unittest.TestCase):
 
     def test_recursive_sanitization_removes_secret_keys_and_values(self):
         payload = {
-            "refresh_token": "[REDACTED]",
+            "refresh_token": "refresh-secret",
             "nested": {
-                "client_secret": "[REDACTED]",
+                "client_secret": "client-secret",
                 "safe": "access-secret and dev-secret",
-                "developer_token": "[REDACTED]",
+                "developer_token": "dev-secret",
             },
         }
         cleaned = sanitize(
