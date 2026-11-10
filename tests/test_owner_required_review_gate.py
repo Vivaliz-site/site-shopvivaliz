@@ -65,9 +65,11 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
         f = {"filename": "remote-control-mcp/server.py",
              "patch": "@@ -1 +1 @@\n+    BLOCKED_COMMANDS = ['sh']"}
         reviews = [review(login="shopvivaliz-human"), review(login="fredmourao-ai")]
-        for autor in ("shopvivaliz-human", "fredmourao-ai"):
-            self.assertEqual(GATE.decide([f], reviews, HEAD, pr_author=autor),
-                             (False, "protected_author_must_be_independent"))
+        self.assertEqual(GATE.decide([f], reviews, HEAD, pr_author="shopvivaliz-human"),
+                         (False, "protected_author_must_be_independent"))
+        # Aprovado pelo dono em 2026-11-10: PR do operador exige so a aprovacao de shopvivaliz-human.
+        self.assertTrue(GATE.decide([f], [review(login="shopvivaliz-human")], HEAD, pr_author="fredmourao-ai")[0])
+        self.assertFalse(GATE.decide([f], [review(login="fredmourao-ai")], HEAD, pr_author="fredmourao-ai")[0])
 
     def test_diff_ausente_gera_erro_de_classificacao_sem_revisao_automatica(self):
         f = {"filename": "AGENTS.md", "status": "modified"}
