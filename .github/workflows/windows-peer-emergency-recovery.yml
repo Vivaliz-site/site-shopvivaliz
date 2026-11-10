@@ -71,7 +71,7 @@ jobs:
             exit 0
           fi
           chmod 600 /tmp/DESKTOP.hosts
-          cmd="& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode InstallTask }"
+          cmd="& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode InstallTask }"
           if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/DESKTOP.hosts -p 32224 -i "$HOME/.ssh/vmkey" user@127.0.0.1 "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\"" >/dev/null 2>&1; then
             printf 'DESKTOP_RECOVERY=executed\n' >> /tmp/windows-peer-safe.txt
             sleep 15

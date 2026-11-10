@@ -1,0 +1,28 @@
+name: VM DC Auth Diagnose Once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vm-dc-auth-diagnose-once.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Diagnose authorization output
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'echo PROCESS; pgrep -af "desktop-commander.*remote|@wonderwhy-er/desktop-commander" || true; echo SAFE_LOG; grep -Ei "device|verify|code|auth|refresh|token|error|failed|remote mcp" "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null | sed -E "s/[A-Za-z0-9._-]{32,}/[redacted]/g" | tail -60 || true'
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

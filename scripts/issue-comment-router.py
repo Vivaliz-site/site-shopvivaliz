@@ -43,6 +43,8 @@ def classify(payload: dict[str, Any]) -> str:
         if exact:
             return exact
 
+        if stripped.startswith("/dc-reauth "):
+            return "dc_reauth"
         if stripped.startswith("/remote "):
             return "remote_access"
         if stripped.startswith("/mlrr "):

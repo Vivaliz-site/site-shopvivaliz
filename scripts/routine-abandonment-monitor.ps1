@@ -31,11 +31,13 @@ function Write-MonitorLog([string]$Message) {
 }
 
 # Rotinas 24h/watchdog conhecidas e documentadas -- nunca sinalizar como abandonadas.
-# Ver docs/FRED-WIN-PRIVATE-RELAY.md. Tarefas do Desktop Commander foram retiradas da
-# allowlist: se ainda existirem, passam a ser sinalizadas para retirada.
+# Ver docs/DESKTOP-COMMANDER-24H.md e docs/FRED-WIN-PRIVATE-RELAY.md.
 $Allowlist = @(
+    'ShopVivaliz Desktop Commander 24h'
+    'ShopVivaliz Desktop Commander Task Guardian'
     'ShopVivaliz Fred-Win Relay 24h'
     'ShopVivaliz Amazon Returns Seller Central Bridge'
+    'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h'
 )
 
 $allTasks = Get-ScheduledTask | Where-Object { $_.TaskName -like 'ShopVivaliz*' }

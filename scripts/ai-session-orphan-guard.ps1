@@ -4,7 +4,7 @@ $ErrorActionPreference='SilentlyContinue'
 function Get-AIKind($p){
   $name=[string]$p.Name
   $cmd=[string]$p.CommandLine
-  if($cmd -match '(?i)extension-host|chrome-native-host|chatgpt classic|cowork-svc'){return $null}
+  if($cmd -match '(?i)desktop-commander|extension-host|chrome-native-host|chatgpt classic|cowork-svc'){return $null}
 
   if($name -ieq 'claude.exe'){
     if($cmd -match '(?i)@anthropic-ai[\\/]claude-code|claude-code[\\/]bin[\\/]claude' -or

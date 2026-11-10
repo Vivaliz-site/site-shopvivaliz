@@ -18,7 +18,7 @@ try{
   $text=$out -join "`n"
   if($text -notmatch 'pid=9001'){throw 'standalone Claude orphan not detected'}
   if($text -notmatch 'pid=9004'){throw 'standalone Codex orphan not detected'}
-  if($text -match 'pid=9002'){throw 'node.exe with a live parent must not be targeted'}
+  if($text -match 'pid=9002'){throw 'Desktop Commander must be excluded'}
   if($text -match 'pid=9003'){throw 'live Codex with a parent must not be targeted'}
 }finally{Remove-Item -Force $tmp -ErrorAction SilentlyContinue}
 

@@ -4,7 +4,7 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 5623
+- Arquivos versionados: 5664
 - Diretorios versionados: 686
 - Grupos de conteudo identico: 207
 - Grupos identicos que incluem codigo: 13

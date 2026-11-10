@@ -1,0 +1,5 @@
+{
+  "action": "install_or_repair",
+  "requested_at": "2026-09-11T17:09:43Z",
+  "reason": "reapply validated Fred-Win interactive-session Desktop Commander runtime after device/relay regression"
+}

@@ -18,9 +18,11 @@ mkdir -p "$LOG_DIR" "$STATUS_DIR"
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"; }
 
 # Unidades 24h/watchdog conhecidas e documentadas -- nunca sinalizar.
-# As units do Desktop Commander foram retiradas da allowlist: se ainda existirem em
-# algum host, passam a ser sinalizadas para retirada (ver scripts/retire-vm-legacy-runtime.sh).
+# Ver docs/DESKTOP-COMMANDER-24H.md.
 ALLOWLIST=(
+  "shopvivaliz-desktop-commander.service"
+  "shopvivaliz-desktop-commander-guardian.service"
+  "shopvivaliz-desktop-commander-guardian.timer"
   "shopvivaliz-amazon-returns.service"
   "shopvivaliz-queue-worker.service"
   "shopvivaliz-shopee-token-renewer.service"

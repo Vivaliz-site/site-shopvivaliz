@@ -1,0 +1,37 @@
+name: VM DC Auth Once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vm-dc-auth-once.yml'
+permissions:
+  contents: read
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Generate device code
+        run: |
+          set -Eeuo pipefail
+          SSH="ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -i $HOME/.ssh/vmkey ubuntu@137.131.156.17"
+          $SSH 'sudo systemctl stop shopvivaliz-desktop-commander.service || true; d="$HOME/.desktop-commander-device"; mkdir -p "$d"; rm -f "$d/auth-required.cooldown" "$d/provider-connected.marker"; : > "$d/manual-authorize.log"; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session >"$d/manual-authorize.log" 2>&1 < /dev/null & echo $! > "$d/manual-authorize.pid"'
+          for i in $(seq 1 40); do
+            sleep 2
+            code="$($SSH 'grep -Eo "[A-Z0-9]{4}-[A-Z0-9]{4}" "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null | tail -1' || true)"
+            if [ -n "$code" ]; then echo "DEVICE_CODE=$code"; exit 0; fi
+          done
+          echo 'DEVICE_CODE_NOT_FOUND'
+          exit 1
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

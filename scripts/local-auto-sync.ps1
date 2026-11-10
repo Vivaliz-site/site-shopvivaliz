@@ -1,7 +1,7 @@
 # ShopVivaliz Windows local auto-sync.
 # Intended for the existing Task Scheduler entry at C:\site-shopvivaliz\scripts\local-auto-sync.ps1.
 # Updates main with fast-forward only, enforces the Graph-only email guard, and then
-# ensures the host-specific private remote path stays healthy.
+# ensures the host-specific private remote path and canonical Desktop Commander stay healthy.
 
 $ErrorActionPreference = "Continue"
 $Repo = "C:\site-shopvivaliz"
@@ -75,6 +75,7 @@ try {
     }
 
     if ($HostKey -eq 'DESKTOP-KOCEPSV') {
+        # Desktop Commander 24h is owned exclusively by its dedicated watchdog.
         # Auto-sync may recover only the independent private relay.
         $RelayBootstrap = Join-Path $Repo 'scripts\desktopkocepsv-remote-bootstrap.ps1'
         if (Test-Path $RelayBootstrap) {
