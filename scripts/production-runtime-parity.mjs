@@ -88,29 +88,30 @@ try {
   await buy.waitFor({ state: 'visible' });
   const sku = await buy.getAttribute('data-sku');
   await buy.click();
-  await page.waitForURL(/\/carrinho/);
-  await page.locator('.cart-item').first().waitFor({ state: 'visible' });
+  await page.waitForURL(/\/checkout/, { timeout: 30000 });
+  await page.locator('#checkout-form').waitFor({ state: 'attached' });
+  await page.locator('.summary-item').first().waitFor({ state: 'visible' });
   let cart = await page.evaluate(() => JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'));
   if (!cart.length) fail('ui_add_to_cart', 'cart did not persist');
   pass('ui_add_to_cart', { sku, items: cart.length });
+  pass('ui_cart_to_checkout');
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.locator('.cart-item').first().waitFor({ state: 'visible' });
+  await page.locator('#checkout-form').waitFor({ state: 'attached' });
+  await page.locator('.summary-item').first().waitFor({ state: 'visible' });
   cart = await page.evaluate(() => JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'));
   if (!cart.some(item => String(item.sku || '') === String(sku || ''))) fail('cart_reload_persistence', 'SKU missing after reload');
   pass('cart_reload_persistence', { items: cart.length });
 
-  await page.locator('#frete-cep').fill('35500006');
-  await page.locator('#btn-frete').click();
-  await page.locator('.sv-shipping-option').first().waitFor({ state: 'visible', timeout: 30000 });
+  await page.locator('#cep-input').fill('35500006');
+  await page.waitForFunction(() => {
+    const q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+    return q && Number(q.total) > 0 && Boolean(q.quote_id);
+  }, { timeout: 30000 });
   const quote = await page.evaluate(() => JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'));
   if (!quote || !(Number(quote.total) > 0) || !quote.quote_id) fail('ui_real_shipping', 'invalid real shipping quote');
   pass('ui_real_shipping', { provider: quote.provider || '', totalPositive: true, hasQuoteId: true });
 
-  await page.locator('#btn-checkout').click();
-  await page.waitForURL(/\/checkout/, { timeout: 30000 });
-  await page.locator('#checkout-form').waitFor({ state: 'attached' });
-  pass('ui_cart_to_checkout');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.locator('#checkout-form').waitFor({ state: 'attached' });
   const persisted = await page.evaluate(() => ({
