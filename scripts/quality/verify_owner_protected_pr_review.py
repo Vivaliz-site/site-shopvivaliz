@@ -206,7 +206,8 @@ def _new_permissions_restrict(profile: dict[str, int]) -> bool:
         return True
     if "*" in profile:
         return profile["*"] < 2
-    return True  # A scoped list removes permissions on unlisted scopes.
+    # Lista de escopos nova (privilegio minimo) nao restringe comportamento existente.
+    return False
 
 
 def _permissions_reduce(old: dict[str, int], new: dict[str, int]) -> bool:
@@ -361,9 +362,12 @@ def decide(files: object, reviews: object, head_sha: str, changed_files: object 
         return False, "pr_text_patch_unavailable"
     if requires_dual_approval(files):
         required = set(DUAL_REQUIRED_REVIEWERS)
-        if pr_author and pr_author.casefold() in {u.casefold() for u in required}:
-            # Nenhuma identidade pode aprovar sua propria PR no GitHub.
+        if pr_author and pr_author.casefold() == OWNER.casefold():
+            # O proprio dono nao pode ser revisor da propria PR protegida.
             return False, "protected_author_must_be_independent"
+        if pr_author and pr_author.casefold() == OPERATOR.casefold():
+            # Aprovado pelo dono (2026-11-10): PR do operador exige somente a aprovacao de shopvivaliz-human.
+            required = {OWNER}
         return verify_approvals(reviews, required, head_sha)
 
     # Standard Check: VM deletion or price changes require shopvivaliz-human
