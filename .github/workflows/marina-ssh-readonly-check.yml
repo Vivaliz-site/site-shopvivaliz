@@ -1,0 +1,37 @@
+name: Marina SSH Read-only Check
+
+# Manual only. Runs on the backend runner and connects to the Marina host
+# with the BACKEND_SSH_KEY secret. Read-only: prints the hostname and identity.
+on:
+  workflow_dispatch:
+    inputs:
+      marina_host:
+        description: Marina address reachable from the backend (Tailscale or private)
+        required: true
+        default: "100.118.170.46"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Refuse to run as a non-ubuntu user
+        run: |
+          set -euo pipefail
+          test "$(id -un)" = "ubuntu" || { echo "runner user must be ubuntu"; exit 1; }
+      - name: Read-only SSH check
+        env:
+          BACKEND_SSH_KEY: ${{ secrets.BACKEND_SSH_KEY }}
+          MARINA_HOST: ${{ inputs.marina_host }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$BACKEND_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          timeout 300 ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            "ubuntu@$MARINA_HOST" 'echo "hostname=$(hostname)"; echo "user=$(id -un)"'
