@@ -1,3 +1,7 @@
+<!-- OWNER_ONLY_RESTRICTIONS_20261110_REF -->
+> **Regra prevalente de 10/11/2026:** somente o proprietário pode incluir ou agravar restrições; nenhum agente pode fazê-lo, nem por PR ou governança, mesmo com aprovação. Ver `docs/knowledge/owner-only-restrictions-2026-11-10.md` e `docs/knowledge/agent-rules.md`. A implantação inicial foi determinada excepcionalmente ao GPT pelo proprietário.
+<!-- /OWNER_ONLY_RESTRICTIONS_20261110_REF -->
+
 <!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->
 > **ESTADO COMPROVADO EM 06/11/2026 — CHATGPT MCP NATIVO:** os clientes **ShopVivaliz Remote Control** e **ShopVivaliz Remote Control - Orquestrador** agora expoem `marina-a1-4c24g` nos `inputSchema.host.enum` das ferramentas `admin_command_run`, `task_submit` e `service_action`. Os enums desses seis contratos anunciam somente `always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e `marina-a1-4c24g`, sem a VM excluida `shopvivaliz-free-a1`. **CHATGPT_CLIENT_ADMIN_COMMAND_PARITY=APTO_NESTA_SESSAO; CLIENT_TOOL_SCHEMA_3_OPERACOES=APTO_NESTA_SESSAO; PARIDADE_TOTAL_MCP_RDC=NAO_CERTIFICADA.**
 > **TESTE REAL VIA MCP NATIVO (sem SSH/RDC):** `admin_command_run(host="marina-a1-4c24g", command="hostname -s; id -un", timeout=5)` retornou `exit_code=0` e `marina-a1-4c24g / ubuntu` nos dois apps. Evidencias: Central audit_id `9571c723-f6d6-4dce-a2f6-5bdeff286def`, Orquestrador audit_id `8436a1dc-a386-4804-b600-f7f2cc89ee04`. A divergencia de catalogo anteriormente documentada **nao se reproduz nesta sessao**.
