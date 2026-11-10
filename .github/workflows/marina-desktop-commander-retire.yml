@@ -1,0 +1,83 @@
+name: Marina Desktop Commander Retire
+
+# Aposentadoria do servico shopvivaliz-desktop-commander.service na Marina,
+# autorizada pelo proprietario em 2026-11-10. Modo inspect e somente leitura;
+# modo retire para e desabilita APENAS essa unit, e so se o ExecStart dela
+# nao for o MCP direto da Marina.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: inspect ou retire
+        required: true
+        default: inspect
+        type: choice
+        options: [inspect, retire]
+      reason:
+        description: Motivo auditavel
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  retire:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 8
+    env:
+      MARINA_PUBLIC_IP: 137.131.173.240
+      MARINA_TAILSCALE_IP: 100.118.170.46
+      MARINA_VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+      MARINA_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+      MODE: ${{ inputs.mode }}
+      REASON: ${{ inputs.reason }}
+    steps:
+      - name: Desktop Commander unit on marina-a1-4c24g
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "AUDIT_REASON=${REASON//[^[:alnum:] _.,:;-]/} MODE=$MODE"
+          key="${RUNNER_TEMP}/marina-dc-key"
+          hosts="${RUNNER_TEMP}/marina-dc-known-hosts"
+          trap 'rm -f "$key" "$hosts"' EXIT
+          printf '%s\n' "$MARINA_VM_KEY" > "$key"
+          printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$hosts"
+          hostkey='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC'
+          printf '%s %s\n' "$MARINA_PUBLIC_IP" "$hostkey" >> "$hosts"
+          printf '%s %s\n' "$MARINA_TAILSCALE_IP" "$hostkey" >> "$hosts"
+          chmod 600 "$key" "$hosts"
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -o ConnectTimeout=8 -i "$key")
+          selected=""
+          for target in "$MARINA_TAILSCALE_IP" "$MARINA_PUBLIC_IP"; do
+            if ssh "${ssh_opts[@]}" "ubuntu@$target" 'true'; then selected="$target"; break; fi
+            echo "MARINA_ROUTE_FAILED=$target"
+          done
+          if [ -z "$selected" ]; then echo "MARINA_ROUTE=NONE_REACHABLE"; exit 75; fi
+          echo "MARINA_ROUTE=$selected"
+          ssh "${ssh_opts[@]}" "ubuntu@$selected" "MODE=$MODE bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          unit=shopvivaliz-desktop-commander.service
+          host="$(hostname)"
+          echo "MARINA_HOSTNAME=$host"
+          if [ "$host" != "marina-a1-4c24g" ]; then echo "MARINA_IDENTITY=MISMATCH"; exit 70; fi
+          echo "--- unit"
+          systemctl show "$unit" -p FragmentPath -p ExecStart -p User -p ActiveState -p UnitFileState --no-pager
+          execstart="$(systemctl show "$unit" -p ExecStart --value --no-pager)"
+          if [ "$MODE" = "inspect" ]; then
+            echo "--- sudo nao interativo?"
+            if sudo -n true 2>/dev/null; then echo "SUDO_NOPASSWD=true"; else echo "SUDO_NOPASSWD=false"; fi
+            echo "--- dependentes (units que exigem esta)"
+            systemctl list-dependencies --reverse "$unit" --no-pager | head -15
+            exit 0
+          fi
+          case "$execstart" in
+            *marina-direct-mcp*|*marina-mcp*|*marina_admin*) echo "ABORT: ExecStart parece o MCP da Marina; nao paro."; exit 71;;
+          esac
+          sudo -n systemctl disable --now "$unit"
+          echo "--- readback"
+          echo "ACTIVE=$(systemctl is-active "$unit" || true) ENABLED=$(systemctl is-enabled "$unit" || true)"
+          for s in shopvivaliz-marina-mcp.service shopvivaliz-cloudflared-admin.service shopvivaliz-queue-worker.service; do
+            echo "$s $(systemctl is-active "$s" || true)"
+          done
+          REMOTE
