@@ -126,37 +126,55 @@ final class SvTinyPublisher
     }
 
     /** @param array<string,mixed> $product */
-    private function resolveTinyId(int $productId, array $product): int
+    /**
+     * Usa apenas ID presente na listagem de produtos ATIVOS.
+     * O mesmo SKU pode permanecer em um ID excluido com GET 200; o detalhe
+     * do cadastro excluido nao serve como prova de que ele e o ID atual.
+     *
+     * @param list<array<string,mixed>> $rows
+     */
+    public static function activeIdFromRows(string $sku, array $rows): int
     {
-        $mapping = sv_market_mapping($this->db, $productId, 'erp');
-        if (is_array($mapping) && (int)($mapping['external_id'] ?? 0) > 0) {
-            return (int)$mapping['external_id'];
-        }
-        $existing = (int)($product['olist_id'] ?? 0);
-        if ($existing > 0) return $existing;
-        $sku = trim((string)($product['sku'] ?? ''));
-        if ($sku === '') throw new RuntimeException('SKU ausente para localizar o produto no Tiny/Olist.');
-        $query = http_build_query(['pesquisa' => $sku, 'situacao' => 'A', 'limit' => 100, 'offset' => 0]);
-        $search = sv_market_tiny_request_v3('GET', '/produtos?' . $query);
-        if ((int)$search['status'] !== 200) {
-            throw new SvMarketplaceException('ERP Olist/Tiny v3 falhou ao resolver SKU ' . $sku, (int)$search['status']);
-        }
-        $json = is_array($search['json'] ?? null) ? $search['json'] : [];
-        $rows = $json['itens'] ?? $json['data'] ?? $json['produtos'] ?? [];
         $matches = [];
-        foreach (is_array($rows) ? $rows : [] as $candidate) {
+        foreach ($rows as $candidate) {
             if (!is_array($candidate)) continue;
             $candidateSku = trim((string)($candidate['codigo'] ?? $candidate['sku'] ?? ''));
             $candidateId = (int)($candidate['id'] ?? $candidate['idProduto'] ?? 0);
             if ($candidateId > 0 && strcasecmp($candidateSku, $sku) === 0) {
-                $matches[$candidateId] = $candidate;
+                $matches[$candidateId] = true;
             }
         }
         if (count($matches) !== 1) {
-            throw new RuntimeException("ERP Olist/Tiny v3 não encontrou exatamente um produto ativo para o SKU {$sku}.");
+            throw new RuntimeException('ERP Olist/Tiny nao encontrou exatamente um ID ativo para o SKU ' . $sku . '.');
         }
-        $tinyId = (int)array_key_first($matches);
-        sv_market_save_mapping($this->db, $productId, 'erp', (string)$tinyId, $sku, ['source' => 'api_v3_exact_sku_search']);
+        return (int)array_key_first($matches);
+    }
+
+    private function resolveTinyId(int $productId, array $product): int
+    {
+        $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') throw new RuntimeException('SKU ausente para localizar o produto no Tiny/Olist.');
+
+        // Nunca confiar apenas no mapeamento salvo ou no detalhe GET: IDs
+        // historicos excluidos ainda podem responder HTTP 200 com situacao A.
+        $query = http_build_query(['codigo' => $sku, 'situacao' => 'A', 'limit' => 100, 'offset' => 0]);
+        $search = sv_market_tiny_request_v3('GET', '/produtos?' . $query);
+        if ((int)$search['status'] !== 200) {
+            throw new SvMarketplaceException('ERP Olist/Tiny v3 falhou ao consultar ID ativo para SKU ' . $sku, (int)$search['status']);
+        }
+        $json = is_array($search['json'] ?? null) ? $search['json'] : [];
+        $rows = $json['itens'] ?? $json['data'] ?? $json['produtos'] ?? [];
+        $tinyId = self::activeIdFromRows($sku, is_array($rows) ? $rows : []);
+
+        $mapping = sv_market_mapping($this->db, $productId, 'erp');
+        $mappedId = is_array($mapping) ? (int)($mapping['external_id'] ?? 0) : 0;
+        $existing = (int)($product['olist_id'] ?? 0);
+        if (($mappedId > 0 && $mappedId !== $tinyId) || ($existing > 0 && $existing !== $tinyId)) {
+            // Nao corrigir vinculo cruzando registros historicos por SKU sozinho:
+            // o novo ID pode ter outro GTIN, marca ou descricao. Auditar antes.
+            throw new RuntimeException('Mapeamento ERP historico diverge do ID ativo. Validar GTIN e vinculo antes de publicar.');
+        }
+        sv_market_save_mapping($this->db, $productId, 'erp', (string)$tinyId, $sku, ['source' => 'api_v3_exact_active_sku']);
         $update = $this->db->prepare("UPDATE products SET olist_id = ?, updated_at = NOW() WHERE id = ? AND (olist_id IS NULL OR TRIM(olist_id) = '')");
         $update->execute([(string)$tinyId, $productId]);
         return $tinyId;
