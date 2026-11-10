@@ -13,14 +13,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: marina-ssh-readonly-check
-  cancel-in-progress: false
-
 jobs:
   check:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
-    timeout-minutes: 5
     steps:
       - name: Refuse to run as a non-ubuntu user
         run: |
@@ -37,6 +32,6 @@ jobs:
           trap 'rm -f "$key"' EXIT
           printf '%s\n' "$BACKEND_SSH_KEY" > "$key"
           chmod 600 "$key"
-          ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+          timeout 300 ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
             -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
             "ubuntu@$MARINA_HOST" 'echo "hostname=$(hostname)"; echo "user=$(id -un)"'
