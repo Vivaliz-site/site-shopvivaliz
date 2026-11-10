@@ -33,12 +33,14 @@ jobs:
           test "$(id -un)" = "ubuntu" || { echo "runner user must be ubuntu"; exit 1; }
       - name: Diagnostico de pre-condicoes (somente existencia)
         run: |
-          set +e
-          echo "node=$(command -v node || echo ausente) versao=$(node --version 2>/dev/null || echo n/a)"
+          if command -v node >/dev/null 2>&1; then
+            echo "node=$(command -v node) versao=$(node --version)"
+          else
+            echo "node=AUSENTE"
+          fi
           for f in /home/ubuntu/.local/bin/claude /home/ubuntu/shopvivaliz-deploy/shared/.env /home/ubuntu/shopvivaliz-deploy/current/docs/knowledge/claude-vm-bootstrap.md /home/ubuntu/shopvivaliz-deploy/current/ops/ai-squad/claude-bridge.mjs; do
             if [ -e "$f" ]; then echo "existe: $f"; else echo "AUSENTE: $f"; fi
           done
-          exit 0
       - name: Install Claude bridge user service
         if: ${{ inputs.install_claude }}
         env:
