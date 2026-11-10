@@ -215,3 +215,15 @@ Todas as operações stateful críticas foram exercitadas ao vivo contra produç
 
 ## Regra de validade
 Esta auditoria cobre o SHA `35fa132047b207e00bef37863a158725cf68dac6` (código web equivalente a `origin/main` em 2026-09-19). Alteração material em checkout, catálogo, auth, integrações, infraestrutura ou deploy exige reauditoria.
+
+---
+
+## Rodada 2026-11-09 — Classificador de governança baseado no efeito do diff (PR #3850)
+
+- **Base SHA:** `dc43260a8603990f029cd06976eab6329e8fb716` (branch da PR antes desta correção).
+- **Impacto:** classificador em `scripts/quality/verify_owner_protected_pr_review.py`; revisões obrigatórias apenas quando permissões diminuem, quantidade de revisores aumenta ou novos gates são realmente introduzidos.
+- **Causa raiz:** regex reconhecia a presença de chaves YAML sem comparar valores anteriores e posteriores; arquivos de testes eram ignorados integralmente; configuração inalterada em contexto ou exemplo Markdown produzia falso bloqueio.
+- **Testes:** RED reproduzido (4 falhas dos 20 testes focais; depois 3 falhas adicionais nos 23 focais). GREEN focal 23/23. Regressão preliminar antes das últimas correções: 79/79 (`test_owner_*.py`), 94/94 (`test_*review*.py`) e 27/27 (`test_pr_owner*.py`). Reexecutar após as últimas alterações antes de criar o commit.
+- **Evidências:** tarefas remotas `67263bc8-50dd-4e44-98b6-5e2f488bbebb`, `05e31a79-6d18-4120-832d-2a4d9be9f926`, `ae53bf95-e4c1-438b-adec-b36db7cd1401` e `220c2b4b-4940-4e3c-a0b4-27cdbaba9039`; checkout isolado em `/home/ubuntu/worktrees/site-shopvivaliz/pr3850-effect-classifier-20261109` no backend autorizado.
+- **Pendências:** checks oficiais no HEAD após push; aprovação formal `APPROVED` de `shopvivaliz-human` e `fredmourao-ai` quando aplicável; sem merge/deploy comprovado nesta rodada.
+- **Estado:** **NÃO APTO para declarar integração ou mudança em produção** até o cumprimento dos gates oficiais; correção de código validada localmente no escopo do teste.

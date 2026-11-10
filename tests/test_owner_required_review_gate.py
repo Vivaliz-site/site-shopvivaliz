@@ -241,5 +241,66 @@ class OwnerRequiredReviewGateTests(unittest.TestCase):
                 self.assertTrue(GATE.decide([arquivo], aprovadores, HEAD)[0])
 
 
+    def test_permission_restrictions_and_relaxations_are_compared_by_effect(self):
+        cases = (
+            ("permissions: write-all", "permissions: read-all", True),
+            ("permissions: read-all", "permissions: write-all", False),
+            ("permissions:\n  contents: write", "permissions:\n  contents: read", True),
+            ("permissions:\n  contents: read", "permissions:\n  contents: write", False),
+        )
+        for old, new, expected in cases:
+            with self.subTest(old=old, new=new):
+                old_lines = old.split("\n")
+                new_lines = new.split("\n")
+                patch = "@@ -1,%d +1,%d @@\n%s\n%s" % (
+                    len(old_lines), len(new_lines),
+                    "\n".join("-" + line for line in old_lines),
+                    "\n".join("+" + line for line in new_lines),
+                )
+                f = {"filename": ".github/workflows/gate.yml", "status": "modified", "patch": patch}
+                self.assertEqual(GATE.requires_dual_approval([f]), expected)
+
+    def test_required_approval_count_compares_increases_and_decreases(self):
+        cases = (
+            ("required_approving_review_count: 1", "required_approving_review_count: 2", True),
+            ("required_approving_review_count: 2", "required_approving_review_count: 1", False),
+            (None, "required_approving_review_count: 2", True),
+            ("required_approving_review_count: 2", None, False),
+        )
+        for old, new, expected in cases:
+            with self.subTest(old=old, new=new):
+                removed = "" if old is None else "-" + old + "\n"
+                added = "" if new is None else "+" + new + "\n"
+                f = {"filename": ".github/workflows/gate.yml", "status": "modified",
+                     "patch": "@@ -1 +1 @@\n" + removed + added}
+                self.assertEqual(GATE.requires_dual_approval([f]), expected)
+
+    def test_test_file_that_adds_required_gate_is_not_blanket_exempt(self):
+        f = {"filename": "tests/test_gate_policy.py", "status": "modified",
+             "patch": "@@ -1,0 +1,1 @@\n+required_status_checks: [security-audit]\n"}
+        self.assertTrue(GATE.requires_dual_approval([f]))
+
+    def test_test_file_without_new_gate_remains_common(self):
+        f = {"filename": "tests/test_gate_policy.py", "status": "modified",
+             "patch": "@@ -1,0 +1,1 @@\n+assert result == expected\n"}
+        self.assertFalse(GATE.requires_dual_approval([f]))
+
+
+    def test_unchanged_unparsed_permission_context_is_not_a_restriction(self):
+        file = {"filename": ".github/workflows/ci.yml", "status": "modified",
+                "patch": "@@ -1,2 +1,3 @@\n permissions: inherit\n name: CI\n+description: unchanged permission settings\n"}
+        self.assertFalse(GATE.requires_dual_approval([file]))
+
+    def test_unchanged_dynamic_approval_count_context_is_not_a_restriction(self):
+        file = {"filename": ".github/workflows/ci.yml", "status": "modified",
+                "patch": "@@ -1,2 +1,3 @@\n required_approving_review_count: computed\n name: CI\n+description: update only\n"}
+        self.assertFalse(GATE.requires_dual_approval([file]))
+
+    def test_markdown_permission_example_is_not_an_executable_gate(self):
+        file = {"filename": "docs/guides/actions-examples.md", "status": "modified",
+                "patch": "@@ -1,0 +1,3 @@\n+```yaml\n+permissions: read-all\n+```\n"}
+        self.assertFalse(GATE.requires_dual_approval([file]))
+
+
 if __name__ == "__main__":
     unittest.main()

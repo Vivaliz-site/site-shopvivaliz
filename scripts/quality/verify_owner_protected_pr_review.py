@@ -97,7 +97,7 @@ LOCK_PATTERNS = (
     re.compile(r"""\bassert_runtime_lease\b"""),
 
     # Regras de workflow, CODEOWNERS, RBAC e limites que alteram a execucao
-    re.compile(r"""(?i)^\s*(?:required_approving_review_count|required_status_checks|permissions|deny|disabled|blocked|restricted|forbidden|disallowed|concurrency|timeout-minutes)\s*[:=]"""),
+    re.compile(r"""(?i)^\s*(?:required_status_checks|deny|disabled|blocked|restricted|forbidden|disallowed|concurrency|timeout-minutes)\s*[:=]"""),
     re.compile(r"""(?i)\braise\s+(?:PermissionError|ForbiddenError|AccessDeniedError)\b"""),
     re.compile(r"""(?i)^\s*if:\s*(?:false|\$\{\{)"""),
     re.compile(r"""(?i)\b(?:ALLOWED|ALLOWLIST|PERMITTED)_(?:COMMANDS|ACTIONS|TOOLS|OPERATIONS)\b\s*[:=]"""),
@@ -136,11 +136,138 @@ def missing_inspectable_patch(files: list[dict]) -> bool:
     return False
 
 
+
+PERMISSION_LEVELS = {"none": 0, "read": 1, "write": 2, "read-all": 1, "write-all": 2, "{}": 0}
+
+
+def _diff_sides(patch: str) -> list[tuple[list[str], list[str]]]:
+    """Return old/new content by hunk, preserving shared context."""
+    hunks: list[tuple[list[str], list[str]]] = []
+    old_lines: list[str] = []
+    new_lines: list[str] = []
+    in_hunk = False
+    for line in patch.splitlines():
+        if line.startswith("@@"):
+            if in_hunk:
+                hunks.append((old_lines, new_lines))
+            old_lines, new_lines = [], []
+            in_hunk = True
+        elif not in_hunk or line.startswith(("+++", "---")):
+            continue
+        elif line.startswith("+"):
+            new_lines.append(line[1:])
+        elif line.startswith("-"):
+            old_lines.append(line[1:])
+        elif line.startswith(" "):
+            old_lines.append(line[1:])
+            new_lines.append(line[1:])
+    if in_hunk:
+        hunks.append((old_lines, new_lines))
+    return hunks
+
+
+def _permission_profiles(lines: list[str]) -> list[dict[str, int]]:
+    """Parse changed/context YAML permission blocks, without external YAML dependencies."""
+    result: list[dict[str, int]] = []
+    header = re.compile(r"^(\s*)permissions\s*:\s*(.*?)\s*$", re.I)
+    scope = re.compile(r"^\s*([a-z-]+)\s*:\s*(none|read|write)\s*$", re.I)
+    for idx, line in enumerate(lines):
+        match = header.match(line)
+        if not match:
+            continue
+        base_indent = len(match.group(1))
+        value = match.group(2).strip().strip(chr(39)).strip(chr(34)).lower()
+        if value:
+            if value in PERMISSION_LEVELS:
+                result.append({"*": PERMISSION_LEVELS[value]})
+            else:
+                inline = re.findall(r"([a-z-]+)\s*:\s*(none|read|write)", value, re.I)
+                result.append({key.lower(): PERMISSION_LEVELS[level.lower()]
+                               for key, level in inline} if inline else {"__unknown__": -1})
+            continue
+        profile: dict[str, int] = {}
+        for candidate in lines[idx + 1:]:
+            if not candidate.strip():
+                continue
+            indent = len(candidate) - len(candidate.lstrip())
+            if indent <= base_indent:
+                break
+            entry = scope.match(candidate)
+            if entry:
+                profile[entry.group(1).lower()] = PERMISSION_LEVELS[entry.group(2).lower()]
+            elif not candidate.lstrip().startswith("#"):
+                profile["__unknown__"] = -1
+        result.append(profile)
+    return result
+
+
+def _new_permissions_restrict(profile: dict[str, int]) -> bool:
+    if "__unknown__" in profile:
+        return True
+    if "*" in profile:
+        return profile["*"] < 2
+    return True  # A scoped list removes permissions on unlisted scopes.
+
+
+def _permissions_reduce(old: dict[str, int], new: dict[str, int]) -> bool:
+    if old == new:
+        return False
+    if "__unknown__" in old or "__unknown__" in new:
+        return True  # An unclassified permission change cannot silently waive owner review.
+    if "*" in new:
+        if "*" in old:
+            return new["*"] < old["*"]
+        return any(new["*"] < level for level in old.values())
+    if "*" in old:
+        return old["*"] > 0  # A finite allow-list removes unspecified scopes.
+    return any(new.get(scope, 0) < level for scope, level in old.items())
+
+
+def _permissions_restricted(patch: str) -> bool:
+    for old_lines, new_lines in _diff_sides(patch):
+        before = _permission_profiles(old_lines)
+        after = _permission_profiles(new_lines)
+        for idx, new_profile in enumerate(after):
+            if idx >= len(before):
+                if _new_permissions_restrict(new_profile):
+                    return True
+            elif _permissions_reduce(before[idx], new_profile):
+                return True
+    return False
+
+
+def _approval_count_increased(patch: str) -> bool:
+    expression = re.compile(r"^\s*required_approving_review_count\s*:\s*(.*?)\s*$", re.I)
+    def counts(lines: list[str]) -> list[int | None]:
+        values = []
+        for line in lines:
+            match = expression.match(line)
+            if match:
+                raw = match.group(1).strip()
+                values.append(int(raw) if raw.isdecimal() else None)
+        return values
+    for old_lines, new_lines in _diff_sides(patch):
+        before, after = counts(old_lines), counts(new_lines)
+        if before == after:
+            continue
+        for idx, new_count in enumerate(after):
+            if new_count is None:
+                return True
+            if idx >= len(before):
+                if new_count > 0:
+                    return True
+            elif before[idx] is None or new_count > before[idx]:
+                return True
+    return False
+
 def is_lock_insertion(f: dict) -> bool:
     """Detecta adicoes RESTRITIVAS reais, sem converter toda edicao em gate duplo."""
     if not isinstance(f, dict) or not isinstance(f.get("patch"), str):
         return False
     path = f.get("filename", "")
+    if (not path.endswith((".md", ".rst", ".txt"))
+            and (_permissions_restricted(f["patch"]) or _approval_count_increased(f["patch"]))):
+        return True
     lines = f["patch"].splitlines()
     removed = {line[1:].strip() for line in lines if line.startswith("-") and not line.startswith("---")}
     for line in lines:
@@ -154,8 +281,6 @@ def is_lock_insertion(f: dict) -> bool:
         if path.endswith((".md", ".rst", ".txt")):
             if any(pattern.search(added) for pattern in POLICY_DENIAL_PATTERNS):
                 return True
-        elif path.startswith("tests/") or path.rsplit("/", 1)[-1].startswith("test_"):
-            continue  # exemplos/fixtures de teste nao sao regras de runtime
         elif any(pattern.search(added) for pattern in LOCK_PATTERNS):
             return True
     return False
