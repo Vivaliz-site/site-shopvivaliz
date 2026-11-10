@@ -76,8 +76,9 @@ jobs:
           esac
           sudo -n systemctl disable --now "$unit"
           echo "--- readback"
-          echo "ACTIVE=$(systemctl is-active "$unit" || true) ENABLED=$(systemctl is-enabled "$unit" || true)"
+          state() { local o; if o="$(systemctl "$1" "$2" 2>/dev/null)"; then echo "$o"; else echo "${o:-inactive}"; fi; }
+          echo "ACTIVE=$(state is-active "$unit") ENABLED=$(state is-enabled "$unit")"
           for s in shopvivaliz-marina-mcp.service shopvivaliz-cloudflared-admin.service shopvivaliz-queue-worker.service; do
-            echo "$s $(systemctl is-active "$s" || true)"
+            echo "$s $(state is-active "$s")"
           done
           REMOTE
