@@ -35,7 +35,6 @@ MAX_BODY = 16384
 REQUEST_TIMEOUT_SECONDS = 5.0
 MAX_OPEN_CONNECTIONS = 16
 ALLOWED_SERVICES = frozenset({
-    "shopvivaliz-desktop-commander.service",
     "shopvivaliz-queue-worker.service",
     "mlrr-fetch-worker.service",
     "amazon-returns-safet.service",

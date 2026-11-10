@@ -125,4 +125,4 @@ echo -e "${YELLOW}[10/10] Validando MCP local...${NC}"
 sleep 2
 curl -fsS http://127.0.0.1:${MCP_PORT}/status >/dev/null
 
-echo -e "${GREEN}Bootstrap concluido. MCP legado limitado a localhost; use o Desktop Commander oficial para acesso remoto.${NC}"
+echo -e "${GREEN}Bootstrap concluido. Servidor MCP ativo; use o MCP nativo (shopvivaliz-remote-control ou marina-mcp) para acesso aos hosts.${NC}"
