@@ -14,7 +14,7 @@ The key path was a literal 'C:\Users\user\.ssh\...' -- only correct if the
 Windows account on this host is actually named "user", which matches no
 other convention in this repo (every other script here resolves
 $env:USERPROFILE dynamically -- see Ensure-ProfileEnvironment in
-desktopkocepsv-desktop-commander-supervisor.ps1 -- or hardcodes the one
+the removed Desktop Commander supervisor -- or hardcodes the one
 known real username for that specific host, e.g. C:\Users\FRED\... in
 ssh-tunnel-service-managed.ps1 for Fred-Win). A wrong key path here fails
 Test-Path silently into 'ERROR private key missing' on every single

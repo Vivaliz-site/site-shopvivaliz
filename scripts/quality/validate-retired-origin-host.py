@@ -20,7 +20,6 @@ BASELINE = frozenset({
     "config/tri-environment-sync.json",
     "remote-control-mcp/server.py",
     "scripts/chatgpt_continuity_nudge_dispatcher.py",
-    "scripts/desktop-commander-four-host-sentinel.sh",
     "scripts/oci-private-access-bootstrap.sh",
     "scripts/setup-iphone-private-ssh-relay.sh",
     "scripts/windows/marina-precutover-preflight.ps1",

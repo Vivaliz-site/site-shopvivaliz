@@ -9,8 +9,8 @@
 worktrees das duas A1, automacao de UI clicando sozinha em telas de consentimento
 (OAuth do Gmail e "Verify Device" do proprio Desktop Commander) via tarefas agendadas de
 disparo unico que nunca foram desativadas depois de rodar. Isso contraria a regra ja
-existente em `docs/DESKTOP-COMMANDER-24H.md` ("a automacao... nao contorna politica de
-autenticacao do provedor") e so foi descoberto porque alguem checou manualmente. Este
+existente na epoca ("a automacao... nao contorna politica de
+autenticacao do provedor"; documento retirado junto com o Desktop Commander) e so foi descoberto porque alguem checou manualmente. Este
 monitor existe para detectar o mesmo padrao de novo sem depender de revisao manual nem de
 IA paga (ver regra de custo/execucao no `CLAUDE.md` raiz: nada pago em cron/timer/daemon).
 
@@ -33,9 +33,8 @@ pelo `claude-local-station.json` e por `api/monitor/dev-status.php`.
 
 Definida no topo de cada script. Atual:
 
-- `ShopVivaliz Desktop Commander 24h` / `ShopVivaliz Desktop Commander Task Guardian`
-  (Windows) e `shopvivaliz-desktop-commander.service` / `-guardian.service` / `-guardian.timer`
-  (Linux) -- watchdog oficial do Desktop Commander, ver `docs/DESKTOP-COMMANDER-24H.md`.
+- O Desktop Commander **nao integra mais a allowlist** (retirado do repositorio): tarefas e units
+  dele que ainda existirem em algum host sao sinalizadas para retirada.
 - `ShopVivaliz Fred-Win Relay 24h` -- tunel SSH reverso privado canonico, ver
   `docs/FRED-WIN-PRIVATE-RELAY.md`. Producao de longa data, confirmado com Fred em
   2026-09-02; **nao desativar**.
@@ -58,7 +57,7 @@ um agente nao deve se auto-eximir de um alerta.
   `shopvivaliz-routine-abandonment-monitor.timer` (unit files em
   `ops/systemd/shopvivaliz-routine-abandonment-monitor.{service,timer}`), a cada 30 min.
 - **DESKTOP-KOCEPSV**: pendente -- host nao alcancavel a partir da sessao que criou este
-  monitor (nao aparece no Tailscale, MCP do Desktop Commander sem conexao). Replicar
+  monitor (nao aparece no Tailscale). Replicar
   quando houver acesso confirmado.
 
 ## Incidente que originou este monitor (2026-09-02)
@@ -74,18 +73,11 @@ cada tarefa exportado antes de desativar, nada foi apagado):
 - `ShopVivaliz DC Auth UI Probe`, `ShopVivaliz DC Auth UI Verify`,
   `ShopVivaliz DC Restore Browser Session`, `ShopVivaliz DC Restore Chrome Once` --
   a segunda (`dc_click_verify.py`) clicava sozinha no botao "Verify Device" do proprio
-  Desktop Commander, o que contraria `docs/DESKTOP-COMMANDER-24H.md` diretamente.
+  Desktop Commander, o que contrariava a regra de nao contornar a autenticacao do provedor.
 
 Auditoria das duas A1 (`144.22.157.209`, `163.176.103.253`) no mesmo dia nao encontrou
 automacao equivalente rodando (achados como `oauth-auto-exec.py` e `test-direct-click.py`
 sao ferramentas legitimas -- wrapper do login OAuth do Olist e smoke test do checkout,
 respectivamente -- confirmados por leitura de codigo, nao apenas pelo nome do arquivo).
 
-Achado a parte (nao corrigido neste PR): `scripts/fredwin-desktop-commander-status.ps1`
-usa uma regex (`@wonderwhy-er/desktop-commander@0\.2\.47.*remote.*--persist-session`) que
-nao bate com o command-line real do processo resolvido via cache do npx
-(`...\node_modules\@wonderwhy-er\desktop-commander\dist\index.js remote --persist-session`,
-sem o `@0.2.47` literal no caminho), entao `CANONICAL_AGENT_COUNT` sempre reporta 0 mesmo
-com o DC saudavel. Confirmado pelo log do supervisor (`Converging launchers canonical=1...`)
-que a deteccao *real* do supervisor esta correta -- o bug e so no script de diagnostico
-manual, sem risco para o uptime do DC. Registrar como tarefa separada para corrigir a regex.
+Obs.: um achado sobre o script de diagnostico `fredwin-desktop-commander-status.ps1` deixou de se aplicar com a retirada do Desktop Commander do repositorio.
