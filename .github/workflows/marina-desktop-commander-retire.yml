@@ -24,7 +24,6 @@ permissions:
 jobs:
   retire:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
-    timeout-minutes: 8
     env:
       MARINA_PUBLIC_IP: 137.131.173.240
       MARINA_TAILSCALE_IP: 100.118.170.46
