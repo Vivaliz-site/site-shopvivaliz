@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-$wf=(string)file_get_contents(dirname(__DIR__).'/.github/workflows/desktop-commander-peer-repair.yml');
+$wf=(string)file_get_contents(dirname(__DIR__).'/.github/workflows/amazon-support-reopen.yml');
 foreach(['Reopen case','Reabrir caso','TERMINAL_NO_REOPEN_ACTION','READ_BACK_FAILED'] as $required){
     if(!str_contains($wf,$required)){fwrite(STDERR,"missing existing-case reopen contract: {$required}\n");exit(1);}
 }

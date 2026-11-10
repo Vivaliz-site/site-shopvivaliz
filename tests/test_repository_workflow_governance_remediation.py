@@ -18,12 +18,8 @@ PUBLISH = (
 
 AUTO_EVIDENCE = (
     "actions-run-index.yml",
-    "desktop-commander-24h-health.yml",
-    "desktop-commander-three-host-control-plane.yml",
-    "desktop-commander-three-host-quick-probe.yml",
     "mei-email-prod-probe-now.yml",
     "mei-email-prod-probe-robust.yml",
-    "vm-desktop-commander-connection-probe.yml",
     "windows-private-peer-recovery.yml",
 )
 
@@ -69,16 +65,6 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         match = re.search(r"(?m)^on:\s*\n(?P<body>(?:^[ \t]+[^\n]*(?:\n|$))*)", text)
         self.assertIsNotNone(match, name)
         return match.group("body")
-
-    # #1757 intentionally allows one bounded repair on schedule; push remains observation-only.
-    def test_desktop_commander_scheduled_health_allows_one_bounded_repair(self):
-        text = self.text("desktop-commander-24h-health.yml")
-        self.assertIn(
-            "ALLOW_REPAIR: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '1' || '0' }}",
-            text,
-        )
-        self.assertIn("MAX_REPAIR_ATTEMPTS = 1 if os.environ.get('ALLOW_REPAIR') == '1' else 0", text)
-        self.assertNotIn("github.event_name == 'push' && '1'", text)
 
     def test_windows_private_peer_recovery_is_manual_only(self):
         triggers = self.trigger_body("windows-private-peer-recovery.yml")
@@ -184,34 +170,6 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertRegex(text, r"(?s)- name: Configure SSH\n\s+if: env\.MODE == 'health'")
         self.assertRegex(text, r"(?s)- name: Run VM route\n\s+if: env\.MODE == 'health'")
 
-    def test_desktop_commander_health_materializes_fallback_evidence(self):
-        text = self.text("desktop-commander-24h-health.yml")
-        self.assertIn("CONTROL_PLANE_EVIDENCE=fallback", text)
-        self.assertIn("/tmp/dc-control-plane-status.json", text)
-        self.assertIn("/tmp/dc-control-plane-status.md", text)
-        self.assertIn("probe_failed_before_status_materialization", text)
-
-    def test_three_host_control_plane_materializes_fallback_evidence(self):
-        text = self.text("desktop-commander-three-host-control-plane.yml")
-        self.assertIn("CONTROL_PLANE_EVIDENCE=fallback", text)
-        self.assertIn("/tmp/dc-status.json", text)
-        self.assertIn("/tmp/dc-status.md", text)
-        self.assertIn("probe_failed_before_status_materialization", text)
-
-    def test_three_host_quick_probe_materializes_fallback_evidence(self):
-        text = self.text("desktop-commander-three-host-quick-probe.yml")
-        self.assertRegex(text, r"(?s)- name: Stage sanitized probe evidence\n\s+if: always\(\)")
-        self.assertRegex(text, r"(?s)- name: Upload immutable probe evidence\n\s+if: always\(\)")
-        self.assertIn("QUICK_PROBE_EVIDENCE=fallback", text)
-        self.assertIn("probe_failed_before_quick_evidence_materialization", text)
-
-    def test_vm_connection_probe_materializes_fallback_evidence(self):
-        text = self.text("vm-desktop-commander-connection-probe.yml")
-        self.assertRegex(text, r"(?s)- name: Stage sanitized connection evidence\n\s+if: always\(\)")
-        self.assertRegex(text, r"(?s)- name: Upload immutable connection evidence\n\s+if: always\(\)")
-        self.assertIn("VM_CONNECTION_EVIDENCE=fallback", text)
-        self.assertIn("probe_failed_before_connection_evidence_materialization", text)
-
     def test_mei_probe_preserves_unknown_when_systemctl_returns_no_state(self):
         text = self.text("mei-email-prod-probe-now.yml")
         self.assertIn('worker_state="${worker_state:-unknown}"', text)
@@ -239,32 +197,11 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertIn("GRAPH_DIAGNOSTIC_EVIDENCE=fallback", text)
         self.assertIn("if ! grep -qx", text)
 
-    def test_dc_contracts_track_current_control_plane_status_step_and_changes(self):
-        marker = "Stage sanitized status evidence"
-        for name in (
-            "desktop-commander-auto-repair-guard-contract-test.php",
-            "desktop-commander-nondisruptive-recovery-contract-test.php",
-        ):
-            text = (ROOT / "tests" / name).read_text(encoding="utf-8")
-            self.assertIn(marker, text, name)
-            self.assertNotIn("Publish sanitized status", text, name)
-        workflow = self.text("dc-orphan-wrapper-contract.yml")
-        self.assertIn(".github/workflows/desktop-commander-three-host-control-plane.yml", workflow)
-        self.assertIn("tests/desktop-commander-auto-repair-guard-contract-test.php", workflow)
-        self.assertIn("tests/desktop-commander-nondisruptive-recovery-contract-test.php", workflow)
-        self.assertIn("php tests/desktop-commander-nondisruptive-recovery-contract-test.php", workflow)
-
     def test_graph_diagnostic_requires_completion_marker(self):
         text = self.text("mei-email-graph-token-diagnostic.yml")
         self.assertIn("GRAPH_DIAGNOSTIC_COMPLETE=1", text)
         self.assertIn("if ! grep -qx", text)
         self.assertIn("collection_failed_before_graph_diagnostic_completion", text)
-
-    def test_dc_contract_trigger_covers_all_validated_workflows(self):
-        workflow = self.text("dc-orphan-wrapper-contract.yml")
-        self.assertIn(".github/workflows/vm-desktop-commander-action.yml", workflow)
-        self.assertIn(".github/workflows/vm-desktop-commander-secure-recovery.yml", workflow)
-
 
 if __name__ == "__main__":
     unittest.main()

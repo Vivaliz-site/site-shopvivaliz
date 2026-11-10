@@ -17,15 +17,10 @@ GUARDED_JOBS = {
     "production-functional-audit.yml": "functional",
     "mlrr-production-ops-bridge.yml": "operate",
     "google-ads-rest-audit.yml": "audit",
-    "dc-four-host-login-once.yml": "login",
     "abandoned-cart-cron-install.yml": "install-cron",
-    "desktop-commander-peer-repair.yml": "repair-peer",
-    "linux-desktop-commander-stage-protection.yml": "stage",
     "oci-principal-controller-downsize.yml": "resize",
     "ml-pricing-production-bootstrap.yml": "bootstrap",
     "oci-bastion-private-access-bootstrap.yml": "bootstrap",
-    "desktop-commander-24h-health.yml": "runtime",
-    "desktop-commander-reauth-runner.yml": "reauth",
 }
 
 

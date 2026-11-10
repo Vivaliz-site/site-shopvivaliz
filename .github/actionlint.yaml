@@ -12,22 +12,7 @@ paths:
   .github/workflows/abandoned-cart-cron-install.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/dc-four-host-login-once.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/desktop-commander-24h-health.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/desktop-commander-peer-repair.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/desktop-commander-reauth-runner.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
   .github/workflows/google-ads-rest-audit.yml:
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
-  .github/workflows/linux-desktop-commander-stage-protection.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
   .github/workflows/ml-pricing-production-bootstrap.yml:
