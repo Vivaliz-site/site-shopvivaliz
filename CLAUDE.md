@@ -42,17 +42,11 @@ Regra de qualidade: nao perguntar "tem token admin?" ao owner nem encerrar com "
 <!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
 
 <!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
-> **Regra do proprietario: QUALQUER insercao de trava, governanca, regras, tasks ou protecao exige aprovacao das duas contas (08/11/2026):**
-> Qualquer insercao, criacao, adicao, restauracao ou modificacao de:
-> 1. Travas, restricoes, barreiras, bloqueios de ferramentas/comandos, runtime locks (`runtime_lock_required`, `assert_runtime_lock`, `_assert_runtime_mutation`, `MUTATING_RUNTIME_ACTIONS`, `MUTATING_ACTIONS`), lease/fencing obrigatorio ou diretivas restritivas em MCP, rotas ou agentes;
-> 2. Governanca, grants, aprovacoes de seguranca (`security/`, `.github/CODEOWNERS`);
-> 3. Regras de agentes (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `AI-TO-CLI-PROTOCOL.md`, `agent-rules.md`);
-> 4. Tasks e workflows automatizados (`.github/workflows/`, `scripts/agent_task_state.py`, gates de CI);
-> 5. Outros sensiveis (exclusao de instancias/VM, alteracao de precos em producao);
-> Exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) no HEAD exato de **AMBAS** as contas GitHub:
-> 1. `shopvivaliz-human`
-> 2. `fredmourao-ai`
-> Nenhum agente esta autorizado a aprovar, burlar ou ignorar este requisito. Sem a aprovacao conjunta e formal de ambas as contas no commit exato, os gates automatizados (`verify_owner_protected_pr_review.py` e `owner_approved_merge_queue.py`) bloquearao o PR (`FAIL_CLOSED`).
+> **Regra transversal para TODOS os repositórios ShopVivaliz (08/11/2026): dupla revisão SOMENTE para inclusão ou agravamento de impedimentos.**
+> Uma PR exige autorização expressa do proprietário e revisão formal `APPROVED` de **ambas** as contas GitHub `shopvivaliz-human` e `fredmourao-ai`, sobre o **mesmo HEAD**, exclusivamente se a mudança **criar, reintroduzir ou endurecer** restrições, travas, bloqueios, controles de acesso ou configurações que impeçam/atrasem a execução de processos, ferramentas, comandos, agentes, workflows, CI, deploys ou automações. Incluem-se novas listas de negação, bloqueios de operação, exigências de lease/fencing e novos gates obrigatórios.
+> **O nome do arquivo não determina a exigência.** Edições comuns de `AGENTS.md`, `CLAUDE.md`, documentação, regras de agentes, testes, tarefas, scripts, arquivos em `.github/workflows/` ou infraestrutura, sem criação/endurecimento de impedimento, **não exigem dupla aprovação nem revisão humana genérica**. Correções e remoções de travas indevidas também não exigem dupla revisão por esse motivo. Outras aprovações já previstas para ações comerciais, destrutivas e privilégios realmente sensíveis permanecem independentes.
+> Os gates devem analisar o **diff real** e suas consequências, não apenas caminhos. Quando o diff de arquivo potencialmente restritivo for inconclusivo ou estiver indisponível, registrar a falha de classificação e solicitar inspeção, sem presumir que toda PR é uma restrição. PRs de restrição devem ser apresentadas por identidade independente dos dois revisores; o GitHub não aceita autoaprovação e nenhum agente pode forjar revisões, contornar branch protection ou usar poderes administrativos para dispensá-las.
+> **Idioma obrigatório:** títulos, descrições, pedidos de revisão e comunicações operacionais de **todas as PRs** de todos os repositórios ShopVivaliz devem usar português brasileiro (`pt-BR`); nomes técnicos, caminhos, identificadores, código e comandos podem permanecer em inglês. A exigência de idioma não introduz revisão humana adicional.
 <!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
 
 > **REGRA DO PROPRIETARIO: MCP PRIMEIRO = TENTATIVA REAL.** Antes de optar por RDC/SSH ou encerrar tarefa remota, chamar uma ferramenta MCP adequada e autorizada para o host na sessao atual. Consultar catalogo nao conta como tentativa. Registrar host, ferramenta, data/hora, task_id/request_id e resultado; se indisponivel, declarar MCP_NOT_EXPOSED, nunca MCP_ATTEMPTED. Fonte: docs/ops/mcp-first-agent-execution-2026-11-05.md.

@@ -96,31 +96,193 @@ LOCK_PATTERNS = (
     re.compile(r"""\bruntime_fencing_token\b"""),
     re.compile(r"""\bassert_runtime_lease\b"""),
 
+    # Regras de workflow, CODEOWNERS, RBAC e limites que alteram a execucao
+    re.compile(r"""(?i)^\s*(?:required_status_checks|deny|disabled|blocked|restricted|forbidden|disallowed|concurrency|timeout-minutes)\s*[:=]"""),
+    re.compile(r"""(?i)\braise\s+(?:PermissionError|ForbiddenError|AccessDeniedError)\b"""),
+    re.compile(r"""(?i)^\s*if:\s*(?:false|\$\{\{)"""),
+    re.compile(r"""(?i)\b(?:ALLOWED|ALLOWLIST|PERMITTED)_(?:COMMANDS|ACTIONS|TOOLS|OPERATIONS)\b\s*[:=]"""),
+
     # Command / tool / action restriction lists
     re.compile(r"""\b(?:BLOCKED|RESTRICTED|DISALLOWED|FORBIDDEN)_(?:COMMANDS|ACTIONS|TOOLS|OPERATIONS)\b"""),
     re.compile(r"""\b(?:blocked|restricted|disallowed|forbidden)_(?:commands|actions|tools|operations)\b\s*="""),
     re.compile(r"""raise\s+(?:\w+Error|Exception)\(['"].*(?:runtime_lock|lock_required|action_blocked|command_blocked|operacao_bloqueada|trava_obrigatoria).*['"]\)"""),
 
     # Policy / prompt restriction markers
-    re.compile(r"""<!--\s*(?:DESKTOP_GUI_LOCK_PROHIBITION_|OWNER_NO_UNAPPROVED_RESTRICTIONS_|LOCK_INSERTION_RESTRICTION_|ALL_LOCK_INSERTION_DUAL_APPROVAL_)"""),
     re.compile(r"""(?i)\b(?:nova\s+trava|novo\s+bloqueio|bloqueio\s+de\s+ferramenta|trava\s+de\s+seguranca)\b"""),
 )
 DESKTOP_LOCK_PATTERNS = LOCK_PATTERNS
 
 
-def is_lock_insertion(f: dict) -> bool:
-    """Detect any attempt to introduce locks, blocks or restrictions."""
-    if not isinstance(f, dict):
-        return False
-    patch = f.get("patch")
-    if not isinstance(patch, str):
-        return False
+# Classificacao por EFEITO do diff, nunca somente pelo caminho.
+POLICY_DENIAL_PATTERNS = (
+    re.compile(r"(?i)\b(?:proibid[oa]|vedad[oa]|bloque(?:ar|ia|ado|ada)|imped(?:ir|e)|restringir)\b.{0,140}\b(?:execu[cç][aã]o|processos?|comandos?|ferramentas?|acesso|agentes?|workflows?|deploy|merge)\b"),
+    re.compile(r"(?i)\b(?:n[aã]o\s+(?:deve|pode|poder[aá])|fica\s+proibido)\b.{0,120}\b(?:executar|acessar|utilizar|invocar|integrar|mesclar|publicar)\b"),
+)
+TEXT_EXTENSIONS = (
+    ".md", ".rst", ".txt", ".py", ".sh", ".php", ".js", ".jsx", ".ts",
+    ".tsx", ".mjs", ".cjs", ".json", ".yml", ".yaml", ".toml", ".ini",
+    ".cfg", ".xml", ".sql", ".go", ".rb", ".rs", ".java",
+)
+
+
+def missing_inspectable_patch(files: list[dict]) -> bool:
+    """Diff textual ausente impede a classificacao; nao exige revisores por caminho."""
+    for f in files:
+        path = f.get("filename", "")
+        if f.get("status") != "removed" and (
+            path.endswith(TEXT_EXTENSIONS) or path in RULES_FILES
+        ) and not isinstance(f.get("patch"), str):
+            return True
+    return False
+
+
+
+PERMISSION_LEVELS = {"none": 0, "read": 1, "write": 2, "read-all": 1, "write-all": 2, "{}": 0}
+
+
+def _diff_sides(patch: str) -> list[tuple[list[str], list[str]]]:
+    """Return old/new content by hunk, preserving shared context."""
+    hunks: list[tuple[list[str], list[str]]] = []
+    old_lines: list[str] = []
+    new_lines: list[str] = []
+    in_hunk = False
     for line in patch.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
-            added_line = line[1:].strip()
-            for pattern in LOCK_PATTERNS:
-                if pattern.search(added_line):
+        if line.startswith("@@"):
+            if in_hunk:
+                hunks.append((old_lines, new_lines))
+            old_lines, new_lines = [], []
+            in_hunk = True
+        elif not in_hunk or line.startswith(("+++", "---")):
+            continue
+        elif line.startswith("+"):
+            new_lines.append(line[1:])
+        elif line.startswith("-"):
+            old_lines.append(line[1:])
+        elif line.startswith(" "):
+            old_lines.append(line[1:])
+            new_lines.append(line[1:])
+    if in_hunk:
+        hunks.append((old_lines, new_lines))
+    return hunks
+
+
+def _permission_profiles(lines: list[str]) -> list[dict[str, int]]:
+    """Parse changed/context YAML permission blocks, without external YAML dependencies."""
+    result: list[dict[str, int]] = []
+    header = re.compile(r"^(\s*)permissions\s*:\s*(.*?)\s*$", re.I)
+    scope = re.compile(r"^\s*([a-z-]+)\s*:\s*(none|read|write)\s*$", re.I)
+    for idx, line in enumerate(lines):
+        match = header.match(line)
+        if not match:
+            continue
+        base_indent = len(match.group(1))
+        value = match.group(2).strip().strip(chr(39)).strip(chr(34)).lower()
+        if value:
+            if value in PERMISSION_LEVELS:
+                result.append({"*": PERMISSION_LEVELS[value]})
+            else:
+                inline = re.findall(r"([a-z-]+)\s*:\s*(none|read|write)", value, re.I)
+                result.append({key.lower(): PERMISSION_LEVELS[level.lower()]
+                               for key, level in inline} if inline else {"__unknown__": -1})
+            continue
+        profile: dict[str, int] = {}
+        for candidate in lines[idx + 1:]:
+            if not candidate.strip():
+                continue
+            indent = len(candidate) - len(candidate.lstrip())
+            if indent <= base_indent:
+                break
+            entry = scope.match(candidate)
+            if entry:
+                profile[entry.group(1).lower()] = PERMISSION_LEVELS[entry.group(2).lower()]
+            elif not candidate.lstrip().startswith("#"):
+                profile["__unknown__"] = -1
+        result.append(profile)
+    return result
+
+
+def _new_permissions_restrict(profile: dict[str, int]) -> bool:
+    if "__unknown__" in profile:
+        return True
+    if "*" in profile:
+        return profile["*"] < 2
+    return True  # A scoped list removes permissions on unlisted scopes.
+
+
+def _permissions_reduce(old: dict[str, int], new: dict[str, int]) -> bool:
+    if old == new:
+        return False
+    if "__unknown__" in old or "__unknown__" in new:
+        return True  # An unclassified permission change cannot silently waive owner review.
+    if "*" in new:
+        if "*" in old:
+            return new["*"] < old["*"]
+        return any(new["*"] < level for level in old.values())
+    if "*" in old:
+        return old["*"] > 0  # A finite allow-list removes unspecified scopes.
+    return any(new.get(scope, 0) < level for scope, level in old.items())
+
+
+def _permissions_restricted(patch: str) -> bool:
+    for old_lines, new_lines in _diff_sides(patch):
+        before = _permission_profiles(old_lines)
+        after = _permission_profiles(new_lines)
+        for idx, new_profile in enumerate(after):
+            if idx >= len(before):
+                if _new_permissions_restrict(new_profile):
                     return True
+            elif _permissions_reduce(before[idx], new_profile):
+                return True
+    return False
+
+
+def _approval_count_increased(patch: str) -> bool:
+    expression = re.compile(r"^\s*required_approving_review_count\s*:\s*(.*?)\s*$", re.I)
+    def counts(lines: list[str]) -> list[int | None]:
+        values = []
+        for line in lines:
+            match = expression.match(line)
+            if match:
+                raw = match.group(1).strip()
+                values.append(int(raw) if raw.isdecimal() else None)
+        return values
+    for old_lines, new_lines in _diff_sides(patch):
+        before, after = counts(old_lines), counts(new_lines)
+        if before == after:
+            continue
+        for idx, new_count in enumerate(after):
+            if new_count is None:
+                return True
+            if idx >= len(before):
+                if new_count > 0:
+                    return True
+            elif before[idx] is None or new_count > before[idx]:
+                return True
+    return False
+
+def is_lock_insertion(f: dict) -> bool:
+    """Detecta adicoes RESTRITIVAS reais, sem converter toda edicao em gate duplo."""
+    if not isinstance(f, dict) or not isinstance(f.get("patch"), str):
+        return False
+    path = f.get("filename", "")
+    if (not path.endswith((".md", ".rst", ".txt"))
+            and (_permissions_restricted(f["patch"]) or _approval_count_increased(f["patch"]))):
+        return True
+    lines = f["patch"].splitlines()
+    removed = {line[1:].strip() for line in lines if line.startswith("-") and not line.startswith("---")}
+    for line in lines:
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        added = line[1:].strip()
+        if not added or added in removed:
+            continue  # linha movida/inalterada nao cria novo controle
+        if path == ".github/CODEOWNERS" and re.match(r"^\S+\s+@", added):
+            return True  # novas exigencias CODEOWNERS podem travar merges
+        if path.endswith((".md", ".rst", ".txt")):
+            if any(pattern.search(added) for pattern in POLICY_DENIAL_PATTERNS):
+                return True
+        elif any(pattern.search(added) for pattern in LOCK_PATTERNS):
+            return True
     return False
 
 
@@ -128,52 +290,13 @@ is_desktop_gui_lock_restoration = is_lock_insertion
 
 
 def is_protected_file(f: dict | str) -> bool:
-    """Determine if file represents locks, governance, rules, tasks or sensitive items."""
-    if isinstance(f, dict):
-        filename = f.get("filename", "")
-        patch = f.get("patch")
-        if is_lock_insertion(f):
-            return True
-    elif isinstance(f, str):
-        filename = f
-        patch = None
-    else:
-        return False
-
-    # 1. Governança
-    if any(filename.startswith(p) for p in GOVERNANCE_PREFIXES) or filename in GOVERNANCE_FILES:
-        return True
-
-    # 2. Regras
-    if filename in RULES_FILES or any(filename.startswith(p) for p in RULES_PREFIXES):
-        return True
-
-    # 3. Tasks / Workflows
-    if any(filename.startswith(p) for p in TASKS_PREFIXES) or filename in TASKS_FILES:
-        return True
-
-    # 4. Outros meios de controle administrativo / broker
-    if filename in SENSITIVE_FILES:
-        return True
-
-    # 5. Documentos com diretivas de governança / trava
-    if filename == "docs/knowledge/host-access.md":
-        if patch is None:
-            return True  # uninspectable policy change
-        for line in patch.splitlines():
-            if (line.startswith("+") and not line.startswith("+++")) or (line.startswith("-") and not line.startswith("---")):
-                if any(marker in line for marker in POLICY_DIRECTIVE_MARKERS):
-                    return True
-
-    return False
+    """Somente uma adicao ou agravamento de trava exige dupla revisao."""
+    return isinstance(f, dict) and is_lock_insertion(f)
 
 
 def requires_dual_approval(files: list[dict | str]) -> bool:
-    """True if PR introduces locks, governance changes, agent rules, tasks or sensitive items."""
-    for f in files:
-        if is_protected_file(f):
-            return True
-    return False
+    """A revisao dupla nunca decorre apenas do nome do arquivo."""
+    return any(is_protected_file(f) for f in files)
 
 
 requires_lock_dual_approval = requires_dual_approval
@@ -233,12 +356,14 @@ def decide(files: object, reviews: object, head_sha: str, changed_files: object 
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "pr_files_invalid"
 
-    # Priority Check: Does this PR touch locks, governance, rules, tasks, or sensitive actions?
+    # Ausencia de diff textual e erro de classificacao, nao revisor obrigatorio.
+    if missing_inspectable_patch(files):
+        return False, "pr_text_patch_unavailable"
     if requires_dual_approval(files):
         required = set(DUAL_REQUIRED_REVIEWERS)
         if pr_author and pr_author.casefold() in {u.casefold() for u in required}:
-            # GitHub forbids PR authors from reviewing their own PR.
-            required = {u for u in required if u.casefold() != pr_author.casefold()}
+            # Nenhuma identidade pode aprovar sua propria PR no GitHub.
+            return False, "protected_author_must_be_independent"
         return verify_approvals(reviews, required, head_sha)
 
     # Standard Check: VM deletion or price changes require shopvivaliz-human
@@ -292,7 +417,9 @@ def main(argv=None) -> int:
         files = github_json(args.repo, f"/pulls/{args.pr}/files?per_page=100", token)
         if not isinstance(files, list) or len(files) >= 100:
             raise ValueError("pr_files_unavailable_or_incomplete")
-        protected = requires_dual_approval(files) or any(is_protected_path(f["filename"]) for f in files if isinstance(f, dict) and isinstance(f.get("filename"), str))
+        protected = requires_dual_approval(files) or any(
+            is_protected_path(f.get("filename", "")) for f in files if isinstance(f, dict) and isinstance(f.get("filename"), str)
+        )
         reviews = (github_json(args.repo, f"/pulls/{args.pr}/reviews?per_page=100", token)
                    if protected else [])
         pr_author = pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None

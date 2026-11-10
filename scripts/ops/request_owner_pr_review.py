@@ -56,16 +56,6 @@ def requires_owner(files: object, labels: object) -> bool:
         name = f["filename"]
         if protected(name) or is_protected_path(name):
             return True
-        if name not in POLICY_DOCS:
-            continue
-        patch = f.get("patch")
-        if not isinstance(patch, str):
-            return True  # An uninspectable policy change cannot silently skip owner review.
-        for line in patch.splitlines():
-            if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
-                continue
-            if any(marker in line for marker in OWNER_DIRECTIVE_MARKERS):
-                return True
     return False
 
 
@@ -95,7 +85,9 @@ def decision(pr: dict, files: list, reviews: list, expected_sha: str) -> str:
         else {HUMAN}
     )
     if author and author.casefold() in {u.casefold() for u in needed_reviewers}:
-        needed_reviewers = {u for u in needed_reviewers if u.casefold() != author.casefold()}
+        if requires_dual_approval(files):
+            return "protected_pr_requires_independent_author"
+        return "protected_pr_requires_independent_author"
 
     if needed_reviewers <= requested_logins:
         return "owner_already_requested"
@@ -167,8 +159,8 @@ def run(number: int, expected_sha: str, token: str) -> int:
         owner_required = requires_owner(files, pr.get("labels"))
         reviews = github(f"/pulls/{number}/reviews?per_page=100", token) if owner_required else []
         status = decision(pr, files, reviews, expected_sha)
-        if status == "protected_pr_must_be_ready":
-            print("OWNER_REVIEW_REQUEST=PENDING protected_pr_must_be_ready")
+        if status in {"protected_pr_must_be_ready", "protected_pr_requires_independent_author"}:
+            print("OWNER_REVIEW_REQUEST=PENDING " + status)
             return 3
         if status != "request_owner_review":
             print("OWNER_REVIEW_REQUEST=SKIPPED reason=" + status)
@@ -178,8 +170,7 @@ def run(number: int, expected_sha: str, token: str) -> int:
         if current.get("head", {}).get("sha") != expected_sha or current.get("state") != "open":
             raise ValueError("pr_changed_before_request")
         author = current.get("user", {}).get("login", "") if isinstance(current.get("user"), dict) else ""
-        raw_reviewers = [HUMAN, OPERATOR] if requires_dual_approval(files) else [HUMAN]
-        reviewers_to_request = [u for u in raw_reviewers if u.casefold() != author.casefold()]
+        reviewers_to_request = [HUMAN, OPERATOR] if requires_dual_approval(files) else [HUMAN]
         already_requested = {
             r.get("login", "").casefold()
             for r in current.get("requested_reviewers", [])
