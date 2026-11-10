@@ -58,10 +58,12 @@ Regra de qualidade: nao perguntar "tem token admin?" ao owner nem encerrar com "
 > **Bloqueio absoluto contra reintroducao de travas desktop GUI (08/11/2026):**
 > As travas de clique, digitacao e abertura de janelas de interface gráfica no Remote Control MCP (`desktop_click`, `desktop_type`, `desktop_open` vinculados a `runtime_lock_required`, `_assert_runtime_mutation` ou `MUTATING_RUNTIME_ACTIONS`) foram formalmente removidas na PR #3837 aprovada pelo proprietario.
 > **Nenhum agente (ChatGPT, Codex, Claude, Gemini, subagentes ou bots) esta autorizado a reintroduzir ou restaurar tais travas.**
-> A restauração dessas travas só pode ser implementada pessoalmente pelo proprietário; nenhum agente pode criá-las nem por PR, mesmo mediante revisão. Controles existentes permanecem.
+> A inclusão ou restauração dessas travas depende de implementação pessoal do proprietário; nenhuma PR ou alteração de agente poderá reintroduzi-las, ainda que revisada. Proteções técnicas existentes permanecem ativas até alteração oficial.
 <!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
 
-> **Política de dupla aprovação de 08/11/2026 superada para inclusão de restrições pela regra exclusiva do proprietário de 10/11/2026.**
+<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108_SUPERADA -->
+> Política de revisão dupla de 08/11/2026 SUPERADA quanto à inclusão ou agravamento de restrições pela norma exclusiva do proprietário de 10/11/2026, registrada acima. A mera dupla revisão não autoriza agentes a propor ou aplicar essas alterações. Aprovações independentes e proteções já vigentes permanecem.
+<!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108_SUPERADA -->
 
 > **REGRA DO PROPRIETARIO: MCP PRIMEIRO = TENTATIVA REAL.** Antes de optar por RDC/SSH ou encerrar tarefa remota, chamar uma ferramenta MCP adequada e autorizada para o host na sessao atual. Consultar catalogo nao conta como tentativa. Registrar host, ferramenta, data/hora, task_id/request_id e resultado; se indisponivel, declarar MCP_NOT_EXPOSED, nunca MCP_ATTEMPTED. Fonte: docs/ops/mcp-first-agent-execution-2026-11-05.md.
 
