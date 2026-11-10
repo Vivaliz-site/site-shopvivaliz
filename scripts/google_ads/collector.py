@@ -58,6 +58,15 @@ def _metric_row(row: dict[str, Any]) -> dict[str, Any]:
             "conversion_value": _number(metrics.get("conversions_value")),
         }
     )
+    # Preserve official Search auction shares when Google Ads actually returns
+    # them. Absent metrics stay absent: zero is NOT a synonym for no evidence.
+    for key in (
+        "search_impression_share",
+        "search_rank_lost_impression_share",
+        "search_budget_lost_impression_share",
+    ):
+        if metrics.get(key) is not None:
+            normalized[key] = _number(metrics[key])
     return normalized
 
 
@@ -129,7 +138,10 @@ SELECT campaign.id, campaign.name, campaign.status,
        campaign.advertising_channel_type, campaign.bidding_strategy_type,
        campaign_budget.id, campaign_budget.name, campaign_budget.amount_micros,
        metrics.impressions, metrics.clicks, metrics.cost_micros,
-       metrics.conversions, metrics.conversions_value
+       metrics.conversions, metrics.conversions_value,
+       metrics.search_impression_share,
+       metrics.search_rank_lost_impression_share,
+       metrics.search_budget_lost_impression_share
 FROM campaign
 WHERE campaign.status != 'REMOVED' AND {date_filter}
 ORDER BY metrics.cost_micros DESC
