@@ -1,0 +1,43 @@
+name: Marina Host Health Monitor
+
+# Monitor determinístico (sem IA) do estado dos serviços críticos da Marina,
+# consultado somente leitura pelo MCP da Marina com service token do Cloudflare Access.
+# Substitui a sentinela removida. Nada é alterado no host.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    env:
+      MARINA_MCP_ACCESS_CLIENT_ID: ${{ secrets.MARINA_MCP_ACCESS_CLIENT_ID }}
+      MARINA_MCP_ACCESS_CLIENT_SECRET: ${{ secrets.MARINA_MCP_ACCESS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Preflight das credenciais (somente metadados)
+        run: python3 scripts/marina_mcp_agent_client.py preflight
+
+      - name: Estado dos serviços críticos
+        run: |
+          set -Eeuo pipefail
+          cmd='for s in shopvivaliz-marina-mcp.service shopvivaliz-cloudflared-admin.service shopvivaliz-queue-worker.service; do echo "UNIT $s=$(systemctl is-active "$s" 2>/dev/null)"; done; echo "UNIT shopvivaliz-desktop-commander.service=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null)"; echo "DISK_ROOT_USE=$(df -P / | awk "NR==2{print \$5}")"'
+          python3 scripts/marina_mcp_agent_client.py call marina_admin_shell --args "$(python3 -c 'import json,sys; print(json.dumps({"command": sys.argv[1]}))' "$cmd")" > "$RUNNER_TEMP/marina-health.json"
+          cat "$RUNNER_TEMP/marina-health.json"
+          python3 - "$RUNNER_TEMP/marina-health.json" <<'PY'
+          import json, re, sys
+          raw = open(sys.argv[1], encoding="utf-8").read()
+          required = ["shopvivaliz-marina-mcp.service", "shopvivaliz-cloudflared-admin.service", "shopvivaliz-queue-worker.service"]
+          missing = [u for u in required if not re.search(r"UNIT " + re.escape(u) + r"=active\b", raw)]
+          if missing:
+              print("MARINA_HEALTH=FAIL missing_or_inactive=" + ",".join(missing))
+              sys.exit(1)
+          print("MARINA_HEALTH=OK")
+          PY
