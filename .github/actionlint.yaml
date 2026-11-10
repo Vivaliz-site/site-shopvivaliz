@@ -12,13 +12,10 @@ paths:
   .github/workflows/abandoned-cart-cron-install.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
-    ignore:
-      - '^constant expression "false" in condition\. remove the if: section$'
   .github/workflows/google-ads-rest-audit.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
+  .github/workflows/ml-pricing-production-bootstrap.yml:
     ignore:
       - '^constant expression "false" in condition\. remove the if: section$'
   .github/workflows/mlrr-production-ops-bridge.yml:
