@@ -69,16 +69,16 @@ jobs:
             if sudo -n true 2>/dev/null; then echo "SUDO_NOPASSWD=true"; else echo "SUDO_NOPASSWD=false"; fi
             echo "--- dependentes (units que exigem esta)"
             systemctl list-dependencies --reverse "$unit" --no-pager | head -15
-            exit 0
+          else
+            case "$execstart" in
+              *marina-direct-mcp*|*marina-mcp*|*marina_admin*) echo "ABORT: ExecStart parece o MCP da Marina; nao paro."; exit 71;;
+            esac
+            sudo -n systemctl disable --now "$unit"
+            echo "--- readback"
+            state() { local o; if o="$(systemctl "$1" "$2" 2>/dev/null)"; then echo "$o"; else echo "${o:-inactive}"; fi; }
+            echo "ACTIVE=$(state is-active "$unit") ENABLED=$(state is-enabled "$unit")"
+            for s in shopvivaliz-marina-mcp.service shopvivaliz-cloudflared-admin.service shopvivaliz-queue-worker.service; do
+              echo "$s $(state is-active "$s")"
+            done
           fi
-          case "$execstart" in
-            *marina-direct-mcp*|*marina-mcp*|*marina_admin*) echo "ABORT: ExecStart parece o MCP da Marina; nao paro."; exit 71;;
-          esac
-          sudo -n systemctl disable --now "$unit"
-          echo "--- readback"
-          state() { local o; if o="$(systemctl "$1" "$2" 2>/dev/null)"; then echo "$o"; else echo "${o:-inactive}"; fi; }
-          echo "ACTIVE=$(state is-active "$unit") ENABLED=$(state is-enabled "$unit")"
-          for s in shopvivaliz-marina-mcp.service shopvivaliz-cloudflared-admin.service shopvivaliz-queue-worker.service; do
-            echo "$s $(state is-active "$s")"
-          done
           REMOTE
