@@ -1,3 +1,17 @@
+<!-- OWNER_ONLY_RESTRICTIONS_20261110 -->
+## Exclusividade do proprietário para criar ou agravar restrições (10/11/2026)
+
+**Determinação mais recente do proprietário, válida para TODOS os repositórios, agentes e ambientes ShopVivaliz. Esta regra substitui, neste assunto, a política de dupla aprovação de 08/11/2026.**
+
+- SOMENTE o próprio proprietário pode executar a inclusão, restauração ou ampliação de bloqueios, restrições, travas, gates, exigências de aprovação, negações de acesso ou qualquer regra/configuração que impeça, condicione ou atrase execuções, acessos, operações, comandos, automações, CI/CD, PRs, merge ou deploy.
+- NENHUM agente, bot ou automação (GPT, Claude, Codex, Gemini, Copilot, Ollama, MCP, GitHub Actions, subagentes) pode introduzir tais mudanças, nem por commit, pull request, edição direta, workflow, ruleset, código, infraestrutura, configuração, políticas de acesso ou documento de governança. A mera aprovação, revisão dupla ou autorização de uma PR NÃO transfere ao agente o poder de implementar.
+- Ao identificar uma restrição que considere necessária, o agente deve apresentar ao proprietário justificativa, impactos, riscos, alternativas, **comandos completos para execução pessoal**, validação e reversão. O agente não deve implementar, publicar ou preparar uma PR que contenha a inclusão restritiva.
+- Correções técnicas, refatorações, ajustes de observabilidade e remoções/reduções de travas indevidas seguem o fluxo normal autorizado, desde que não introduzam outra restrição no mesmo diff.
+- Esta decisão não desativa automaticamente MFA, RBAC, regras de plataforma, proteções GitHub, mecanismos de segurança exigidos por terceiros ou aprovações independentes anteriormente existentes.
+- As PRs e comunicações de agentes continuam obrigatoriamente em **português brasileiro (pt-BR)**, preservando termos técnicos, código e caminhos.
+- **Exceção única de implantação:** em 10/11/2026 o proprietário determinou expressamente que GPT aplicasse esta atualização inicial. Isso não autoriza agentes a criar futuras restrições, mesmo se aprovadas.
+<!-- /OWNER_ONLY_RESTRICTIONS_20261110 -->
+
 <!-- AGENT_PR_TITLE_IDENTITY_V1_20261108 -->
 > **Regra do proprietario (08/11/2026) — identidade da IA no titulo de TODA PR de agente:** na criacao de uma PR ShopVivaliz, prefixar seu titulo em pt-BR com o agente executor REAL: `[GPT]`, `[Claude]`, `[Gemini]`, `[Codex]`, `[Copilot]`, `[Ollama]`, `[Auto-Healer]` ou `[Agente: Nome]`. A conta GitHub `fredmourao-ai` nao identifica qual modelo executou o trabalho. Na descricao, distinguir agente criador, contribuidores/revisores e identidade GitHub, sem inventar proveniencia. Em PRs antigas com origem desconhecida, informar `[Agente não identificado]`; nao aceitar esse marcador para PRs novas. A regra de titulo nao concede privilegio comercial e nao exige nova revisao humana por si so. Fonte: `docs/knowledge/agent-pr-attribution.md`.
 <!-- /AGENT_PR_TITLE_IDENTITY_V1_20261108 -->
@@ -34,16 +48,12 @@ Antes de afirmar falta de token/credencial ou pedir novamente ao owner: ler `AGE
 > **Bloqueio absoluto contra reintroducao de travas desktop GUI (08/11/2026):**
 > As travas de clique, digitacao e abertura de janelas de interface gráfica no Remote Control MCP (`desktop_click`, `desktop_type`, `desktop_open` vinculados a `runtime_lock_required`, `_assert_runtime_mutation` ou `MUTATING_RUNTIME_ACTIONS`) foram formalmente removidas na PR #3837 aprovada pelo proprietario.
 > **Nenhum agente (ChatGPT, Codex, Claude, Gemini, subagentes ou bots) esta autorizado a reintroduzir ou restaurar tais travas.**
-> Qualquer PR que tente retornar essas travas para acoes desktop GUI exige obrigatoriamente a revisao e aprovacao nominal (`APPROVED`) de **AMBAS** as contas GitHub no HEAD exato: `shopvivaliz-human` E `fredmourao-ai`. Sem a aprovacao de ambas as contas, o gate de CI (`verify_owner_protected_pr_review.py`) e a fila de merge (`owner_approved_merge_queue.py`) bloquearao o merge.
+> A inclusão ou restauração dessas travas depende de implementação pessoal do proprietário; nenhuma PR ou alteração de agente poderá reintroduzi-las, ainda que revisada. Proteções técnicas existentes permanecem ativas até alteração oficial.
 <!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
 
-<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
-> **Regra transversal para TODOS os repositórios ShopVivaliz (08/11/2026): dupla revisão SOMENTE para inclusão ou agravamento de impedimentos.**
-> Uma PR exige autorização expressa do proprietário e revisão formal `APPROVED` de **ambas** as contas GitHub `shopvivaliz-human` e `fredmourao-ai`, sobre o **mesmo HEAD**, exclusivamente se a mudança **criar, reintroduzir ou endurecer** restrições, travas, bloqueios, controles de acesso ou configurações que impeçam/atrasem a execução de processos, ferramentas, comandos, agentes, workflows, CI, deploys ou automações. Incluem-se novas listas de negação, bloqueios de operação, exigências de lease/fencing e novos gates obrigatórios.
-> **O nome do arquivo não determina a exigência.** Edições comuns de `AGENTS.md`, `CLAUDE.md`, documentação, regras de agentes, testes, tarefas, scripts, arquivos em `.github/workflows/` ou infraestrutura, sem criação/endurecimento de impedimento, **não exigem dupla aprovação nem revisão humana genérica**. Correções e remoções de travas indevidas também não exigem dupla revisão por esse motivo. Outras aprovações já previstas para ações comerciais, destrutivas e privilégios realmente sensíveis permanecem independentes.
-> Os gates devem analisar o **diff real** e suas consequências, não apenas caminhos. Quando o diff de arquivo potencialmente restritivo for inconclusivo ou estiver indisponível, registrar a falha de classificação e solicitar inspeção, sem presumir que toda PR é uma restrição. PRs de restrição devem ser apresentadas por identidade independente dos dois revisores; o GitHub não aceita autoaprovação e nenhum agente pode forjar revisões, contornar branch protection ou usar poderes administrativos para dispensá-las.
-> **Idioma obrigatório:** títulos, descrições, pedidos de revisão e comunicações operacionais de **todas as PRs** de todos os repositórios ShopVivaliz devem usar português brasileiro (`pt-BR`); nomes técnicos, caminhos, identificadores, código e comandos podem permanecer em inglês. A exigência de idioma não introduz revisão humana adicional.
-<!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108 -->
+<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108_SUPERADA -->
+> Política de revisão dupla de 08/11/2026 SUPERADA quanto à inclusão ou agravamento de restrições pela norma exclusiva do proprietário de 10/11/2026, registrada acima. A mera dupla revisão não autoriza agentes a propor ou aplicar essas alterações. Aprovações independentes e proteções já vigentes permanecem.
+<!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108_SUPERADA -->
 
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
