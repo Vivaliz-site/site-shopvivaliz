@@ -23,6 +23,7 @@ if str(TRUSTED_REPOSITORY_ROOT) not in sys.path:
 from scripts.pr_gate_scope import required_specialized_gates
 from scripts.quality.verify_owner_protected_pr_review import (
     requires_dual_approval,
+    missing_inspectable_patch,
     requires_lock_dual_approval,
     requires_desktop_lock_dual_approval,
     verify_approvals,
@@ -160,6 +161,8 @@ def eligible(pr: object, files: object, reviews: object, checks: object,
         return False, "files_missing_or_pagination_boundary"
     if any(not isinstance(f, dict) or not isinstance(f.get("filename"), str) for f in files):
         return False, "invalid_file_metadata"
+    if missing_inspectable_patch(files):
+        return False, "pr_text_patch_unavailable"
     is_owner_only = any(protected(f["filename"]) for f in files)
     creator = pr.get("user")
     if not isinstance(creator, dict):
@@ -176,7 +179,7 @@ def eligible(pr: object, files: object, reviews: object, checks: object,
         author = creator.get("login", "")
         required_accounts = set({HUMAN, OPERATOR})
         if author and author.casefold() in {u.casefold() for u in required_accounts}:
-            required_accounts = {u for u in required_accounts if u.casefold() != author.casefold()}
+            return False, "protected_author_must_be_independent"
         ok, reason = verify_approvals(reviews, required_accounts, sha)
         if not ok:
             return False, "protected_requires_dual_approval_on_exact_head"

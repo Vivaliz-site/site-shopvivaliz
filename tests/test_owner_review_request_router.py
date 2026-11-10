@@ -22,9 +22,9 @@ class OwnerReviewRouterTests(unittest.TestCase):
         self.assertTrue(requires_owner(files, []))
         self.assertEqual(decision(pr(), files, [], SHA), "request_owner_review")
 
-    def test_owner_policy_directive_requires_review(self):
+    def test_marcador_documental_nao_exige_revisao_por_si_so(self):
         files = [{"filename": "AGENTS.md", "patch": "@@ -1 +1 @@\n+<!-- OWNER_DIRECTIVES_20261105 -->"}]
-        self.assertEqual(decision(pr(), files, [], SHA), "request_owner_review")
+        self.assertEqual(decision(pr(), files, [], SHA), "common_pr_no_owner_review")
 
     def test_common_docs_do_not_request_human(self):
         files = [{"filename": "docs/knowledge/host-access.md", "patch": "@@ -1 +1 @@\n+normal host docs link"}]
@@ -61,9 +61,9 @@ class OwnerReviewRouterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             decision(pr(head="b" * 40), [{"filename": "security/requests/x.md"}], [], SHA)
 
-    def test_uninspectable_owner_policy_fails_closed(self):
+    def test_diff_ausente_nao_atribui_revisor_por_nome_de_arquivo(self):
         files = [{"filename": "AGENTS.md", "patch": None}]
-        self.assertTrue(requires_owner(files, []))
+        self.assertFalse(requires_owner(files, []))
 
     def test_desktop_gui_lock_restoration_requires_dual_review(self):
         files = [{
