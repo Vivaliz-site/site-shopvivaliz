@@ -61,11 +61,18 @@ $detail = [
     'descricaoComplementar' => '<p>Nivel laser profissional</p>',
     'situacao' => 'A',
     'unidade' => 'PC',
+    'unidadePorCaixa' => '6',
+    'ncm' => '9031.80.90',
+    'origem' => 0,
+    'codigoEspecificadorSubstituicaoTributaria' => '00.001.00',
+    'garantia' => '12 meses',
     'gtin' => '7890000000000',
     'precos' => ['preco' => 199.90, 'precoPromocional' => 179.90],
-    'categoria' => ['nome' => 'Ferramentas', 'caminhoCompleto' => 'Ferramentas > Medicao'],
-    'marca' => ['nome' => 'MTX'],
-    'dimensoes' => ['largura' => 15, 'altura' => 12, 'comprimento' => 110, 'pesoLiquido' => 1.5],
+    'categoria' => ['id' => 77, 'nome' => 'Ferramentas', 'caminhoCompleto' => 'Ferramentas > Medicao'],
+    'marca' => ['id' => 88, 'nome' => 'MTX'],
+    'dimensoes' => ['largura' => 15, 'altura' => 12, 'comprimento' => 110, 'pesoLiquido' => 1.5, 'pesoBruto' => 1.7, 'quantidadeVolumes' => 2, 'diametro' => 0],
+    'produtoPai' => ['id' => 999, 'sku' => 'PAI'],
+    'variacoes' => [['id' => 350340, 'sku' => '35039-AZ', 'precos' => ['preco' => 9000]]],
     'anexos' => [['url' => 'https://example.test/35039.jpg']],
     'seo' => ['titulo' => 'Nivel Laser MTX', 'descricao' => 'Nivel laser MTX', 'slug' => 'nivel-laser-mtx-35039'],
 ];
@@ -74,6 +81,20 @@ t_assert(($product['sku'] ?? '') === '35039', 'SKU v3 nao normalizado');
 t_assert(($product['estoque_disponivel'] ?? -1) === 7, 'estoque v3 nao normalizado');
 t_assert((float)($product['precos']['preco'] ?? 0) === 199.90, 'preco v3 nao normalizado');
 t_assert(($product['sync_source'] ?? '') === 'tiny_v3', 'fonte canonica ausente');
+t_assert(($product['ncm'] ?? '') === '9031.80.90', 'NCM ERP perdido no cache');
+t_assert(($product['origem'] ?? '') === '0', 'Origem ICMS ERP perdida no cache');
+t_assert(($product['codigoEspecificadorSubstituicaoTributaria'] ?? '') === '00.001.00', 'CEST ERP perdido no cache');
+t_assert(($product['unidadePorCaixa'] ?? '') === '6', 'Unidade por caixa perdida');
+t_assert(($product['garantia'] ?? '') === '12 meses', 'Garantia ERP perdida');
+t_assert((int)($product['categoria']['id'] ?? -1) === 77, 'ID categoria ERP perdido');
+t_assert((int)($product['marca']['id'] ?? -1) === 88, 'ID marca ERP perdido');
+t_assert((float)($product['dimensoes']['pesoBruto'] ?? 0) === 1.7, 'Peso bruto ERP perdido');
+t_assert((int)($product['dimensoes']['quantidadeVolumes'] ?? 0) === 2, 'Quantidade volumes ERP perdida');
+t_assert(($product['produtoPai']['id'] ?? '') === '999', 'Vinculo pai ERP perdido');
+t_assert(count($product['variacoes_vinculos'] ?? []) === 1, 'Vinculos variacao ERP perdidos');
+t_assert(($product['variacoes_vinculos'][0]['sku'] ?? '') === '35039-AZ', 'SKU variacao ERP perdido');
+t_assert(!isset($product['variacoes_vinculos'][0]['precos']), 'Preco de variacao exposto no cache derivado');
+t_assert(!isset($product['fornecedores']), 'Dados de fornecedores nao devem ir ao cache publico');
 
 svoei_upsert_catalog_product($tmp, $product);
 $active = t_items($tmp . '/storage/products-cache-ativos.json');
