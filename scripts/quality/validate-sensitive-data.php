@@ -16,8 +16,21 @@ $documentedExamples = [
     './CONFIGURAR_GITHUB_SECRETS.md', // onboarding example; never loaded at runtime
 ];
 $errors = [];
+$directoryIterator = new RecursiveDirectoryIterator('.', FilesystemIterator::SKIP_DOTS);
+$filteredIterator = new RecursiveCallbackFilterIterator(
+    $directoryIterator,
+    static function (SplFileInfo $current): bool {
+        $name = $current->getFilename();
+        if ($name === '.git' || $name === '.pytest_cache' || $name === 'node_modules' || $name === 'vendor' || $name === 'logs') {
+            return false;
+        }
+        return true;
+    }
+);
 $iterator = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator('.', FilesystemIterator::SKIP_DOTS)
+    $filteredIterator,
+    RecursiveIteratorIterator::SELF_FIRST,
+    RecursiveIteratorIterator::CATCH_GET_CHILD
 );
 
 foreach ($iterator as $file) {

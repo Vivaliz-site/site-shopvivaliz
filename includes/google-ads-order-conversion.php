@@ -144,9 +144,9 @@ function svgads_send_approved_purchase(array $order): bool
         $headers[] = 'login-customer-id: ' . $loginCustomerId;
     }
 
-    $version = trim((string)(getenv('GOOGLE_ADS_API_VERSION') ?: 'v22'));
+    $version = trim((string)(getenv('GOOGLE_ADS_API_VERSION') ?: 'v25'));
     if (preg_match('/^v\d+$/', $version) !== 1) {
-        $version = 'v22';
+        $version = 'v25';
     }
     $url = "https://googleads.googleapis.com/{$version}/customers/{$customerId}:uploadClickConversions";
     [$status, $errno, $body] = svgads_http_post_json($url, $headers, [
