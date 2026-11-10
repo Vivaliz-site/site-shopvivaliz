@@ -1,3 +1,7 @@
+<!-- OWNER_ONLY_RESTRICTIONS_20261110_REF -->
+> **Regra prevalente de 10/11/2026:** somente o proprietário pode incluir ou agravar restrições; nenhum agente pode fazê-lo, nem por PR ou governança, mesmo com aprovação. Ver `docs/knowledge/owner-only-restrictions-2026-11-10.md` e `docs/knowledge/agent-rules.md`. A implantação inicial foi determinada excepcionalmente ao GPT pelo proprietário.
+<!-- /OWNER_ONLY_RESTRICTIONS_20261110_REF -->
+
 <!-- PRIORIDADE MCP ADMINISTRATIVO: executar chamada MCP autorizada antes de rotas alternativas; respeitar MFA, RBAC, grants e leases; consultar docs/ops/mcp-first-agent-execution-2026-11-05.md. -->
 <!-- MCP_CLIENT_CATALOG_PARITY_20261106 -->
 > **ESTADO COMPROVADO EM 06/11/2026 — CHATGPT MCP NATIVO:** os clientes **ShopVivaliz Remote Control** e **ShopVivaliz Remote Control - Orquestrador** agora expoem `marina-a1-4c24g` nos `inputSchema.host.enum` das ferramentas `admin_command_run`, `task_submit` e `service_action`. Os enums desses seis contratos anunciam somente `always-free-arm-1787907847-26`, `Fred-Win`, `KOCEPSV` e `marina-a1-4c24g`, sem a VM excluida `shopvivaliz-free-a1`. **CHATGPT_CLIENT_ADMIN_COMMAND_PARITY=APTO_NESTA_SESSAO; CLIENT_TOOL_SCHEMA_3_OPERACOES=APTO_NESTA_SESSAO; PARIDADE_TOTAL_MCP_RDC=NAO_CERTIFICADA.**
