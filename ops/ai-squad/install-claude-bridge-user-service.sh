@@ -32,7 +32,11 @@ esac
 test -n "$node_bin"
 test -f "$bridge_source"
 test -x "$claude_bin"
-test -f "$env_path"
+# O bridge tolera a ausencia do .env compartilhado (envValue() devolve vazio e
+# usa o login OAuth do Claude Code). Apenas avisa, sem criar ou copiar segredos.
+if [ ! -f "$env_path" ]; then
+  printf 'AVISO: %s ausente; o bridge usara o login OAuth do Claude Code.\n' "$env_path" >&2
+fi
 test -f "$bootstrap_doc"
 mkdir -p "$service_dir" "$workspace" "$claude_dir"
 chmod 700 "$runtime" "$workspace" "$claude_dir"
