@@ -19,16 +19,30 @@ final class SvTinyPublisher
         $title = $this->limit(trim((string)($content['title'] ?? '')), 120);
         $description = trim((string)($content['description'] ?? ''));
         if ($title === '' || $description === '') throw new RuntimeException('Título ou descrição vazios para Tiny/Olist.');
+        // O PUT do produto nao e um PATCH de SEO. Buscar o cadastro completo
+        // antes de alterar texto preserva slug, video e palavras-chave que
+        // nao tenham sido explicitamente substituidos pela proposta.
+        $current = sv_market_tiny_request_v3('GET', '/produtos/' . $tinyId);
+        if ((int)($current['status'] ?? 0) !== 200) {
+            throw new SvMarketplaceException('Nao foi possivel ler o SEO atual no ERP antes da publicacao.', (int)($current['status'] ?? 0));
+        }
+        $currentJson = is_array($current['json'] ?? null) ? $current['json'] : [];
+        $currentProduct = is_array($currentJson['produto'] ?? null) ? $currentJson['produto'] : $currentJson;
+        $currentSku = trim((string)($currentProduct['sku'] ?? $currentProduct['codigo'] ?? ''));
+        if ($currentSku === '' || strcasecmp($currentSku, $sku) !== 0) {
+            throw new RuntimeException('SKU do produto ERP nao corresponde ao cadastro de origem.');
+        }
+        $currentSeo = is_array($currentProduct['seo'] ?? null) ? $currentProduct['seo'] : [];
+        $seo = self::mergeSeo($currentSeo, $content);
         $payload = [
             'descricao' => $title,
             'sku' => $sku,
             'descricaoComplementar' => $this->notes($content),
-            'seo' => [
-                'titulo' => $this->limit((string)($content['meta_title'] ?? $title), 120),
-                'descricao' => (string)($content['meta_description'] ?? $description),
-                'keywords' => is_array($content['seo_keywords'] ?? null) ? array_values($content['seo_keywords']) : [],
-            ],
         ];
+        if ($seo !== []) {
+            $payload['seo'] = $seo;
+        }
+        // Nao enviar preco, custo ou estoque no PUT editorial.
         sv_market_assert_no_commerce_fields($payload, 'Tiny/Olist product text update');
         $response = sv_market_tiny_request_v3('PUT', '/produtos/' . $tinyId, $payload);
         if (!in_array((int)$response['status'], [200, 204], true)) {
@@ -46,14 +60,16 @@ final class SvTinyPublisher
             throw new RuntimeException('Tiny/Olist não confirmou a descrição complementar no read-back.');
         }
         $readSeo = is_array($readProduct['seo'] ?? null) ? $readProduct['seo'] : [];
-        if ($readSeo !== []) {
-            $readSeoTitle = trim((string)($readSeo['titulo'] ?? ''));
-            $readSeoDescription = trim((string)($readSeo['descricao'] ?? ''));
-            if ($readSeoTitle !== '' && $readSeoTitle !== trim((string)$payload['seo']['titulo'])) {
-                throw new RuntimeException('Tiny/Olist não confirmou o título SEO no read-back.');
+        foreach ($seo as $key => $expected) {
+            if (!array_key_exists($key, $readSeo) || $readSeo[$key] !== $expected) {
+                throw new RuntimeException('Tiny/Olist nao preservou o campo SEO ' . $key . ' no read-back.');
             }
-            if ($readSeoDescription !== '' && $readSeoDescription !== trim((string)$payload['seo']['descricao'])) {
-                throw new RuntimeException('Tiny/Olist não confirmou a descrição SEO no read-back.');
+        }
+        // Identidade e valores comerciais nunca sao alvo da publicacao textual.
+        foreach (['ncm', 'gtin', 'origem', 'codigoEspecificadorSubstituicaoTributaria', 'categoria', 'marca', 'dimensoes', 'precos', 'fornecedores', 'variacoes', 'estoque'] as $field) {
+            if (array_key_exists($field, $currentProduct)
+                && ($readProduct[$field] ?? null) !== $currentProduct[$field]) {
+                throw new RuntimeException('Tiny/Olist mudou campo fora do escopo editorial: ' . $field);
             }
         }
         sv_market_save_mapping($this->db, $productId, 'erp', (string)$tinyId, $sku, ['source' => 'resolved_by_sku_or_products.olist_id']);
@@ -63,14 +79,39 @@ final class SvTinyPublisher
             'external_id' => (string)$tinyId,
             'http_status' => (int)$response['status'],
             'request_id' => '',
-            'fields' => ['descricao', 'descricaoComplementar', 'seo.titulo', 'seo.descricao', 'seo.keywords'],
+            'fields' => array_merge(['descricao', 'descricaoComplementar'], array_map(static fn(string $key): string => 'seo.' . $key, array_keys($seo))),
             'response' => [
                 'title_confirmed' => true,
                 'description_confirmed' => $readDescription !== '',
-                'seo_confirmed' => $readSeo !== [],
+                'seo_confirmed' => $seo === [] || $readSeo !== [],
+                'seo_fields_preserved' => array_keys($seo),
+                'non_editorial_fields_unchanged' => true,
             ],
             'verified' => true,
         ];
+    }
+
+    /**
+     * Mescla SEO do ERP sem transformar campo omitido na proposta em limpeza.
+     * A lista vazia de keywords no staging significa "sem sugestao nova",
+     * nao a exclusao de palavras-chave existentes.
+     *
+     * @param array<string,mixed> $existingSeo
+     * @param array<string,mixed> $content
+     * @return array<string,mixed>
+     */
+    public static function mergeSeo(array $existingSeo, array $content): array
+    {
+        $seo = $existingSeo;
+        $title = trim((string)($content['meta_title'] ?? ''));
+        $description = trim((string)($content['meta_description'] ?? ''));
+        $keywords = is_array($content['seo_keywords'] ?? null)
+            ? array_values(array_filter(array_map('trim', $content['seo_keywords']), static fn(string $value): bool => $value !== ''))
+            : [];
+        if ($title !== '') $seo['titulo'] = function_exists('mb_substr') ? mb_substr($title, 0, 120) : substr($title, 0, 120);
+        if ($description !== '') $seo['descricao'] = $description;
+        if ($keywords !== []) $seo['keywords'] = $keywords;
+        return $seo;
     }
 
     public function publishImages(int $productId, array $imageUrls): array
