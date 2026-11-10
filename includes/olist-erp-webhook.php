@@ -56,17 +56,35 @@ function svoei_normalize_v3_product(array $item, array $stockDetail = []): array
     $image = svoei_first_text([$item['imagem_principal_url'] ?? '', $attachments[0]['url'] ?? '']);
     $slug = svoei_first_text([$seo['slug'] ?? '', $item['slug'] ?? '']);
     if ($slug === '') $slug = svcr_slug($name, $sku);
+    // A listagem resumida do ERP nao pode apagar os relacionamentos do detalhe.
+    // Expor apenas identidades de variacoes no cache derivado (nunca custos).
+    $variacoesVinculos = [];
+    foreach (is_array($item['variacoes'] ?? null) ? $item['variacoes'] : [] as $variation) {
+        if (!is_array($variation)) continue;
+        $variationId = trim((string)($variation['id'] ?? ''));
+        $variationSku = svoei_first_text([$variation['sku'] ?? '', $variation['codigo'] ?? '']);
+        if ($variationId === '' && $variationSku === '') continue;
+        $variacoesVinculos[] = ['id' => $variationId, 'sku' => $variationSku];
+    }
 
     return [
         'id' => $item['id'] ?? null,
         'sku' => $sku,
         'tipo' => (string)($item['tipo'] ?? 'P'),
+        'tipoVariacao' => $item['tipoVariacao'] ?? null,
+        'produtoPai' => is_array($item['produtoPai'] ?? null) ? ['id' => (string)($item['produtoPai']['id'] ?? '')] : $item['produtoPai'] ?? null,
+        'variacoes_vinculos' => $variacoesVinculos,
         'kit' => is_array($item['kit'] ?? null) ? $item['kit'] : [],
         'descricao' => $name,
         'descricaoComplementar' => svoei_first_text([$item['descricaoComplementar'] ?? '', $item['descricao_complementar'] ?? '']),
         'situacao' => (string)($item['situacao'] ?? 'A'),
         'unidade' => (string)($item['unidade'] ?? ''),
+        'unidadePorCaixa' => (string)($item['unidadePorCaixa'] ?? ''),
+        'ncm' => (string)($item['ncm'] ?? ''),
+        'origem' => (string)($item['origem'] ?? ''),
+        'codigoEspecificadorSubstituicaoTributaria' => (string)($item['codigoEspecificadorSubstituicaoTributaria'] ?? ''),
         'gtin' => (string)($item['gtin'] ?? ''),
+        'garantia' => (string)($item['garantia'] ?? ''),
         'precos' => [
             'preco' => svoei_number($prices['preco'] ?? $prices['preco_venda'] ?? $item['preco'] ?? 0),
             'precoPromocional' => svoei_number($prices['precoPromocional'] ?? $prices['preco_promocional'] ?? $item['precoPromocional'] ?? 0),
@@ -74,15 +92,19 @@ function svoei_normalize_v3_product(array $item, array $stockDetail = []): array
         'estoque' => ['quantidade' => (int)floor(svoei_number($available))],
         'estoque_disponivel' => (int)floor(svoei_number($available)),
         'categoria' => [
+            'id' => $category['id'] ?? null,
             'nome' => svoei_first_text([$category['nome'] ?? '', $item['descricaoCategoria'] ?? '']),
             'caminhoCompleto' => svoei_first_text([$category['caminhoCompleto'] ?? '', $item['descricaoArvoreCategoria'] ?? '']),
         ],
-        'marca' => ['nome' => $brand],
+        'marca' => ['id' => is_array($brandValue) ? ($brandValue['id'] ?? null) : null, 'nome' => $brand],
         'dimensoes' => [
             'largura' => svoei_number($dimensions['largura'] ?? $item['larguraEmbalagem'] ?? 0),
             'altura' => svoei_number($dimensions['altura'] ?? $item['alturaEmbalagem'] ?? 0),
             'comprimento' => svoei_number($dimensions['comprimento'] ?? $item['comprimentoEmbalagem'] ?? 0),
             'pesoLiquido' => svoei_number($dimensions['pesoLiquido'] ?? $dimensions['peso_liquido'] ?? $item['pesoLiquido'] ?? 0),
+            'pesoBruto' => svoei_number($dimensions['pesoBruto'] ?? $item['pesoBruto'] ?? 0),
+            'quantidadeVolumes' => (int)($dimensions['quantidadeVolumes'] ?? $item['quantidadeVolumes'] ?? 0),
+            'diametro' => svoei_number($dimensions['diametro'] ?? $item['diametroEmbalagem'] ?? 0),
         ],
         'anexos' => $attachments,
         'imagem_principal_url' => $image,
