@@ -49,4 +49,8 @@ $invalid['gclid'] = 'bad id with spaces';
 $invalid['gbraid'] = '';
 assert_true(svgads_build_click_conversion($invalid, 'customers/123/conversionActions/456') === null, 'invalid click identifiers must fail closed');
 
+$source = (string)file_get_contents($root . '/includes/google-ads-order-conversion.php');
+assert_true(str_contains($source, "'v25'"), 'Google Ads API version default must be modern v25');
+assert_true(!str_contains($source, "'v22'"), 'sunsetted Google Ads API v22 must not be used');
+
 echo "PASS: Google Ads approved-order conversion payload is deterministic and attributable.\n";
