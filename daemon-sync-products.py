@@ -26,7 +26,7 @@ _LAST_REQUEST = 0.0
 _MIN_REQUEST_INTERVAL = 1.10
 DETAIL_CACHE_MAX_AGE_SECONDS = 2 * 60 * 60
 # Any schema change must refresh previously compacted ERP details before reuse.
-PUBLIC_PRODUCT_SCHEMA_VERSION = 2
+PUBLIC_PRODUCT_SCHEMA_VERSION = 3
 AMAZON_PRICE_LIST_ID = 991
 CENT = Decimal('0.01')
 _UNCHECKED_CACHE_REVISION = object()
@@ -105,6 +105,12 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "descricaoComplementar": str(item.get("descricaoComplementar") or item.get("descricao_complementar") or "").strip(),
         "situacao": str(item.get("situacao") or "A"),
         "unidade": str(item.get("unidade") or ""),
+        "unidadePorCaixa": str(item.get("unidadePorCaixa") or ""),
+        # ERP IDs remain authoritative; these are read-only projections,
+        # never written back through the storefront cache.
+        "ncm": str(item.get("ncm") or ""),
+        "origem": str(item.get("origem") or ""),
+        "garantia": str(item.get("garantia") or ""),
         "gtin": str(item.get("gtin") or ""),
         "precos": {
             "preco": float(prices.get("preco") or prices.get("preco_venda") or item.get("preco") or 0),
@@ -129,6 +135,8 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
             "comprimento": float(dimensions.get("comprimento") or 0),
             "pesoLiquido": float(dimensions.get("pesoLiquido") or dimensions.get("peso_liquido") or item.get("peso") or 0),
             "pesoBruto": float(dimensions.get("pesoBruto") or dimensions.get("peso_bruto") or 0),
+            "diametro": float(dimensions.get("diametro") or 0),
+            "quantidadeVolumes": int(dimensions.get("quantidadeVolumes") or 0),
         },
         "anexos": attachments,
         "imagem_principal_url": str(item.get("imagem_principal_url") or ""),
