@@ -1,0 +1,82 @@
+name: Hosts Read-only Inventory
+
+# Manual only. Read-only inventory and non-destructive functional tests on the
+# backend and Marina hosts. No service restarts, no config changes.
+on:
+  workflow_dispatch:
+    inputs:
+      marina_host:
+        description: Marina address reachable from the backend
+        required: true
+        default: "100.118.170.46"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend inventory and functional tests
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Inventory and functional tests (backend)
+        run: |
+          set -uo pipefail
+          echo "hostname=$(hostname)"
+          echo "user=$(id -un)"
+          echo "--- versions"
+          apache2 -v 2>/dev/null | head -n1 || echo "apache2: n/a"
+          php -v 2>/dev/null | head -n1 || echo "php: n/a"
+          mysql --version 2>/dev/null || echo "mysql: n/a"
+          echo "--- shopvivaliz services (running)"
+          systemctl list-units --type=service --state=running --no-pager --no-legend 'shopvivaliz*' || true
+          echo "--- disk and memory"
+          df -h / | tail -n1
+          free -m | head -n2
+          echo "--- functional: temp file write/read/remove"
+          f="/tmp/sv-functional-$(date +%s)-$$.txt"
+          echo "ok" > "$f" && cat "$f" && rm -f "$f" && echo "TEMP_WRITE_READ_REMOVE=PASS" || echo "TEMP_WRITE_READ_REMOVE=FAIL"
+          echo "--- functional: sudo non-interactive capability (no privileged command run)"
+          sudo -n true 2>/dev/null && echo "SUDO_NOPASSWD=PASS" || echo "SUDO_NOPASSWD=NOT_AVAILABLE"
+          echo "--- functional: apache status"
+          systemctl is-active apache2 2>/dev/null || echo "apache2: not active"
+          echo "--- functional: mysql SELECT 1"
+          mysql -e 'SELECT 1' 2>/dev/null && echo "MYSQL_SELECT=PASS" || echo "MYSQL_SELECT=NOT_AVAILABLE_OR_NO_CREDENTIALS"
+
+  marina:
+    name: Marina inventory and functional tests
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Inventory and functional tests (Marina over SSH)
+        env:
+          BACKEND_SSH_KEY: ${{ secrets.BACKEND_SSH_KEY }}
+          MARINA_HOST: ${{ inputs.marina_host }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$BACKEND_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          timeout 300 ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            "ubuntu@$MARINA_HOST" 'set -uo pipefail
+              echo "hostname=$(hostname)"
+              echo "user=$(id -un)"
+              echo "--- versions"
+              apache2 -v 2>/dev/null | head -n1 || echo "apache2: n/a"
+              php -v 2>/dev/null | head -n1 || echo "php: n/a"
+              mysql --version 2>/dev/null || echo "mysql: n/a"
+              echo "--- shopvivaliz services (running)"
+              systemctl list-units --type=service --state=running --no-pager --no-legend "shopvivaliz*" || true
+              echo "--- disk and memory"
+              df -h / | tail -n1
+              free -m | head -n2
+              echo "--- functional: temp file write/read/remove"
+              f="/tmp/sv-functional-$(date +%s)-$$.txt"
+              echo ok > "$f" && cat "$f" && rm -f "$f" && echo "TEMP_WRITE_READ_REMOVE=PASS" || echo "TEMP_WRITE_READ_REMOVE=FAIL"
+              echo "--- functional: sudo non-interactive capability (no privileged command run)"
+              sudo -n true 2>/dev/null && echo "SUDO_NOPASSWD=PASS" || echo "SUDO_NOPASSWD=NOT_AVAILABLE"
+              echo "--- functional: apache status"
+              systemctl is-active apache2 2>/dev/null || echo "apache2: not active"
+              echo "--- functional: mysql SELECT 1"
+              mysql -e "SELECT 1" 2>/dev/null && echo "MYSQL_SELECT=PASS" || echo "MYSQL_SELECT=NOT_AVAILABLE_OR_NO_CREDENTIALS"'
