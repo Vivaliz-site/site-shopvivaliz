@@ -72,6 +72,21 @@ try {
     assertProductTab($one['status']==='mapped' && $one['id']===101
         && $one['method']==='OLIST_AUTHENTICATED_PRODUCT_TAB_UI',
         'verified screenshot + unique live ERP SKU must map');
+    // Same Amazon Seller SKU can be listed under both integrations of ONE
+    // Olist product. Fulfillment decides which integration supplies the rate.
+    $sameProductChannels=$loaded;
+    $sameProductChannels['entries']['SELLER-1'][]=[
+        'id'=>101,'erp_sku'=>'REAL-ERP','integration'=>'Amazon',
+        'observed_at'=>'2026-11-06T04:15:00.000Z','screenshot_verified'=>true];
+    $asDba=SvAmazonMarginOlistProductTabCapture::lookup(
+        $sameProductChannels,'SELLER-1',$live,$now,'MERCHANT');
+    assertProductTab($asDba['status']==='mapped' && $asDba['integration']==='Amazon',
+        'merchant current offer selects Olist Amazon/DBA integration');
+    $asOnsite=SvAmazonMarginOlistProductTabCapture::lookup(
+        $sameProductChannels,'SELLER-1',$live,$now,'AMAZON');
+    assertProductTab($asOnsite['status']==='mapped'
+        && $asOnsite['integration']==='Amazon Onsite',
+        'Amazon fulfillment selects Olist Amazon Onsite integration');
     assertProductTab(SvAmazonMarginOlistProductTabCapture::lookup(
         $loaded,'SELLER-2',$live,$now)['status']==='absent',
         'unpictured product association must not certify missing cost');
