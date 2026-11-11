@@ -384,7 +384,7 @@ e das exportações PDF/XLSX continua necessária após qualquer deploy.
 
 ## Margem comercial PROJETADA no preco vigente (decisao do proprietario em 06/11/2026)
 
-A margem da lista de risco **abaixo de 10%** e a **margem atual estimada** da oferta **por Seller SKU**, sem exigir venda anterior. A margem **realizada**, calculada sobre valores transacionais efetivos e conciliados, continua preservada em campo proprio e nunca e misturada com a projecao.
+A margem da lista de risco **abaixo de 9%** e a **margem atual estimada** da oferta **por Seller SKU**, sem exigir venda anterior. A margem **realizada**, calculada sobre valores transacionais efetivos e conciliados, continua preservada em campo proprio e nunca e misturada com a projecao.
 
 - **Preco:** oferta BUYABLE vigente na Amazon Pricing (nao usar o preco de venda antiga nem o preco cadastral se Pricing nao confirmou).
 - **Custo:** ultimo custo ERP Olist V3 positivo do produto ativo vinculado ao Seller SKU, referente ao kit comercial completo e com multiplicador e BOM validados.
@@ -392,11 +392,11 @@ A margem da lista de risco **abaixo de 10%** e a **margem atual estimada** da of
 - **Peso/volume:** obter item_package_weight / item_package_dimensions da Amazon Catalog ou dimensoes.pesoBruto / comprimento / largura / altura do produto validado Olist. Peso cubico (kg) = comprimento x largura x altura (cm) / 6000; peso tarifavel = maior entre peso real e cubico, acrescido de 20 gramas de embalagem. Diferencas entre as duas fontes sao sinalizadas.
 - **Logistica:** tarifas oficiais FBA Onsite e DBA vigentes por faixa de preco/peso; WMS Onsite = R$ 0 na tabela oficial. DBA acima de R$ 200 depende da regiao de origem real, configurada por SV_AMAZON_DBA_ORIGIN_REGION (sp_capital, se_capital, se_interior, other). Sem origem identificada, margem pendente.
 - **DBA sem venda:** o canal MERCHANT pode ser projetado como DBA candidato, marcado explicitamente estimated_program_unverified; nao afirma que o pedido foi conciliado. Programa desconhecido permanece pendente.
-- **Piso comercial vigente:** margem atual projetada abaixo de **10% (1000 bps)** e risco comercial. Produtos entre 9,00% e 9,99% devem aparecer como abaixo do piso, inclusive aqueles com ressalvas de dimensao ou programa. Margem projetada nao significa rentabilidade financeira historica certificada; pendencias sem cotacao confiavel nunca recebem margem inventada.
+- **Piso comercial vigente:** margem atual projetada abaixo de **9% (900 bps)** e risco comercial. Margens iguais a 9,00% nao entram no filtro; margens menores que 9,00% entram, inclusive quando houver ressalvas de dimensao ou programa. Margem projetada nao significa rentabilidade financeira historica certificada; pendencias sem cotacao confiavel nunca recebem margem inventada.
 - **Imposto:** SV_AMAZON_MARGIN_TAX_BPS (padrao 1400 = 14%) aplicado ao **preco vigente**.
 - **Formula por unidade comercial:** lucro atual = preco vigente - custo completo do kit - comissao cotada - logistica aplicavel - imposto sobre preco vigente - WMS; margem atual (%) = lucro atual / preco vigente x 100.
 - **Dados ausentes:** nao inventar custo, peso, comissao, regiao nem lucro. Manter margem atual nula ate haver fonte confiavel, com causa expressa.
-- **Relatorios:** painel tem filtro Margem atual estimada abaixo de 10% e separa Margem historica; Excel inclui preco, custo, comissao, logistica, imposto, peso real/cubico/tarifavel, status e origem; PDF exibe margem atual.
+- **Relatorios:** painel tem filtro Margem atual estimada abaixo de 9% e separa Margem historica; Excel inclui preco, custo, comissao, logistica, imposto, peso real/cubico/tarifavel, status e origem; PDF exibe margem atual.
 - **Escopo:** margens projetadas nao incluem publicidade, devolucoes e outras despesas extraordinarias nao fornecidas. Nao apresentar como liquido financeiro total certificado.
 
 Fontes: FBA Onsite https://sellercentral.amazon.com.br/gp/help/external/GSCSJT23SEAKNXAN ; DBA https://venda.amazon.com.br/cresca/dba ; comissoes https://venda.amazon.com.br/precos ; cotacao https://developer-docs.amazon.com/sp-api/reference/getmyfeesestimates .
