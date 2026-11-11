@@ -56,6 +56,8 @@ jobs:
           print("MCP_DCR_ENABLED="+str(reg.get("enabled") is True).lower())
           print("MCP_DCR_URIS_COUNT="+str(len(reg.get("allowed_uris") or [])))
           print("MCP_DCR_STABLE_CHATGPT_REDIRECT_PRESENT="+str("https://chatgpt.com/connector_platform_oauth_redirect" in (reg.get("allowed_uris") or [])).lower())
+          print("MCP_DCR_CLAUDE_AI_REDIRECT_PRESENT="+str("https://claude.ai/api/mcp/auth_callback" in (reg.get("allowed_uris") or [])).lower())
+          print("MCP_DCR_CLAUDE_COM_REDIRECT_PRESENT="+str("https://claude.com/api/mcp/auth_callback" in (reg.get("allowed_uris") or [])).lower())
           print("MCP_POLICY_COUNT="+str(len(app.get("policies") or [])))
           print("MCP_ORIGIN_JWT_POLICY_PRESERVATION_REQUIRED=true")
           PY

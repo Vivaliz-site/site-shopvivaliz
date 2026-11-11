@@ -64,20 +64,37 @@ def probe():
     return bool(meta.get("registration_endpoint"))
 
 
+STABLE_REDIRECT_URIS = (
+    "https://chatgpt.com/connector_platform_oauth_redirect",
+    "https://claude.ai/api/mcp/auth_callback",
+    "https://claude.com/api/mcp/auth_callback",
+)
+
+
 def validate_redirect(uri):
     u = urlsplit(uri)
-    if u.scheme != "https" or u.hostname != "chatgpt.com" or u.username or u.password or u.query or u.fragment:
+    if u.scheme != "https" or u.username or u.password or u.query or u.fragment:
         raise DcrError("invalid_chatgpt_redirect")
     try:
         if u.port is not None:
             raise DcrError("invalid_chatgpt_redirect")
     except ValueError:
         raise DcrError("invalid_chatgpt_redirect") from None
-    if u.path == "/connector_platform_oauth_redirect":
+    if uri in STABLE_REDIRECT_URIS:
         return uri
+    if u.hostname != "chatgpt.com":
+        raise DcrError("invalid_chatgpt_redirect")
     if not re.fullmatch(r"/connector/oauth/[A-Za-z0-9_-]{8,128}", u.path):
         raise DcrError("invalid_chatgpt_redirect_path")
     return uri
+
+
+def validate_redirects(uris):
+    if isinstance(uris, str):
+        uris = [uris]
+    if not isinstance(uris, (list, tuple)) or not uris:
+        raise DcrError("invalid_chatgpt_redirect")
+    return list(dict.fromkeys(validate_redirect(u) for u in uris))
 
 
 def plan(app, app_id, redirect):
@@ -88,7 +105,7 @@ def plan(app, app_id, redirect):
     cfg = app.get("oauth_configuration")
     if not isinstance(cfg, dict) or cfg.get("enabled") is not True:
         raise DcrError("managed_oauth_not_enabled")
-    callback = validate_redirect(redirect)
+    callbacks = validate_redirects(redirect)
     result = copy.deepcopy(app)
     dynamic = result["oauth_configuration"].setdefault("dynamic_client_registration", {})
     if not isinstance(dynamic, dict):
@@ -99,7 +116,7 @@ def plan(app, app_id, redirect):
     if not isinstance(existing, list) or any(not isinstance(x, str) for x in existing):
         raise DcrError("invalid_redirect_allowlist")
     dynamic.update(enabled=True, allow_any_on_localhost=False, allow_any_on_loopback=False,
-                   allowed_uris=list(dict.fromkeys(existing + [callback])))
+                   allowed_uris=list(dict.fromkeys(existing + callbacks)))
     return result
 
 
@@ -161,7 +178,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--app-id", default="")
-    ap.add_argument("--redirect-uri", default="")
+    ap.add_argument("--redirect-uri", action="append", default=[])
     ap.add_argument("--backup-path", default="")
     args = ap.parse_args()
     old = updated = None
@@ -173,14 +190,14 @@ def main():
         print("OAUTH_DCR_ADVERTISED=" + str(current).lower())
         if not args.apply:
             return 0 if current else 2
-        callback = validate_redirect(args.redirect_uri)
+        callbacks = validate_redirects(args.redirect_uri)
         if not args.app_id or not args.backup_path:
             raise DcrError("exact_app_id_and_backup_required")
         token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
         if not token:
             raise DcrError("provider_credential_not_in_current_process")
         old = app_get(token, args.app_id)
-        updated = plan(old, args.app_id, callback)
+        updated = plan(old, args.app_id, callbacks)
         if updated != old:
             save_private_backup(Path(args.backup_path), old)
             print("PRIVATE_ROLLBACK_BACKUP_SAVED=true")
@@ -191,7 +208,8 @@ def main():
                 raise DcrError("cloudflare_update_failed")
         readback = app_get(token, args.app_id)
         dcr = readback.get("oauth_configuration", {}).get("dynamic_client_registration", {})
-        if readback.get("domain") != DOMAIN or dcr.get("enabled") is not True or callback not in dcr.get("allowed_uris", []):
+        allowed_after = dcr.get("allowed_uris", [])
+        if readback.get("domain") != DOMAIN or dcr.get("enabled") is not True or any(cb not in allowed_after for cb in callbacks):
             raise DcrError("dcr_readback_mismatch")
         if (_without_dcr_and_observation_timestamps(readback) !=
                 _without_dcr_and_observation_timestamps(old)):
