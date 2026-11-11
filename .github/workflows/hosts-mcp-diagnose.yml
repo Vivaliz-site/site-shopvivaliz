@@ -1,0 +1,30 @@
+name: Remote Control MCP Read-only Diagnose
+
+# Manual only. Read-only diagnosis of the Remote Control MCP on the backend.
+# Reads service status and listening ports. Checks that the token file exists
+# without printing its content. Changes nothing.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend MCP diagnosis
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Read-only MCP diagnosis (backend)
+        run: |
+          set -uo pipefail
+          echo "hostname=$(hostname)"
+          echo "--- services"
+          systemctl list-units --type=service --all --no-pager --no-legend 'shopvivaliz-*remote*' 'shopvivaliz-claude*' || true
+          echo "--- listening ports 5580/5581"
+          (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -E ':(5580|5581)\b' || echo "NO_LISTENER_5580_5581"
+          echo "--- token file presence (content never printed)"
+          for p in /var/lib/shopvivaliz-remote-control/mcp-token /var/lib/shopvivaliz-remote-control/service.env; do
+            if sudo -n test -f "$p"; then echo "PRESENT $p"; else echo "ABSENT_OR_NO_ACCESS $p"; fi
+          done
+          echo "--- recent journal (last 15 lines, remote-control units)"
+          sudo -n journalctl -u shopvivaliz-claude-remote-control.service -u shopvivaliz-remote-control-mcp.service -n 15 --no-pager 2>/dev/null || echo "JOURNAL_NOT_AVAILABLE"
