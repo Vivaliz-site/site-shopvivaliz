@@ -389,7 +389,7 @@ def create_server(
                               + (GUI_BROWSER_TOOLS if gui_browser is not None and self.jwt_verified else [])}
                 elif method == "tools/call":
                     params = request.get("params")
-                    if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
+                    if not isinstance(params, dict) or not {"name", "arguments"} <= set(params) <= {"name", "arguments", "_meta"}:
                         raise ValueError("invalid_tool_request")
                     name, arguments = params["name"], params["arguments"]
                     if not isinstance(arguments, dict):
