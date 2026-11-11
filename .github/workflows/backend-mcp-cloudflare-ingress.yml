@@ -1,0 +1,48 @@
+name: Backend MCP Cloudflare Access and Tunnel Ingress
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "inspect (read-only), apply (provisiona Access + ingress + DNS), ou rollback"
+        required: true
+        type: choice
+        options:
+          - inspect
+          - apply
+          - rollback
+        default: inspect
+      confirmation:
+        description: "Para apply use APPLY_BACKEND_MCP_INGRESS; para rollback use ROLLBACK_BACKEND_MCP_INGRESS"
+        required: true
+        type: string
+        default: inspect
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-mcp-cloudflare-ingress
+  cancel-in-progress: false
+
+jobs:
+  manage-ingress:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Execute Cloudflare Access and Tunnel ingress management
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_DNS_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+          ACTION: ${{ inputs.action }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname -s)" = "always-free-arm-1787907847-26"
+          python3 scripts/provision_backend_mcp_cloudflare_ingress.py
