@@ -1,0 +1,29 @@
+[Unit]
+Description=ShopVivaliz Remote Control Access Gateway (Cloudflare Access JWT -> MCP)
+After=network-online.target shopvivaliz-remote-control-browser-mcp.service
+Wants=network-online.target
+ConditionPathExists=/var/lib/shopvivaliz-remote-control/access-gateway.json
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/shopvivaliz-rc-access-gateway
+Environment=PYTHONUNBUFFERED=1
+Environment=GATEWAY_PORT=5590
+Environment=GATEWAY_UPSTREAM_PORT=5581
+Environment=GATEWAY_ACCESS_CONFIG=/var/lib/shopvivaliz-remote-control/access-gateway.json
+Environment=GATEWAY_UPSTREAM_TOKEN_FILE=/var/lib/shopvivaliz-remote-control/mcp-token
+ExecStart=/usr/bin/python3 /opt/shopvivaliz-rc-access-gateway/gateway.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/shopvivaliz-remote-control
+MemoryMax=256M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
