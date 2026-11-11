@@ -2,6 +2,27 @@
 declare(strict_types=1);
 
 /**
+ * Ignore connective words only in multiword searches. A one-word query such
+ * as "para" retains its original meaning instead of matching every product.
+ *
+ * @return list<string>
+ */
+function sv_catalog_search_terms(string $normalizedQuery): array
+{
+    $tokens = preg_split('/\\s+/u', trim($normalizedQuery)) ?: [];
+    $tokens = array_values(array_filter($tokens, static fn(string $token): bool => $token !== ''));
+    if (count($tokens) < 2) {
+        return $tokens;
+    }
+    $connectives = ['DE', 'DA', 'DO', 'DAS', 'DOS', 'PARA', 'COM', 'EM', 'E'];
+    $meaningful = array_values(array_filter(
+        $tokens,
+        static fn(string $token): bool => !in_array($token, $connectives, true)
+    ));
+    return $meaningful !== [] ? $meaningful : $tokens;
+}
+
+/**
  * Paid-search-aware catalog copy.
  *
  * Keeps commercial claims factual while aligning the visible catalog heading
@@ -25,7 +46,11 @@ function sv_catalog_search_context(string $query): array
         ? mb_strtolower($query, 'UTF-8')
         : strtolower($query);
 
-    if (str_contains($normalized, 'vedante')) {
+    $doorSealIntent = str_contains($normalized, 'vedante')
+        || str_contains($normalized, 'vedador')
+        || str_contains($normalized, 'veda porta')
+        || (str_contains($normalized, 'rodo') && str_contains($normalized, 'porta'));
+    if ($doorSealIntent) {
         return [
             'eyebrow' => 'Vedantes para porta',
             'heading' => 'Vedantes para porta em alumínio e borracha',
