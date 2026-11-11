@@ -1,3 +1,7 @@
+<!-- RDC_FORA_DA_META_20261111 -->
+> **RDC (Desktop Commander) — decisao do proprietario, 2026-11-11:** o RDC deixou de ser meta e de ser passo recomendado de tentativa. Mencoes a RDC neste arquivo sao historico ou fallback opcional, nao exigencia; a rota principal e o MCP administrativo. Este aviso nao cria proibicao nem gate. Fonte: `docs/knowledge/host-routes-matrix.md`.
+<!-- /RDC_FORA_DA_META_20261111 -->
+
 <!-- OWNER_ONLY_RESTRICTIONS_20261110 -->
 ## Exclusividade do proprietário para criar ou agravar restrições (10/11/2026)
 
