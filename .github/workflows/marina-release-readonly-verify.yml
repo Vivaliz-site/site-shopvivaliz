@@ -1,0 +1,35 @@
+name: Marina Release Read-Only Verify
+
+# Somente leitura. Roda no runner shopvivaliz-a1-deploy, que executa na propria
+# Marina: nao usa SSH nem secrets, nao altera release, servico ou arquivo.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    steps:
+      - name: Read release state (no mutation)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          base=/home/ubuntu/shopvivaliz-deploy
+          echo "== current"
+          readlink -f "$base/current" || echo "current ausente"
+          echo "== release-sha"
+          cat "$base/current/.release-sha" 2>/dev/null || echo "release-sha ausente"
+          echo "== deploy-target-ref"
+          cat "$base/shared/deploy-target-ref" 2>/dev/null || echo "sem alvo fixado"
+          echo "== releases recentes"
+          ls -t "$base/releases" 2>/dev/null | head -5 || echo "releases ausentes"
+          echo "== cadeia de background na release ativa"
+          grep -n 'BACKGROUND_ORDER=' "$base/current/scripts/autonomous-provider-failover.sh" 2>/dev/null || echo "roteador ausente"
+      - name: Health endpoint (sem segredos)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -sS --max-time 10 https://shopvivaliz.com.br/api/health/version.php | head -c 800 || echo "health indisponivel"
