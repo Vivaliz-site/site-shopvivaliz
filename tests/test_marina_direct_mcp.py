@@ -96,6 +96,8 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
                           "marina_processes_list", "marina_system_usage",
                           "marina_kernel_telemetry", "marina_kernel_telemetry_batch"})
         _, output = self.rpc("tools/call", {"name": "marina_host_health", "arguments": {}})
+        _, output_meta = self.rpc("tools/call", {"name": "marina_host_health", "arguments": {}, "_meta": {"progressToken": 1}})
+        self.assertEqual(output_meta["result"], output["result"])
         result = json.loads(output["result"]["content"][0]["text"])
         self.assertEqual(result["host"], m.EXPECTED_HOST)
         self.assertEqual(result["scope"], "unprivileged_read_only")
