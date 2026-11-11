@@ -77,6 +77,8 @@ jobs:
             --apply \
             --app-id 961c1049-6e70-46ae-bcfa-7827fbdf7553 \
             --redirect-uri https://chatgpt.com/connector_platform_oauth_redirect \
+            --redirect-uri https://claude.ai/api/mcp/auth_callback \
+            --redirect-uri https://claude.com/api/mcp/auth_callback \
             --backup-path "$backup"
 
       - name: Validate public discovery and registration after write

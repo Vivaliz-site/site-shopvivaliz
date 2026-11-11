@@ -80,8 +80,12 @@ class Tests(unittest.TestCase):
                 dcr.validate_redirect(redirect)
 
     def test_stable_redirect_supported(self):
-        uri = "https://chatgpt.com/connector_platform_oauth_redirect"
-        self.assertEqual(dcr.validate_redirect(uri), uri)
+        for uri in (
+            "https://chatgpt.com/connector_platform_oauth_redirect",
+            "https://claude.ai/api/mcp/auth_callback",
+            "https://claude.com/api/mcp/auth_callback",
+        ):
+            self.assertEqual(dcr.validate_redirect(uri), uri)
 
     def test_existing_open_local_clients_rejected(self):
         for key in ("allow_any_on_localhost", "allow_any_on_loopback"):

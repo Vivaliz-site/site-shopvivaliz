@@ -25,6 +25,8 @@ class MarinaDcrApplyWorkflowContract(unittest.TestCase):
     def test_exact_app_and_redirect_only(self):
         self.assertIn("961c1049-6e70-46ae-bcfa-7827fbdf7553", self.workflow)
         self.assertIn("https://chatgpt.com/connector_platform_oauth_redirect", self.workflow)
+        self.assertIn("https://claude.ai/api/mcp/auth_callback", self.workflow)
+        self.assertIn("https://claude.com/api/mcp/auth_callback", self.workflow)
         self.assertIn("scripts/marina_mcp_oauth_dcr.py", self.workflow)
         self.assertIn("--apply", self.workflow)
         self.assertIn("--app-id", self.workflow)
