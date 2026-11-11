@@ -13,17 +13,17 @@ Este arquivo é leitura obrigatória antes de qualquer tarefa que envolva VM, ru
 
 ## Hosts canônicos
 
-- `marina-a1-4c24g` — **producao web/deploy**, banco/workers/runner (OCI ESPOSA), privado documentado `10.80.1.116`, Tailscale observado `100.118.170.46`; RDC 1/2 direto online em 2026-10-29.
+- `marina-a1-4c24g` — **produção web/deploy**, banco, workers e runner (OCI ESPOSA); rota MCP central de escrita administrativa autorizada e validada em 11/11/2026 com `hostname -s; id -un` (exit 0).
 - `always-free-arm-1787907847-26` — backend/automacao/browser/controller MCP (OCI PRINCIPAL), VCN `10.0.1.38`, Tailscale observado `100.66.174.74`.
 - `shopvivaliz-free-a1` — **origem excluida** segundo proprietario; SSH sem rota em 2026-10-29. Nao enviar comandos/probes/deploys. OCI `TERMINATED` nao foi validado nesta rodada.
 - `Fred-Win` e `KOCEPSV` são hosts de apoio. Navegador de tarefas ShopVivaliz não deve rodar neles.
 
 ## Ordem de acesso
 
-1. **Remote Control MCP:** rota operacional primaria **do backend/hosts allowlisted ativos**. Seu inventario em 2026-10-29 ainda exibe origem excluida e **nao inclui Marina**; nunca usar alias da origem para Marina. Para Marina, usar **RDC 1/2 direto** (online, ID descoberto pelo nome) ou SSH privado apenas apos autenticacao validada. MCP independente Marina permanece inativo. O controller canônico fica em `always-free-arm-1787907847-26` e o endpoint de controle permanece privado/loopback.
+1. **Remote Control MCP:** rota operacional primária para backend, Marina e os hosts Windows publicados. Em 11/11/2026, `admin_command_run` comprovou backend, Marina e Fred-Win, mas a conexão do KOCEPSV falhou no relay `127.0.0.1:2223`; não inferir cobertura de um host somente pelo catálogo. O controller continua no backend e seu estado de continuidade precisa de certificação própria.
 2. **SSH privado/Tailscale:** usar o usuário dedicado `shopvivaliz-agent` somente quando a operação não estiver disponível pelo Remote Control MCP ou quando o control plane estiver comprovadamente indisponível. SSH público direto, login root público e autenticação por senha continuam proibidos.
 3. **GitHub Actions/OCI Bastion:** fallback auditável para bootstrap, recuperação e reparo do próprio Remote Control MCP quando não houver rota privada utilizável.
-4. **GUI/validação visual:** usar o canal grafico autorizado por host (RDC direto para Marina quando apropriado, RustDesk self-hosted no fluxo backend). Navegador, Playwright/Selenium/CDP, MFA, CAPTCHA, consentimento ou validação visual continuam na backend `always-free-arm-1787907847-26`, nunca nos hosts Windows.
+4. **GUI/validação visual:** executar pelas ferramentas MCP de desktop ou navegador realmente autorizadas para cada host, perfil e lease; validar a navegação real, efeitos e persistência. O navegador corporativo canônico e o controle de sessão ficam no backend, sem migração de cookies para Windows.
 
 ## Navegador
 
