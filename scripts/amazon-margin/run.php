@@ -21,6 +21,7 @@ require_once $root.'/includes/pdo-database.php';
 require_once $root.'/includes/marketplace/AmazonPublisher.php';
 require_once $root.'/includes/amazon-margin/AuditStore.php';
 require_once $root.'/includes/amazon-margin/AuditCollector.php';
+require_once $root.'/includes/marketplace/TinyV3Runtime.php';
 
 $options = getopt('', ['all','next','skus:','from:','dry-run']);
 $dryRun = array_key_exists('dry-run', $options);
@@ -52,8 +53,8 @@ try {
         $scope=(string)$job['scope'];
         $selected=$scope==='selected' ? $job['skus'] : [];
     }
-    $token = (string)(getenv('TINY_ACCESS_TOKEN') ?: getenv('OLIST_ACCESS_TOKEN') ?: '');
-    if ($token==='') throw new RuntimeException('tiny_access_token_missing');
+    // Consult canonical rotating token store instead of stale .env bearer.
+    $token = sv_market_tiny_ensure_access_token();
     $collector = new SvAmazonMarginCollector(new SvAmazonClient(),$token);
     $progress = $requestId>0 ? static function(string $stage,int $done,?int $total) use($db,$requestId):void {
         SvAmazonMarginStore::progress($db,$requestId,$stage,$done,$total);
