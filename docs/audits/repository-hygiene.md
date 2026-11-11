@@ -4,8 +4,8 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 5623
-- Diretorios versionados: 686
+- Arquivos versionados: 5649
+- Diretorios versionados: 687
 - Grupos de conteudo identico: 207
 - Grupos identicos que incluem codigo: 13
 - Nomes de funcao encontrados em mais de um arquivo: 741
@@ -1281,10 +1281,6 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `.vinext/fonts/geist-mono-00e989178794/geist-mono-0638449e.woff2`
 - `dist/client/assets/_vinext_fonts/geist-mono-00e989178794/geist-mono-0638449e.woff2`
 
-### Git blob ID `358f905bd3206bd2b75fd13b896ededb4cec1e57`
-- `AGENTS.md`
-- `CLAUDE.md`
-
 ### Git blob ID `38f0d9cb18d85d2e5b1a91fa95cc4a2a2c9478b6`
 - `js/cart-persistence-v23.js`
 - `public/dist/js/cart-persistence-v23.abeb4c252b.min.js`
@@ -1433,6 +1429,10 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `css/network-status-v22.css`
 - `public/dist/css/network-status-v22.860b495039.min.css`
 
+### Git blob ID `fb62e18acd052d9503285074d20aece1fa44b6a0`
+- `AGENTS.md`
+- `CLAUDE.md`
+
 ## Funcoes declaradas em mais de um arquivo
 
 Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaScript/TypeScript. Nomes repetidos nao provam duplicacao semantica; metodos e escopos podem ser independentes.
@@ -1524,7 +1524,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `Ce`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `challengeRequired`: `scripts/cloudflare-access-ui-probe.mjs`, `scripts/openai-secure-mcp-platform-auth.mjs`
 - `channelKey`: `admin/assets/catalog-change-intelligence.js`, `admin/assets/image-generation-workflow.js`
-- `check`: `includes/idempotency.php`, `tests/amazon-margin/AuditQueueTest.php`, `tests/amazon-margin/OlistAmazonOrderLinkTest.php`, `tests/amazon-margin/PromoFloorGuardTest.php`, `tests/analytics-session-consent-regression-test.cjs`, `tests/checkout-payment-retry-regression.cjs`, `tests/google-merchant-image-priority-test.php`, `tests/webhook-post-processor-google-ads-test.php`
+- `check`: `includes/idempotency.php`, `tests/amazon-margin/AuditQueueTest.php`, `tests/amazon-margin/OlistAmazonOrderLinkTest.php`, `tests/amazon-margin/PromoFloorGuardTest.php`, `tests/analytics-session-consent-regression-test.cjs`, `tests/checkout-payment-retry-regression.cjs`, `tests/google-merchant-image-priority-test.php`, `tests/test-site-pending-gateway-readonly.php`, `tests/webhook-post-processor-google-ads-test.php`
 - `checkHealthOnce`: `public/assets/liz-assistant/liz-assistant.js`, `public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js`
 - `checkout`: `js/mixed-cart-promo-v1.js`, `public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js`
 - `checkoutHasItems`: `js/sales-conversion-v1.js`, `public/dist/js/sales-conversion-v1.513b731b42.min.js`
@@ -1968,7 +1968,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `requireAsyncModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `requireModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `reset`: `includes/PHPMailer/SMTP.php`, `includes/logger.php`, `includes/query-builder.php`, `includes/rate-limiter.php`
-- `resolve`: `includes/amazon-margin/HistoricalFulfillment.php`, `includes/amazon-margin/KitCost.php`, `includes/amazon-margin/OlistAmazonOrderLink.php`, `includes/amazon-margin/ProductMatch.php`, `tests/catalog-search-order.test.cjs`, `tests/catalog-search-stock-race.test.cjs`
+- `resolve`: `includes/amazon-margin/HistoricalFulfillment.php`, `includes/amazon-margin/KitCost.php`, `includes/amazon-margin/OlistAmazonOrderLink.php`, `includes/amazon-margin/OlistChannelProgram.php`, `includes/amazon-margin/ProductMatch.php`, `tests/catalog-search-order.test.cjs`, `tests/catalog-search-stock-race.test.cjs`
 - `resolveAuthorizationHeader`: `includes/amazon-returns/RemoteBridge.php`, `includes/remote-bridge-auth.php`
 - `resolveBlockedCycle`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `resolveItemId`: `includes/marketplace/MercadoLivrePublisher.php`, `includes/marketplace/ShopeePublisher.php`
