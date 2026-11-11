@@ -1,0 +1,62 @@
+name: Hosts Admin Non-Destructive Write Test
+
+# Manual only. Non-destructive administrative write test on both hosts.
+# Writes and removes one new temporary file under /var/tmp. Never edits any
+# existing access file. Runs read-only syntax checks for sudoers, sshd and
+# apache. Never restarts or reloads a service.
+on:
+  workflow_dispatch:
+    inputs:
+      marina_host:
+        description: Marina address reachable from the backend
+        required: true
+        default: "100.118.170.46"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend admin write test
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Admin write test (backend)
+        run: |
+          set -uo pipefail
+          echo "hostname=$(hostname)"
+          f="/var/tmp/sv-admin-test-$(date +%s)-$$.conf"
+          printf '%s\n' "# sv-admin-test v1" "marker=ok" > "$f" || { echo "ADMIN_WRITE=FAIL_CREATE"; exit 0; }
+          sed -i 's/^# sv-admin-test v1$/# sv-admin-test v2/' "$f" && grep -q '^# sv-admin-test v2$' "$f" && echo "ADMIN_EDIT_COMMENT=PASS" || echo "ADMIN_EDIT_COMMENT=FAIL"
+          rm -f "$f" && echo "ADMIN_CLEANUP=PASS" || echo "ADMIN_CLEANUP=FAIL"
+          echo "--- read-only checks"
+          sudo -n visudo -c >/dev/null 2>&1 && echo "SUDOERS_SYNTAX=PASS" || echo "SUDOERS_SYNTAX=FAIL_OR_NOT_AVAILABLE"
+          sudo -n sshd -t >/dev/null 2>&1 && echo "SSHD_SYNTAX=PASS" || echo "SSHD_SYNTAX=FAIL_OR_NOT_AVAILABLE"
+          sudo -n apachectl configtest >/dev/null 2>&1 && echo "APACHE_CONFIGTEST=PASS" || echo "APACHE_CONFIGTEST=FAIL_OR_NOT_AVAILABLE"
+
+  marina:
+    name: Marina admin write test
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    steps:
+      - name: Admin write test (Marina over SSH)
+        env:
+          BACKEND_SSH_KEY: ${{ secrets.BACKEND_SSH_KEY }}
+          MARINA_HOST: ${{ inputs.marina_host }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$BACKEND_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          timeout 300 ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            "ubuntu@$MARINA_HOST" 'set -uo pipefail
+              echo "hostname=$(hostname)"
+              f="/var/tmp/sv-admin-test-$(date +%s)-$$.conf"
+              printf "%s\n" "# sv-admin-test v1" "marker=ok" > "$f" || { echo "ADMIN_WRITE=FAIL_CREATE"; exit 0; }
+              sed -i "s/^# sv-admin-test v1$/# sv-admin-test v2/" "$f" && grep -q "^# sv-admin-test v2$" "$f" && echo "ADMIN_EDIT_COMMENT=PASS" || echo "ADMIN_EDIT_COMMENT=FAIL"
+              rm -f "$f" && echo "ADMIN_CLEANUP=PASS" || echo "ADMIN_CLEANUP=FAIL"
+              echo "--- read-only checks"
+              sudo -n visudo -c >/dev/null 2>&1 && echo "SUDOERS_SYNTAX=PASS" || echo "SUDOERS_SYNTAX=FAIL_OR_NOT_AVAILABLE"
+              sudo -n sshd -t >/dev/null 2>&1 && echo "SSHD_SYNTAX=PASS" || echo "SSHD_SYNTAX=FAIL_OR_NOT_AVAILABLE"
+              sudo -n apachectl configtest >/dev/null 2>&1 && echo "APACHE_CONFIGTEST=PASS" || echo "APACHE_CONFIGTEST=FAIL_OR_NOT_AVAILABLE"'
