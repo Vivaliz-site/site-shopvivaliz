@@ -17,6 +17,7 @@ require_once __DIR__ . '/OlistAdsIndex.php';
 require_once __DIR__ . '/OlistUiCapture.php';
 require_once __DIR__ . '/OlistProductTabCapture.php';
 require_once __DIR__ . '/OlistChannelProgram.php';
+require_once __DIR__ . '/../marketplace/TinyV3Runtime.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -110,11 +111,14 @@ final class SvAmazonMarginCollector
         // Headers indicate the remaining budget and seconds to reset; preserve
         // capacity for the ERP's regular workflows instead of burst-reading it.
         for ($attempt=0;$attempt<6;$attempt++) {
+            // Canonical OAuth daemon owns refresh rotation: a static .env
+            // token can be stale even when the live token store is healthy.
+            $token=sv_market_tiny_ensure_access_token();
             $headers=[];
             $ch=curl_init('https://api.tiny.com.br/public-api/v3'.$path);
             if ($ch===false) throw new RuntimeException('tiny_transport_init_failed');
             curl_setopt_array($ch,[
-                CURLOPT_HTTPHEADER=>['Authorization: Bearer [REDACTED] application/json'],
+                CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$token,'Accept: application/json'],
                 CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>35,
                 CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2,
                 CURLOPT_HEADERFUNCTION=>static function($handle,string $line)use(&$headers):int{
