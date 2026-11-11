@@ -86,6 +86,8 @@ function sv_catalog_search_aliases(string $query): array
     $normalized = sv_catalog_search_normalize($query);
     $aliases = [$normalized];
     $rules = [
+        // Interpretar termos equivalentes de veda-porta sem ampliar buscas por 'rodo' genérico.
+        'VEDANTE' => ['VEDANTE', 'VEDANTES', 'VEDADOR', 'VEDADORES', 'VEDACAO'],
         'RODIZIO' => ['RODIZIO', 'RODIZIOS', 'RODINHA', 'RODINHAS', 'RODAS', 'GEL', 'SILICONE'],
         'CADEADO' => ['CADEADO', 'CADEADOS', 'PAPAIZ', 'TRAVA', 'SEGURANCA'],
         'ASSENTO' => ['ASSENTO', 'TAMPA', 'VASO SANITARIO', 'SANITARIO', 'BANHEIRO', 'ASTRA'],
@@ -152,7 +154,8 @@ function sv_catalog_matches_query(array $row, string $query): bool
         return true;
     }
 
-    $words = array_filter(explode(' ', $queryNorm));
+    // Preposições não devem eliminar produtos relevantes em buscas de compra.
+    $words = sv_catalog_search_terms($queryNorm);
     if ($words === []) {
         return true;
     }
