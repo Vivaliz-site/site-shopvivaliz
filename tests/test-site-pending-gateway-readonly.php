@@ -45,4 +45,4 @@ $r = svpr_inspect_rows([$rows[0]], static fn(string $ref): array => ['results' =
 check($r['status'] === 'INCOMPLETE_NOT_CERTIFIED', 'partial paging must not pass');
 $r = svpr_inspect_rows([$rows[0]], static function(): array { throw new RuntimeException('private'); }, $detail);
 check($r['counts']['search_errors'] === 1 && $r['status'] === 'INCOMPLETE_NOT_CERTIFIED', 'API failure fail-incomplete');
-echo "PASS 13 gateway-reference assertions\n";
+echo "PASS 14 gateway-reference assertions\n";
