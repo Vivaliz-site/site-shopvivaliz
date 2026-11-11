@@ -67,6 +67,26 @@ if (str_contains($sheet,'Preco medio efetivo das vendas')
     || str_contains($p,'Preco medio efetivo nas vendas')) {
     throw new Exception('Gross including shipping cannot be presented as product price');
 }
+// Live audit #19: 224 cents / 2490 cents = 8.99598%, rounded to
+// 900 bps by the collector. The threshold is strictly below 9%, so XLSX
+// must expose the unrounded percentage and its exact classification.
+$rounding=SvAmazonMarginExport::rows(['rows'=>[
+    ['seller_sku'=>'CN-U9ID-NZPT','price'=>24.90,
+      'current_margin_bps'=>900,'current_profit_cents'=>224],
+    ['seller_sku'=>'THRESHOLD-ABOVE','price'=>24.90,
+      'current_margin_bps'=>904,'current_profit_cents'=>225],
+    ['seller_sku'=>'PENDING','price'=>24.90,
+      'current_margin_bps'=>null,'current_profit_cents'=>null],
+]],[]);
+if(($rounding[0]['Abaixo de 9% exato']??null)!=='Sim'
+    ||abs(($rounding[0]['Margem atual exata (%)']??0)-8.996)>0.0001
+    ||($rounding[1]['Abaixo de 9% exato']??null)!=='Nao'
+    ||($rounding[2]['Abaixo de 9% exato']??null)!=='Pendente') {
+    throw new Exception('exact 9 percent threshold must use cents without bps rounding');
+}
+$roundingXlsx=SvAmazonMarginExport::xlsx($rounding);
+if(strlen($roundingXlsx)<1000)
+    throw new Exception('exact margin XLSX invalid');
 // Regression from persisted production run #14: three DBA Shipment rows had
 // pending_sales=1, confirmed_sales=0 but were labelled "no sales" in UI/exports.
 // Relabel for presentation without mutating the historical audit payload.
