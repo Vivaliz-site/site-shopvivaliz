@@ -1,0 +1,42 @@
+﻿name: Backend MCP Cloudflare scope probe (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Diagnostico somente leitura de escopo Cloudflare para conector MCP do backend
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe Access apps and tunnels (redacted, read-only)
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: "0afb7d99f708b9455598df9fa1035164"
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          token=os.environ.get("CF_TOKEN","")
+          if not token: raise SystemExit("NO_CLOUDFLARE_SECRET")
+          acc=os.environ["CF_ACCOUNT"]
+          def get(path):
+              req=urllib.request.Request("https://api.cloudflare.com/client/v4/accounts/"+acc+path,headers={"Authorization":"Bearer "+token})
+              try:
+                  with urllib.request.urlopen(req,timeout=15) as r: return r.status,json.load(r)
+              except urllib.error.HTTPError as e: return e.code,{}
+          s,r=get("/access/apps?per_page=100")
+          print("ACCESS_APPS_READ_HTTP="+str(s))
+          for a in r.get("result",[]) or []:
+              print("ACCESS_APP domain="+str(a.get("domain"))+" type="+str(a.get("type")))
+          s,r=get("/cfd_tunnel?is_deleted=false&per_page=100")
+          print("TUNNELS_READ_HTTP="+str(s))
+          for t in r.get("result",[]) or []:
+              print("TUNNEL name="+str(t.get("name"))+" id="+str(t.get("id"))+" status="+str(t.get("status")))
+          PY
