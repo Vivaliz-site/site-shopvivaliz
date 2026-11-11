@@ -16,6 +16,7 @@ require_once __DIR__ . '/OlistAmazonOrderLink.php';
 require_once __DIR__ . '/OlistAdsIndex.php';
 require_once __DIR__ . '/OlistUiCapture.php';
 require_once __DIR__ . '/OlistProductTabCapture.php';
+require_once __DIR__ . '/OlistChannelProgram.php';
 
 /**
  * Read-only Amazon SP-API + Olist/Tiny v3 collection.
@@ -113,7 +114,7 @@ final class SvAmazonMarginCollector
             $ch=curl_init('https://api.tiny.com.br/public-api/v3'.$path);
             if ($ch===false) throw new RuntimeException('tiny_transport_init_failed');
             curl_setopt_array($ch,[
-                CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$this->tinyToken,'Accept: application/json'],
+                CURLOPT_HTTPHEADER=>['Authorization: Bearer [REDACTED] application/json'],
                 CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>35,
                 CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2,
                 CURLOPT_HEADERFUNCTION=>static function($handle,string $line)use(&$headers):int{
@@ -499,6 +500,14 @@ final class SvAmazonMarginCollector
                 'confirmed_units'=>0,'profit_cents'=>0,
                 'realized_sale_gross_cents'=>null,'realized_unit_price'=>null,
                 'status'=>'unverified'];
+            // Current Amazon offer channel is known even when Olist cost is
+            // missing. The authenticated Olist integration can subsequently
+            // confirm DBA vs Onsite without changing the current offer.
+            $row['program'] = match ((string)($row['fulfillment_channel']??'')) {
+                'AMAZON'=>'FBA_ONSITE',
+                'MERCHANT'=>'DBA_CANDIDATE',
+                default=>null,
+            };
             // Historical financial reconciliation must survive a Seller Flex
             // removal from BUYABLE: the same period's shipments still exist.
             $recentShipments=array_values(array_filter(
@@ -621,6 +630,8 @@ final class SvAmazonMarginCollector
                 } elseif ($decision==='verified_same') {
                     $row['erp_ui_observed_at']=$uiLink['observed_at'];
                     $row['erp_ui_verified_same_product']=true;
+                    if (!empty($uiLink['integration']))
+                        $row['erp_integration']=$uiLink['integration'];
                 } elseif ($decision==='reference_only') {
                     $row['erp_historical_ui_candidate']=[
                         'erp_sku'=>$uiLink['candidate_erp_sku']??null,
@@ -634,7 +645,8 @@ final class SvAmazonMarginCollector
                 // In an existing Olist UI conflict, this is corroboration
                 // only: a second UI cannot silently clear a disputed link.
                 $productTabLink=SvAmazonMarginOlistProductTabCapture::lookup(
-                    $productTabCapture,(string)$sku,$this->productsBySku);
+                    $productTabCapture,(string)$sku,$this->productsBySku,null,
+                    (string)($row['fulfillment_channel']??''));
                 if (!empty($row['erp_ui_conflict'])) {
                     if (($productTabLink['status']??'absent')!=='absent')
                         $row['erp_product_tab_crosscheck_pending']=true;
@@ -669,11 +681,28 @@ final class SvAmazonMarginCollector
                     } elseif ($productTabDecision==='verified_same') {
                         $row['erp_product_tab_observed_at']=$productTabLink['observed_at'];
                         $row['erp_product_tab_verified']=true;
+                        // EAN already selected the correct product. Retain its
+                        // independently verified Olist Amazon integration too.
+                        if (!empty($productTabLink['integration']))
+                            $row['erp_integration']=$productTabLink['integration'];
                     } elseif ($productTabDecision==='reference_only') {
                         $row['erp_historical_product_tab_candidate']=[
                             'erp_sku'=>$productTabLink['candidate_erp_sku']??null,
                             'observed_at'=>$productTabLink['observed_at']??null,
                             'source'=>'OLIST_ERP_AUTHENTICATED_PRODUCT_EDIT_UI'];
+                    }
+                }
+                // The user's Olist Amazon integration is the positive
+                // current DBA/Onsite evidence. Never infer it from title/SKU;
+                // require the independent authenticated product-tab match,
+                // corroborated by Amazon's live fulfillment channel.
+                if (!empty($row['erp_product_tab_verified'])) {
+                    $verifiedProgram=SvAmazonMarginOlistChannelProgram::resolve(
+                        (string)($row['erp_integration']??''),
+                        (string)($row['fulfillment_channel']??''));
+                    if ($verifiedProgram!==null) {
+                        $row['program']=$verifiedProgram;
+                        $row['program_source']='OLIST_AUTHENTICATED_PRODUCT_TAB_X_AMAZON_PRICING';
                     }
                 }
                 $row['erp_match_method']=$link['method'];
@@ -783,7 +812,8 @@ final class SvAmazonMarginCollector
                 $rows[]=$row;
                 continue;
             }
-            $row['program'] = $isFba ? 'FBA_ONSITE' : 'DBA_CANDIDATE';
+            $row['program'] = $isFba ? 'FBA_ONSITE'
+                : (($row['program']??null)==='DBA' ? 'DBA' : 'DBA_CANDIDATE');
             // DBA postage is debited once per order (not per Shipment row).
             // Only financial-window rows are passed to the calculation.
             if ($isMerchant) {

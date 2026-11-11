@@ -126,7 +126,7 @@ final class SvAmazonMarginOlistProductTabCapture
      * @param array<string,list<array<string,mixed>>> $bySku
      */
     public static function lookup(array $index,string $sellerSku,array $bySku,
-        ?DateTimeImmutable $now=null): array
+        ?DateTimeImmutable $now=null,?string $fulfillmentChannel=null): array
     {
         $absent=['status'=>'absent','id'=>null,
             'reason'=>'no_verified_olist_product_tab_binding'];
@@ -137,6 +137,17 @@ final class SvAmazonMarginOlistProductTabCapture
         if(count($ids)!==1) {
             return ['status'=>'ambiguous_erp','id'=>null,
                 'reason'=>'seller_sku_linked_to_multiple_erp_products_in_product_tabs'];
+        }
+        // One ERP product may expose the same Seller SKU in both Olist
+        // Amazon integrations. Read the offer's actual fulfillment channel
+        // to pick the applicable integration, never insertion order.
+        $expectedIntegration=match (strtoupper((string)$fulfillmentChannel)) {
+            'MERCHANT'=>'Amazon', 'AMAZON'=>'Amazon Onsite', default=>null,
+        };
+        if ($expectedIntegration!==null) {
+            $corroborated=array_values(array_filter($entries,
+                static fn(array $x):bool=>(string)$x['integration']===$expectedIntegration));
+            if ($corroborated!==[]) $entries=$corroborated;
         }
         $candidate=(string)$entries[0]['erp_sku'];
         $at=$now??new DateTimeImmutable('now',new DateTimeZone('UTC'));
