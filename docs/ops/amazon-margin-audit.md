@@ -505,3 +505,33 @@ ativa escrita automática de preços, estoque, custos ou pedidos.
 A certificação global depende de nova auditoria completa pelo worker
 existente após merge/deploy e UI admin autenticada com filtro ativos,
 PDF/XLSX, reload/persistência. Snapshots #14/#15 são históricos imutáveis.
+
+### Vinculo Olist e programa logistico do anuncio (11/11/2026)
+
+O identificador Amazon Seller SKU do anuncio pode ser diferente do SKU do produto
+Olist e o catalogo Amazon pode nao fornecer o GTIN. Consultar o vinculo exato na
+aba **Produtos > Anuncios** do produto, nas integracoes **Amazon** (27473),
+**Amazon Onsite** (27478) e **Amazon Classic** (27482). Quando o vinculo
+esta vigente, confirmado na tela autenticada e corroborado pelo canal atual
+retornado pelo Amazon Pricing, classificar **Amazon + MERCHANT = DBA** e
+**Amazon Onsite + AMAZON = FBA Onsite**. Nunca confundir o nome da integracao
+com o SKU do produto, nem aplicar tarifa FBA classica ao FBA Onsite. Caso o
+mesmo Seller SKU figure em ambas as integracoes *do mesmo produto*, escolher
+a integracao correspondente ao canal de fulfillment atual. Vinculos com
+produtos ERP distintos exigem reconciliacao de identidade; nao substituir
+custos de produtos diferentes por aproximacao.
+
+A coleta autenticada de 11/11 identificou 211 produtos ERP ativos, 533 Seller
+SKUs distintos vinculados e 0 erros de captura. Os 89 anuncios BUYABLE que o
+snapshot anterior de margem tratava como sem ERP estavam todos vinculados;
+o documento de captura de 06/11 havia ultrapassado a janela de atualidade
+aplicada pelo auditor. A corretude da margem depende adicionalmente da cotacao
+de comissao, custo ERP corrente, custo integral dos kits e tarifa real. Para
+DBA em preco superior a R$ 200, a tabela corrente utiliza regiao de origem;
+nao presumir regiao so pelo nome da integracao.
+
+Exemplo: Seller SKU `1C7Q-LKVG-BOTU` foi localizado na integracao Amazon do
+produto ERP ID `385227548`, SKU `178970678530`, com preco Amazon R$ 27,99.
+A tarifa DBA aplicavel nesse preco e R$ 4,50; a margem nao pode ser
+certificada antes de consultar custo e comissao atuais. Nenhum preco, estoque
+ou anuncio foi alterado neste procedimento de leitura.
