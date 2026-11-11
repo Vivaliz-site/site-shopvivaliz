@@ -43,14 +43,24 @@ assert.match(page, /n-partial-context/);
 // Strict risk filter: only margins below 9.00% are included.
 const filterSource = page.match(/function filterMatch\(r,s\)\{[\s\S]*?\n\}/);
 assert.ok(filterSource, 'filterMatch helper must exist in the production UI');
-const {filterMatch} = vm.runInNewContext(
-  sourceOf('state') + '\n' + filterSource[0] + '\n({filterMatch})'
+const exactSource = page.match(/function currentMarginBelow9\(r\)\{[\s\S]*?\n\}/);
+assert.ok(exactSource, 'exact monetary <9% helper must exist');
+const {filterMatch,currentMarginBelow9} = vm.runInNewContext(
+  sourceOf('state') + '\n' + exactSource[0] + '\n' + filterSource[0]
+  + '\n({filterMatch,currentMarginBelow9})'
 );
 const floorCases=[899,900,999,1000].map(bps => ({status:'no_confirmed_sales',current_margin_bps:bps}));
 assert.deepEqual(Array.from(floorCases, r=>filterMatch(r,'current_low9')),[true,false,false,false]);
 assert.equal(filterMatch({status:'no_confirmed_sales',current_margin_bps:null},'current_low9'),false);
-assert.match(page, /current_margin_bps\)\s*>=900/);
-assert.match(page, /current_margin_bps<900\?'danger'/);
+// An integer-bps margin rounded from 8.99598% to 900 must still count <9%.
+const sale2490={status:'no_confirmed_sales',price:24.9,current_profit_cents:224,current_margin_bps:900};
+assert.equal(currentMarginBelow9(sale2490),true);
+assert.equal(filterMatch(sale2490,'current_low9'),true);
+assert.equal(currentMarginBelow9({...sale2490,current_profit_cents:225}),false);
+assert.equal(currentMarginBelow9({...sale2490,current_margin_bps:null}),false);
+assert.match(page,/const low=base\.filter\(currentMarginBelow9\)\.length/);
+assert.match(page,/!currentMarginBelow9\(r\)/);
+assert.match(page,/currentMarginBelow9\(r\)\?'danger'/);
 
 assert.match(page, /const simOk=canSimulate\(r\)/);
 assert.match(page, /if\(!currentSim\|\|!canSimulate\(currentSim\)\)return/);

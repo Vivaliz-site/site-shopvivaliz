@@ -16,6 +16,16 @@ final class SvAmazonMarginExport
         $status = $row['amazon_status'] ?? [];
         $buyable = is_array($status) && in_array('BUYABLE',$status,true);
         $financialStatus = SvAmazonMarginFinancialStatus::forDisplay($row);
+        $priceCents=isset($row['price'])&&is_numeric($row['price'])
+            ?(int)round((float)$row['price']*100):0;
+        $profitCents=isset($row['current_profit_cents'])&&is_numeric($row['current_profit_cents'])
+            ?(int)$row['current_profit_cents']:null;
+        $hasMargin=isset($row['current_margin_bps']);
+        $exactMargin=$hasMargin&&$priceCents>0&&$profitCents!==null
+            ?round($profitCents*100/$priceCents,4):null;
+        $below9=$exactMargin!==null
+            ?($profitCents*10000<$priceCents*900?'Sim':'Nao')
+            :($hasMargin?((int)$row['current_margin_bps']<900?'Sim':'Nao'):'Pendente');
         $reason = match($financialStatus) {
             'unmapped_erp' => 'Produto vinculado no ERP nao identificado',
             'ambiguous_erp' => 'Produto ERP ambiguo',
@@ -40,6 +50,8 @@ final class SvAmazonMarginExport
             'Fonte canal historico'=>(string)($row['historical_fulfillment_source'] ?? ''),
             'Preco Amazon (R$)'=>self::num($row['price'] ?? null),
             'Margem atual estimada (%)'=>isset($row['current_margin_bps']) ? round((int)$row['current_margin_bps']/100,2) : null,
+            'Margem atual exata (%)'=>$exactMargin,
+            'Abaixo de 9% exato'=>$below9,
             'Lucro atual por unidade (R$)'=>isset($row['current_profit_cents']) ? round((int)$row['current_profit_cents']/100,2) : null,
             'Comissao Amazon atual (R$)'=>isset($row['current_commission_cents']) ? round((int)$row['current_commission_cents']/100,2) : null,
             'Logistica atual (R$)'=>isset($row['current_logistics_cents']) ? round((int)$row['current_logistics_cents']/100,2) : null,

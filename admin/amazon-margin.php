@@ -243,6 +243,22 @@ async function loadStatus(){
 const price=v=>v===null||v===undefined?'—':'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
 function isActive(r){return Array.isArray(r.amazon_status)&&r.amazon_status.includes('BUYABLE');}
+// Exact monetary threshold, not the margin already rounded to integer basis
+// points. R$ 2.24 / R$ 24.90 = 8.996%, which rounds to 900 bps.
+function currentMarginBelow9(r){
+ if(r.current_margin_bps===null||r.current_margin_bps===undefined)return false;
+ const cents=Math.round(Number(r.price)*100),profit=Number(r.current_profit_cents);
+ if(Number.isSafeInteger(cents)&&cents>0&&Number.isSafeInteger(profit))
+  return profit*10000<cents*900;
+ return Number(r.current_margin_bps)<900;
+}
+function currentMarginExact(r){
+ if(r.current_margin_bps===null||r.current_margin_bps===undefined)return null;
+ const cents=Math.round(Number(r.price)*100),profit=Number(r.current_profit_cents);
+ return Number.isSafeInteger(cents)&&cents>0&&Number.isSafeInteger(profit)
+  ?100*profit/cents:null;
+}
+
 function program(r){return r.program||(r.fulfillment_channel==='AMAZON'?'FBA_ONSITE':r.fulfillment_channel==='MERCHANT'?'MERCHANT':'UNKNOWN');}
 function programLabel(r){const p=program(r);return p==='FBA_ONSITE'?'FBA Onsite':p==='DBA'?'DBA':p==='DBA_CANDIDATE'||p==='MERCHANT'?'Envio vendedor':p==='UNKNOWN'?'Não identificado':p;}
 function financialStatus(r){return r.status==='no_confirmed_sales'&&Number(r.confirmed_sales||0)===0&&Number(r.pending_sales||0)>0?'pending_financial_reconciliation':r.status;}
@@ -259,7 +275,7 @@ function refreshSelection(){
 }
 function filterMatch(r,s){
  if(s==='')return true;
- if(s==='current_low9')return r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&Number(r.current_margin_bps)<900;
+ if(s==='current_low9')return currentMarginBelow9(r);
  if(s==='current_pending')return r.current_margin_bps===null||r.current_margin_bps===undefined;
  if(s==='low'||s==='healthy'||s==='pending')return state(r)===s;
  if(s==='unmapped')return r.status==='unmapped_erp';
@@ -338,8 +354,8 @@ function costMarkup(r){
 function refreshMetrics(){
  const active=data.filter(isActive).length;
  const base=el('only-active').checked?data.filter(isActive):data;
- const healthy=base.filter(r=>r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&Number(r.current_margin_bps)>=900).length;
- const low=base.filter(r=>r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&Number(r.current_margin_bps)<900).length;
+ const healthy=base.filter(r=>r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&!currentMarginBelow9(r)).length;
+ const low=base.filter(currentMarginBelow9).length;
  el('n-total-label').textContent=el('only-active').checked?'Anúncios ativos':'Anúncios cadastrados';
  el('n-total').textContent=base.length;
  el('n-total-context').textContent=active+' ativos de '+data.length+' no catálogo';
@@ -378,7 +394,11 @@ function render(){
      (currentStatus==='estimated_dimension_conflict'?'<span class="cell-note warn">Medidas Amazon x ERP divergentes</span>':'')+
      (currentStatus==='estimated_program_unverified'?'<span class="cell-note warn">DBA presumido — conferir programa</span>':'')
    :'<span class="cell-note warn">Pendente: '+escapeHtml(currentStatus.replaceAll('_',' '))+'</span>';
-  const currentText=(currentVerified?margin(r.current_margin_bps):'—')+currentDetail;
+  const exact=currentMarginExact(r);
+  const roundingNote=currentVerified&&currentMarginBelow9(r)&&r.current_margin_bps>=900&&exact!==null
+   ?'<span class="cell-note warn">Margem sem arredondar: '+exact.toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})+'% (inferior a 9%)</span>'
+   :'';
+  const currentText=(currentVerified?margin(r.current_margin_bps):'—')+roundingNote+currentDetail;
   const simOk=canSimulate(r);
   return '<tr><td><input type="checkbox" class="row-check" data-sku="'+escapeHtml(sku)+'" '+(chosen?'checked':'')+' aria-label="Selecionar '+escapeHtml(sku)+'"></td>'
    +'<td><strong><code>'+escapeHtml(sku)+'</code></strong><span class="cell-note">'+escapeHtml((r.title||'').slice(0,95))+'</span></td>'
@@ -402,7 +422,7 @@ function render(){
    +'<td class="right">'+priceMarkup(r)+'</td>'
    +'<td class="right">'+costMarkup(r)+'</td>'
    +'<td class="right">'+Number(r.confirmed_sales||0)+'<span class="cell-note">'+Number(r.confirmed_units||0)+' unidade(s) conciliada(s)</span>'+(Number(r.pending_sales||0)>0?'<span class="cell-note warn">'+Number(r.pending_sales)+' lançamento(s) aguardando conciliação</span>':'')+'</td>'
-   +'<td class="right '+(currentVerified?(r.current_margin_bps<900?'danger':'positive'):'warning')+'">'+currentText+'</td>'
+   +'<td class="right '+(currentVerified?(currentMarginBelow9(r)?'danger':'positive'):'warning')+'">'+currentText+'</td>'
    +'<td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+marginText+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined&&Number(r.confirmed_units||0)>0?price(Number(r.profit_cents||0)/100/Number(r.confirmed_units)):'—')+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined?price(Number(r.profit_cents||0)/100):'—')+(r.status==='partial'?'<span class="cell-note warn">Parcial</span>':'')+'</td>'
