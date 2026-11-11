@@ -16,6 +16,35 @@ sv_test_assert(($vedante['eyebrow'] ?? '') === 'Vedantes para porta', 'vedante e
 sv_test_assert(($vedante['heading'] ?? '') === 'Vedantes para porta em alumínio e borracha', 'vedante heading must match keyword and product');
 sv_test_assert(str_contains((string)($vedante['lead'] ?? ''), 'frete por CEP'), 'vedante lead must surface commercial shipping intent');
 
+// Termos usados em buscas comerciais devem levar ao catálogo de vedação,
+// sem transformar o nome do produto ou prometer estoque/frete inexistentes.
+foreach (['rodo para porta', 'vedador de porta', 'veda porta'] as $searchTerm) {
+    $context = sv_catalog_search_context($searchTerm);
+    sv_test_assert(($context['eyebrow'] ?? '') === 'Vedantes para porta', $searchTerm . ' eyebrow must match door-seal intent');
+    sv_test_assert(($context['heading'] ?? '') === 'Vedantes para porta em alumínio e borracha', $searchTerm . ' must show relevant heading');
+}
+
+sv_test_assert(
+    sv_catalog_search_terms('RODO PARA PORTA') === ['RODO', 'PORTA'],
+    'connector PARA must not hide rodo-para-porta inventory'
+);
+sv_test_assert(
+    sv_catalog_search_terms('VEDADOR DE PORTA') === ['VEDADOR', 'PORTA'],
+    'connector DE must not restrict vedador-de-porta inventory'
+);
+sv_test_assert(
+    sv_catalog_search_terms('VEDANTE') === ['VEDANTE'],
+    'single term search must stay intact'
+);
+sv_test_assert(
+    sv_catalog_search_terms('PARA') === ['PARA'],
+    'standalone connector must not match the entire catalog'
+);
+sv_test_assert(
+    sv_catalog_search_terms('  RODO   PARA  PORTA ') === ['RODO', 'PORTA'],
+    'extra whitespace must not hide relevant products'
+);
+
 $antique = sv_catalog_search_context('vaso antique');
 sv_test_assert(($antique['heading'] ?? '') === 'Vasos Antique Japi', 'Antique search must get a dedicated heading');
 
