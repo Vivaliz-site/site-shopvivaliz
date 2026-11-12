@@ -814,13 +814,13 @@ state_path.write_text(json.dumps(state))
         next_action = (
             "Esta tarefa e um probe de continuidade automatica; nao ha edicao de "
             "codigo real necessaria. Execute exatamente estes tres comandos, nesta "
-            "ordem, somente na conversa vinculada:\\n"
+            "ordem, somente na conversa vinculada:\n"
             f"1) python3 scripts/agent_task_state.py check-step --task {task_id} "
             "--step-id 1 --evidence assistant_executed_bound_sentinel "
-            "--verification independent_browser_proof_required\\n"
+            "--verification independent_browser_proof_required\n"
             f"2) python3 scripts/agent_task_state.py ready --task {task_id} "
             "--evidence bound_sentinel_executed_pending_external_confirmation "
-            "--verification continuity_e2e_pass\\n"
+            "--verification continuity_e2e_pass\n"
             f"3) python3 scripts/agent_task_state.py complete --task {task_id}"
         )
         state = self._state(next_action=next_action)
@@ -846,7 +846,7 @@ state_path.write_text(json.dumps(state))
             "executor_order": ["chatgpt_common", "chatgpt_work", "cli"],
             "fallback_policy": "chatgpt_common_then_work_then_cli",
         }
-        (self.runtime / "_resume-requests.jsonl").write_text(json.dumps(request) + "\\n", encoding="utf-8")
+        (self.runtime / "_resume-requests.jsonl").write_text(json.dumps(request) + "\n", encoding="utf-8")
         (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
             json.dumps({
                 "fingerprint": request["fingerprint"],
@@ -856,7 +856,7 @@ state_path.write_text(json.dumps(state))
                 "bridge_ok": True,
                 "http_status": 200,
                 "worker_status": "ERROR",
-            }) + "\\n",
+            }) + "\n",
             encoding="utf-8",
         )
 
