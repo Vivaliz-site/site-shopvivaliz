@@ -42,15 +42,15 @@ class ProbeStaticContractTests(unittest.TestCase):
         self.assertIn("python3 scripts/agent_task_state.py complete", next_action)
         self.assertIn("continuity_e2e_pass", next_action)
         self.assertIn("--evidence", next_action)
-        command_lines = [line.split(") ", 1)[1] for line in next_action.splitlines() if line.startswith(("1) ", "2) ", "3) "))]
+        command_lines = [line.split(") ", 1)[1] for line in next_action.splitlines() if line.startswith(("1) ", "2) "))]
         self.assertEqual(
             command_lines,
             [
-                "python3 scripts/agent_task_state.py check-step --task continuity-e2e-fixture --step-id 1 --evidence assistant_executed_bound_sentinel --verification independent_browser_proof_required",
                 "python3 scripts/agent_task_state.py ready --task continuity-e2e-fixture --evidence bound_sentinel_executed_pending_external_confirmation --verification continuity_e2e_pass",
                 "python3 scripts/agent_task_state.py complete --task continuity-e2e-fixture",
             ],
         )
+        self.assertNotIn("check-step", next_action)
         self.assertIn("--conversation-id", PROBE_PATH.read_text(encoding="utf-8"))
         self.assertIn("--browser-session", PROBE_PATH.read_text(encoding="utf-8"))
         self.assertNotIn("bind-conversation", PROBE_PATH.read_text(encoding="utf-8"))
@@ -358,53 +358,73 @@ class ProbeEvaluationTests(unittest.TestCase):
                 runner=fake_runner,
             )
         commands = [call[2] for call in calls]
-        self.assertEqual(commands, ["start", "plan-checklist", "progress"])
-        self.assertIn("--step", calls[1])
-        self.assertNotIn("check-step", commands)
+        self.assertEqual(commands, ["start", "progress"])
+        self.assertNotIn("plan-checklist", commands)
+        self.assertIn("--next-action", calls[1])
         self.assertIn("--conversation-id", calls[0])
         self.assertIn(self.CONVERSATION_ID, calls[0])
         self.assertIn("--browser-session", calls[0])
         self.assertIn("atendimento", calls[0])
 
 
-    def test_real_cli_plans_checklist_before_progress_without_fake_completion(self) -> None:
-        """The live CLI must accept the synthetic checkpoint (regression Nov 2)."""
+    def test_real_cli_accepts_two_step_probe_without_optional_checklist(self) -> None:
+        """The continuity probe tests browser recovery, not optional checklist policy."""
         probe = load_probe()
         with tempfile.TemporaryDirectory() as tmp:
             runtime = Path(tmp)
-            task_id = "continuity-e2e-checklist-gate"
+            task_id = "continuity-e2e-two-step"
             probe.create_synthetic_task(
                 runtime_dir=runtime,
                 task_id=task_id,
                 repository="Vivaliz-site/site-shopvivaliz",
                 agent_task_state_script=ROOT / "scripts" / "agent_task_state.py",
                 conversation_id=self.CONVERSATION_ID,
-                browser_session="dev",
+                browser_session="atendimento",
                 runner=lambda argv, **kw: subprocess.run(
                     argv, capture_output=True, text=True, **kw
                 ),
             )
             checkpoint = json.loads((runtime / f"{task_id}.json").read_text())
             self.assertEqual(checkpoint["conversation_id"], self.CONVERSATION_ID)
-            self.assertEqual(checkpoint["browser_session"], "dev")
+            self.assertEqual(checkpoint["browser_session"], "atendimento")
             self.assertEqual(checkpoint["status"], "RUNNING")
-            self.assertEqual(len(checkpoint["checklist"]["items"]), 1)
-            self.assertEqual(checkpoint["checklist"]["items"][0]["status"], "PENDENTE")
+            self.assertEqual(checkpoint.get("checklist", {}).get("items", []), [])
             self.assertEqual(
-                len([x for x in checkpoint["next_action"].splitlines() if x.startswith(("1) ", "2) ", "3) "))]),
-                3,
+                len([x for x in checkpoint["next_action"].splitlines() if x.startswith(("1) ", "2) "))]),
+                2,
             )
-            # The harness must not pass readiness without real browser action.
+
             env = os.environ.copy()
             env["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = str(runtime)
-            blocked = subprocess.run(
-                [sys.executable, str(ROOT / "scripts" / "agent_task_state.py"),
-                 "ready", "--task", task_id, "--evidence", "no_browser_proof",
-                 "--verification", "continuity_e2e_pass"],
+            ready = subprocess.run(
+                [
+                    sys.executable, str(ROOT / "scripts" / "agent_task_state.py"),
+                    "ready", "--task", task_id,
+                    "--evidence", "bound_sentinel_executed_pending_external_confirmation",
+                    "--verification", "continuity_e2e_pass",
+                ],
                 env=env, capture_output=True, text=True, check=False,
             )
-            self.assertNotEqual(blocked.returncode, 0)
-            self.assertIn("not certified", blocked.stdout)
+            self.assertEqual(ready.returncode, 0, ready.stdout + ready.stderr)
+            complete = subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "agent_task_state.py"), "complete", "--task", task_id],
+                env=env, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(complete.returncode, 0, complete.stdout + complete.stderr)
+
+            # Terminal state alone is not browser proof; the independent
+            # certifier still requires PROGRESS_CONFIRMED for this conversation.
+            certifier = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "chatgpt_continuity_proof_certifier.py"),
+                    "--runtime-dir", str(runtime),
+                    "--task", task_id,
+                ],
+                env=env, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(certifier.returncode, 3)
+            self.assertIn("no_bound_progress_confirmed_for_checkpoint", certifier.stdout)
 
     def test_crash_after_first_write_preserves_atomic_routing(self) -> None:
         probe = load_probe()
