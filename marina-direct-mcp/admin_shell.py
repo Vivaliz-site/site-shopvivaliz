@@ -80,7 +80,7 @@ EXPECTED_UBUNTU_GRANT = {
 
 ADMIN_SHELL_TOOL = {
     "name": "marina_admin_shell",
-    "description": "Run one bash command on Marina. By default it runs as the shopvivaliz-marina-mcp service account; with as_root=true it runs as root through sudo; with as_user="ubuntu" it runs as the ubuntu user through sudo (grant PR 3918). Owner grant PR 3620. Output is truncated and every call is audited by command hash.",
+    "description": "Run one bash command on Marina. By default it runs as the shopvivaliz-marina-mcp service account; with as_root=true it runs as root through sudo; with as_user=ubuntu it runs as the ubuntu user through sudo (grant PR 3918). Owner grant PR 3620. Output is truncated and every call is audited by command hash.",
     "inputSchema": {
         "type": "object",
         "properties": {
