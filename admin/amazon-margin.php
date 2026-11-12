@@ -97,6 +97,33 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     </div>
     <div id="feedback" role="status" aria-live="polite"></div>
   </section>
+  <section class="card" id="target-margin-manager">
+    <h2>Margem líquida desejada dos anúncios selecionados</h2>
+    <p class="note">Marque os anúncios na lista abaixo e informe a margem líquida desejada. A prévia calcula
+      o preço de venda e o mínimo propostos na Amazon, além da exceção de preço na
+      <strong>tabela Amazon 991 do ERP Olist</strong>. A comissão desta simulação usa a taxa da cotação vigente;
+      para publicar será necessária a cotação oficial no novo preço e a validação do impacto no site e
+      nos anúncios do mesmo produto ERP.</p>
+    <div class="controls" style="margin-top:12px">
+      <label for="target-margin-percent">Margem desejada (%)</label>
+      <input type="number" id="target-margin-percent" min="0.01" max="99.99" step="0.01" value="10"
+        inputmode="decimal" style="max-width:110px">
+      <button id="target-margin-preview" type="button" class="primary" disabled>Calcular selecionados</button>
+      <button id="target-margin-export" type="button" disabled>Exportar prévia CSV</button>
+      <button id="target-margin-apply" type="button" disabled
+        title="Aplicação requer aprovação comercial e publicação pela integração autorizada">Aplicar no ERP 991 + Amazon</button>
+      <span class="muted small" id="target-margin-count">Nenhum anúncio selecionado</span>
+    </div>
+    <p id="target-margin-state" class="note small" role="status" aria-live="polite">Aguardando seleção para simulação.</p>
+    <div class="table-scroller" id="target-margin-preview-area" hidden>
+      <table><thead><tr>
+        <th>Seller SKU</th><th>Descrição / ERP</th><th>Programa</th>
+        <th class="right">Preço atual</th><th class="right">Custo conjunto</th>
+        <th class="right">Preço proposto</th><th class="right">Mínimo Amazon</th>
+        <th class="right">Margem simulada</th><th>Pendências e impacto</th>
+      </tr></thead><tbody id="target-margin-rows"></tbody></table>
+    </div>
+  </section>
   <section class="card" id="olist-import-section">
     <h2>Vínculos dos anúncios no ERP Olist</h2>
     <p class="note">Importe arquivos de anúncios apenas das integrações que oferecem
@@ -163,6 +190,17 @@ const el=id=>document.getElementById(id);
 const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let data=[], selected=new Set(), displayed=[], shown=75, taxBps=1400, currentSim=null;
 let lastRunId=null, submitBusy=false, pollBusy=false, activeAll=false;
+let targetPlan=null,targetPlanKey='',targetBusy=false;
+function selectedTargetKey(){
+ return JSON.stringify([lastRunId,[...selected].sort(),el('target-margin-percent').value]);
+}
+function updateTargetControls(){
+ const target=Number(el('target-margin-percent').value);
+ el('target-margin-count').textContent=selected.size+' Seller SKU(s) selecionado(s)';
+ el('target-margin-preview').disabled=targetBusy||selected.size===0||!Number.isFinite(target)||target<=0||target>=100;
+ el('target-margin-export').disabled=!targetPlan||targetPlanKey!==selectedTargetKey();
+}
+
 const stageLabels={
  queued:'Na fila',starting:'Iniciando',loading_listings:'Localizando anúncios Amazon',
  loading_prices:'Consultando preços Amazon',mapping_erp_products:'Vinculando produtos Olist/Tiny',
@@ -274,6 +312,7 @@ function refreshSelection(){
   (hidden?' · '+hidden+' oculto(s) por outros filtros':'')+
   (!selected.size?' · PDF/Excel incluirão os '+displayed.length+' anúncios filtrados':'');
  el('run-selected').disabled=submitBusy||visible.length===0||visible.length>1000;
+ updateTargetControls();
 }
 function filterMatch(r,s){
  if(s==='')return true;
@@ -506,6 +545,83 @@ async function requestRun(scope){
  }catch(e){showError(e);}
  finally{submitBusy=false;refreshSelection();el('run-all').disabled=activeAll;}
 }
+function targetMoney(cents){return cents===null||cents===undefined?'—':price(Number(cents)/100);}
+function targetProblems(r){
+ const dictionary={
+  sku_not_in_latest_audit:'Não consta da auditoria mais recente',
+  offer_not_buyable:'Anúncio não comprável',
+  effective_price_unverified:'Preço efetivo da Amazon não confirmado',
+  unit_cost_unverified:'Custo por conjunto não conciliado',
+  current_fee_quote_unavailable:'Comissão atual não cotada',
+  fulfillment_program_unverified:'Logística não confirmada',
+  current_margin_not_calculated:'Margem atual pendente',
+  target_not_solvable_with_known_tariff:'Não foi possível atingir margem pela simulação',
+  programa_dba_ainda_candidato:'DBA ainda não certificado',
+  dimensoes_erp_amazon_divergentes:'Dimensões ERP/Amazon divergentes',
+  identidade_historica_divergente_do_erp_atual:'Vínculo histórico divergente',
+  skus_mesmo_produto_erp_precos_diferentes:'Conflito: SKUs mesmo produto ERP requerem preços distintos'
+ };
+ const issues=[r.reason,...(r.notices||[])].filter(Boolean).map(x=>dictionary[x]||x);
+ if(!r.erp_id)issues.push('ID do produto ERP não certificado');
+ if((r.related_unselected_skus||[]).length)
+  issues.push('Este ERP também atende outros '+r.related_unselected_skus.length+' Seller SKUs: '+r.related_unselected_skus.join(', '));
+ return issues.join(' · ')||'Prévia: comissão no novo preço ainda precisa ser cotada oficialmente';
+}
+async function previewTarget(){
+ if(targetBusy||selected.size===0)return;
+ const target=Number(el('target-margin-percent').value),key=selectedTargetKey();
+ if(!Number.isFinite(target)||target<=0||target>=100)return;
+ targetBusy=true;updateTargetControls();
+ el('target-margin-state').textContent='Simulando '+selected.size+' anúncios…';
+ try{
+  const res=await fetch(API,{method:'POST',credentials:'same-origin',
+   headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
+   body:JSON.stringify({action:'target_margin_preview',skus:[...selected],target_percent:target})});
+  const json=await readJson(res);
+  targetPlan=json;targetPlanKey=key;
+  el('target-margin-preview-area').hidden=false;
+  el('target-margin-rows').innerHTML=(json.preview.rows||[]).map(r=>
+   '<tr><td><strong>'+escapeHtml(r.seller_sku)+'</strong></td>'+
+   '<td>'+escapeHtml(r.title||'—')+'<span class="cell-note">ERP '+escapeHtml(r.erp_id??'—')+' • '+escapeHtml(r.erp_sku||'—')+'</span></td>'+
+   '<td>'+escapeHtml(r.program||'—')+'</td>'+
+   '<td class="right">'+targetMoney(r.current_price_cents)+'</td>'+
+   '<td class="right">'+targetMoney(r.cost_cents)+'</td>'+
+   '<td class="right">'+targetMoney(r.proposed_price_cents)+'</td>'+
+   '<td class="right">'+targetMoney(r.minimum_price_cents)+'</td>'+
+   '<td class="right">'+(r.margin_estimate_percent===undefined?'—':
+    Number(r.margin_estimate_percent).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4})+'%')+'</td>'+
+   '<td class="small">'+escapeHtml(targetProblems(r))+'</td></tr>'
+  ).join('')||'<tr><td colspan="9">Nenhuma oferta selecionada.</td></tr>';
+  el('target-margin-state').textContent='Auditoria #'+json.audit_run_id+' · '+json.preview.simulated+
+   ' preço(s) calculado(s) · '+json.preview.pending+' pendente(s) · margem desejada '+
+   Number(json.preview.target_percent).toLocaleString('pt-BR')+
+   '%. SIMULAÇÃO: nenhum preço foi gravado. Cotação oficial e execução comercial ainda necessárias.';
+ }catch(err){el('target-margin-state').textContent='Falha de simulação: '+String(err.message||err).slice(0,190);}
+ finally{targetBusy=false;updateTargetControls();}
+}
+function exportTarget(){
+ if(!targetPlan||targetPlanKey!==selectedTargetKey())return;
+ const columns=['Seller SKU','Descrição','SKU ERP','ERP ID','Programa','Margem desejada (%)',
+  'Preço atual (R$)','Preço proposto ERP e Amazon (R$)','Mínimo Amazon (R$)',
+  'Custo (R$)','Comissão simulada (R$)','Logística simulada (R$)','Imposto (R$)',
+  'Lucro simulado (R$)','Margem simulada (%)','Outros SKUs do produto ERP','Ressalvas'];
+ const safe=v=>{let s=String(v??'');if(/^[\s]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+ const records=(targetPlan.preview.rows||[]).map(r=>[
+  r.seller_sku,r.title,r.erp_sku,r.erp_id,r.program,targetPlan.preview.target_percent,
+  r.current_price_cents/100,r.proposed_price_cents===null?'':r.proposed_price_cents/100,
+  r.minimum_price_cents===null?'':r.minimum_price_cents/100,
+  r.cost_cents===undefined?'':r.cost_cents/100,
+  r.commission_estimate_cents===undefined?'':r.commission_estimate_cents/100,
+  r.logistics_cents===undefined?'':r.logistics_cents/100,
+  r.tax_cents===undefined?'':r.tax_cents/100,
+  r.profit_estimate_cents===undefined?'':r.profit_estimate_cents/100,
+  r.margin_estimate_percent,r.related_seller_skus?.join(' | ')||'',targetProblems(r)
+ ]);
+ const csv=[columns,...records].map(row=>row.map(safe).join(';')).join('\r\n');
+ const href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+ const element=document.createElement('a');element.href=href;element.download='shopvivaliz-margem-desejada-previa.csv';
+ document.body.appendChild(element);element.click();element.remove();setTimeout(()=>URL.revokeObjectURL(href),1200);
+}
 async function download(format){
  el('feedback').textContent='Gerando '+format.toUpperCase()+'…';
  try{
@@ -571,6 +687,8 @@ el('olist-import').onclick=importOlistExports;
 
 el('run-selected').onclick=()=>requestRun('selected');el('run-all').onclick=()=>requestRun('all');
 el('pdf').onclick=()=>download('pdf');el('xlsx').onclick=()=>download('xlsx');
+el('target-margin-percent').oninput=updateTargetControls;
+el('target-margin-preview').onclick=previewTarget;el('target-margin-export').onclick=exportTarget;
 el('reload').onclick=()=>load();
 el('search').oninput=()=>{shown=75;render();};
 el('program').onchange=el('status').onchange=el('only-active').onchange=()=>{shown=75;render();};

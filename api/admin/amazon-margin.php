@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/../../includes/admin-guard.php';
 require_once __DIR__.'/../../includes/amazon-margin/AuditStore.php';
+require_once __DIR__.'/../../includes/amazon-margin/TargetMarginPricePlan.php';
 require_once __DIR__.'/../../includes/amazon-margin/ReportExport.php';
 require_once __DIR__.'/../../includes/amazon-margin/OlistAdsIndex.php';
 require_once __DIR__.'/../../includes/amazon-margin/OlistAdsImport.php';
@@ -72,6 +73,33 @@ try {
         if (!is_string($raw)||strlen($raw)>100000) sv_margin_api_json(413,['ok'=>false,'error'=>'payload_too_large']);
         $body=json_decode($raw,true,512,JSON_THROW_ON_ERROR);
         if (!is_array($body)) sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_action']);
+        if (($body['action']??'')==='target_margin_preview') {
+            $latest=SvAmazonMarginStore::latest($db);
+            if (!$latest)sv_margin_api_json(404,['ok'=>false,'error'=>'no_audit_snapshot']);
+            $skus=sv_margin_api_selected($body['skus']??[]);
+            if ($skus===[])sv_margin_api_json(400,['ok'=>false,'error'=>'no_selected_skus']);
+            $target=SvAmazonTargetMarginPricePlan::targetBps($body['target_percent']??null);
+            $snapshot=$latest['snapshot'];
+            $tax=(int)($snapshot['tax_bps']??1400);
+            if (is_array($snapshot['rows']??null)) {
+                foreach($snapshot['rows'] as &$r) {
+                    if (is_array($r)) $r['_target_tax_bps']=$tax;
+                }
+                unset($r);
+            }
+            $region=trim((string)(getenv('SV_AMAZON_DBA_ORIGIN_REGION')?:''));
+            $proposal=SvAmazonTargetMarginPricePlan::prepare($snapshot,$skus,$target,
+                $region!==''?$region:null);
+            sv_margin_api_json(200,['ok'=>true,'audit_run_id'=>$latest['run_id'],
+                'generated_at'=>$latest['generated_at'],'preview'=>$proposal,
+                'price_updates_enabled'=>false,
+                'publication_status'=>'commercial_execution_not_authorized_by_this_preview']);
+        }
+        if (($body['action']??'')==='target_margin_apply') {
+            sv_margin_api_json(409,['ok'=>false,
+                'error'=>'commercial_publication_requires_approved_execution',
+                'detail'=>'Esta simulacao nao publica precos. Usar o fluxo comercial autorizado para ERP 991 e Amazon Listings.']);
+        }
         if (($body['action']??'')==='export') {
             $latest=SvAmazonMarginStore::latest($db);
             if (!$latest)sv_margin_api_json(404,['ok'=>false,'error'=>'no_audit_snapshot']);
