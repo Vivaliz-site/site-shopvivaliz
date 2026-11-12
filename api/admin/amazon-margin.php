@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../../includes/admin-guard.php';
 require_once __DIR__.'/../../includes/amazon-margin/AuditStore.php';
 require_once __DIR__.'/../../includes/amazon-margin/TargetMarginPricePlan.php';
+require_once __DIR__.'/../../includes/amazon-margin/TargetMarginPriceJobs.php';
 require_once __DIR__.'/../../includes/amazon-margin/ReportExport.php';
 require_once __DIR__.'/../../includes/amazon-margin/OlistAdsIndex.php';
 require_once __DIR__.'/../../includes/amazon-margin/OlistAdsImport.php';
@@ -66,7 +67,7 @@ try {
                 'import'=>$import,
                 'historical_only'=>$fresh===0,
                 'audit_request'=>$job,
-                'price_updates_enabled'=>false,
+                'price_updates_enabled'=>true,
             ]);
         }
         $raw=file_get_contents('php://input');
@@ -92,13 +93,44 @@ try {
                 $region!==''?$region:null);
             sv_margin_api_json(200,['ok'=>true,'audit_run_id'=>$latest['run_id'],
                 'generated_at'=>$latest['generated_at'],'preview'=>$proposal,
-                'price_updates_enabled'=>false,
-                'publication_status'=>'commercial_execution_not_authorized_by_this_preview']);
+                'preview_digest'=>SvAmazonTargetMarginPriceJobs::digest((int)$latest['run_id'],$proposal),
+                'price_updates_enabled'=>true,
+                'publication_status'=>'applicable_only_after_explicit_admin_confirmation']);
         }
         if (($body['action']??'')==='target_margin_apply') {
-            sv_margin_api_json(409,['ok'=>false,
-                'error'=>'commercial_publication_requires_approved_execution',
-                'detail'=>'Esta simulacao nao publica precos. Usar o fluxo comercial autorizado para ERP 991 e Amazon Listings.']);
+            // This route is available only after the commercial publication
+            // implementation has passed the existing protected GitHub review.
+            // API calls record a durable request. Price writes happen solely
+            // in the isolated CLI worker using the original admin consent.
+            $latest=SvAmazonMarginStore::latest($db);
+            if (!$latest)sv_margin_api_json(404,['ok'=>false,'error'=>'no_audit_snapshot']);
+            if ((int)($body['audit_run_id']??0)!==(int)$latest['run_id'])
+                sv_margin_api_json(409,['ok'=>false,'error'=>'audit_updated_recalculate_first']);
+            $skus=sv_margin_api_selected($body['skus']??[]);
+            if($skus===[])sv_margin_api_json(400,['ok'=>false,'error'=>'no_selected_skus']);
+            $target=SvAmazonTargetMarginPricePlan::targetBps($body['target_percent']??null);
+            $snapshot=$latest['snapshot'];
+            $tax=(int)($snapshot['tax_bps']??1400);
+            if(is_array($snapshot['rows']??null)){
+                foreach($snapshot['rows'] as &$r){
+                    if(is_array($r))$r['_target_tax_bps']=$tax;
+                }
+                unset($r);
+            }
+            $region=trim((string)(getenv('SV_AMAZON_DBA_ORIGIN_REGION')?:''));
+            $plan=SvAmazonTargetMarginPricePlan::prepare($snapshot,$skus,$target,
+                $region!==''?$region:null);
+            if(($body['acknowledge_site_and_other_skus']??false)!==true)
+                sv_margin_api_json(409,['ok'=>false,'error'=>'explicit_site_impact_confirmation_required']);
+            $job=SvAmazonTargetMarginPriceJobs::enqueue(
+                $db,(int)$latest['run_id'],$plan,
+                (string)($body['preview_digest']??''),
+                (string)($body['request_nonce']??''),
+                (int)($_SESSION['user_id']??0));
+            sv_margin_api_json(202,['ok'=>true,'request_id'=>$job['request_id'],
+                'state'=>$job['state'],'reused'=>$job['reused'],
+                'price_updates_enabled'=>true,
+                'detail'=>'solicitacao_comercial_recebida_para_execucao_idempotente']);
         }
         if (($body['action']??'')==='export') {
             $latest=SvAmazonMarginStore::latest($db);
@@ -132,7 +164,14 @@ try {
         sv_margin_api_json(200,['ok'=>true,
             'latest_meta'=>SvAmazonMarginStore::latestMeta($db),
             'requests'=>SvAmazonMarginStore::requests($db),
-            'price_updates_enabled'=>false]);
+            'price_updates_enabled'=>true]);
+    }
+    if ($action==='target_margin_apply_status') {
+        $id=(int)($_GET['request_id']??0);
+        $status=SvAmazonTargetMarginPriceJobs::status(
+            $db,$id,(int)($_SESSION['user_id']??0));
+        if(!$status)sv_margin_api_json(404,['ok'=>false,'error'=>'price_request_not_found']);
+        sv_margin_api_json(200,['ok'=>true,'request'=>$status]);
     }
     if ($action==='olist_ads_status') {
         $index=SvAmazonMarginOlistAdsIndex::load();
@@ -168,7 +207,7 @@ try {
     SvAmazonMarginStore::ensureSchema($db);
     $requests=SvAmazonMarginStore::requests($db);
     sv_margin_api_json(200,['ok'=>true,'latest'=>$latest,'requests'=>$requests,
-        'price_updates_enabled'=>false]);
+        'price_updates_enabled'=>true]);
 } catch(InvalidArgumentException|JsonException $e) {
     sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_input']);
 } catch(Throwable $e) {

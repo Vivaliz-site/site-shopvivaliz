@@ -571,3 +571,108 @@ formal de escopo e reconciliacao individual apos escrita. O endpoint
 `target_margin_apply` retorna erro expresso enquanto esse executor nao
 estiver autorizado; a interface nao promete aplicacao efetiva nesse estado.
 Esta fase nao concede permissao comercial nem altera grants existentes.
+
+
+
+### Credenciais SP-API — verificação cruzada ShopVivaliz / Amazon Returns
+
+As credenciais LWA (client ID, client secret e refresh token) permanecem
+somente nos ambientes privados, nunca no repositório ou na documentação.
+O runtime ShopVivaliz já as carregava; o Seller ID é um identificador separado,
+recuperado de dois snapshots privados de anúncios e confirmado com GET real
+de Listings e Pricing na conta Amazon BR. O arquivo privado recebeu a chave
+AMAZON_SELLER_ID preservando proprietário e permissões, sem registrar seu
+valor em logs ou no Git.
+
+A documentação do Amazon Returns confirma que o runtime utiliza o mesmo
+conjunto de chaves LWA em seu próprio ambiente protegido. O preflight público
+de saúde retornou HTTP 200, status OK e zero bloqueios, sem leitura ou cópia
+do arquivo secreto do Returns. A API Sellers confirmou a participação no
+marketplace BR; não é necessário pedir novo token ao operador.
+
+Evidências de integração, somente leitura:
+- GET /sellers/v1/marketplaceParticipations: HTTP 200.
+- GET Listings e GET Pricing para R9-O6PX-YBXA: HTTP 200.
+- PUT idempotente de validação na tabela 991: HTTP 204; GET posterior HTTP 200;
+  159 exceções e uma promoção preservadas; SHA-256 canônico antes/depois idêntico;
+  zero alteração de preço comercial.
+- Cotação oficial getMyFeesEstimates no preço proposto R$ 119,08:
+  comissão R$ 17,86, lucro R$ 11,91 e margem líquida calculada de 10,00%.
+- Listings VALIDATION_PREVIEW para preço de venda e mínimo iguais a
+  R$ 119,08: HTTP 200, status VALID, zero issues; nenhum PATCH comercial enviado.
+- Amazon Returns /api/health.php: HTTP 200, status OK, zero bloqueios.
+
+## Aplicação comercial de margem desejada (P2 — revisão protegida)
+
+### Contrato oficial de gravação Olist (validado no Swagger publicado)
+
+O endpoint oficial é PUT /listas-precos/{idListaDePreco}, operação
+AtualizarListaDePrecosAction, disponível desde a API v3.1.1. A resposta
+de sucesso documentada é HTTP 204. O schema de entrada
+AtualizarListaPrecoRequestModel aceita descricao, acrescimoDesconto e
+itens[] com idProduto, preco e precoPromocional. O GET da lista retorna
+excecoes[] e também codigo, que é campo de resposta, não do PUT. Portanto
+o adaptador converte as exceções atuais da tabela 991 em itens[], preserva
+preço regular/promocional de todos os produtos e altera somente a exceção
+ERP selecionada. A compensação usa o mesmo schema oficial. O readback GET
+confere preço alvo, promoções, percentual, códigos e todas as exceções não
+selecionadas; divergência deixa o item em revisão manual.
+
+O censo GET /listas-precos também identificou as listas 983 (Amazon FBA),
+984 (Amazon ONSITE) e 991 (Amazon). O escopo desta rotina P2 permanece
+explicitamente na lista 991 (Amazon); as outras duas listas não são alteradas
+nem se presume a qual integração estão atribuídas apenas pelo nome.
+
+Fontes oficiais:
+- Swagger Olist ERP API v3: https://erp.tiny.com.br/public-api/v3/swagger/index.html
+- Changelog v3.1.1: https://api-docs.erp.olist.com/changelog/versao-3-1-1
+- Schema publicado no Swagger: PUT /listas-precos/{idListaDePreco} /
+  AtualizarListaPrecoRequestModel.
+
+
+A etapa posterior à simulação usa as rotas administrativas autenticadas:
+- `POST target_margin_apply` exige os SKUs já selecionados, margem desejada,
+  ID do snapshot, digest da mesma prévia, confirmação explícita do impacto
+  da tabela 991 no site e nos outros anúncios, e nonce de idempotência.
+  A resposta `202` significa **solicitação registrada**, não preço aplicado.
+- `GET target_margin_apply_status&request_id=...` permite à mesma conta
+  administrativa consultar o andamento sem ler o journal privado de
+  credenciais e payloads dos provedores.
+- A fila persiste `amazon_margin_target_price_requests` e
+  `amazon_margin_target_price_items`, com checkpoint por etapa, SKU e
+  valor em centavos. `scripts/amazon-margin/run.php --next` consome
+  solicitações comerciais apenas se a fila normal de auditoria estiver
+  vazia. `--all`, `--skus` e `--dry-run` não gravam preços.
+
+A execução protegida reconsulta produto, canal e preço efetivo Amazon,
+custo por unidade, faixa de logística, produto ERP e exceção da tabela 991.
+Reestima a comissão via `getMyFeesEstimates` SP-API **no preço proposto**,
+recalculando até alcançar a margem alvo com impostos e logística atuais.
+Não escreve se houver custo pendente, promoção, quantidade/dimensão
+não conciliada, preço efetivo divergente, SKU inexistente ou incompatibilidade
+de produto ERP compartilhado. Na lista 991 preserva as demais exceções,
+as regras gerais e preços promocionais não selecionados; após gravação
+usa GET para confirmar paridade. Na Amazon usa uma alteração granular
+da oferta com `purchasable_offer.our_price` e
+`purchasable_offer.minimum_seller_allowed_price` igual ao preço de venda,
+sem desabilitar campanhas, alterar estoque ou mudar outros campos.
+
+A operação nunca repete PUT/PATCH de resultado incerto sem ler novamente
+as APIs, por meio dos estágios `erp_submit_started`,
+`amazon_submit_started` e `awaiting_readback`. Um retorno HTTP
+definitivamente recusado pelo catálogo Amazon pode gerar compensação da
+tabela ERP, somente quando a diferença ainda corresponde exatamente à
+modificação isolada realizada pelo worker. Inconsistência, concorrência,
+falta de autorização ou readback não confirmado permanecem para revisão
+humana, sem autodeclaração de sucesso.
+
+**Pendências de ativação em produção:** a SP-API utilizada pela auditoria
+já cota comissões de preços propostos, mas o identificador oficial de
+vendedor (Merchant Token/Seller ID) não estava presente nas quatro
+chaves de configuração reconhecidas pelo cliente da VM Marina durante
+a validação somente leitura. Por isso `getListingsItem` não foi
+comprovado. Também falta evidência segura do contrato `PUT` da
+lista 991 no Olist V3, sem alterar preços reais em teste. O executor
+comercial não deve ser integrado em produção sem revisão nominal
+`shopvivaliz-human`, verificação do provedor e teste E2E UI.
+O módulo P2 não foi executado sobre preços reais durante seu desenvolvimento.

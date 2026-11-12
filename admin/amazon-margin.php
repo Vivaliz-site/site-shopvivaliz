@@ -199,6 +199,11 @@ function updateTargetControls(){
  el('target-margin-count').textContent=selected.size+' Seller SKU(s) selecionado(s)';
  el('target-margin-preview').disabled=targetBusy||selected.size===0||!Number.isFinite(target)||target<=0||target>=100;
  el('target-margin-export').disabled=!targetPlan||targetPlanKey!==selectedTargetKey();
+ const canApply=!!targetPlan&&targetPlanKey===selectedTargetKey()&&
+  Number(targetPlan.preview.pending)===0&&
+  (targetPlan.preview.rows||[]).every(r=>r.state==='simulated'&&
+   Number(r.erp_id)>0&&!r.price_list_shared_product_conflict);
+ el('target-margin-apply').disabled=targetBusy||!canApply;
 }
 
 const stageLabels={
@@ -599,6 +604,64 @@ async function previewTarget(){
  }catch(err){el('target-margin-state').textContent='Falha de simulação: '+String(err.message||err).slice(0,190);}
  finally{targetBusy=false;updateTargetControls();}
 }
+let targetPublicationPoll=null,targetApplyNonce=null,targetApplyKey='';
+async function refreshTargetPublication(requestId){
+ try{
+  const res=await fetch(API+'?action=target_margin_apply_status&request_id='+encodeURIComponent(requestId),
+   {credentials:'same-origin',cache:'no-store'});
+  const json=await readJson(res),status=json.request;
+  const items=status.items||[];
+  const done=items.filter(i=>i.state==='done').length,
+   attention=items.filter(i=>['manual_review','rejected'].includes(i.state)).length;
+  el('target-margin-state').textContent='Publicação #'+requestId+' · '+done+'/'+items.length+
+   ' confirmado(s) no ERP e na Amazon · '+attention+
+   ' com necessidade de conferência · estado '+status.state+
+   '. O preço só conta como aplicado depois do readback dos dois canais.';
+  if(status.state!=='finished'&&targetPublicationPoll===requestId){
+   setTimeout(()=>refreshTargetPublication(requestId),8000);
+  }
+ }catch(err){
+  el('target-margin-state').textContent='Falha na consulta do andamento da publicação #'+requestId+
+   ': '+String(err.message||err).slice(0,140);
+ }
+}
+async function applyTarget(){
+ if(el('target-margin-apply').disabled||!targetPlan)return;
+ const plan=targetPlan.preview;
+ const affected=plan.rows.reduce((a,r)=>a+(r.related_unselected_skus||[]).length,0);
+ const message='ATENÇÃO: esta operação alterará PREÇOS REAIS dos '+plan.rows.length+
+  ' Seller SKUs selecionados, tanto na lista Amazon 991 do ERP Olist quanto na Amazon '+
+  '(preço de venda e preço mínimo iguais). O site usa a tabela ERP e poderá ser afetado. '+
+  (affected?'Há '+affected+' referência(s) a outros Seller SKUs compartilhando produtos ERP. ':'')+
+  'O valor final pode ser MAIOR que a prévia, porque a comissão será recotada pela Amazon '+
+  'no preço real proposto antes da gravação. As alterações serão registradas e só serão '+
+  'confirmadas após leitura das duas APIs. Confirmar?';
+ if(!window.confirm(message))return;
+ targetBusy=true;updateTargetControls();
+ el('target-margin-state').textContent='Registrando execução comercial autorizada…';
+ try{
+  const requestKey=targetPlanKey;
+  if(!targetApplyNonce||targetApplyKey!==requestKey){
+   targetApplyNonce=crypto.randomUUID().replace(/-/g,'');
+   targetApplyKey=requestKey;
+  }
+  const nonce=targetApplyNonce; // Reuse on timeout to avoid a second price job.
+  const res=await fetch(API,{method:'POST',credentials:'same-origin',
+   headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},
+   body:JSON.stringify({action:'target_margin_apply',
+    audit_run_id:targetPlan.audit_run_id,target_percent:plan.target_percent,
+    skus:[...selected],preview_digest:targetPlan.preview_digest,
+    request_nonce:nonce,acknowledge_site_and_other_skus:true})});
+  const json=await readJson(res);
+  targetPublicationPoll=json.request_id;
+  el('target-margin-state').textContent='Solicitação #'+json.request_id+
+   ' registrada: aplicação pelo worker protegido, com confirmação de preço no ERP e Amazon.';
+  await refreshTargetPublication(json.request_id);
+ }catch(err){
+  el('target-margin-state').textContent='A publicação não foi confirmada: '+
+   String(err.message||err).slice(0,200);
+ }finally{targetBusy=false;updateTargetControls();}
+}
 function exportTarget(){
  if(!targetPlan||targetPlanKey!==selectedTargetKey())return;
  const columns=['Seller SKU','Descrição','SKU ERP','ERP ID','Programa','Margem desejada (%)',
@@ -689,6 +752,7 @@ el('run-selected').onclick=()=>requestRun('selected');el('run-all').onclick=()=>
 el('pdf').onclick=()=>download('pdf');el('xlsx').onclick=()=>download('xlsx');
 el('target-margin-percent').oninput=updateTargetControls;
 el('target-margin-preview').onclick=previewTarget;el('target-margin-export').onclick=exportTarget;
+el('target-margin-apply').onclick=applyTarget;
 el('reload').onclick=()=>load();
 el('search').oninput=()=>{shown=75;render();};
 el('program').onchange=el('status').onchange=el('only-active').onchange=()=>{shown=75;render();};

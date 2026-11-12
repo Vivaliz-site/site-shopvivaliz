@@ -28,7 +28,11 @@ leia o bloco `cURL` de exemplo pra confirmar o path exato antes de codificar —
 | Formas de envio — listar | `GET /formas-envio` | [listar-formas-de-envio](https://api-docs.erp.olist.com/api-reference/logistica/listar-formas-de-envio) |
 | Transportadores — listar | **não existe** (`/transportadores` = 404) | — |
 | Naturezas de operação — listar | **não existe** (`/naturezas-operacao` = 404) | — |
-| Listas de preço — listar | não confirmado (`/lista-de-precos`/`/listas-precos` = 404, path real não achado ainda) | — |
+| Listas de preço — listar | GET /listas-precos | Swagger Olist v3 |
+| Lista de preços — obter | GET /listas-precos/{idListaDePreco} | Swagger Olist v3 |
+| Lista de preços — atualizar | PUT /listas-precos/{idListaDePreco} | Swagger Olist v3 / changelog v3.1.1 |
+| Lista de preços — criar | POST /listas-precos | Swagger Olist v3 / changelog v3.1.1 |
+| Lista de preços — excluir produto | DELETE /listas-precos/{idListaDePreco}/produtos/{idProduto} | Swagger Olist v3 / changelog v3.1.1 |
 | Estoque | `GET /estoque/{id}` | — (só esse tem `disponivel` correto pra kits) |
 | Pedidos — atualizar despacho/rastreio | `PUT /pedidos/{idPedido}/despacho` | [atualizar-informações-de-rastreamento-do-pedido](https://api-docs.erp.olist.com/api-reference/pedidos/atualizar-informa%C3%A7%C3%B5es-de-rastreamento-do-pedido) |
 | Notas fiscais — obter | `GET /notas/{idNota}` | [obter-nota-fiscal](https://api-docs.erp.olist.com/api-reference/notas/obter-nota-fiscal) |
@@ -425,3 +429,24 @@ curl -s https://api.tiny.com.br/public-api/v3/estoque/{id} -H "Authorization: Be
 ```
 
 Documentação completa (sitemap com ~322 páginas): `https://api-docs.erp.olist.com/sitemap.xml`.
+
+
+## Listas de preços — schema oficial GET/PUT (API v3.1.1)
+
+Referências oficiais consultadas no Swagger publicado em
+https://erp.tiny.com.br/public-api/v3/swagger/index.html e no changelog
+https://api-docs.erp.olist.com/changelog/versao-3-1-1.
+
+- GET /listas-precos/{idListaDePreco} retorna a lista e suas exceções no campo
+  excecoes[], incluindo idProduto, codigo, preco e precoPromocional.
+- PUT /listas-precos/{idListaDePreco} usa AtualizarListaPrecoRequestModel:
+  descricao, acrescimoDesconto e itens[], cada item com idProduto, preco e
+  precoPromocional. O retorno de sucesso documentado é HTTP 204.
+- excecoes e codigo são campos da resposta GET; não devem ser copiados
+  para o corpo do PUT. Antes de atualizar, converter todas as exceções GET
+  para itens[], preservando preço regular e promocional dos produtos não
+  selecionados. Depois, fazer novo GET e comparar todas as exceções.
+- No censo atual da conta, GET /listas-precos retornou dez listas; a lista
+  991 tem descrição Amazon e 159 exceções. Esta rotina comercial P2 atua
+  somente nessa lista, conforme o escopo solicitado; não altera as listas
+  983 (Amazon FBA) ou 984 (Amazon ONSITE).

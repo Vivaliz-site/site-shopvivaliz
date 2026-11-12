@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 
-// Read-only CLI collector. Has no price or stock write operations.
+// --all, --skus and --dry-run are always read-only. --next processes
+// audit requests first; only when the audit queue is empty can it consume
+// explicit owner-confirmed commercial price requests after protected review.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 $root = dirname(__DIR__, 2);
 $shared = (string)(getenv('SHOPVIVALIZ_SHARED_DIR') ?: '/home/ubuntu/shopvivaliz-deploy/shared');
@@ -21,6 +23,7 @@ require_once $root.'/includes/pdo-database.php';
 require_once $root.'/includes/marketplace/AmazonPublisher.php';
 require_once $root.'/includes/amazon-margin/AuditStore.php';
 require_once $root.'/includes/amazon-margin/AuditCollector.php';
+require_once $root.'/includes/amazon-margin/TargetMarginPriceWorker.php';
 require_once $root.'/includes/marketplace/TinyV3Runtime.php';
 
 $options = getopt('', ['all','next','skus:','from:','dry-run']);
@@ -48,7 +51,16 @@ try {
         $locked = (int)$db->query("SELECT GET_LOCK('shopvivaliz_amazon_margin_runner',0)")->fetchColumn();
         if ($locked !== 1) throw new RuntimeException('another_margin_audit_running');
         $job = SvAmazonMarginStore::next($db);
-        if (!$job) { echo json_encode(['state'=>'queue_empty']),"\n"; exit(0); }
+        if (!$job) {
+            // This commercial worker is invoked ONLY when the normal
+            // read-only audit queue has no request. It handles exclusively
+            // explicitly confirmed and durable admin price requests.
+            // All --all, --skus, and --dry-run modes remain read-only.
+            $priceJob=SvAmazonTargetMarginPriceWorker::runNext($db);
+            echo json_encode(['state'=>'audit_queue_empty','commercial_request'=>$priceJob],
+                JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),"\n";
+            exit(0);
+        }
         $requestId=(int)$job['id'];
         $scope=(string)$job['scope'];
         $selected=$scope==='selected' ? $job['skus'] : [];
