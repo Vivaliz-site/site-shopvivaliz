@@ -1,7 +1,16 @@
-import test from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 
+// These tests use synthetic task IDs. Isolate the worker's task-state root so
+// a stale production/shared checkpoint can never change the browser binding.
+const taskStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-unavailable-canonical-state-'));
+process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR = taskStateDir;
+process.env.SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF = '0';
 const { attemptNudge } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+after(() => fs.rmSync(taskStateDir, { recursive: true, force: true }));
 
 function canonicalUnavailableCdp({
   turnStatus = 200,
