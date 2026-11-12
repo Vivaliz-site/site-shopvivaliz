@@ -228,5 +228,57 @@ class RealProcessTimeoutTests(unittest.TestCase):
         self.assertFalse(_alive(b"sleep\x004343"))
 
 
+class UbuntuGrantTests(unittest.TestCase):
+    def setUp(self):
+        self.entries = []
+        self.audit = lambda entry: (self.entries.append(entry) or True)
+        patcher = patch.object(shell, "_service_identity_ok", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_shipped_ubuntu_grant_matches_pinned_owner_approval(self):
+        self.assertEqual(shell.load_ubuntu_grant(), shell.EXPECTED_UBUNTU_GRANT)
+        self.assertEqual(shell.load_ubuntu_grant()["pr_number"], shell.UBUNTU_GRANT_PR)
+        approval = Path(MODULE).parents[1] / "security" / "owner-approvals" / "3918.json"
+        self.assertEqual(json.loads(approval.read_text()), shell.EXPECTED_UBUNTU_GRANT)
+
+    def test_ubuntu_grant_mismatch_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "grant.json"
+            path.write_text(json.dumps(dict(shell.EXPECTED_UBUNTU_GRANT, root_http_daemon_allowed=True)))
+            with self.assertRaises(RuntimeError):
+                shell.load_ubuntu_grant(path)
+
+    def test_as_user_runs_through_sudo_as_ubuntu_with_root_side_timeout(self):
+        seen = []
+        def runner(argv, **kwargs):
+            seen.append(argv)
+            return subprocess.CompletedProcess(argv, 0)
+        result = shell.run_admin_shell({"command": "id", "as_user": "ubuntu"}, home="/tmp",
+                                       audit=self.audit, runner=runner, ubuntu_enabled=True)
+        self.assertTrue(result["ok"])
+        self.assertEqual(seen[0][:6], ["/usr/bin/sudo", "-n", "-H", "-u", "ubuntu", "--"])
+        self.assertIn("/usr/bin/timeout", seen[0])
+        self.assertEqual(self.entries[0]["as_user"], "ubuntu")
+
+    def test_as_user_refused_when_grant_not_loaded(self):
+        called = []
+        result = shell.run_admin_shell({"command": "id", "as_user": "ubuntu"}, home="/tmp", audit=self.audit,
+                                       runner=lambda *a, **k: called.append(a))
+        self.assertEqual(result, {"ok": False, "reason": "ubuntu_grant_unavailable"})
+        self.assertEqual(called, [])
+
+    def test_only_ubuntu_and_never_combined_with_root(self):
+        for args in ({"as_user": "root"}, {"as_user": "www-data"}, {"as_user": "ubuntu", "as_root": True}):
+            result = shell.run_admin_shell(dict(args, command="id"), home="/tmp", audit=self.audit,
+                                           runner=lambda *a, **k: None, ubuntu_enabled=True)
+            self.assertEqual(result, {"ok": False, "reason": "invalid_arguments"})
+
+    def test_bootstrap_without_ubuntu_grant_keeps_root_shell_working(self):
+        with patch.object(shell, "UBUNTU_GRANT_FILE", Path("/nonexistent/grant.json")),              patch.object(shell, "load_ubuntu_grant", side_effect=FileNotFoundError):
+            runner = shell.bootstrap_admin_shell()
+        self.assertIs(runner.keywords["ubuntu_enabled"], False)
+
+
 if __name__ == "__main__":
     unittest.main()
