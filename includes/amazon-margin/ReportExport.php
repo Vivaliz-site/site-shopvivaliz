@@ -28,6 +28,11 @@ final class SvAmazonMarginExport
         $below9=$exactMargin!==null
             ?($profitCents*10000<$priceCents*900?'Sim':'Nao')
             :($hasMargin?((int)$row['current_margin_bps']<900?'Sim':'Nao'):'Pendente');
+        // Owner floor: exact 10% classification avoids rounding 9.996% to 1000 bps.
+        // Preserve the old 9% diagnostic column for compatibility.
+        $below10=$priceCents>0&&$profitCents!==null&&$hasMargin
+            ?($profitCents*10000<$priceCents*1000?'Sim':'Nao')
+            :($hasMargin?((int)$row['current_margin_bps']<1000?'Sim':'Nao'):'Pendente');
         $reason = match($financialStatus) {
             'unmapped_erp' => 'Produto vinculado no ERP nao identificado',
             'ambiguous_erp' => 'Produto ERP ambiguo',
@@ -54,6 +59,7 @@ final class SvAmazonMarginExport
             'Margem atual estimada (%)'=>isset($row['current_margin_bps']) ? round((int)$row['current_margin_bps']/100,2) : null,
             'Margem atual exata (%)'=>$exactMargin,
             'Abaixo de 9% exato'=>$below9,
+            'Abaixo de 10% exato'=>$below10,
             'Lucro atual por unidade (R$)'=>isset($row['current_profit_cents']) ? round((int)$row['current_profit_cents']/100,2) : null,
             'Comissao Amazon atual (R$)'=>isset($row['current_commission_cents']) ? round((int)$row['current_commission_cents']/100,2) : null,
             'Logistica atual (R$)'=>isset($row['current_logistics_cents']) ? round((int)$row['current_logistics_cents']/100,2) : null,

@@ -67,8 +67,8 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
   <div class="alert">Primeira fase: <strong>auditoria e relatórios somente leitura</strong>. Alterações de preço serão liberadas apenas após validação da sincronização individual Amazon/ERP e do impacto no site.</div>
   <div class="cards">
     <div class="card metric"><span id="n-total-label">Anúncios ativos</span><strong id="n-total">—</strong><small id="n-total-context">—</small></div>
-    <div class="card metric"><span>Margem atual estimada abaixo de 9%</span><strong class="danger" id="n-risk">—</strong></div>
-    <div class="card metric"><span>Margem atual estimada ≥9%</span><strong class="positive" id="n-good">—</strong></div>
+    <div class="card metric"><span>Margem atual estimada abaixo de 10%</span><strong class="danger" id="n-risk">—</strong></div>
+    <div class="card metric"><span>Margem atual estimada ≥10%</span><strong class="positive" id="n-good">—</strong></div>
     <div class="card metric"><span>Margem atual pendente</span><strong class="warning" id="n-pending">—</strong><small id="n-partial-context">—</small></div>
   </div>
   <section class="card" id="audit-live" role="status" aria-live="polite">
@@ -130,7 +130,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
-      <select id="status"><option value="">Todos os resultados</option><option value="current_low9">Margem atual estimada abaixo de 9%</option><option value="current_pending">Margem atual pendente</option><option value="low">Confirmada abaixo de 10%</option><option value="healthy">Confirmada ≥10%</option><option value="pending">Pendente ou parcial</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="pending_financial">Vendas aguardando conciliação financeira</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
+      <select id="status"><option value="">Todos os resultados</option><option value="current_low10">Margem atual estimada abaixo de 10%</option><option value="current_pending">Margem atual pendente</option><option value="low">Confirmada abaixo de 10%</option><option value="healthy">Confirmada ≥10%</option><option value="pending">Pendente ou parcial</option><option value="unmapped">Vínculo ERP não identificado</option><option value="no_sales">Sem vendas no período</option><option value="pending_financial">Vendas aguardando conciliação financeira</option><option value="no_price">Sem preço efetivo</option><option value="erp_error">Falha/ambiguidade ERP</option></select>
       <label class="filter-active" for="only-active"><input type="checkbox" id="only-active" checked> Somente ativos <span id="active-count" class="small muted"></span></label>
       <button type="button" id="select-visible">Selecionar visíveis</button>
       <button type="button" id="clear-selected">Limpar seleção</button>
@@ -244,13 +244,14 @@ const price=v=>v===null||v===undefined?'—':'R$ '+Number(v).toLocaleString('pt-
 const margin=v=>v===null||v===undefined?'—':(v/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
 function isActive(r){return Array.isArray(r.amazon_status)&&r.amazon_status.includes('BUYABLE');}
 // Exact monetary threshold, not the margin already rounded to integer basis
-// points. R$ 2.24 / R$ 24.90 = 8.996%, which rounds to 900 bps.
-function currentMarginBelow9(r){
+// points. A R$ 250 offer with R$ 24.99 profit has 9.996% margin,
+// which rounds to 1000 bps but remains below the 10% owner floor.
+function currentMarginBelow10(r){
  if(r.current_margin_bps===null||r.current_margin_bps===undefined)return false;
  const cents=Math.round(Number(r.price)*100),profit=Number(r.current_profit_cents);
  if(Number.isSafeInteger(cents)&&cents>0&&Number.isSafeInteger(profit))
-  return profit*10000<cents*900;
- return Number(r.current_margin_bps)<900;
+  return profit*10000<cents*1000;
+ return Number(r.current_margin_bps)<1000;
 }
 function currentMarginExact(r){
  if(r.current_margin_bps===null||r.current_margin_bps===undefined)return null;
@@ -275,7 +276,7 @@ function refreshSelection(){
 }
 function filterMatch(r,s){
  if(s==='')return true;
- if(s==='current_low9')return currentMarginBelow9(r);
+ if(s==='current_low10')return currentMarginBelow10(r);
  if(s==='current_pending')return r.current_margin_bps===null||r.current_margin_bps===undefined;
  if(s==='low'||s==='healthy'||s==='pending')return state(r)===s;
  if(s==='unmapped')return r.status==='unmapped_erp';
@@ -371,8 +372,8 @@ function costMarkup(r){
 function refreshMetrics(){
  const active=data.filter(isActive).length;
  const base=el('only-active').checked?data.filter(isActive):data;
- const healthy=base.filter(r=>r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&!currentMarginBelow9(r)).length;
- const low=base.filter(currentMarginBelow9).length;
+ const healthy=base.filter(r=>r.current_margin_bps!==null&&r.current_margin_bps!==undefined&&!currentMarginBelow10(r)).length;
+ const low=base.filter(currentMarginBelow10).length;
  el('n-total-label').textContent=el('only-active').checked?'Anúncios ativos':'Anúncios cadastrados';
  el('n-total').textContent=base.length;
  el('n-total-context').textContent=active+' ativos de '+data.length+' no catálogo';
@@ -414,8 +415,8 @@ function render(){
      (currentStatus==='estimated_program_unverified'?'<span class="cell-note warn">DBA presumido — conferir programa</span>':'')
    :'<span class="cell-note warn">Pendente: '+escapeHtml(currentStatus.replaceAll('_',' '))+'</span>';
   const exact=currentMarginExact(r);
-  const roundingNote=currentVerified&&currentMarginBelow9(r)&&r.current_margin_bps>=900&&exact!==null
-   ?'<span class="cell-note warn">Margem sem arredondar: '+exact.toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})+'% (inferior a 9%)</span>'
+  const roundingNote=currentVerified&&currentMarginBelow10(r)&&r.current_margin_bps>=1000&&exact!==null
+   ?'<span class="cell-note warn">Margem sem arredondar: '+exact.toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})+'% (inferior a 10%)</span>'
    :'';
   const currentText=(currentVerified?margin(r.current_margin_bps):'—')+roundingNote+currentDetail;
   const simOk=canSimulate(r);
@@ -441,7 +442,7 @@ function render(){
    +'<td class="right">'+priceMarkup(r)+'</td>'
    +'<td class="right">'+costMarkup(r)+'</td>'
    +'<td class="right">'+Number(r.confirmed_sales||0)+'<span class="cell-note">'+Number(r.confirmed_units||0)+' unidade(s) conciliada(s)</span>'+(Number(r.pending_sales||0)>0?'<span class="cell-note warn">'+Number(r.pending_sales)+' lançamento(s) aguardando conciliação</span>':'')+'</td>'
-   +'<td class="right '+(currentVerified?(currentMarginBelow9(r)?'danger':'positive'):'warning')+'">'+currentText+'</td>'
+   +'<td class="right '+(currentVerified?(currentMarginBelow10(r)?'danger':'positive'):'warning')+'">'+currentText+'</td>'
    +'<td class="right '+(st==='low'?'danger':st==='healthy'?'positive':'warning')+'">'+marginText+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined&&Number(r.confirmed_units||0)>0?price(Number(r.profit_cents||0)/100/Number(r.confirmed_units)):'—')+'</td>'
    +'<td class="right">'+(r.margin_weighted_bps!==null&&r.margin_weighted_bps!==undefined?price(Number(r.profit_cents||0)/100):'—')+(r.status==='partial'?'<span class="cell-note warn">Parcial</span>':'')+'</td>'

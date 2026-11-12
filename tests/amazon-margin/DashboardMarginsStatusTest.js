@@ -34,33 +34,35 @@ assert.deepEqual(Array.from(rows, canSimulate), [true,true,true,false,false,fals
 assert.equal(rows.filter(r=>state(r)==='low').length,2);
 assert.equal(rows.filter(r=>state(r)==='healthy').length,2);
 assert.equal(rows.filter(r=>state(r)==='pending').length,4);
-assert.match(page, /Margem atual estimada abaixo de 9%/);
+assert.match(page, /Margem atual estimada abaixo de 10%/);
 assert.match(page, /Confirmada abaixo de 10%/);
 assert.match(page, /Pendente ou parcial/);
-assert.match(page, /value="current_low9"/);
+assert.match(page, /value="current_low10"/);
 assert.match(page, /value="current_pending"/);
 assert.match(page, /n-partial-context/);
-// Strict risk filter: only margins below 9.00% are included.
+// Strict risk filter: only margins below 10.00% are included.
 const filterSource = page.match(/function filterMatch\(r,s\)\{[\s\S]*?\n\}/);
 assert.ok(filterSource, 'filterMatch helper must exist in the production UI');
-const exactSource = page.match(/function currentMarginBelow9\(r\)\{[\s\S]*?\n\}/);
-assert.ok(exactSource, 'exact monetary <9% helper must exist');
-const {filterMatch,currentMarginBelow9} = vm.runInNewContext(
+const exactSource = page.match(/function currentMarginBelow10\(r\)\{[\s\S]*?\n\}/);
+assert.ok(exactSource, 'exact monetary <10% helper must exist');
+const {filterMatch,currentMarginBelow10} = vm.runInNewContext(
   sourceOf('state') + '\n' + exactSource[0] + '\n' + filterSource[0]
-  + '\n({filterMatch,currentMarginBelow9})'
+  + '\n({filterMatch,currentMarginBelow10})'
 );
 const floorCases=[899,900,999,1000].map(bps => ({status:'no_confirmed_sales',current_margin_bps:bps}));
-assert.deepEqual(Array.from(floorCases, r=>filterMatch(r,'current_low9')),[true,false,false,false]);
-assert.equal(filterMatch({status:'no_confirmed_sales',current_margin_bps:null},'current_low9'),false);
-// An integer-bps margin rounded from 8.99598% to 900 must still count <9%.
+assert.deepEqual(Array.from(floorCases, r=>filterMatch(r,'current_low10')),[true,true,true,false]);
+assert.equal(filterMatch({status:'no_confirmed_sales',current_margin_bps:null},'current_low10'),false);
+// An integer-bps margin rounded to 1000 from 9.996% must still count <10%.
 const sale2490={status:'no_confirmed_sales',price:24.9,current_profit_cents:224,current_margin_bps:900};
-assert.equal(currentMarginBelow9(sale2490),true);
-assert.equal(filterMatch(sale2490,'current_low9'),true);
-assert.equal(currentMarginBelow9({...sale2490,current_profit_cents:225}),false);
-assert.equal(currentMarginBelow9({...sale2490,current_margin_bps:null}),false);
-assert.match(page,/const low=base\.filter\(currentMarginBelow9\)\.length/);
-assert.match(page,/!currentMarginBelow9\(r\)/);
-assert.match(page,/currentMarginBelow9\(r\)\?'danger'/);
+assert.equal(currentMarginBelow10(sale2490),true);
+assert.equal(filterMatch(sale2490,'current_low10'),true);
+assert.equal(currentMarginBelow10({...sale2490,current_profit_cents:225}),true);
+assert.equal(currentMarginBelow10({...sale2490,current_profit_cents:249}),false);
+assert.equal(currentMarginBelow10({status:'no_confirmed_sales',price:250,current_profit_cents:2499,current_margin_bps:1000}),true);
+assert.equal(currentMarginBelow10({...sale2490,current_margin_bps:null}),false);
+assert.match(page,/const low=base\.filter\(currentMarginBelow10\)\.length/);
+assert.match(page,/!currentMarginBelow10\(r\)/);
+assert.match(page,/currentMarginBelow10\(r\)\?'danger'/);
 
 assert.match(page, /const simOk=canSimulate\(r\)/);
 assert.match(page, /if\(!currentSim\|\|!canSimulate\(currentSim\)\)return/);

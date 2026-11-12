@@ -1,0 +1,16 @@
+'use strict';
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const page = fs.readFileSync(__dirname + '/../../admin/amazon-margin.php', 'utf8');
+const extracted = page.match(/function currentMarginBelow10\(r\)\{[\s\S]*?\n\}/);
+assert.ok(extracted, 'missing projected net margin 10% comparator');
+const below10 = vm.runInNewContext(extracted[0] + '; currentMarginBelow10');
+assert.equal(below10({price:250, current_profit_cents:2499, current_margin_bps:1000}), true, '9.996% must be below 10% despite bps rounding');
+assert.equal(below10({price:24.90, current_profit_cents:249, current_margin_bps:1000}), false, 'exactly 10% must pass');
+assert.equal(below10({price:24.90, current_profit_cents:225, current_margin_bps:904}), true, '9.036% is below owner 10% floor, despite exceeding 9%');
+assert.equal(below10({price:24.90, current_profit_cents:null, current_margin_bps:null}), false, 'unknown margin is pending, not low');
+assert.ok(page.includes('value="current_low10"'), 'UI should filter estimated margins below 10%');
+assert.ok(page.includes('Margem atual estimada abaixo de 10%'), 'risk KPI must show 10%');
+assert.ok(page.includes('Margem atual estimada ≥10%'), 'healthy KPI must show 10%');
+console.log('PASS Amazon estimated net margin floor 10% UI');
