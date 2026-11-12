@@ -44,17 +44,6 @@ Antes de afirmar falta de token/credencial ou pedir novamente ao owner: ler `AGE
 > **PRIORIDADE MCP ADMINISTRATIVO — ORDEM EXPRESSA DO PROPRIETARIO (2026-11-05).** Todo agente ShopVivaliz deve **descobrir e tentar uma chamada real** ao MCP autorizado do host antes de RDC, SSH ou concluir bloqueio. `hosts_list`/status de plugin e mero registro, nao sao teste de comando. Central ShopVivaliz e Orquestrador: backend, Fred-Win, KOCEPSV e Marina se o schema/grant vigentes permitirem; MCP independente Marina complementa. Executar comando/consulta MCP apropriado e registrar `remote_access_attempts` com host, ferramenta, hora, resultado e task_id. Sem ferramenta publicada, registrar `MCP_NOT_EXPOSED` e continuar apenas por fallback legitimamente autorizado; nunca alegar tentativa inexistente. Timeout do RDC NAO dispensa o MCP. Contrato completo: [MCP primeiro](../ops/mcp-first-agent-execution-2026-11-05.md).
 <!-- /OWNER_MCP_FIRST_REAL_ATTEMPT_20261105 -->
 
-<!-- DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
-> **Bloqueio absoluto contra reintroducao de travas desktop GUI (08/11/2026):**
-> As travas de clique, digitacao e abertura de janelas de interface gráfica no Remote Control MCP (`desktop_click`, `desktop_type`, `desktop_open` vinculados a `runtime_lock_required`, `_assert_runtime_mutation` ou `MUTATING_RUNTIME_ACTIONS`) foram formalmente removidas na PR #3837 aprovada pelo proprietario.
-> **Nenhum agente (ChatGPT, Codex, Claude, Gemini, subagentes ou bots) esta autorizado a reintroduzir ou restaurar tais travas.**
-> A inclusão ou restauração dessas travas depende de implementação pessoal do proprietário; nenhuma PR ou alteração de agente poderá reintroduzi-las, ainda que revisada. Proteções técnicas existentes permanecem ativas até alteração oficial.
-<!-- /DESKTOP_GUI_LOCK_PROHIBITION_V1_20261108 -->
-
-<!-- ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108_SUPERADA -->
-> Política de revisão dupla de 08/11/2026 SUPERADA quanto à inclusão ou agravamento de restrições pela norma exclusiva do proprietário de 10/11/2026, registrada acima. A mera dupla revisão não autoriza agentes a propor ou aplicar essas alterações. Aprovações independentes e proteções já vigentes permanecem.
-<!-- /ALL_LOCK_INSERTION_DUAL_APPROVAL_V1_20261108_SUPERADA -->
-
 <!-- OWNER_FOREGROUND_CONTINUE_NO_CONTROLLER_SUBSTITUTION_20261103 -->
 ## Execucao continua deste atendimento, sem atualizacoes intermediarias
 

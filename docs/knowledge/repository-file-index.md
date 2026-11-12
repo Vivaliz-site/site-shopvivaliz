@@ -4024,12 +4024,9 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `scripts/openai-secure-mcp-platform-probe.mjs` | Ferramentas e rotinas de manutencao - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/activate-mcp-central-marina-admin.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/activate-mcp-central-marina-readonly.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/ops/activate_owner_merge_queue_ruleset.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/authorize-chatgpt-plugin-permissions-lease.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/authorize-kocepsv-gui-validation-lease.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/cloudflare-admin-preflight.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/ops/owner_approved_merge_queue.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/ops/request_owner_pr_review.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/shopvivaliz-independent-ci.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/tests/test_verify_marina_admin_execution.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `scripts/ops/verify-marina-admin-execution.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4042,7 +4039,6 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `scripts/pr_conflict_vm_heal.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/pr_gate_replay.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/pr_gate_scope.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/pr_owner_review_recovery.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/pricing-certbot-repair.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/priority/__init__.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/priority/prioritizer.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4109,7 +4105,6 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `scripts/quality/validate-storefront-assets.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/quality/validate-updater-contract.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/quality/verify_commercial_review.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/quality/verify_owner_protected_pr_review.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/queue-smoke.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/queue-worker.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/quick-deploy-ecommerce.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -6192,12 +6187,8 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `tests/test_otpclient_persistence.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_authorized_rollout.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_gate_zero_files.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/test_owner_merge_queue_authorization.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_protected_pr_merge_guard.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/test_owner_required_review_gate.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/test_owner_review_request_router.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_security_merge_guard.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/test_owner_technical_native_queue_merge.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_unit_pattern.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_post_migration_global_audit_parity.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_postdeploy_price_parity_contract.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6210,7 +6201,6 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `tests/test_pr_gate_replay.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_gate_scope.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_owner_recovery_workflow.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/test_pr_owner_review_recovery.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_owner_review_visibility.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_review_routing.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_preview_ttl.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |

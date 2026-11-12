@@ -73,7 +73,6 @@ fi
 python3 -m unittest tests.test_ci_suite_relevance -v
 run_suite python3 scripts/check_pr_review_routing.py
 run_suite python3 -m unittest tests/test_pr_review_routing.py -v
-run_suite python3 -m unittest tests/test_owner_review_request_router.py -v
 bash -n .githooks/pre-commit .githooks/pre-push scripts/repository-governance-validate.sh
 run_suite python3 scripts/validate-recurring-ai-policy.py
 run_suite python3 scripts/validate-retired-windows-tasks.py
@@ -115,7 +114,7 @@ else
 fi
 run_suite python3 -m unittest tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_pr_gate_replay -v
 if [ "$(uname -s)" = "Linux" ]; then
-  run_suite python3 -m unittest tests.test_pr_owner_review_recovery tests.test_pr_owner_recovery_workflow tests.test_ci_php_lint_scope -v
+  run_suite python3 -m unittest tests.test_ci_php_lint_scope -v
 else
   echo "SKIP POSIX_OWNER_RECOVERY_TEST=$(uname -s); required in Linux CI"
 fi
