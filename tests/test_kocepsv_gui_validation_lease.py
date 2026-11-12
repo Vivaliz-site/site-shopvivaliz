@@ -25,6 +25,12 @@ CRED = "unit-test-placeholder-" + "x" * 24
 NOW = datetime(2026, 11, 1, 22, 0, tzinfo=timezone.utc)
 
 
+def historical_issuance_clock():
+    # This historical owner grant expired on 12 Nov. Freeze time only inside
+    # the two successful-issuance fixtures. Production still denies expiry.
+    return SimpleNamespace(fromisoformat=datetime.fromisoformat, now=lambda tz: NOW)
+
+
 def grant():
     return {
         "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
@@ -151,7 +157,8 @@ class KocepsvGuiValidationLeaseTests(unittest.TestCase):
                 called.append((kind, owner, ttl, actions))
                 return {"lease_id": "lease-unit", "fencing_token": 17,
                         "expires_at_epoch": 1234567}
-            with patch.object(m, "STATE_ROOT", root), \
+            with patch.object(m, "datetime", historical_issuance_clock()), \
+                 patch.object(m, "STATE_ROOT", root), \
                  patch.object(m, "LEDGER_DIR", root / "_desktop-kocepsv-gui-validation-approvals"), \
                  patch.object(m.runtime_lock, "acquire_runtime_lock", side_effect=issue):
                 first = m.issue_one_use(PR, proof)
@@ -176,6 +183,7 @@ class KocepsvGuiValidationLeaseTests(unittest.TestCase):
     def test_lock_contention_never_steals_another_owner(self):
         proof = {"pr_number": PR, "head_sha": HEAD, "merge_sha": MERGE, "expires_at_utc": "2026-11-12T00:00:00Z"}
         with tempfile.TemporaryDirectory() as temp, \
+             patch.object(m, "datetime", historical_issuance_clock()), \
              patch.object(m, "STATE_ROOT", Path(temp)), \
              patch.object(m, "LEDGER_DIR", Path(temp) / "_desktop-kocepsv-gui-validation-approvals"), \
              patch.object(m.runtime_lock, "acquire_runtime_lock",

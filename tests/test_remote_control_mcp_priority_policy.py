@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Prioridade de acesso por host: backend via MCP, Marina via RDC verificado.
+"""Prioridade MCP por host, mantendo registros antigos como historicos.
 
-Nao impor proibição global de Desktop Commander: a Marina foi comprovadamente
-acessada por RDC em 2026-10-29 enquanto a allowlist MCP central nao a inclui.
+Marina e backend tem rotas MCP canônicas conforme a documentacao atual;
+referencias de outubro ao RDC nao mudam o acesso publicado em novembro.
 """
 from pathlib import Path
 import unittest
@@ -47,7 +47,7 @@ class RemoteControlMcpPriorityPolicyTest(unittest.TestCase):
         self.assertIn("2. **SSH privado/Tailscale:**", remote_access)
         self.assertIn("3. **GitHub Actions/OCI Bastion:**", remote_access)
         self.assertIn("4. **GUI/validação visual:**", remote_access)
-        self.assertIn("nao inclui Marina", remote_access)
+        self.assertIn("rota MCP central de escrita administrativa autorizada", remote_access)
 
         current = (ROOT / "docs" / "knowledge" /
                    "current-topology-and-access-2026-10-29.md").read_text(
