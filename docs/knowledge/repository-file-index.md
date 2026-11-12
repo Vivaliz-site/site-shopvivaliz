@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5649 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -994,6 +994,7 @@ Gerado deterministicamente a partir de 5649 arquivos versionados no indice Git. 
 | `.github/workflows/marina-host-health-monitor.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/marina-mcp-cloudflare-dcr-apply.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/marina-mcp-cloudflare-dcr-inspect.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
+| `.github/workflows/marina-mcp-service-token-duration.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/marina-migration-deploy.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/marina-migration-scope-ci.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/marina-readonly-status.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -4076,6 +4077,7 @@ Gerado deterministicamente a partir de 5649 arquivos versionados no indice Git. 
 | `scripts/quality/audit-product-image-mismatch.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/quality/audit-storefront-erp-prices.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/quality/check_pr_agent_title.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/quality/cloudflare_access_token_duration.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/quality/cloudflare_access_token_probe.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/quality/deployment_closure_guard.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/quality/official-site-reference-http-policy.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -6040,6 +6042,7 @@ Gerado deterministicamente a partir de 5649 arquivos versionados no indice Git. 
 | `tests/test_ci_scoped_validation_contract.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_ci_suite_relevance.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_claude_mcp_stdio_transport.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_cloudflare_access_token_duration.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_cloudflare_access_token_probe.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_cloudflare_admin_preflight.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_cloudflare_admin_shell_preflight.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |

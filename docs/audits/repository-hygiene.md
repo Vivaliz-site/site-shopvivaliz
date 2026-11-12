@@ -4,7 +4,7 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 5649
+- Arquivos versionados: 5652
 - Diretorios versionados: 687
 - Grupos de conteudo identico: 207
 - Grupos identicos que incluem codigo: 13
@@ -1369,6 +1369,10 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `api/mercadopago-orders-sdk.php`
 - `api/mercadopago-orders.php`
 
+### Git blob ID `bba04fba5e808732c14ac1c21f82ec5fdd5cf098`
+- `AGENTS.md`
+- `CLAUDE.md`
+
 ### Git blob ID `c43066fbfabc0c28e0ca1fc1fb4a9b659252e419`
 - `favicon.svg`
 - `images/favicon.svg`
@@ -1428,10 +1432,6 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 ### Git blob ID `f91d11adc420b1904f1fd9924cc7206492a2e6e3`
 - `css/network-status-v22.css`
 - `public/dist/css/network-status-v22.860b495039.min.css`
-
-### Git blob ID `fb62e18acd052d9503285074d20aece1fa44b6a0`
-- `AGENTS.md`
-- `CLAUDE.md`
 
 ## Funcoes declaradas em mais de um arquivo
 
