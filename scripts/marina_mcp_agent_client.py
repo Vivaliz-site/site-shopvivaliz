@@ -64,9 +64,9 @@ def file_state(path: Path) -> str:
         return "UNSAFE_SYMLINK"
     if not stat.S_ISREG(info.st_mode):
         return "UNSAFE_NOT_A_FILE"
-    if info.st_uid != os.geteuid():
+    if hasattr(os, "geteuid") and info.st_uid != os.geteuid():
         return "UNSAFE_OWNER"
-    if stat.S_IMODE(info.st_mode) & 0o077:
+    if hasattr(os, "geteuid") and (stat.S_IMODE(info.st_mode) & 0o077):
         return "UNSAFE_MODE"
     return "PRESENT"
 

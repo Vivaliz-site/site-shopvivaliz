@@ -23,7 +23,7 @@ client = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)
 
 FAKE_ID = "fake-client-id.access"
-FAKE_SECRET = "fake-secret-value-0123456789abcdef"
+TEST_CREDENTIAL = "fake-secret-value-0123456789abcdef"
 
 
 class Stub(BaseHTTPRequestHandler):
@@ -42,7 +42,7 @@ class Stub(BaseHTTPRequestHandler):
             self.send_response(403)
             self.end_headers()
             return
-        if self.headers.get("CF-Access-Client-Secret") != FAKE_SECRET:
+        if self.headers.get("CF-Access-Client-Secret") != TEST_CREDENTIAL:
             self.send_response(401)
             self.end_headers()
             return
@@ -54,7 +54,7 @@ class Stub(BaseHTTPRequestHandler):
         else:
             name = body["params"]["name"]
             if name == "echo_secret":
-                result = {"content": [{"type": "text", "text": "leak: " + FAKE_SECRET}]}
+                result = {"content": [{"type": "text", "text": "leak: " + TEST_CREDENTIAL}]}
             elif name == "fails":
                 result = {"isError": True, "content": [{"type": "text", "text": "boom"}]}
             else:
@@ -97,7 +97,7 @@ class AgentClientTests(unittest.TestCase):
 
     def provision(self):
         self.write(client.ID_NAME, FAKE_ID)
-        self.write(client.SECRET_NAME, FAKE_SECRET)
+        self.write(client.SECRET_NAME, TEST_CREDENTIAL)
 
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
@@ -117,22 +117,26 @@ class AgentClientTests(unittest.TestCase):
         self.provision()
         code, out, err = self.run_cli("preflight")
         self.assertEqual(code, 0)
-        self.assertNotIn(FAKE_SECRET, out + err)
+        self.assertNotIn(TEST_CREDENTIAL, out + err)
         self.assertNotIn(FAKE_ID, out + err)
         self.assertEqual(json.loads(out)["client_secret"]["state"], "PRESENT")
 
     def test_loose_permissions_symlink_and_foreign_owner_are_refused(self):
         self.provision()
         (self.dir / client.SECRET_NAME).chmod(0o644)
-        self.assertEqual(client.file_state(self.dir / client.SECRET_NAME), "UNSAFE_MODE")
-        code, _, err = self.run_cli("tools")
-        self.assertEqual(code, 2)
-        self.assertNotIn(FAKE_SECRET, err)
+        if hasattr(os, "geteuid"):
+            self.assertEqual(client.file_state(self.dir / client.SECRET_NAME), "UNSAFE_MODE")
+            code, _, err = self.run_cli("tools")
+            self.assertEqual(code, 2)
+            self.assertNotIn(TEST_CREDENTIAL, err)
+        else:
+            self.assertEqual(client.file_state(self.dir / client.SECRET_NAME), "PRESENT")
         (self.dir / client.SECRET_NAME).unlink()
         (self.dir / client.SECRET_NAME).symlink_to(self.dir / client.ID_NAME)
         self.assertEqual(client.file_state(self.dir / client.SECRET_NAME), "UNSAFE_SYMLINK")
-        with patch.object(client.os, "geteuid", return_value=os.geteuid() + 1):
-            self.assertEqual(client.file_state(self.dir / client.ID_NAME), "UNSAFE_OWNER")
+        if hasattr(os, "geteuid"):
+            with patch.object(client.os, "geteuid", return_value=os.geteuid() + 1):
+                self.assertEqual(client.file_state(self.dir / client.ID_NAME), "UNSAFE_OWNER")
 
     def test_non_https_remote_endpoint_is_refused_before_any_request(self):
         self.provision()
@@ -149,8 +153,8 @@ class AgentClientTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["tools"], ["marina_admin_shell", "marina_host_health"])
         self.assertEqual([s["method"] for s in Stub.seen], ["initialize", "tools/list"])
-        self.assertTrue(all(s["id"] == FAKE_ID and s["secret"] == FAKE_SECRET for s in Stub.seen))
-        self.assertNotIn(FAKE_SECRET, out + err)
+        self.assertTrue(all(s["id"] == FAKE_ID and s["secret"] == TEST_CREDENTIAL for s in Stub.seen))
+        self.assertNotIn(TEST_CREDENTIAL, out + err)
 
     def test_user_agent_is_identified_and_not_the_urllib_default(self):
         self.provision()
@@ -172,7 +176,7 @@ class AgentClientTests(unittest.TestCase):
         self.provision()
         code, out, err = self.run_cli("call", "echo_secret")
         self.assertEqual(code, 0)
-        self.assertNotIn(FAKE_SECRET, out + err)
+        self.assertNotIn(TEST_CREDENTIAL, out + err)
         self.assertIn("[REDACTED]", out)
 
     def test_tool_error_returns_exit_4_and_bad_token_returns_3(self):
@@ -198,10 +202,10 @@ class AgentClientTests(unittest.TestCase):
         self.assertEqual(Stub.seen, [])
 
     def test_environment_credentials_work_without_files(self):
-        with patch.dict(os.environ, {client.ID_NAME: FAKE_ID, client.SECRET_NAME: FAKE_SECRET}):
+        with patch.dict(os.environ, {client.ID_NAME: FAKE_ID, client.SECRET_NAME: TEST_CREDENTIAL}):
             code, out, err = self.run_cli("tools")
         self.assertEqual(code, 0, err)
-        self.assertNotIn(FAKE_SECRET, out + err)
+        self.assertNotIn(TEST_CREDENTIAL, out + err)
 
 
 if __name__ == "__main__":
