@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 TOKEN_PATH = Path("/var/lib/shopvivaliz-remote-control/mcp-token")
+FALLBACK_TOKEN_PATH = Path.home() / ".shopvivaliz" / "secrets" / "shopvivaliz-remote-control-token"
 SERVICE_ENV_PATH = Path("/var/lib/shopvivaliz-remote-control/service.env")
 MCP_URLS = (
     "http://127.0.0.1:5581/mcp",
@@ -106,10 +107,16 @@ def forward(raw: bytes) -> dict[str, Any] | None:
     params = prepared.get("params")
     args = params.get("arguments", {}) if isinstance(params, dict) else {}
     request_id = args.get("request_id") if isinstance(args, dict) else None
-    try:
-        token = TOKEN_PATH.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeError):
-        return error_response(request, "controller_token_unavailable")
+    token = ""
+    candidates = (TOKEN_PATH, FALLBACK_TOKEN_PATH) if TOKEN_PATH == Path("/var/lib/shopvivaliz-remote-control/mcp-token") else (TOKEN_PATH,)
+    for path in candidates:
+        try:
+            if path.exists():
+                token = path.read_text(encoding="utf-8").strip()
+                if token and not any(ch.isspace() for ch in token):
+                    break
+        except (OSError, UnicodeError):
+            continue
     if not token or any(ch.isspace() for ch in token):
         return error_response(request, "controller_token_unavailable")
     payload = json.dumps(prepared, ensure_ascii=False).encode("utf-8")
@@ -191,8 +198,8 @@ def main() -> int:
             continue
         result = forward(raw)
         if result is not None:
-            sys.stdout.write(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n")
-            sys.stdout.flush()
+            sys.stdout.buffer.write((json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
+            sys.stdout.buffer.flush()
     return 0
 
 
