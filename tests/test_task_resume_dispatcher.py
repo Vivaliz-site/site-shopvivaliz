@@ -812,15 +812,23 @@ state_path.write_text(json.dumps(state))
         dispatcher = load_dispatcher()
         task_id = "continuity-e2e-browser-only"
         next_action = (
-            "Esta tarefa e um probe de continuidade automatica; nao ha edicao de codigo real necessaria. "
-            "Rode exatamente estes dois comandos, nesta ordem, e nada mais:\n"
-            f"1) python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass\n"
-            f"2) python3 scripts/agent_task_state.py complete --task {task_id}"
+            "Esta tarefa e um probe de continuidade automatica; nao ha edicao de "
+            "codigo real necessaria. Execute exatamente estes tres comandos, nesta "
+            "ordem, somente na conversa vinculada:\\n"
+            f"1) python3 scripts/agent_task_state.py check-step --task {task_id} "
+            "--step-id 1 --evidence assistant_executed_bound_sentinel "
+            "--verification independent_browser_proof_required\\n"
+            f"2) python3 scripts/agent_task_state.py ready --task {task_id} "
+            "--evidence bound_sentinel_executed_pending_external_confirmation "
+            "--verification continuity_e2e_pass\\n"
+            f"3) python3 scripts/agent_task_state.py complete --task {task_id}"
         )
         state = self._state(next_action=next_action)
         (self.runtime / "resume-e2e.json").unlink()
         state["task_id"] = task_id
+        state["goal"] = "Prove the detached continuity recovery pipeline end-to-end"
         state["conversation_id"] = "12345678-2222-3333-4444-555555555555"
+        state["browser_session"] = "atendimento"
         (self.runtime / f"{task_id}.json").write_text(json.dumps(state), encoding="utf-8")
         request = {
             "id": "resume-browser-probe",
@@ -838,7 +846,7 @@ state_path.write_text(json.dumps(state))
             "executor_order": ["chatgpt_common", "chatgpt_work", "cli"],
             "fallback_policy": "chatgpt_common_then_work_then_cli",
         }
-        (self.runtime / "_resume-requests.jsonl").write_text(json.dumps(request) + "\n", encoding="utf-8")
+        (self.runtime / "_resume-requests.jsonl").write_text(json.dumps(request) + "\\n", encoding="utf-8")
         (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
             json.dumps({
                 "fingerprint": request["fingerprint"],
@@ -848,9 +856,18 @@ state_path.write_text(json.dumps(state))
                 "bridge_ok": True,
                 "http_status": 200,
                 "worker_status": "ERROR",
-            }) + "\n",
+            }) + "\\n",
             encoding="utf-8",
         )
+
+        self.assertTrue(dispatcher._browser_only_e2e_probe(request, state))
+        after_first_step = dict(state)
+        after_first_step["next_action"] = "Verify the original goal and complete the probe"
+        self.assertTrue(
+            dispatcher._browser_only_e2e_probe(request, after_first_step),
+            "the probe must remain browser-only after its mutable next_action changes",
+        )
+
         old_capture = os.environ.get("CAPTURE_PATH")
         os.environ["CAPTURE_PATH"] = str(self.capture)
         try:
@@ -873,6 +890,38 @@ state_path.write_text(json.dumps(state))
         current = json.loads((self.runtime / f"{task_id}.json").read_text())
         self.assertEqual(current["status"], "RUNNING")
         self.assertFalse((self.runtime / "_resume-executions.jsonl").exists())
+
+    def test_browser_e2e_probe_requires_exact_identity_and_session(self) -> None:
+        dispatcher = load_dispatcher()
+        task_id = "continuity-e2e-browser-only"
+        state = self._state()
+        state.update({
+            "task_id": task_id,
+            "agent_id": "chatgpt-common",
+            "goal": "Prove the detached continuity recovery pipeline end-to-end",
+            "conversation_id": "12345678-2222-3333-4444-555555555555",
+            "browser_session": "atendimento",
+        })
+        request = {"preferred_executor": "chatgpt_common"}
+        self.assertTrue(dispatcher._browser_only_e2e_probe(request, state))
+
+        for key, value in (
+            ("agent_id", "claude"),
+            ("goal", "unrelated task"),
+            ("conversation_id", ""),
+            ("browser_session", "fred"),
+        ):
+            with self.subTest(key=key):
+                altered = dict(state)
+                altered[key] = value
+                self.assertFalse(dispatcher._browser_only_e2e_probe(request, altered))
+
+        self.assertFalse(
+            dispatcher._browser_only_e2e_probe(
+                {"preferred_executor": "cli"},
+                state,
+            )
+        )
 
     def test_detached_prompt_requires_safe_git_push_wrapper(self) -> None:
         dispatcher = load_dispatcher()
