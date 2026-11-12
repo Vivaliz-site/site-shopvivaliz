@@ -571,3 +571,52 @@ formal de escopo e reconciliacao individual apos escrita. O endpoint
 `target_margin_apply` retorna erro expresso enquanto esse executor nao
 estiver autorizado; a interface nao promete aplicacao efetiva nesse estado.
 Esta fase nao concede permissao comercial nem altera grants existentes.
+
+## Aplicação comercial de margem desejada (P2 — revisão protegida)
+
+A etapa posterior à simulação usa as rotas administrativas autenticadas:
+- `POST target_margin_apply` exige os SKUs já selecionados, margem desejada,
+  ID do snapshot, digest da mesma prévia, confirmação explícita do impacto
+  da tabela 991 no site e nos outros anúncios, e nonce de idempotência.
+  A resposta `202` significa **solicitação registrada**, não preço aplicado.
+- `GET target_margin_apply_status&request_id=...` permite à mesma conta
+  administrativa consultar o andamento sem ler o journal privado de
+  credenciais e payloads dos provedores.
+- A fila persiste `amazon_margin_target_price_requests` e
+  `amazon_margin_target_price_items`, com checkpoint por etapa, SKU e
+  valor em centavos. `scripts/amazon-margin/run.php --next` consome
+  solicitações comerciais apenas se a fila normal de auditoria estiver
+  vazia. `--all`, `--skus` e `--dry-run` não gravam preços.
+
+A execução protegida reconsulta produto, canal e preço efetivo Amazon,
+custo por unidade, faixa de logística, produto ERP e exceção da tabela 991.
+Reestima a comissão via `getMyFeesEstimates` SP-API **no preço proposto**,
+recalculando até alcançar a margem alvo com impostos e logística atuais.
+Não escreve se houver custo pendente, promoção, quantidade/dimensão
+não conciliada, preço efetivo divergente, SKU inexistente ou incompatibilidade
+de produto ERP compartilhado. Na lista 991 preserva as demais exceções,
+as regras gerais e preços promocionais não selecionados; após gravação
+usa GET para confirmar paridade. Na Amazon usa uma alteração granular
+da oferta com `purchasable_offer.our_price` e
+`purchasable_offer.minimum_seller_allowed_price` igual ao preço de venda,
+sem desabilitar campanhas, alterar estoque ou mudar outros campos.
+
+A operação nunca repete PUT/PATCH de resultado incerto sem ler novamente
+as APIs, por meio dos estágios `erp_submit_started`,
+`amazon_submit_started` e `awaiting_readback`. Um retorno HTTP
+definitivamente recusado pelo catálogo Amazon pode gerar compensação da
+tabela ERP, somente quando a diferença ainda corresponde exatamente à
+modificação isolada realizada pelo worker. Inconsistência, concorrência,
+falta de autorização ou readback não confirmado permanecem para revisão
+humana, sem autodeclaração de sucesso.
+
+**Pendências de ativação em produção:** a SP-API utilizada pela auditoria
+já cota comissões de preços propostos, mas o identificador oficial de
+vendedor (Merchant Token/Seller ID) não estava presente nas quatro
+chaves de configuração reconhecidas pelo cliente da VM Marina durante
+a validação somente leitura. Por isso `getListingsItem` não foi
+comprovado. Também falta evidência segura do contrato `PUT` da
+lista 991 no Olist V3, sem alterar preços reais em teste. O executor
+comercial não deve ser integrado em produção sem revisão nominal
+`shopvivaliz-human`, verificação do provedor e teste E2E UI.
+O módulo P2 não foi executado sobre preços reais durante seu desenvolvimento.
