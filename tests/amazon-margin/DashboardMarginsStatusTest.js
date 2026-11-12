@@ -109,6 +109,24 @@ const linkedUnverified=costMarkup({
 });
 assert.match(linkedUnverified,/Custo registrado no produto ERP: R\$ 15.05/);
 assert.match(linkedUnverified,/Margem não certificada/);
+const kitRegistered=costMarkup({
+  status:'kit_cost_unverified',last_cost:null,erp_base_cost:55.21,
+  erp_kit_bom_cost:null
+});
+assert.match(kitRegistered,/Custo positivo cadastrado no produto ERP/);
+assert.match(kitRegistered,/R\$ 55.21\*/);
+assert.match(kitRegistered,/não certificado como custo por unidade vendida/);
+assert.doesNotMatch(kitRegistered,/Custo não identificado/);
+const kitMismatch=costMarkup({
+  status:'kit_cost_unverified',last_cost:null,erp_base_cost:33.08,
+  erp_kit_bom_cost:14.94
+});
+assert.match(kitMismatch,/R\$ 33.08\*/);
+assert.match(kitMismatch,/R\$ 14.94/);
+assert.match(kitMismatch,/não certificadas/);
+assert.match(page,/id="registered-cost-indicator"/);
+assert.match(page,/const kitRecorded=base\.filter/);
+
 assert.match(page,/r.current_margin_cost_used\?\?r.last_cost/);
 
 console.log('PASS dashboard financial status: certified only, weighted margin, partial pending, safe simulation');
