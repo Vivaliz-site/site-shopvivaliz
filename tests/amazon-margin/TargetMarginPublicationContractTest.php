@@ -8,25 +8,38 @@ $table=[
  'excecoes'=>[
   ['idProduto'=>101,'codigo'=>'OLIST-101','preco'=>130.50,'precoPromocional'=>0.0,
    'other_metadata'=>'preserve_this'],
-  ['idProduto'=>102,'codigo'=>'OLIST-102','preco'=>299.99,'precoPromocional'=>0.0],
+  ['idProduto'=>102,'codigo'=>'OLIST-102','preco'=>299.99,'precoPromocional'=>280.0],
  ]
 ];
 $before=json_encode($table,JSON_THROW_ON_ERROR);
 $planned=SvAmazonTargetMarginPublication::olistPriceListPayload($table,101,'OLIST-101',15732);
 tpub($planned['descricao']==='Amazon' && $planned['acrescimoDesconto']===10.0,'list_991_meta');
-tpub($planned['excecoes'][0]['preco']===157.32
-    && $planned['excecoes'][0]['other_metadata']==='preserve_this'
-    && $planned['excecoes'][1]===$table['excecoes'][1],'preserve_other_exceptions_and_metadata');
+tpub(isset($planned['itens'])&&!isset($planned['excecoes'])
+    &&count($planned['itens'])===2,'official_put_uses_itens_not_get_excecoes');
+tpub($planned['itens'][0]===['idProduto'=>101,'preco'=>157.32,'precoPromocional'=>0.0]
+    &&$planned['itens'][1]===['idProduto'=>102,'preco'=>299.99,'precoPromocional'=>280.0],
+    'official_put_schema_and_preserve_unrelated_values');
+tpub(!array_key_exists('codigo',$planned['itens'][0])
+    &&!array_key_exists('other_metadata',$planned['itens'][0]),
+    'only_official_put_fields_are_sent');
 tpub(json_encode($table,JSON_THROW_ON_ERROR)===$before,'no_inplace_mutation');
+$after=$table;$after['excecoes'][0]['preco']=157.32;
 tpub(SvAmazonTargetMarginPublication::olistPriceVerified(
-    $table,array_merge(['id'=>991],$planned),101,15732),'list_readback_exact');
-$corrupted=$planned;$corrupted['excecoes'][1]['preco']=299.00;
+    $table,$after,101,15732),'list_readback_exact');
+$corrupted=$after;$corrupted['excecoes'][1]['preco']=299.00;
 tpub(!SvAmazonTargetMarginPublication::olistPriceVerified(
-    $table,array_merge(['id'=>991],$corrupted),101,15732),'no_unrelated_exception_overwrite');
+    $table,$corrupted,101,15732),'no_unrelated_exception_overwrite');
 $insert=SvAmazonTargetMarginPublication::olistPriceListPayload($table,103,'OLIST-103',4401);
-tpub(count($insert['excecoes'])===3
-    && $insert['excecoes'][2]['preco']===44.01
-    && $insert['excecoes'][2]['idProduto']===103,'new_exception_id_exact');
+tpub(count($insert['itens'])===3
+    &&$insert['itens'][2]['preco']===44.01
+    &&$insert['itens'][2]['idProduto']===103
+    &&$insert['itens'][2]['precoPromocional']===0.0,
+    'new_exception_uses_official_item_schema');
+$restore=SvAmazonTargetMarginPublication::olistPriceListRestorePayload($table);
+tpub($restore['descricao']==='Amazon'&&$restore['acrescimoDesconto']===10.0
+    &&$restore['itens'][0]['preco']===130.50&&$restore['itens'][1]['preco']===299.99
+    &&$restore['itens'][1]['precoPromocional']===280.0,
+    'compensation_uses_same_official_put_schema');
 $promo=$table;$promo['excecoes'][0]['precoPromocional']=99.90;
 try{SvAmazonTargetMarginPublication::olistPriceListPayload($promo,101,'OLIST-101',15732);
     throw new RuntimeException('bad promo accepted');

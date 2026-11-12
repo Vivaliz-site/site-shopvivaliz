@@ -12,33 +12,61 @@ require_once __DIR__.'/CurrentFeeEstimates.php';
  */
 final class SvAmazonTargetMarginPublication
 {
-    /** Preserve the complete list 991, all unrelated exceptions and promos. */
+    /**
+     * Olist GET returns excecoes, but its official PUT schema (v3.1.1)
+     * requires itens[] with only idProduto, preco and precoPromocional.
+     * Never echo the GET response as a PUT body: excecoes/codigo are
+     * response fields, not accepted request fields.
+     */
     public static function olistPriceListPayload(
         array $current,int $erpProductId,string $erpSku,int $priceCents
     ): array {
-        sveap_parse_table($current);
         if($erpProductId<=0||$erpSku===''||$priceCents<=0)
             throw new InvalidArgumentException('price_target_invalid');
-        $exceptions=$current['excecoes'];
-        $found=false;
-        foreach($exceptions as &$exception){
-            if((int)$exception['idProduto']!==$erpProductId)continue;
-            if($found)throw new RuntimeException('price_table_duplicate_erp_id');
-            $found=true;
-            if((float)($exception['precoPromocional']??0)>0)
-                throw new RuntimeException('price_table_promotion_requires_reconciliation');
-            $exception['preco']=$priceCents/100;
-            // An existing price-list exception retains all ERP metadata.
+        return self::olistUpdatePayload($current,$erpProductId,$erpSku,$priceCents);
+    }
+
+    /** Restore the exact original price values through the official PUT schema. */
+    public static function olistPriceListRestorePayload(array $current):array
+    {
+        return self::olistUpdatePayload($current,null,null,null);
+    }
+
+    private static function olistUpdatePayload(array $current,?int $targetProductId,
+        ?string $erpSku,?int $priceCents):array
+    {
+        sveap_parse_table($current);
+        $items=[];$found=false;
+        foreach($current['excecoes'] as $exception){
+            if(!is_array($exception))throw new RuntimeException('price_table_exception_invalid');
+            $id=(int)$exception['idProduto'];
+            $regular=(float)$exception['preco'];
+            $promo=$exception['precoPromocional']??0;
+            if($targetProductId!==null&&$id===$targetProductId){
+                if($found)throw new RuntimeException('price_table_duplicate_erp_id');
+                $found=true;
+                if($erpSku!==null&&isset($exception['codigo'])
+                    &&(string)$exception['codigo']!==$erpSku)
+                    throw new RuntimeException('price_table_erp_sku_mismatch');
+                if(is_numeric($promo)&&(float)$promo>0)
+                    throw new RuntimeException('price_table_promotion_requires_reconciliation');
+                $regular=$priceCents/100;
+            }
+            $item=['idProduto'=>$id,'preco'=>$regular];
+            if(array_key_exists('precoPromocional',$exception)){
+                $item['precoPromocional']=$exception['precoPromocional']===null
+                    ?null:(float)$exception['precoPromocional'];
+            }
+            $items[]=$item;
         }
-        unset($exception);
-        if(!$found)$exceptions[]=[
-            'idProduto'=>$erpProductId,'codigo'=>$erpSku,
-            'preco'=>$priceCents/100,'precoPromocional'=>0,
-        ];
+        if($targetProductId!==null&&!$found){
+            $items[]=['idProduto'=>$targetProductId,'preco'=>$priceCents/100,
+                'precoPromocional'=>0.0];
+        }
         return [
-            'descricao'=>$current['descricao'],
-            'acrescimoDesconto'=>$current['acrescimoDesconto'],
-            'excecoes'=>$exceptions,
+            'descricao'=>(string)$current['descricao'],
+            'acrescimoDesconto'=>(float)$current['acrescimoDesconto'],
+            'itens'=>$items,
         ];
     }
 
@@ -53,9 +81,20 @@ final class SvAmazonTargetMarginPublication
             if((float)$parsed['exceptions'][(string)$productId]['promo']>0)return false;
             $original=sveap_parse_table($before);
             if((float)$parsed['percent']!==(float)$original['percent'])return false;
+            $expectedCount=count($original['exceptions'])
+                +(isset($original['exceptions'][(string)$productId])?0:1);
+            if(count($parsed['exceptions'])!==$expectedCount)return false;
+            $beforeRows=[];$afterRows=[];
+            foreach($before['excecoes'] as $row)$beforeRows[(string)$row['idProduto']]=$row;
+            foreach($after['excecoes'] as $row)$afterRows[(string)$row['idProduto']]=$row;
             foreach($original['exceptions'] as $id=>$old){
-                if((int)$id===$productId)continue;
-                if(!isset($parsed['exceptions'][$id])||$parsed['exceptions'][$id]!==$old)
+                if(!isset($parsed['exceptions'][$id]))return false;
+                if((int)$id===$productId){
+                    if((int)round($parsed['exceptions'][$id]['price']*100)!==$cents
+                        ||$parsed['exceptions'][$id]['promo']!==$old['promo'])return false;
+                }elseif($parsed['exceptions'][$id]!==$old)return false;
+                if(isset($beforeRows[$id]['codigo'])
+                    &&(string)($afterRows[$id]['codigo']??'')!==(string)$beforeRows[$id]['codigo'])
                     return false;
             }
             return true;

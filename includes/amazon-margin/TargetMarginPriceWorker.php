@@ -281,11 +281,7 @@ final class SvAmazonTargetMarginPriceWorker
             $current=self::readOlist($token);
             if(!SvAmazonTargetMarginPublication::olistPriceVerified(
                 $original,$current,$erpId,$newPrice))return false;
-            $payload=[
-                'descricao'=>$original['descricao'],
-                'acrescimoDesconto'=>$original['acrescimoDesconto'],
-                'excecoes'=>$original['excecoes'],
-            ];
+            $payload=SvAmazonTargetMarginPublication::olistPriceListRestorePayload($original);
             $response=svtop_tiny_request('PUT','/listas-precos/991',$token,$payload);
             if(!in_array((int)($response['status']??0),[200,204],true))return false;
             $after=self::readOlist($token);
