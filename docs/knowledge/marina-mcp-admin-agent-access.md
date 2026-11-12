@@ -16,3 +16,9 @@
 - As credenciais ficam so em `~/.shopvivaliz/secrets/` (modo 0600, dono do chamador), nunca em repositorio, log, chat ou argumento de processo. Quem le esses arquivos tem root na Marina.
 - Comandos admin e `as_root` sao auditados por hash no host. Use comandos minimos, de preferencia com `id`/leitura antes de mutar.
 - Detalhes do grant, units e promocao de release: `marina-direct-mcp/README.md` e `docs/ops/marina-mcp-admin-validation-20261104.md`.
+
+## Executar como `ubuntu` (as_user) e root do backend (2026-11-12)
+- `marina_admin_shell` aceita `as_user="ubuntu"` (mutuamente exclusivo com `as_root`). Roda `sudo -n -H -u ubuntu -- timeout ...`, com o mesmo limite de saida, timeout e auditoria por hash (campo `as_user`). Valores diferentes de `ubuntu` retornam `invalid_arguments`.
+- Requer: grant `security/owner-approvals/3918.json` (PR #3918, aprovacao de `shopvivaliz-human` no HEAD exato), regra `shopvivaliz-marina-mcp ALL=(ubuntu) NOPASSWD: ALL` em `marina-direct-mcp/sudoers/` e release ativado por `operator_upgrade_release.sh --activate`. Sem o grant carregado a ferramenta continua funcionando como antes e `as_user` retorna `ubuntu_grant_unavailable`.
+- Validacao apos ativar: `marina_admin_shell` com `command="id -un"` e `as_user="ubuntu"` deve retornar `ubuntu`; `as_root` continua retornando `root`; a conta de servico segue sem `NoNewPrivileges` apenas conforme o grant 3620.
+- Backend (`always-free-arm-1787907847-26`): o usuario `root` tem em `/root/.claude.json` os servidores `shopvivaliz-marina-admin` (`headersHelper` do `ubuntu`) e `shopvivaliz-remote-control` (sem `sudo`), e as credenciais do Marina MCP em `/root/.shopvivaliz/secrets/` (modo 0600, dono root). `claude mcp list` como root mostra os dois `Connected` (2026-11-12). Backup anterior: `/root/.claude.json.bak-mcp-users-20261112`. O `desktop-commander` ficou fora porque `/home/ubuntu/.local/bin/shopvivaliz-dc-mcp` nao existe.

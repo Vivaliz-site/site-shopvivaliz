@@ -11,7 +11,7 @@ Este bloco prevalece sobre os blocos anteriores deste arquivo que descrevem o MC
 | `marina_host_health`, `marina_processes_list`, `marina_system_usage`, `marina_kernel_telemetry`, `marina_kernel_telemetry_batch`, `marina_service_status` | bearer local ou JWT | somente leitura |
 | `marina_workspace_file_write` | bearer local | escrita no workspace privado, sob grant |
 | `marina_service_restart` (+ `_prepare`), `marina_olist_browser_restart` (+ `_prepare`) | bearer local | via root broker, grants proprios |
-| `marina_admin_shell` | **somente JWT do Cloudflare Access verificado** | `bash -c` como `shopvivaliz-marina-mcp`; com `as_root=true` roda como root via `sudo -n` e `timeout` do lado root |
+| `marina_admin_shell` | **somente JWT do Cloudflare Access verificado** | `bash -c` como `shopvivaliz-marina-mcp`; com `as_root=true` roda como root via `sudo -n` e `timeout` do lado root; com `as_user="ubuntu"` roda como `ubuntu` via `sudo -n -u` (grant PR 3918, `mcp-admin-ubuntu-grant.json`) |
 | `marina_gui_session` | **somente JWT** | `start`/`status`/`stop` do Xvfb `:99` do usuario de servico |
 | `marina_browser_navigate` | **somente JWT** | uma URL http(s), Chromium **headless**, retorna titulo, URL final e PNG |
 
