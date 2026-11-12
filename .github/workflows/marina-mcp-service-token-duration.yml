@@ -1,0 +1,44 @@
+name: Marina MCP Service Token Duration
+
+# Torna o service token do MCP da Marina sem expiracao, alterando a duracao do token existente.
+# Client ID/Secret nao mudam: nada e copiado, rotacionado nem impresso.
+# Modo padrao: seco (so le). Com apply=true faz o PUT e le de novo para provar o resultado.
+# Somente acionamento manual. Usa os secrets ja existentes do repositorio (apenas por nome).
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "true = altera a duracao do token; false = modo seco (so le)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marina-mcp-service-token-duration
+  cancel-in-progress: false
+
+jobs:
+  token-duration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rodar script (seco ou apply)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          set -Eeuo pipefail
+          if [ "$APPLY" = "true" ]; then
+            python3 scripts/quality/cloudflare_access_token_duration.py --apply
+          else
+            python3 scripts/quality/cloudflare_access_token_duration.py
+          fi
