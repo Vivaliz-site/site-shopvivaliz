@@ -17,6 +17,7 @@ require_once __DIR__ . '/OlistAdsIndex.php';
 require_once __DIR__ . '/OlistUiCapture.php';
 require_once __DIR__ . '/OlistProductTabCapture.php';
 require_once __DIR__ . '/OlistChannelProgram.php';
+require_once __DIR__ . '/CurrentProductLink.php';
 require_once __DIR__ . '/../marketplace/TinyV3Runtime.php';
 
 /**
@@ -712,6 +713,21 @@ final class SvAmazonMarginCollector
                 $row['erp_match_method']=$link['method'];
                 $row['erp_mapping_reason']=$link['reason'];
                 if ($link['status']!=='mapped' || $prod===null) {
+                    // The live Olist product->Anuncios link can establish the
+                    // CURRENT offer's source cost even when a historical order
+                    // or GTIN still disputes the REALIZED sale's ERP identity.
+                    // Keep these facts separate: never turn the disputed
+                    // historical margin into a confirmed transaction.
+                    if (($productTabLink['status']??'')==='mapped') {
+                        $currentProduct=$this->product((int)$productTabLink['id']);
+                        $reference=SvAmazonMarginCurrentProductLink::reference(
+                            $row,$productTabLink,$currentProduct,
+                            fn(int $id):array=>$this->product($id)
+                        );
+                        if ($reference!==null) {
+                            $row['current_product_link_reference']=$reference;
+                        }
+                    }
                     $row['status']=$link['status'];
                     $rows[]=$row;
                     continue;
@@ -890,13 +906,26 @@ final class SvAmazonMarginCollector
         // Keep transactional margins untouched; quote a second, explicitly
         // estimated current-price metric even when there were no recent sales.
         $this->note('quoting_current_fees',0,count($rows));
-        $feeQuotes=SvAmazonCurrentFeeEstimates::quote($this->amazon,$rows,$this->marketplace,
-            fn(int $done,int $total)=>$this->note('quoting_current_fees',$done,$total));
+        $projectionRows=array_map(
+            static fn(array $r):array=>SvAmazonMarginCurrentProductLink::projectionInput($r),
+            $rows
+        );
+        $feeQuotes=SvAmazonCurrentFeeEstimates::quote(
+            $this->amazon,$projectionRows,$this->marketplace,
+            fn(int $done,int $total)=>$this->note('quoting_current_fees',$done,$total)
+        );
         $region=trim((string)(getenv('SV_AMAZON_DBA_ORIGIN_REGION')?:''));
         foreach($rows as &$pricedRow){
             $sku=(string)($pricedRow['seller_sku']??'');
-            $pricedRow+=SvAmazonCurrentPriceMargin::calculate($pricedRow,
+            $projection=SvAmazonMarginCurrentProductLink::projectionInput($pricedRow);
+            $pricedRow+=SvAmazonCurrentPriceMargin::calculate($projection,
                 $feeQuotes[$sku]??null,$taxBps,$region!==''?$region:null);
+            if (($pricedRow['last_cost']??null)===null
+                && ($projection['last_cost']??null)!==null) {
+                $pricedRow['current_margin_cost_used']=$projection['last_cost'];
+                $pricedRow['current_margin_cost_source']=
+                    'OLIST_AUTHENTICATED_PRODUCT_TAB_UI_X_CURRENT_OLIST_V3';
+            }
         }
         unset($pricedRow);
         $this->note('saving_report',count($rows),count($listings));

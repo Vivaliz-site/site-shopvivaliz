@@ -82,4 +82,31 @@ assert.equal(simulateGross(realSale,0,1400),null);
 assert.equal(simulateGross(realSale,112.97,NaN),null);
 assert.match(page,/Receita bruta hipotética\/unidade/);
 assert.doesNotMatch(page,/old\*oldMargin\/10000/);
+// The Olist current product-tab may have a verified recorded cost even
+// when historic Amazon order/GTIN identity disagrees. Never say "no cost".
+const costMarkupSource=page.match(/function costMarkup\(r\)\{[\s\S]*?\n\}/);
+assert.ok(costMarkupSource,'cost presentation helper must exist');
+const {costMarkup}=vm.runInNewContext(
+  costMarkupSource[0]+'\n({costMarkup})',
+  {price:v=>'R$ '+v,escapeHtml:v=>String(v)}
+);
+const linkedCost=costMarkup({
+  status:'ambiguous_erp',last_cost:null,
+  current_product_link_reference:{
+    status:'offer_cost_verified',recorded_cost:15.05,offer_cost:15.05
+  }
+});
+assert.match(linkedCost,/Custo atual por unidade comercial vinculada/);
+assert.match(linkedCost,/margem atual estimável, mas vendas históricas exigem conciliação/);
+assert.doesNotMatch(linkedCost,/Custo não identificado|Custo não confirmado nesta auditoria/);
+const linkedUnverified=costMarkup({
+  status:'ambiguous_erp',last_cost:null,
+  current_product_link_reference:{
+    status:'kit_composition_pending',recorded_cost:15.05,offer_cost:null
+  }
+});
+assert.match(linkedUnverified,/Custo registrado no produto ERP: R\$ 15.05/);
+assert.match(linkedUnverified,/Margem não certificada/);
+assert.match(page,/r.current_margin_cost_used\?\?r.last_cost/);
+
 console.log('PASS dashboard financial status: certified only, weighted margin, partial pending, safe simulation');
