@@ -31,12 +31,17 @@ function svcat_search_terms(string $query): array
     $parts = preg_split('/[^A-Z0-9]+/', $normalized) ?: [];
     $stopwords = ['A', 'AS', 'O', 'OS', 'E', 'DE', 'DA', 'DAS', 'DO', 'DOS', 'EM', 'PARA', 'POR', 'COM'];
     $terms = [];
+    $originalTokens = [];
     foreach ($parts as $part) {
         $part = trim($part);
-        if ($part === '' || strlen($part) < 2 || in_array($part, $stopwords, true)) continue;
+        if ($part === '') continue;
+        if (!in_array($part, $originalTokens, true)) $originalTokens[] = $part;
+        if (strlen($part) < 2 || in_array($part, $stopwords, true)) continue;
         if (!in_array($part, $terms, true)) $terms[] = $part;
     }
-    return $terms;
+    // If the visitor typed only connectors or a one-character SKU fragment,
+    // retain that intent rather than treating a nonempty query as no filter.
+    return $terms !== [] ? $terms : $originalTokens;
 }
 
 function svcat_search_term_matches(string $haystack, string $term): bool
@@ -55,7 +60,9 @@ function svcat_search_term_matches(string $haystack, string $term): bool
 function svcat_product_matches_query(array $product, string $query): bool
 {
     $terms = svcat_search_terms($query);
-    if ($terms === []) return true;
+    // Only a genuinely empty query displays the entire inventory. A query
+    // with punctuation but no searchable characters is not an empty search.
+    if ($terms === []) return trim($query) === '';
 
     $haystack = svcat_search_normalize(implode(' ', [
         $product['sku'] ?? '',
