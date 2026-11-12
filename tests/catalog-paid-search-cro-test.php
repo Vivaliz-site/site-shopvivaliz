@@ -58,6 +58,35 @@ sv_catalog_test_assert(
     'Brand/tool category overlap must not broaden the paid landing to unrelated products.'
 );
 
+// A standalone connector must not erase the search and show the full
+// inventory. The same predicate serves ads landings and storefront search.
+sv_catalog_test_assert(
+    svcat_search_terms('para') === ['PARA'],
+    'Standalone connector PARA must not silently broaden to all SKUs.'
+);
+sv_catalog_test_assert(
+    svcat_search_terms('de para') === ['DE', 'PARA'],
+    'Connector-only multiword queries must not silently match all SKUs.'
+);
+sv_catalog_test_assert(
+    svcat_search_terms('rodo para porta') === ['RODO', 'PORTA'],
+    'Meaningful multiword purchase intent keeps ignoring connectors.'
+);
+sv_catalog_test_assert(
+    svcat_search_terms('') === [],
+    'Only an empty search should display the full catalog.'
+);
+$irrelevantProduct = ['sku' => 'MRT-01', 'name' => 'Martelo Aco',
+    'description' => 'Manual reforcado', 'category' => 'Ferramentas'];
+sv_catalog_test_assert(
+    !svcat_product_matches_query($irrelevantProduct, 'para'),
+    'Unrelated product must not match standalone connector search.'
+);
+sv_catalog_test_assert(
+    !svcat_product_matches_query($irrelevantProduct, '!!!'),
+    'Punctuation-only nonempty search must not match every product.'
+);
+
 sv_catalog_test_assert(
     str_contains($source, "'slug' => trim((string)(\$row['slug'] ?? ''))"),
     'Catalog API must expose the canonical runtime slug so JS does not invent a different product URL.'
