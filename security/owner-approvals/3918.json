@@ -1,0 +1,20 @@
+{
+  "schema": "SHOPVIVALIZ_OWNER_PR_GRANT_V1",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "pr_number": 3918,
+  "resource": "mcp:marina",
+  "principal": "marina-mcp-service",
+  "target_repository": "Vivaliz-site/site-shopvivaliz",
+  "host": "marina-a1-4c24g",
+  "capabilities": [
+    "admin_shell_ubuntu"
+  ],
+  "operation": "marina_admin_execute",
+  "run_as_user": "shopvivaliz-marina-mcp",
+  "target_user": "ubuntu",
+  "ubuntu_via_sudo_allowed": true,
+  "root_http_daemon_allowed": false,
+  "external_jwt_admin_allowed": false,
+  "requires_access_jwt": true,
+  "stored_credentials_allowed": false
+}

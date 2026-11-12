@@ -61,7 +61,8 @@ class OperatorGatedUnitsTests(unittest.TestCase):
         self.assertNotEqual(conf["Service"].get("User"), "root")
         sudoers = (ROOT / "marina-direct-mcp" / "sudoers" / "shopvivaliz-marina-mcp").read_text(encoding="utf-8")
         rules = [line for line in sudoers.splitlines() if line.strip() and not line.startswith("#")]
-        self.assertEqual(rules, [ACCOUNT + " ALL=(root) NOPASSWD: ALL"])
+        self.assertEqual(rules, [ACCOUNT + " ALL=(root) NOPASSWD: ALL",
+                                 ACCOUNT + " ALL=(ubuntu) NOPASSWD: ALL"])
 
     def test_no_privileged_shell_or_controller_tunnel(self):
         for name in UNITS:

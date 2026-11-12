@@ -1,3 +1,5 @@
 # Owner grant PR 3619: marina_admin_shell may run commands as root (as_root=true).
 # Installed by operator_upgrade_release.sh --activate, validated with visudo -cf.
 shopvivaliz-marina-mcp ALL=(root) NOPASSWD: ALL
+# Owner grant (PR do run-as-ubuntu): marina_admin_shell may run commands as ubuntu (as_user="ubuntu").
+shopvivaliz-marina-mcp ALL=(ubuntu) NOPASSWD: ALL
