@@ -4,7 +4,7 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 5652
+- Arquivos versionados: 5637
 - Diretorios versionados: 687
 - Grupos de conteudo identico: 207
 - Grupos identicos que incluem codigo: 13
@@ -1333,6 +1333,10 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 - `.vinext/fonts/geist-8ac0455e797f/geist-001175b1.woff2`
 - `dist/client/assets/_vinext_fonts/geist-8ac0455e797f/geist-001175b1.woff2`
 
+### Git blob ID `8d3584b9cc377a5c23df5429cd70e026b9b50bbc`
+- `AGENTS.md`
+- `CLAUDE.md`
+
 ### Git blob ID `8f01e7630ba2f88ffa1acd90d69f67efb5bd3092`
 - `.vinext/fonts/geist-8ac0455e797f/geist-98bbbccb.woff2`
 - `dist/client/assets/_vinext_fonts/geist-8ac0455e797f/geist-98bbbccb.woff2`
@@ -1368,10 +1372,6 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 ### Git blob ID `b574d097e269c3ec2dd677119aa634b2eab19466`
 - `api/mercadopago-orders-sdk.php`
 - `api/mercadopago-orders.php`
-
-### Git blob ID `bba04fba5e808732c14ac1c21f82ec5fdd5cf098`
-- `AGENTS.md`
-- `CLAUDE.md`
 
 ### Git blob ID `c43066fbfabc0c28e0ca1fc1fb4a9b659252e419`
 - `favicon.svg`
