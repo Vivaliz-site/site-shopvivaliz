@@ -58,4 +58,24 @@ sv_test_assert(($generic['heading'] ?? '') === 'Resultados para: rodizio', 'gene
 $empty = sv_catalog_search_context('');
 sv_test_assert(($empty['heading'] ?? '') === 'Produtos Vivaliz', 'empty query must preserve generic catalog heading');
 
+// Paid-search visitors should have an immediately visible route to the
+// real product cards rather than scrolling past the complete hero and filters.
+$catalogTemplate = (string)file_get_contents(dirname(__DIR__) . '/catalogo.php');
+sv_test_assert(
+    str_contains($catalogTemplate, 'catalog-search-landing')
+      && str_contains($catalogTemplate, 'class="catalog-query-jump"')
+      && str_contains($catalogTemplate, 'href="#product-grid"'),
+    'Queried catalog must have a direct skip-to-products action.'
+);
+sv_test_assert(
+    str_contains($catalogTemplate, "\$query !== '' && \$products"),
+    'Product jump action must not appear on empty or zero-result queries.'
+);
+$compactCss = dirname(__DIR__) . '/css/catalog-search-compact-v1.css';
+sv_test_assert(
+    is_file($compactCss)
+      && str_contains((string)file_get_contents($compactCss), '.catalog-search-landing .catalog-header'),
+    'Search landing must use a scoped compact layout without changing the homepage.'
+);
+
 fwrite(STDOUT, "PASS: catalog paid-search landing context.\n");
