@@ -123,20 +123,27 @@ def _findings(windows: dict[str, Any], config: dict[str, Any]) -> list[dict[str,
         # 0.9001 denotes at least ~90% rank loss, NOT an exact causal share.
         # Never turn this observation into a bid, budget, policy or gate change.
         rank_loss = row.get("search_rank_lost_impression_share")
+        impressions = float(row.get("impressions") or 0)
+        clicks = float(row.get("clicks") or 0)
+        # A single impression over 30 days must not silently clear the
+        # previously reported loss-of-delivery observation. This is strictly
+        # diagnostic and never authorizes commercial campaign changes.
         if (
             campaign.get("status") == "ENABLED"
-            and float(row.get("impressions") or 0) == 0
+            and 0 <= impressions <= 1
+            and clicks == 0
             and rank_loss is not None
             and float(rank_loss) >= 0.9
         ):
             findings.append(
                 {
-                    "type": "campaign_zero_delivery_rank_loss",
+                    "type": "campaign_zero_delivery_rank_loss" if impressions == 0
+                            else "campaign_near_zero_delivery_rank_loss",
                     "classification": "OBSERVATION",
                     "resource_id": str(campaign.get("id") or ""),
                     "evidence": {
                         "window": "30d",
-                        "impressions": 0,
+                        "impressions": impressions,
                         "rank_lost_share_api_value": float(rank_loss),
                         "budget_lost_share_api_value": row.get("search_budget_lost_impression_share"),
                         "api_share_capped_estimate": True,
