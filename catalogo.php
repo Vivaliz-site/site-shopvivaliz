@@ -559,17 +559,23 @@ $svNavCurrent = 'catalogo';
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
     <link rel="stylesheet" href="/css/catalog-category-select-v1.css?v=2026-08-17-1">
+    <?php if ($query !== ''): ?>
+    <link rel="stylesheet" href="/css/catalog-search-compact-v1.css?v=2026-11-12">
+    <?php endif; ?>
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
 
-    <main class="catalog-page">
+    <main class="catalog-page<?= $query !== '' ? ' catalog-search-landing' : '' ?>">
         <section class="catalog-header">
             <div class="container catalog-header-inner">
                 <div>
                     <p class="eyebrow"><?= sv_catalog_esc($catalogEyebrow) ?></p>
                     <h1><?= sv_catalog_esc($catalogHeading) ?></h1>
                     <p class="muted"><?= sv_catalog_esc($catalogLead) ?></p>
+                    <?php if ($query !== '' && $products): ?>
+                    <a class="catalog-query-jump" href="#product-grid">Ver <?= sv_catalog_esc($totalStr) ?> encontrados</a>
+                    <?php endif; ?>
                 </div>
                 <form class="catalog-search" role="search" method="get" action="/catalogo">
                     <input id="catalog-search" name="q" type="search" aria-label="Buscar no catálogo" autocomplete="off" value="<?= sv_catalog_esc($query) ?>">
