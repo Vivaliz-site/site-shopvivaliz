@@ -101,7 +101,13 @@ final class SvAmazonTargetMarginPublication
         }catch(Throwable){return false;}
     }
 
-    /** Granular MERGE of the two requested price sub-attributes. */
+    /**
+     * Replace only the purchasable_offer attribute using the complete latest
+     * GET snapshot, preserving unrelated audiences/offers and all other
+     * listing attributes. Amazon's live Listings VALIDATION_PREVIEW rejected
+     * op=merge (HTTP 400 InvalidInput) and accepted op=replace (HTTP 200 VALID).
+     * The writer supplies an existing real listing before submission.
+     */
     public static function amazonPricePatch(
         string $productType,string $marketplaceId,int $cents,
         ?array $existingListing=null
@@ -149,7 +155,7 @@ final class SvAmazonTargetMarginPublication
         return [
             'productType'=>$productType,
             'patches'=>[[
-                'op'=>'merge',
+                'op'=>'replace',
                 'path'=>'/attributes/purchasable_offer',
                 'value'=>$offers,
             ]],

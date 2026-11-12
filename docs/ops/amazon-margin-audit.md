@@ -604,6 +604,22 @@ Evidências de integração, somente leitura:
 
 ## Aplicação comercial de margem desejada (P2 — revisão protegida)
 
+### Correção verificada no provedor Amazon Listings
+
+A prévia real SP-API na conta autorizada (SKU de validação R9-O6PX-YBXA)
+retornou HTTP 400, InvalidInput, para op=merge em
+/attributes/purchasable_offer. Para o mesmo produto, preço proposto e
+campo, a operação op=replace retornou HTTP 200, VALID, zero problemas
+em mode=VALIDATION_PREVIEW. A nova operação substitui somente o atributo
+purchasable_offer com a lista completa de ofertas recebida pelo GET,
+preservando os demais públicos, ofertas e atributos; atualiza our_price
+e minimum_seller_allowed_price da oferta selecionada no mesmo PATCH.
+GET posterior confirmou preço original intacto: nenhum PATCH comercial
+foi enviado. A correção está coberta por testes que confirmam a operação,
+o escopo de um único atributo e a preservação de ofertas não selecionadas.
+
+
+
 ### Contrato oficial de gravação Olist (validado no Swagger publicado)
 
 O endpoint oficial é PUT /listas-precos/{idListaDePreco}, operação
