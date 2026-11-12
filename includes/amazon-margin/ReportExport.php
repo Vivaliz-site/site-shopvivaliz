@@ -13,6 +13,8 @@ final class SvAmazonMarginExport
     {
         $margin = $row['margin_weighted_bps'] ?? null;
         $reference=is_array($row['prior_cost_reference']??null) ? $row['prior_cost_reference'] : [];
+        $liveLink=is_array($row['current_product_link_reference']??null)
+            ? $row['current_product_link_reference'] : [];
         $status = $row['amazon_status'] ?? [];
         $buyable = is_array($status) && in_array('BUYABLE',$status,true);
         $financialStatus = SvAmazonMarginFinancialStatus::forDisplay($row);
@@ -76,6 +78,19 @@ final class SvAmazonMarginExport
                 ? round((int)$row['realized_sale_gross_cents']/100,2):null,
             'Preco cadastro Amazon (R$)'=>self::num($row['listed_price'] ?? null),
             'Custo ERP por conjunto vendido (R$)'=>self::num($row['last_cost'] ?? null),
+            'Custo registrado no produto ERP atual (R$)'=>self::num($liveLink['recorded_cost']??null),
+            'Custo atual por conjunto vinculado (R$)'=>self::num($liveLink['offer_cost']??null),
+            'Situacao vinculo custo atual'=>(string)($liveLink['status']??''),
+            'ID ERP vinculo atual'=>isset($liveLink['erp_id'])?(int)$liveLink['erp_id']:null,
+            'SKU ERP vinculo atual'=>(string)($liveLink['erp_sku']??''),
+            'Integracao ERP vinculo atual'=>(string)($liveLink['integration']??''),
+            'Data do vinculo ERP atual'=>(string)($liveLink['observed_at']??''),
+            'Motivo pendencia custo atual'=>(string)($liveLink['reason']??''),
+            'Margem atual calculada com custo do vinculo'=>
+                isset($row['current_margin_cost_used'],$row['current_margin_bps'])
+                    ?'Sim':'Nao',
+            'Custo usado na projecao atual (R$)'=>self::num(
+                $row['current_margin_cost_used']??$row['last_cost']??null),
             'Custo base da peca no ERP (R$)'=>self::num($row['erp_base_cost'] ?? $row['last_cost'] ?? null),
             'Custo registrado de kit no ERP (R$)'=>(($row['erp_product_type']??'')==='K')
                 ? self::num($row['erp_base_cost']??$row['last_cost']??null):null,
@@ -272,6 +287,10 @@ final class SvAmazonMarginExport
                     && $row['Custo anterior verificado (R$)']!==null) {
                     $showCost=$get('Custo anterior verificado (R$)').'^';
                 }
+                if ($showCost==='-' &&
+                    ($row['Custo atual por conjunto vinculado (R$)']??null)!==null) {
+                    $showCost=$get('Custo atual por conjunto vinculado (R$)').'~';
+                }
                 $content .= self::pdfText(448,$y,8,$showCost);
                 $content .= self::pdfText(509,$y,8,$get('Margem atual estimada (%)'));
                 $content .= self::pdfText(568,$y,8,$get('Unidades confirmadas'));
@@ -307,7 +326,7 @@ final class SvAmazonMarginExport
                 }
                 if($i%2===1)$content.="0.54 w 27 ".($y-23)." m 813 ".($y-23)." l S\n";
             }
-            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; ^ Custo historico nao certificado; custo = kit completo por venda.');
+            $content .= self::pdfText(27,24,8,'Preco = anuncio atual; ^ Custo historico nao certificado; ~ custo atual (historico pendente); custo = kit completo por venda.');
             $content .= self::pdfText(27,12,8,'Margem atual = estimativa no preco vigente; margens historicas e detalhamento disponiveis no Excel.');
             $content .= self::pdfText(755,24,8,'Pagina '.($index+1).'/'.count($groups));
             $pg=4+2*$index;$ct=$pg+1;

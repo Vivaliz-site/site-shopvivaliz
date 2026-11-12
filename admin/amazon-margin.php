@@ -299,7 +299,7 @@ const reasonText={
  confirmed:'Margem apurada pelas vendas conciliadas',
  partial:'Parte dos fretes/lançamentos ainda pendente de conciliação',
  unmapped_erp:'Produto ERP não identificado por EAN, SKU, pedido Amazon ou fonte atual Olist',
- ambiguous_erp:'Vínculo ERP ambíguo (EAN, pedidos ou relação atual Olist divergentes)',
+ ambiguous_erp:'Vínculo histórico divergente do relacionamento atual no Olist; conferir antes de certificar vendas anteriores',
  erp_or_catalog_read_failed:'Falha de consulta ao ERP ou catálogo Amazon',
  erp_identity_mismatch:'Identificação de produto divergente entre Amazon e ERP',
  price_or_cost_missing:'Preço efetivo ou custo de aquisição indisponível',
@@ -341,6 +341,23 @@ function costMarkup(r){
   return '—<span class="cell-note warn">'+trace+
     ' <strong>Custo e margem bloqueados até reconciliação.</strong></span>';
  }
+ // A valid live product-tab binding can expose a positive registered cost
+ // without proving the cost identity of older Amazon transactions. Display
+ // both facts; never label an observed ERP cost as missing or certified.
+ const linked=r.current_product_link_reference;
+ if(linked&&Number.isFinite(Number(linked.recorded_cost))&&Number(linked.recorded_cost)>0) {
+  const recorded=price(linked.recorded_cost);
+  const exact=linked.status==='offer_cost_verified'&&
+   Number.isFinite(Number(linked.offer_cost))&&Number(linked.offer_cost)>0;
+  const amount=exact?price(linked.offer_cost):'—';
+  const quantity=exact?'Custo atual por unidade comercial vinculada: '+amount+'. ':
+   'Custo registrado no produto ERP: '+recorded+'. ';
+  return amount+'<span class="cell-note warn">'+quantity+
+   'Vínculo atual confirmado na aba Anúncios do Olist; '+(exact
+   ?'margem atual estimável, mas vendas históricas exigem conciliação.'
+   :'composição ou identidade comercial ainda não conciliada. Margem não certificada.')+
+   '</span>';
+ }
  const prior=r.prior_cost_reference;
  if(prior&&Number.isFinite(Number(prior.cost))&&Number(prior.cost)>0) {
   return price(prior.cost)+'<span class="cell-note warn">Último custo verificado em auditoria #'+
@@ -348,9 +365,9 @@ function costMarkup(r){
     '). <strong>Referência histórica; não validado nesta execução.</strong></span>';
  }
  return '—<span class="cell-note warn">'+(r.status==='unmapped_erp'?'Produto relacionado ainda não identificado pela auditoria':
-   r.status==='ambiguous_erp'?'Vínculo ERP ambíguo':
+   r.status==='ambiguous_erp'?'Vínculo histórico e atual do ERP divergentes; custo por oferta não conciliado':
    r.status==='erp_or_catalog_read_failed'?'Consulta ERP falhou':
-   r.status==='kit_cost_unverified'?'Quantidade/composição do kit não comprovada':'Custo não identificado')+'</span>';
+   r.status==='kit_cost_unverified'?'Quantidade/composição do kit não comprovada':'Custo não confirmado nesta auditoria')+'</span>';
 }
 function refreshMetrics(){
  const active=data.filter(isActive).length;
@@ -380,7 +397,9 @@ function render(){
   const chosen=selected.has(sku);
   const st=state(r),active=isActive(r);
   const diag=r.erp_ui_conflict
-   ?'Divergência entre vínculo da interface atual Olist e identificação anterior; custo e margem não certificados'
+   ?(r.current_margin_cost_used!==undefined
+     ?'Custo atual vinculado ao Olist; margem histórica pendente por divergência de identidade'
+     :'Vínculo histórico divergente da interface atual Olist; margem histórica pendente')
    :(reasonText[financialStatus(r)]||String(financialStatus(r)??'Não verificado'));
   const marginText=r.margin_weighted_bps===null||r.margin_weighted_bps===undefined
    ?'—<span class="cell-note warn">Margem não apurada</span>'
@@ -390,7 +409,7 @@ function render(){
   const currentDetail=currentVerified
    ?'<span class="cell-note">Lucro atual: '+price(Number(r.current_profit_cents||0)/100)+'</span>'+
      '<span class="cell-note">Comissão: '+price(Number(r.current_commission_cents||0)/100)+' · logística: '+price(Number(r.current_logistics_cents||0)/100)+'</span>'+
-     '<span class="cell-note">Impostos: '+price(Number(r.current_tax_cents||0)/100)+' · custo conjunto: '+price(r.last_cost)+'</span>'+
+     '<span class="cell-note">Impostos: '+price(Number(r.current_tax_cents||0)/100)+' · custo conjunto atual: '+price(r.current_margin_cost_used??r.last_cost)+'</span>'+
      (r.current_billable_kg?'<span class="cell-note">Peso tarifável: '+Number(r.current_billable_kg).toFixed(2)+' kg</span>':'')+
      (currentStatus==='estimated_dimension_conflict'?'<span class="cell-note warn">Medidas Amazon x ERP divergentes</span>':'')+
      (currentStatus==='estimated_program_unverified'?'<span class="cell-note warn">DBA presumido — conferir programa</span>':'')
