@@ -615,8 +615,13 @@ purchasable_offer com a lista completa de ofertas recebida pelo GET,
 preservando os demais públicos, ofertas e atributos; atualiza our_price
 e minimum_seller_allowed_price da oferta selecionada no mesmo PATCH.
 GET posterior confirmou preço original intacto: nenhum PATCH comercial
-foi enviado. A correção está coberta por testes que confirmam a operação,
-o escopo de um único atributo e a preservação de ofertas não selecionadas.
+foi enviado. Antes do PATCH, o worker refaz o GET Listings depois do
+readback do ERP 991 e reconstrói a substituição sobre a lista mais recente
+de ofertas, não sobre o snapshot coletado antes do PUT Olist. Se uma
+consulta transitória falhar depois de o ERP estar confirmado, a fila mantém
+a etapa erp_verified para retomar por GET, sem repetir o PUT comercial.
+A correção está coberta por testes que confirmam a operação, a etapa de
+retomada e a preservação de ofertas não selecionadas.
 
 
 
