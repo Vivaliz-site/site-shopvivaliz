@@ -46,6 +46,20 @@ def plan(token: dict | None) -> dict:
     }
 
 
+def candidate_lines(tokens: list[dict], limit: int = 20) -> list[str]:
+    """Quando o nome nao bate, lista so nome e expiracao de tokens que lembram Marina/MCP.
+
+    Nome e data nao sao segredo; ids, client_id e secrets nunca sao impressos.
+    """
+    lines = []
+    for token in tokens:
+        name = str(token.get("name") or "")
+        if "marina" in name.lower() or "mcp" in name.lower():
+            lines.append(f"SERVICE_TOKEN_CANDIDATE name={name} expires_at={token.get('expires_at') or ''}"
+                         f" duration={token.get('duration') or ''}")
+    return lines[:limit]
+
+
 def classify_http_error(code: int) -> str:
     if code in (401, 403):
         return "SCOPE_INSUFFICIENT"
@@ -112,6 +126,9 @@ def main() -> int:
     print(f"MARINA_TOKEN_DURATION_BEFORE={decision.get('duration', '')}")
     print(f"MARINA_TOKEN_PLAN={decision['verdict']}")
     if token is None:
+        print(f"SERVICE_TOKENS_TOTAL={len(tokens)}")
+        for line in candidate_lines(tokens):
+            print(line)
         return 5
     if not decision["will_update"]:
         print("MARINA_TOKEN_DURATION=ALREADY_NON_EXPIRING")

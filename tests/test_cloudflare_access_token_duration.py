@@ -89,6 +89,17 @@ class MainFlowTests(unittest.TestCase):
         self.assertIn("MARINA_TOKEN_PLAN=TOKEN_NOT_FOUND", out)
         self.assertFalse([c for c in calls if c[0] == "PUT"])
 
+    def test_not_found_lists_only_name_and_dates_of_candidates(self):
+        tokens = [{"id": "SECRET-ID", "client_id": "SECRET-CLIENT", "name": "marina-mcp-outro",
+                   "expires_at": "2027-01-01T00:00:00Z", "duration": "8760h"},
+                  {"id": "x", "name": "nao-relacionado"}]
+        rc, out, _ = self.run_main([], [self.ZONE, (200, {"success": True, "result": tokens,
+                                                          "result_info": {"total_pages": 1}})])
+        self.assertEqual(rc, 5)
+        self.assertIn("SERVICE_TOKEN_CANDIDATE name=marina-mcp-outro", out)
+        self.assertNotIn("nao-relacionado", out)
+        self.assertNotIn("SECRET", out)
+
     def test_missing_credentials_not_provisioned(self):
         out = io.StringIO()
         with patch.dict(os.environ, {}, clear=True), patch("sys.argv", ["prog"]), redirect_stdout(out):
