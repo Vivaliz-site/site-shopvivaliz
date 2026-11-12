@@ -438,12 +438,12 @@ def _failed_chatgpt_nudge_after(
 
 
 def _browser_only_e2e_probe(request: dict[str, Any], state: dict[str, Any]) -> bool:
-    """Keep the synthetic browser E2E probe exclusively on its bound ChatGPT chat.
+    """Recognize the strict browser E2E sentinel contract.
 
-    The probe's next_action intentionally changes after its first checklist
-    command. Identify it by the immutable task contract, not by parsing a
-    mutable command list; otherwise the detached fallback can take over after
-    step one and invalidate the very browser proof being measured.
+    These synthetic checkpoints exist specifically to prove that the bound
+    ChatGPT Web conversation executed the two allowlisted state transitions.
+    Letting Gemini/CLI run the same commands would manufacture a terminal
+    checkpoint without proving browser continuity.
     """
     task_id = str(state.get("task_id", "")).strip()
     if not task_id.startswith("continuity-e2e-"):
@@ -452,14 +452,18 @@ def _browser_only_e2e_probe(request: dict[str, Any], state: dict[str, Any]) -> b
         return False
     if str(state.get("agent_id", "")).strip() != "chatgpt-common":
         return False
-    if str(state.get("goal", "")).strip() != "Prove the detached continuity recovery pipeline end-to-end":
+    if not str(state.get("conversation_id", "")).strip():
         return False
-    conversation_id = str(state.get("conversation_id", "")).strip()
-    if not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", conversation_id):
-        return False
-    if str(state.get("browser_session", "")).strip() not in {"dev", "atendimento"}:
-        return False
-    return True
+    next_action = str(state.get("next_action", ""))
+    commands = [
+        line.split(") ", 1)[1].strip()
+        for line in next_action.splitlines()
+        if line.startswith(("1) ", "2) ")) and ") " in line
+    ]
+    return commands == [
+        f"python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass",
+        f"python3 scripts/agent_task_state.py complete --task {task_id}",
+    ]
 
 
 def _state_signature(payload: dict[str, Any]) -> str:
