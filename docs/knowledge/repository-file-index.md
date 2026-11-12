@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -1088,8 +1088,6 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `.github/workflows/pr-agent-attribution.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/pr-completion-enforcer.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/pr-conflict-auto-healer.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/pr-owner-approval-merge-queue.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
-| `.github/workflows/pr-owner-merge-queue-activate.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/pr-policy-enforcement.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/probe-delete-repo-auth-backend-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/probe-delete-repo-auth-oci-once.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -2557,7 +2555,6 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `docs/ops/oci-dual-account-access.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/oci-marina-migration-v5-20261017.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/owner-oneclick-merge-queue-2026-11-02.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/ops/pr-owner-review-auto-recovery-2026-11-02.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/pricing-mysql-loopback-owner-approval-2026-10-31.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/single-owner-governance-audit-2026-11-02.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/ops/tiny-owner-price-review-2026-11-08.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -6186,7 +6183,6 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `tests/test_orquestrador_atomic_checkpoint.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_otpclient_persistence.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_authorized_rollout.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/test_owner_gate_zero_files.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_protected_pr_merge_guard.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_security_merge_guard.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_owner_unit_pattern.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -6200,7 +6196,6 @@ Gerado deterministicamente a partir de 5652 arquivos versionados no indice Git. 
 | `tests/test_pr_conflict_healer_write_auth_contract.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_gate_replay.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_gate_scope.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/test_pr_owner_recovery_workflow.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_owner_review_visibility.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_pr_review_routing.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_preview_ttl.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
