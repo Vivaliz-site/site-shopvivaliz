@@ -1,5 +1,5 @@
 <!-- OWNER_ONLY_RESTRICTIONS_20261110_REF -->
-> **Regra prevalente de 10/11/2026:** somente o proprietário pode incluir ou agravar restrições; nenhum agente pode fazê-lo, nem por PR ou governança, mesmo com aprovação. Ver `docs/knowledge/owner-only-restrictions-2026-11-10.md` e `docs/knowledge/agent-rules.md`. A implantação inicial foi determinada excepcionalmente ao GPT pelo proprietário.
+> **Regra vigente após orientação de 12/11/2026:** apenas o proprietário pode incluir ou agravar **novas** restrições. Agentes técnicos podem corrigir regressões e restaurar exatamente o baseline protetivo previamente aprovado, sem ampliar escopo, seguindo as permissões e os fluxos oficiais existentes. Para Amazon Returns, isso abrange restaurar kill switch ON/flags externas OFF, sem conceder escrita. Ver `docs/knowledge/owner-only-restrictions-2026-11-10.md` e `docs/knowledge/agent-rules.md`; revisão deve ser integrada formalmente antes de aplicação operacional.
 <!-- /OWNER_ONLY_RESTRICTIONS_20261110_REF -->
 
 <!-- PRIORIDADE MCP ADMINISTRATIVO: executar chamada MCP autorizada antes de rotas alternativas; respeitar MFA, RBAC, grants e leases; consultar docs/ops/mcp-first-agent-execution-2026-11-05.md. -->

@@ -4,11 +4,19 @@
 
 ## Regra prevalente
 
-Somente o próprio proprietário, atuando pessoalmente, pode **introduzir, restaurar ou agravar** bloqueios, restrições, travas, gates, controles de impedimento, exigências obrigatórias ou configurações que possam bloquear, condicionar ou dificultar a execução ou a operação.
+Somente o próprio proprietário, atuando pessoalmente, pode **introduzir novas restrições ou agravar restrições existentes**, incluindo bloqueios, travas, gates, controles de impedimento, exigências obrigatórias ou configurações que possam bloquear, condicionar ou dificultar a execução ou a operação.
 
-Nenhum agente, subagente, bot ou automação pode implementar tais inclusões, seja diretamente ou por commit, pull request, issue que implemente mudança, workflow, ruleset, código, infraestrutura, política de acesso, arquivo de instruções ou **governança**. Aprovação de PR, dupla revisão, aprovação verbal ou delegação administrativa não substituem a execução pessoal do proprietário.
+Nenhum agente, subagente, bot ou automação pode implementar tais inclusões, seja diretamente ou por commit, pull request, issue que implemente mudança, workflow, ruleset, código, infraestrutura, política de acesso, arquivo de instruções ou **governança**. Para **novas restrições ou agravamentos**, aprovação de PR, dupla revisão, aprovação verbal ou delegação administrativa não substituem a execução pessoal do proprietário.
 
-### Procedimento quando um agente identificar necessidade de restrição
+### Recuperação do estado de segurança previamente aprovado (diretiva do proprietário de 12/11/2026)
+
+A exclusividade acima trata de **restrições novas ou agravadas**, não impede um agente técnico autorizado de **corrigir uma regressão e restaurar exatamente o estado de segurança previamente aprovado e comprovado**. Esta recuperação usa os fluxos oficiais já existentes, com identidade operacional real, ownership/lease/fencing quando aplicável, trilha de auditoria, testes, CI/merge/deploy canônico e readback. Não pode criar uma restrição nova, alterar seu alcance ou usar a exceção para ampliar privilégios.
+
+**Aplicação imediata ao Amazon Returns:** se o perfil de produção divergir do baseline protetivo previamente aprovado, o agente pode preparar e, após esta alteração de governança estar validamente integrada, executar a restauração do kill switch global para ON e das sete ações externas para OFF, por mudança versionada e procedimento operacional autorizado. Essa restauração **não concede** abertura de SAFE-T, recurso, suporte, lançamento ERP ou operação externa, e não transforma um grant de uso único em autorização ilimitada.
+
+O grant de SAFE-T já renovado pela PR #3846 continua independente desta regra: requer verificação efetiva de uso único, escopo/canary, ausência de claim externa, elegibilidade Amazon, segurança do operador e autorização do provedor. Esta alteração documental não ativa nem consome esse grant e não dispensa revisão humana formal em PR de segurança quando requerida pelos controles existentes.
+
+### Procedimento quando um agente identificar necessidade de nova restrição
 
 1. **Não implementar**, não criar PR e não alterar o ambiente para impor a restrição.
 2. Descrever o problema, o impacto, a necessidade técnica, alternativas menos restritivas e o que será impedido.
