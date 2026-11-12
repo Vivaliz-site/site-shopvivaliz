@@ -93,6 +93,9 @@ kitReportAssert($bad['Custo ERP por conjunto vendido (R$)']===null,
 kitReportAssert($bad['Custo registrado de kit no ERP (R$)']===33.08
     && $bad['Custo calculado pela composicao do kit (R$)']===14.94,
     'Excel must preserve both incongruent values');
+kitReportAssert($bad['Custo cadastrado sem certificacao do kit (R$)']===33.08,
+    'XLSX must display ERP registered cost as reference without certifying sale cost');
+
 kitReportAssert($bad['Lucro por unidade vendida (R$)']===null
     && $bad['Lucro acumulado do periodo (R$)']===null,
     'historical margin cannot be certified');

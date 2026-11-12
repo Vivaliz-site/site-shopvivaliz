@@ -94,6 +94,9 @@ final class SvAmazonMarginExport
             'Custo base da peca no ERP (R$)'=>self::num($row['erp_base_cost'] ?? $row['last_cost'] ?? null),
             'Custo registrado de kit no ERP (R$)'=>(($row['erp_product_type']??'')==='K')
                 ? self::num($row['erp_base_cost']??$row['last_cost']??null):null,
+            'Custo cadastrado sem certificacao do kit (R$)'=>
+                ($row['status']??'')==='kit_cost_unverified'
+                    ?self::num($row['erp_base_cost']??null):null,
             'Custo calculado pela composicao do kit (R$)'=>self::num($row['erp_kit_bom_cost']??null),
             'Quantidade total de componentes do kit'=>isset($row['erp_kit_bom_total_units'])
                 ? (int)$row['erp_kit_bom_total_units']:null,

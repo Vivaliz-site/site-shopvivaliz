@@ -127,6 +127,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <p class="note"><strong>Margem realizada:</strong> calculada com a receita bruta de cada venda realmente conciliada na Amazon Finances (produto + frete cobrado ao cliente − promoções de frete/descontos), não com o preço atual do anúncio. O valor principal de cada anúncio é o <strong>preço vigente</strong>; quando houver vendas conciliadas, mostramos separadamente a <strong>receita bruta média por unidade</strong>, que pode incluir frete cobrado ao comprador e descontos; ela não é o preço isolado do produto. A comissão já está no repasse financeiro, sem dedução dupla. Sem venda conciliada, não há margem realizada.</p>
     <p class="note"><strong>Preço e custo são por unidade VENDIDA</strong> (kit completo, quando aplicável). O lucro por unidade vendida é separado do <strong>lucro total acumulado</strong> nas vendas conciliadas. Produtos simples vendidos como kit usam custo da peça multiplicado pela quantidade confirmada no anúncio; kits cadastrados no ERP não são multiplicados novamente.</p>
     <p class="note" id="prior-cost-indicator" hidden></p>
+    <p class="note" id="registered-cost-indicator" hidden></p>
     <div class="controls" style="margin-top:12px">
       <input id="search" type="search" placeholder="Buscar produto, SKU Amazon, SKU ERP, ASIN…" aria-label="Buscar anúncio">
       <select id="program"><option value="">Todos os programas</option><option value="FBA_ONSITE">FBA Onsite</option><option value="DBA">DBA</option><option value="UNKNOWN">Não identificado</option></select>
@@ -335,11 +336,16 @@ function costMarkup(r){
  }
  if(r.status==='kit_cost_unverified') {
   const registered=Number(r.erp_base_cost||0),bom=Number(r.erp_kit_bom_cost||0);
-  const trace=registered>0&&bom>0
-    ?'Custo histórico do kit '+price(registered)+' difere da soma dos componentes '+price(bom)+'.'
-    :'Composição ou custo unitário dos componentes não comprovado.';
-  return '—<span class="cell-note warn">'+trace+
-    ' <strong>Custo e margem bloqueados até reconciliação.</strong></span>';
+  const hasRecorded=Number.isFinite(registered)&&registered>0;
+  const trace=hasRecorded&&bom>0
+    ?'O custo registrado '+price(registered)+' difere da soma dos componentes '+price(bom)+'.'
+    :'Quantidade ou composição da unidade comercial anunciada não comprovada.';
+  const recorded=hasRecorded?price(registered)+'*':'—';
+  const evidence=hasRecorded
+    ?'* Custo positivo cadastrado no produto ERP, não certificado como custo por unidade vendida. '
+    :'Custo de aquisição não comprovado. ';
+  return recorded+'<span class="cell-note warn">'+evidence+trace+
+    ' <strong>Margem atual e histórica não certificadas até conciliação.</strong></span>';
  }
  // A valid live product-tab binding can expose a positive registered cost
  // without proving the cost identity of older Amazon transactions. Display
@@ -387,6 +393,14 @@ function refreshMetrics(){
  const indicator=el('prior-cost-indicator');
  indicator.hidden=fallback===0;
  indicator.textContent=fallback+' anúncios com último custo de uma auditoria anterior. Esses valores são históricos, não custos confirmados nesta execução, e não habilitam margem certificada.';
+ const kitRecorded=base.filter(r=>r.status==='kit_cost_unverified'&&
+   Number.isFinite(Number(r.erp_base_cost))&&Number(r.erp_base_cost)>0).length;
+ const currentLinked=base.filter(r=>r.last_cost===null&&r.last_cost!==0&&
+   Number(r.current_product_link_reference?.offer_cost)>0).length;
+ const costEvidence=el('registered-cost-indicator');
+ costEvidence.hidden=kitRecorded===0&&currentLinked===0;
+ costEvidence.textContent=currentLinked+' anúncio(s) com custo da associação atual Olist comprovado, mas identidade de vendas históricas divergente; '+
+   kitRecorded+' kit(s) com custo positivo cadastrado, mas quantidade ou composição ainda não conciliada. Os valores não certificam lucro histórico.';
 }
 function render(){
  refreshMetrics();
