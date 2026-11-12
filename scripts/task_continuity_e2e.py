@@ -68,24 +68,20 @@ def _child_env(runtime_dir: Path) -> dict[str, str]:
 
 
 def build_sentinel_next_action(task_id: str) -> str:
-    """Send only the three canonical CLI steps to the real browser assistant.
+    """Send the two canonical CLI transitions to the real browser assistant.
 
-    The test harness plans the checklist before it asks for progress. The
-    browser assistant must finish the checklist in its own bound conversation,
-    then supply evidence to the normal readiness gate. This alone is never
-    E2E proof: the independent nudge/response certifier remains mandatory.
+    The continuity probe deliberately uses no optional checklist: its purpose
+    is to prove same-conversation browser recovery. The independent nudge and
+    response certifier remains mandatory and rejects detached execution.
     """
     return (
         "Esta tarefa e um probe de continuidade automatica; nao ha edicao de "
-        "codigo real necessaria. Execute exatamente estes tres comandos, nesta "
+        "codigo real necessaria. Execute exatamente estes dois comandos, nesta "
         "ordem, somente na conversa vinculada:\n"
-        f"1) python3 scripts/agent_task_state.py check-step --task {task_id} "
-        '--step-id 1 --evidence assistant_executed_bound_sentinel '
-        '--verification independent_browser_proof_required\n'
-        f"2) python3 scripts/agent_task_state.py ready --task {task_id} "
+        f"1) python3 scripts/agent_task_state.py ready --task {task_id} "
         '--evidence bound_sentinel_executed_pending_external_confirmation '
         f"--verification {EXPECTED_VERIFICATION}\n"
-        f"3) python3 scripts/agent_task_state.py complete --task {task_id}"
+        f"2) python3 scripts/agent_task_state.py complete --task {task_id}"
     )
 
 def create_synthetic_task(
@@ -121,23 +117,8 @@ def create_synthetic_task(
         env=env,
         timeout=30,
     )
-    # The durable checklist is mandatory for new checkpoints. Prepare exactly
-    # one step for the actual bound ChatGPT assistant to certify, never mark it
-    # completed in the synthetic harness or forge browser progress.
-    runner(
-        [
-            sys.executable,
-            str(agent_task_state_script),
-            "plan-checklist",
-            "--task",
-            task_id,
-            "--step",
-            "Execute the sentinel in the explicitly bound ChatGPT conversation",
-        ],
-        check=True,
-        env=env,
-        timeout=30,
-    )
+    # This probe intentionally has no optional checklist; browser proof is
+    # independently required by the response certifier.
     runner(
         [
             sys.executable,
