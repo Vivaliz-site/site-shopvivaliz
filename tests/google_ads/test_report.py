@@ -161,6 +161,33 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("blocked_by", signal[0])
         self.assertEqual(report["mode"], "readonly")
 
+    def test_single_impression_does_not_hide_rank_loss_observation(self):
+        fixture = fixture_collected()
+        fixture["windows"]["30d"]["campaigns"] = [
+            {"campaign": {"id": "active-one", "status": "ENABLED"},
+             "impressions": 1, "clicks": 0, "cost": 0, "conversions": 0,
+             "search_rank_lost_impression_share": 0.9001,
+             "search_budget_lost_impression_share": 0.0},
+            {"campaign": {"id": "active-two", "status": "ENABLED"},
+             "impressions": 2, "clicks": 0, "cost": 0, "conversions": 0,
+             "search_rank_lost_impression_share": 0.9001},
+            {"campaign": {"id": "paused-one", "status": "PAUSED"},
+             "impressions": 1, "clicks": 0, "cost": 0, "conversions": 0,
+             "search_rank_lost_impression_share": 0.9001},
+        ]
+        report = build_report(fixture, CONFIG)
+        signal = [
+            finding for finding in report["findings"]
+            if finding["type"] == "campaign_near_zero_delivery_rank_loss"
+        ]
+        self.assertEqual(len(signal), 1)
+        self.assertEqual(signal[0]["resource_id"], "active-one")
+        self.assertEqual(signal[0]["evidence"]["impressions"], 1)
+        self.assertTrue(signal[0]["evidence"]["api_share_capped_estimate"])
+        self.assertEqual(signal[0]["classification"], "OBSERVATION")
+        self.assertNotIn("blocked_by", signal[0])
+        self.assertEqual(report["mode"], "readonly")
+
     def test_customer_identifier_is_masked(self):
         report = build_report(fixture_collected(), CONFIG)
         self.assertEqual(report["customer"]["id"], "******7890")
