@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-09T03:46:02.771Z",
+  "generated_at": "2026-11-12T21:25:54.266Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -240,6 +240,11 @@
       "file": "/public/dist/css/catalog-conversion-v4.5f8587a906.min.css",
       "bytes": 7729,
       "source_bytes": 7729
+    },
+    "/css/catalog-search-compact-v1.css": {
+      "file": "/public/dist/css/catalog-search-compact-v1.5af9a7cbd7.min.css",
+      "bytes": 1411,
+      "source_bytes": 1889
     },
     "/css/category-real-images-v52.css": {
       "file": "/public/dist/css/category-real-images-v52.f1a699a925.min.css",
