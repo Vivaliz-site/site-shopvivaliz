@@ -535,3 +535,39 @@ produto ERP ID `385227548`, SKU `178970678530`, com preco Amazon R$ 27,99.
 A tarifa DBA aplicavel nesse preco e R$ 4,50; a margem nao pode ser
 certificada antes de consultar custo e comissao atuais. Nenhum preco, estoque
 ou anuncio foi alterado neste procedimento de leitura.
+
+## Margem desejada — previa administrativa sem escrita comercial (12/11/2026)
+
+O painel administrativo `/admin/amazon-margin.php` reutiliza a selecao
+existente de Seller SKUs e oferece um campo de **margem liquida operacional
+desejada (%)**, com `POST action=target_margin_preview` em
+`/api/admin/amazon-margin.php`. A API consulta exclusivamente o ultimo
+snapshot persistido e retorna, por SKU, o **preco de venda proposto**, o
+**preco minimo Amazon proposto igual ao de venda**, o ID do produto ERP
+para a lista **Amazon 991**, comissao proporcional a ultima cotacao SP-API,
+tarifa logistica por faixa, impostos conforme `tax_bps` e margem simulada.
+
+O calculo usa centavos inteiros e examina transicoes das faixas logisticas.
+Nunca reduz o preco atual nesta previa. Produtos com custo de conjunto
+pendente, preco efetivo ausente, modalidade desconhecida ou SKU ausente
+recebem motivo de pendencia, nao valores preenchidos por deducao. Produtos
+ERP compartilhados apresentam os demais Seller SKUs para dimensionar o
+efeito no site e nas outras ofertas; alvos divergentes para o mesmo ID
+aparecem como conflito. A funcao pode exportar a proposta como CSV; **nenhum
+POST de simulacao escreve precos no ERP, na Amazon ou no site**.
+
+**Limite da estimativa:** comissao e cotada apenas no preco vigente no
+snapshot; o custo proporcional ao preco proposto e uma hipotese. Portanto
+a margem exibida NAO e cotacao Amazon oficial no novo preco, nem lucro
+historico realizado ou margem financeira total (publicidade, devolucoes
+e outras despesas nao estao embutidas). A publicacao comercial real
+exige o fluxo protegido preexistente, uma nova cotacao oficial SP-API
+no preco proposto, compatibilidade e readback da tabela Olist 991,
+preco efetivo da Amazon Pricing, Product Type Definition e atributos
+`purchasable_offer.our_price` e
+`purchasable_offer.minimum_seller_allowed_price`, impactos do mesmo
+produto ERP, integracao com site, integridade financeira, aprovacao
+formal de escopo e reconciliacao individual apos escrita. O endpoint
+`target_margin_apply` retorna erro expresso enquanto esse executor nao
+estiver autorizado; a interface nao promete aplicacao efetiva nesse estado.
+Esta fase nao concede permissao comercial nem altera grants existentes.
