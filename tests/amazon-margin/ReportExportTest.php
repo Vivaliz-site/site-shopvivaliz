@@ -117,4 +117,31 @@ $legacyZip->close();unlink($legacyFile);
 $legacyPdf=SvAmazonMarginExport::pdf($legacy,'2026-11-07');
 if(!str_starts_with($legacyPdf,'%PDF-1.4')) throw new Exception('pending PDF invalid');
 
+// Owner's commercial floor is 10%: keep 9% diagnostic for historic exports,
+// but provide an independent exact ten-percent classification in all new rows.
+$floor10=SvAmazonMarginExport::rows(['rows'=>[
+    ['seller_sku'=>'BELOW-10-ROUNDS-TO-1000','price'=>250.00,
+      'current_margin_bps'=>1000,'current_profit_cents'=>2499],
+    ['seller_sku'=>'NINE-PLUS-BUT-BELOW-TEN','price'=>24.90,
+      'current_margin_bps'=>904,'current_profit_cents'=>225],
+    ['seller_sku'=>'EXACTLY-TEN','price'=>24.90,
+      'current_margin_bps'=>1000,'current_profit_cents'=>249],
+    ['seller_sku'=>'NO-MARGIN','price'=>24.90,
+      'current_margin_bps'=>null,'current_profit_cents'=>null],
+]],[]);
+if(array_column($floor10,'Abaixo de 10% exato')!==['Sim','Sim','Nao','Pendente'])
+    throw new Exception('owner minimum net margin 10% classification must use exact cents');
+$floor10Xlsx=SvAmazonMarginExport::xlsx($floor10);
+$floor10Tmp=tempnam(sys_get_temp_dir(),'margin-floor10-');
+file_put_contents($floor10Tmp,$floor10Xlsx);
+try {
+    $floor10Zip=new ZipArchive();
+    if($floor10Zip->open($floor10Tmp)!==true)throw new Exception('floor10 xlsx invalid');
+    $floor10Xml=(string)$floor10Zip->getFromName('xl/worksheets/sheet1.xml');
+    $floor10Zip->close();
+    if(!str_contains($floor10Xml,'Abaixo de 10% exato')
+       ||!str_contains($floor10Xml,'BELOW-10-ROUNDS-TO-1000'))
+        throw new Exception('xlsx must expose 10% exact classification');
+} finally {@unlink($floor10Tmp);}
+
 echo "PASS margin exports: XLSX file/worksheet/data + PDF header/footer + selection\n";
