@@ -2952,11 +2952,22 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
           return el ? String(el.innerText||el.textContent||'').trim() : '';
         })()`);
         if (String(insertedDraft || '').trim() !== expected) return false;
-        // No enabled Send is proof of submission. Leave our exact draft
-        // intact for a bounded recovery attempt rather than report a phantom
-        // Enter send that cannot be confirmed in canonical history.
         if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
-        return false;
+        if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+        if (!(await conversationStreamComplete(cdp))) return false;
+        try {
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'rawKeyDown', key: 'Enter', code: 'Enter',
+            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+          });
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'keyUp', key: 'Enter', code: 'Enter',
+            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+          });
+          return true;
+        } catch {
+          return false;
+        }
       }
       return false;
     }
