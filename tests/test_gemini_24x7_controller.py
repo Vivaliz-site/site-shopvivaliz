@@ -120,7 +120,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         for task_id, status in (("very-old-open", "RUNNING"), ("very-old-done", "CONCLUIDO")):
             (self.runtime / f"{task_id}.json").write_text(
                 json.dumps({
-                    "task_id": task_id, "created_at": old, "updated_at": old,
+                    "task_id": task_id, "agent_id": "gpt", "created_at": old, "updated_at": old,
                     "status": status, "next_action": "preserve original intent",
                 }),
                 encoding="utf-8",
@@ -141,7 +141,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         controller = load_controller()
         (self.runtime / "malformed-active.json").write_text(
             json.dumps({
-                "task_id": "malformed-active", "created_at": "not-a-time",
+                "task_id": "malformed-active", "agent_id": "gpt", "created_at": "not-a-time",
                 "updated_at": "not-a-time", "status": "READY_TO_COMPLETE",
                 "next_action": "verify before finishing",
             }),
@@ -163,7 +163,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         (self.runtime / "unbound-real-task.json").write_text(
             json.dumps({
-                "task_id": "unbound-real-task", "status": "RUNNING",
+                "task_id": "unbound-real-task", "agent_id": "gpt", "status": "RUNNING",
                 "next_action": "finish task", "created_at": now, "updated_at": now,
             }),
             encoding="utf-8",
@@ -333,7 +333,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
     def test_explicit_bound_fred_task_keeps_personal_mfa_required(self) -> None:
         controller = load_controller()
         (self.runtime / "fred.json").write_text(json.dumps({
-            "task_id": "fred", "status": "RUNNING", "browser_session": "fred",
+            "task_id": "fred", "agent_id": "gpt", "status": "RUNNING", "browser_session": "fred",
             "conversation_id": "legacyBoundConversation1",
         }), encoding="utf-8")
         with (
