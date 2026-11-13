@@ -38,12 +38,13 @@ O checklist formal e opcional; sua ausencia nao impede registrar progresso em P0
 <!-- SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1 -->
 - P0 (somente leitura/preparacao): executar diagnosticos e validacoes sem nova aprovacao.
 - P1 (mudanca tecnica reversivel): executar pelo grant ja existente, com testes e PR tecnico quando aplicavel, sem aprovacoes ou preflights duplicados.
-- P2 (novo poder/efeito protegido): exige aprovacao formal efetiva do owner quando a protecao vigente determinar, sem agente simular a identidade humana.
+- P2 (novo poder/efeito protegido): exige aprovacao formal efetiva do owner shopvivaliz-human quando a protecao vigente determinar, sem agente simular a identidade humana.
 - NoNewPrivileges=yes em determinado processo nao equivale a poder administrativo. Falhas de seguranca, escopo desconhecido e recusas devem permanecer fail-closed, sem contornar MFA/RBAC.
 <!-- /SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1 -->
 
 **Auditoria V5:** validar o contrato detalhado de docs/quality/AUDIT_ABSOLUTE_GATE_V1.md, docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md, docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md e docs/quality/AUDIT_MERGE_ENFORCEMENT_V1; resultado APTO exige evidencias reais, nao apenas marcadores ou CI.
-***
+
+**Referencias adicionais de auditoria (sob demanda):** docs/quality/AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1.md; docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md; docs/quality/AUDIT_PROJECT_REQUIREMENTS_V1.md; scripts/absolute-audit-governance-validate.sh; Absolute Audit Main Guard; AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1; AUDIT_EXTERNAL_REMEDIATION_V1; DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1; EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1; AUDIT_UI_EVIDENCE_INTEGRITY_V2. Nenhum marcador substitui executar o ciclo de evidencia.
 
 ## Credenciais e perfis
 <!-- CREDENTIAL_REPROMPT_GATE_V1 -->
