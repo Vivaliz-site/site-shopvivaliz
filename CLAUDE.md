@@ -71,5 +71,10 @@ Antes de pedir novamente credenciais ChatGPT Dev/Atendimento, conferir sessao ex
 Na backend, executar chatgpt_credential_preflight.py por admin_command_run com timeout=5 e durable=false, conforme docs/knowledge/atendimento-chatgpt-bootstrap.md. Um erro de leitura representa NOT_VERIFIED, nunca ABSENT por inferencia.
 <!-- /CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
 
+
+<!-- FINAL_RESPONSE_DEPLOY_GATE_V1 -->
+**Gate da resposta final:** nunca declarar entrega concluida se uma etapa executavel ainda estiver pendente. Alteracoes versionadas exigem branch, testes, PR, checks, merge e **pós-deploy** com evidencia de SHA e ambiente de destino quando houver deploy aplicavel. A **resposta final** deve identificar explicitamente bloqueios reais e proximas acoes, sem confundir commit ou CI verde com entrega operacional. Nenhum teste ou otimizacao dispensa protecoes e revisao formal exigidas.
+<!-- /FINAL_RESPONSE_DEPLOY_GATE_V1 -->
+
 ## GitHub, PR e custos de IA
 TODA PR de agente em pt-BR, titulo atribuido ao executor REAL, como [GPT] ou [Claude], e observacoes com provas. PR tecnica comum segue gates proporcionais; aprovacao humana formal apenas quando realmente exigida pela classe P2 ou protecao existente. Nao forcar branch, nao escrever direto em main quando protegido, nao promover release sem testes. Antes de executar comandos versionados, preservar alteracoes alheias, revisar diff e estado Git. Superpowers e Gepeto quando disponiveis, sem simular execucao externa. Em rotinas repetitivas preferir provedores gratuitos autorizados; nao executar loops com IA paga nem gastar tokens para repetir logs ou reabrir arquivos completos. Carregar somente trechos de codigo e documentos pertinentes, preferir sinteses de checkpoints. A reducao de contexto NAO altera escopo administrativo ou politicas de seguranca.
