@@ -67,7 +67,7 @@ Antes da resposta final, confirmar revisao, testes e efeito persistido. Mudanca 
 
 <!-- GLOBAL_TASK_CONTINUITY_V8 -->
 <!-- CHECKPOINT_FIRST_V9 -->
-**Antes da primeira** etapa material de uma tarefa, registrar checkpoint com `scripts/agent_task_state.py start`, ref/SHA, identidade, objetivo e fonte das regras. Durante a execucao, usar `scripts/agent_task_state.py progress` com evidencias e proxima acao, sem perder trabalho ja realizado. O registro de estado nao substitui a conclusao real nem cria checklist obrigatorio.
+**antes da primeira** etapa material de uma tarefa, registrar checkpoint com `scripts/agent_task_state.py start`, ref/SHA, identidade, objetivo e fonte das regras. Durante a execucao, usar `scripts/agent_task_state.py progress` com evidencias e proxima acao, sem perder trabalho ja realizado. O registro de estado nao substitui a conclusao real nem cria checklist obrigatorio.
 <!-- /CHECKPOINT_FIRST_V9 -->
 <!-- /GLOBAL_TASK_CONTINUITY_V8 -->
 
