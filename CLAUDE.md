@@ -1,5 +1,10 @@
 # Instrucoes de agentes ShopVivaliz (indice executivo)
 
+<!-- OWNER_CREDENTIAL_ROUTE_DISCOVERY_20261107 -->
+**REGRA DO PROPRIETARIO: MCP PRIMEIRO.** Em todas as tarefas nos hosts, identificar o schema e executar chamada real autorizada do MCP antes de alegar falta de acesso; conferir grants, task_id, readback e limites. Fonte: docs/ops/mcp-first-agent-execution-2026-11-05.md. A checagem read-only do workflow shopvivaliz-remote-access.yml (run 42429462524, CLOUDFLARE_ACCESS_APPS_READ=true) nao prova poder de escrita nem dispensa autorizacao de outro provedor.
+<!-- /OWNER_CREDENTIAL_ROUTE_DISCOVERY_20261107 -->
+
+
 <!-- CONTEXT_MINIMIZATION_V1_20261113 -->
 Este arquivo AGENTS.md e seu espelho byte-a-byte CLAUDE.md sao o ponto de entrada ENXUTO. Regras detalhadas vigentes permanecem no repositorio; apenas se remove repeticao e historico da janela automatica. **Nao desativa controles, nao cria grants e nao declara testes aprovados.** Snapshot anterior recuperavel pelo historico Git. Nao importar indiscriminadamente documentos grandes: consultar a fonte exigida por tarefa. Alteracoes em arquivos de governanca seguem PR, gates e regras vigentes.
 <!-- /CONTEXT_MINIMIZATION_V1_20261113 -->
@@ -82,6 +87,31 @@ Ao receber **Retome**, Continue, Prossiga ou Siga, fazer preflight `rules_loaded
 Ordem de retomada para a mesma tarefa: ChatGPT comum, ChatGPT Work quando elegivel e necessario; CLI/Codex como ultimo recurso. Em rotinas persistentes usar somente provedores gratuitos aprovados, sem consumo recorrente de IA paga.
 <!-- /CHATGPT_RESUME_ORDER_V5 -->
 <!-- /CODEX_LAST_RESORT_V1 -->
+
+## Continuidade, checkpoint e disciplina de custo
+<!-- GLOBAL_TASK_CONTINUITY_V8 -->
+<!-- CHECKPOINT_FIRST_V9 -->
+<!-- TASK_CONTINUITY_ENFORCEMENT_V3 -->
+<!-- RESUME_EXECUTION_GATE_V1 -->
+Em "Retome", "Continue", "Siga" ou "Prossiga": consultar regras atuais e registrar rules_loaded. Antes da primeira etapa material, executar agent_task_state.py start na sessao propria e agent_task_state.py progress conforme se executa; preservar identificador, next_action, evidencias e estado da tarefa. A regra e um contrato documental: nao alegar verificacao do primeiro tool call sem observacao real. Nenhum timeout invalida trabalho sem antes investigar e usar rotas autorizadas. Estado CONCLUIDO exige evidencia real; bloqueios externos permanecem BLOCKED_EXTERNAL.
+<!-- /RESUME_EXECUTION_GATE_V1 -->
+<!-- /TASK_CONTINUITY_ENFORCEMENT_V3 -->
+<!-- /CHECKPOINT_FIRST_V9 -->
+<!-- /GLOBAL_TASK_CONTINUITY_V8 -->
+<!-- CHATGPT_RESUME_ORDER_V5 -->
+Retomada humana: ChatGPT comum primeiro, Work quando autorizado, CLI em ultimo caso; estrategia chatgpt_common_then_work_then_cli. Rotinas persistentes devem preferir alternativas gratuitas comprovadas, sem custo de tokens pagos ciclicos.
+<!-- /CHATGPT_RESUME_ORDER_V5 -->
+<!-- CODEX_LAST_RESORT_V1 -->
+Codex e recurso de ultima instancia quando alternativas adequadas nao bastarem. Nunca duplicar agente ativo nem prometer execucao automatica sem executor comprovado.
+<!-- /CODEX_LAST_RESORT_V1 -->
+
+<!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
+**Regra absoluta: todo erro identificado exige correcao real e validacao.** Observar RED, investigar causa raiz, corrigir e prevenir, executar GREEN e regressao, validar persistencia e UI/E2E quando aplicavel. Se nao houver autorizacao ou evidencia, manter RUNNING/NAO_APTO e next_action rastreavel. Em operacao SOMENTE LEITURA, jamais modificar o alvo: registrar para rota autorizada. **Sem bypass** de MFA, RBAC, grants, recusas ou protecoes. Nao mascarar status por CI verde ou erro de tela.
+<!-- /ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
+
+<!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
+Para deploy comercial, confirmar paridade dos precos e custos efetivos no ERP, inclusive Amazon, mediante workflow postdeploy-erp-price-parity.yml e readback; publicacao concluida exige execucao real.
+<!-- /DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
 
 ## Credenciais e perfis
 <!-- CREDENTIAL_REPROMPT_GATE_V1 -->
