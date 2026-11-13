@@ -16,8 +16,10 @@ class AuditScheduleRecoveryTest(unittest.TestCase):
         self.assertIn("github.event.workflow_run.conclusion == 'failure'", AUDIT)
         self.assertIn("github.event.workflow_run.head_branch == 'main'", AUDIT)
 
-    def test_does_not_cancel_running_audits(self):
-        self.assertIn("cancel-in-progress: false", AUDIT)
+    def test_preserves_existing_cancel_policy_but_separates_triggers(self):
+        self.assertIn("cancel-in-progress: true", AUDIT)
+        self.assertIn("github.event_name", AUDIT)
+        self.assertIn("agents-hourly-deep-audit-${{ github.event_name }}-${{ github.ref }}", AUDIT)
 
     def test_uses_preexisting_unbilled_runner(self):
         for workflow in (AUDIT, SUMMARY, WATCHDOG):
