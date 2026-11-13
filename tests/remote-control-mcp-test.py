@@ -1503,6 +1503,20 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("exceptionDetails", m.BROWSER_TYPE_NODE_SCRIPT)
         self.assertIn("browser_runtime_exception", m.BROWSER_TYPE_NODE_SCRIPT)
 
+    def test_browser_type_supports_real_contenteditable_and_proves_insertion(self):
+        script = m.BROWSER_TYPE_NODE_SCRIPT
+        self.assertIn("focused.result.value.contenteditable", script)
+        self.assertIn("Input.insertText", script)
+        self.assertIn("browser_contenteditable_text_not_applied", script)
+        self.assertIn("content_length+secret.length", script)
+        self.assertIn('button[data-testid=', script)
+        self.assertIn("browser_contenteditable_submit_unavailable", script)
+        self.assertIn("if(r.exceptionDetails) throw new Error('browser_runtime_exception')", script)
+        self.assertIn("corporate_logout_guard_denied", script)
+        invocation = m.browser_type_invocation("ABC123", ".ProseMirror", False)
+        self.assertIn(".ProseMirror", invocation)
+        self.assertNotIn("sample-sensitive-input", " ".join(invocation))
+
     def test_browser_type_uses_modern_node_with_websocket_support(self):
         self.assertEqual(m.BROWSER_NODE_BIN, "/usr/local/bin/node")
 
