@@ -728,7 +728,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("runtime_lease_id", props["properties"])
         self.assertEqual(["dev", "atendimento"], props["properties"]["session"]["enum"])
         self.assertEqual(
-            {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend",
+            {"fill_email", "fill_password", "fill_saved_password", "fill_code", "fill_gnome_totp", "continue", "resend",
              "back_to_methods", "open_login", "continue_google", "continue_microsoft"},
             set(props["properties"]["action"]["enum"]),
         )
