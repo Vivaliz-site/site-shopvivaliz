@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T21:36:27.013Z",
+  "generated_at": "2026-11-13T03:27:55.259Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -57,9 +57,9 @@
       "source_bytes": 550
     },
     "/js/catalog.js": {
-      "file": "/public/dist/js/catalog.4868fc16bf.min.js",
-      "bytes": 16844,
-      "source_bytes": 19508
+      "file": "/public/dist/js/catalog.a457b721a2.min.js",
+      "bytes": 17889,
+      "source_bytes": 20640
     },
     "/js/category-real-images-v52.js": {
       "file": "/public/dist/js/category-real-images-v52.2a917c4e2d.min.js",
@@ -242,9 +242,9 @@
       "source_bytes": 7729
     },
     "/css/catalog-search-compact-v1.css": {
-      "file": "/public/dist/css/catalog-search-compact-v1.75c6e0c1eb.min.css",
-      "bytes": 1411,
-      "source_bytes": 1889
+      "file": "/public/dist/css/catalog-search-compact-v1.5021ac201b.min.css",
+      "bytes": 1966,
+      "source_bytes": 2576
     },
     "/css/category-real-images-v52.css": {
       "file": "/public/dist/css/category-real-images-v52.f1a699a925.min.css",
