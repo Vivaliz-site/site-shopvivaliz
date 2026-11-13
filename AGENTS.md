@@ -46,6 +46,19 @@ O checklist formal e opcional; sua ausencia nao impede registrar progresso em P0
 
 **Referencias adicionais de auditoria (sob demanda):** docs/quality/AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1.md; docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md; docs/quality/AUDIT_PROJECT_REQUIREMENTS_V1.md; scripts/absolute-audit-governance-validate.sh; Absolute Audit Main Guard; AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1; AUDIT_EXTERNAL_REMEDIATION_V1; DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1; EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1; AUDIT_UI_EVIDENCE_INTEGRITY_V2. Nenhum marcador substitui executar o ciclo de evidencia.
 
+
+## Auditoria extrema V5 e integridade de evidencias
+A politica AUDIT_POLICY.md determina requisitos por superficie e impede conclusao por simples relatorio. Consultar:
+- docs/quality/AUDIT_ABSOLUTE_GATE_V1.md (certificacao de aptidao); docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md (ciclo de reparacao);
+- docs/quality/AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1.md (verificar credenciais sem expor segredos); docs/quality/AUDIT_PROJECT_REQUIREMENTS_V1.md (requisitos por projeto);
+- docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md (verificar merge); docs/quality/AUDIT_UI_EVIDENCE_INTEGRITY_V2.md (evidencia UI real e persistencia);
+- scripts/absolute-audit-governance-validate.sh e o workflow Absolute Audit Main Guard antes de declarar APTO na branch/release efetiva.
+
+<!-- AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->Todo defeito verificavel exige correcao, prevencao, testes e readback antes de encerramento.<!-- /AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+<!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->Quando a acao externa for legitimamente negada, preservar o bloqueio e a evidencia, sem contornar permissoes.<!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
+<!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->Diagnostico isolado nao equivale a correcao; validar ciclo inteiro no runtime pertinente.<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+<!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->Em sistema com interface, auditoria exige interacao no navegador permitido; screenshot ou API isolados nao validam UI.<!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+
 ## Credenciais e perfis
 <!-- CREDENTIAL_REPROMPT_GATE_V1 -->
 Antes de pedir novamente credenciais ChatGPT Dev/Atendimento, conferir sessao exata e rodar preflight de metadados via MCP, sem ler senha nem exibir secrets: scripts/chatgpt_credential_preflight.py --session dev (ou atendimento). Credencial armazenada nao prova login valido; fluxo oficial deve respeitar MFA/CAPTCHA e identidades separadas. Nunca copiar cookies ou OTP entre perfis.
