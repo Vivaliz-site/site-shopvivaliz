@@ -51,7 +51,12 @@ final class SvAmazonTargetMarginPriceWorker
                     &&($e->httpStatus===429||$e->httpStatus>=500))
                     $state='queued'; // safe retry for read-only step
 
-                SvAmazonTargetMarginPriceJobs::transition($db,$id,$state,$state,$item['result_price_cents']??null,$code);
+                // A retry after a confirmed Olist PUT resumes at erp_verified:
+                // a queued checkpoint must never repeat the commercial ERP PUT.
+                $nextStage=$state==='queued'&&$stage==='erp_verified'
+                    ?'erp_verified':$state;
+                SvAmazonTargetMarginPriceJobs::transition($db,$id,$state,$nextStage,
+                    $item['result_price_cents']??null,$code);
                 return ['state'=>$state,'code'=>$code,'item_id'=>$id];
             }catch(Throwable $e){
                 // Do not put provider error bodies or tokens in the journal.
@@ -67,8 +72,9 @@ final class SvAmazonTargetMarginPriceWorker
                         'amazon_effective_price_unverified','olist_991_get_failed',
                         'amazon_quote_at_candidate_unavailable'
                     ],true))$state='queued';
-                SvAmazonTargetMarginPriceJobs::transition($db,$id,$state,
-                    $state==='awaiting_readback'?'awaiting_readback':'manual_review',
+                $nextStage=$state==='queued'&&$stage==='erp_verified'
+                    ?'erp_verified':$state;
+                SvAmazonTargetMarginPriceJobs::transition($db,$id,$state,$nextStage,
                     $item['result_price_cents']??null,get_class($e));
                 return ['state'=>$state,'code'=>get_class($e),'item_id'=>$id];
             }
@@ -224,10 +230,8 @@ final class SvAmazonTargetMarginPriceWorker
                     $target,'erp_table_no_longer_equals_confirmed_target');
                 return 'manual_review';
             }
-            $listing=self::readListing($client,$sku);
-            $ptype=self::productType($listing);
-            return self::submitAmazon($db,$id,$sku,$client,$ptype,$target,
-                $token,$original,(int)$item['erp_id'],$listing);
+            return self::submitAmazon($db,$id,$sku,$client,$target,
+                $token,$original,(int)$item['erp_id']);
         }
         if($stage==='erp_submit_started'){
             // PUT outcome is unknown after a crash; do not repeat blindly.
@@ -270,8 +274,8 @@ final class SvAmazonTargetMarginPriceWorker
             return 'manual_review';
         }
         SvAmazonTargetMarginPriceJobs::transition($db,$id,'running','erp_verified',$target);
-        return self::submitAmazon($db,$id,$sku,$client,$ptype,$target,
-            $token,$table,$erpId,$listing);
+        return self::submitAmazon($db,$id,$sku,$client,$target,
+            $token,$table,$erpId);
     }
 
     private static function compensateOlist(string $token,array $original,
@@ -293,12 +297,17 @@ final class SvAmazonTargetMarginPriceWorker
     }
 
     private static function submitAmazon(PDO $db,int $itemId,string $sku,
-        SvAmazonClient $client,string $productType,int $priceCents,
-        string $tinyToken,array $originalTable,int $erpId,array $listing):string
+        SvAmazonClient $client,int $priceCents,
+        string $tinyToken,array $originalTable,int $erpId):string
     {
         $marketplace=$client->marketplaceId();
+        // Reconcile against the freshest official Listings data immediately
+        // before PATCH. The earlier snapshot predates the ERP PUT/readback;
+        // using it with replace could erase updated B2B offers or metadata.
+        $currentListing=self::readListing($client,$sku);
+        $productType=self::productType($currentListing);
         $patch=SvAmazonTargetMarginPublication::amazonPricePatch(
-            $productType,$marketplace,$priceCents,$listing);
+            $productType,$marketplace,$priceCents,$currentListing);
         // Persist BEFORE PATCH; on uncertainty only GET/readback is allowed.
         SvAmazonTargetMarginPriceJobs::transition(
             $db,$itemId,'running','amazon_submit_started',$priceCents);

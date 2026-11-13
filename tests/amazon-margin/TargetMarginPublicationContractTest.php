@@ -48,8 +48,8 @@ try{SvAmazonTargetMarginPublication::olistPriceListPayload($promo,101,'OLIST-101
 $patch=SvAmazonTargetMarginPublication::amazonPricePatch('CHAIR','A2Q3Y263D00KWC',15732);
 tpub($patch['productType']==='CHAIR','listing_product_type_preserved');
 tpub(count($patch['patches'])===1
-    && $patch['patches'][0]['op']==='merge'
-    && $patch['patches'][0]['path']==='/attributes/purchasable_offer','granular_merge_not_replace');
+    && $patch['patches'][0]['op']==='replace'
+    && $patch['patches'][0]['path']==='/attributes/purchasable_offer','official_replace_only_purchasable_offer');
 $offer=$patch['patches'][0]['value'][0];
 tpub($offer['currency']==='BRL'&&$offer['marketplace_id']==='A2Q3Y263D00KWC'
     && $offer['our_price'][0]['schedule'][0]['value_with_tax']===157.32
@@ -57,6 +57,25 @@ tpub($offer['currency']==='BRL'&&$offer['marketplace_id']==='A2Q3Y263D00KWC'
     'sale_and_floor_together');
 tpub(count($offer)===5,'no_extra_commerce_fields');
 $listing=['attributes'=>['purchasable_offer'=>[$offer]]];
+$unrelatedOffer=['currency'=>'BRL','audience'=>'B2B',
+    'marketplace_id'=>'A2Q3Y263D00KWC',
+    'our_price'=>[['schedule'=>[['value_with_tax'=>200.00]]]],
+    'minimum_seller_allowed_price'=>[['schedule'=>[['value_with_tax'=>120.00]]]]];
+$originalLiveListing=['attributes'=>[
+    'purchasable_offer'=>[$offer,$unrelatedOffer],
+    'item_name'=>[['value'=>'Unrelated product title','language_tag'=>'pt_BR']]]];
+$originalSerialized=json_encode($originalLiveListing,JSON_THROW_ON_ERROR);
+$replaced=SvAmazonTargetMarginPublication::amazonPricePatch(
+    'CHAIR','A2Q3Y263D00KWC',16999,$originalLiveListing);
+tpub($replaced['patches'][0]['op']==='replace'
+    &&count($replaced['patches'])===1
+    &&count($replaced['patches'][0]['value'])===2
+    &&$replaced['patches'][0]['value'][1]===$unrelatedOffer
+    &&$replaced['patches'][0]['value'][0]['our_price'][0]['schedule'][0]['value_with_tax']===169.99,
+    'replace_existing_live_attribute_preserves_all_other_audiences');
+tpub(json_encode($originalLiveListing,JSON_THROW_ON_ERROR)===$originalSerialized
+    &&!isset($replaced['patches'][0]['value'][0]['item_name']),
+    'no_mutation_of_original_listing_and_no_unrelated_attribute_in_patch');
 tpub(SvAmazonTargetMarginPublication::listingPricesMatch($listing,'A2Q3Y263D00KWC',15732),
     'both_prices_verified');
 $badListing=$listing;$badListing['attributes']['purchasable_offer'][0]
@@ -74,4 +93,4 @@ try{SvAmazonTargetMarginPublication::quotedMargin($row,15733,$quote,1400,'other'
  throw new RuntimeException('accepted different quotation price');
 }catch(InvalidArgumentException $e){tpub($e->getMessage()==='official_quote_at_price_missing',
  'official_quote_price_must_match');}
-echo "PASS target margin Olist 991 preserved, Amazon MERGE sale+floor, readback and fee-at-proposed-price\n";
+echo "PASS target margin Olist 991 preserved, Amazon REPLACE offer sale+floor, readback and fee-at-proposed-price\n";

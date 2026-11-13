@@ -25,7 +25,14 @@ assert.match(worker,/readPricing\(/);
 assert.match(worker,/amazon_submit_started/);
 assert.match(worker,/SvAmazonTargetMarginPriceJobs::transition/);
 assert.match(worker,/compensateOlist\(/);
+assert.match(worker,/\$currentListing=self::readListing\(\$client,\$sku\);/);
+assert.match(worker,/amazonPricePatch\(\s*\$productType,\$marketplace,\$priceCents,\$currentListing\)/);
+assert.match(worker,/\$nextStage=\$state==='queued'&&\$stage==='erp_verified'/);
+assert.doesNotMatch(worker,/SvAmazonTargetMarginPriceJobs::transition\(\$db,\$id,\$state,\$state,/);
+
 assert.match(publication,/olistPriceListRestorePayload/);
+assert.match(publication,/'op'=>'replace'/);
+assert.doesNotMatch(publication,/'op'=>'merge'/);
 assert.match(publication,/\$items\[\]/);
 assert.match(publication,/\x27itens\x27\s*=>\s*\$items/);
 assert.doesNotMatch(publication,/\x27excecoes\x27\s*=>\s*\$exceptions/);
