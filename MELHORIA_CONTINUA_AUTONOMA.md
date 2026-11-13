@@ -132,8 +132,6 @@ O sistema rastreia continuamente:
 ### 🎯 Objetivos de Melhoria Contínua
 
 #### Curto Prazo (Próximas 2 semanas)
-- [ ] Finalizar setup MedusaJS
-- [ ] Integrar Medusa com EHA webhooks
 - [ ] Migrar catálogo completo
 - [ ] Implementar cart persistence
 
