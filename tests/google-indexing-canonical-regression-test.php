@@ -11,15 +11,21 @@ if (!is_string($catalog) || !is_string($product)) {
     exit(1);
 }
 
+$navigation = file_get_contents($root . '/includes/catalog-page-navigation.php');
 $requiredCatalog = [
     'return sv_catalog_base_url() . \'/catalogo/\' . ($query !== \'\' ? \'?\' . $query : \'\');',
-    'return \'/catalogo/\' . ($qs !== \'\' ? \'?\' . $qs : \'\');',
+    "require_once __DIR__ . '/includes/catalog-page-navigation.php';",
 ];
 foreach ($requiredCatalog as $needle) {
     if (!str_contains($catalog, $needle)) {
         fwrite(STDERR, "Catalog canonical/page URLs must use /catalogo/\n");
         exit(1);
     }
+}
+if (!is_string($navigation) ||
+    !str_contains($navigation, 'return \'/catalogo/\' . ($qs !== \'\' ? \'?\' . $qs : \'\');')) {
+    fwrite(STDERR, "Catalog pagination must keep /catalogo/ as its canonical path\n");
+    exit(1);
 }
 
 $requiredProduct = [

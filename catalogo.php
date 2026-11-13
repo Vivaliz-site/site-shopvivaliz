@@ -44,6 +44,7 @@ require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/ml-ranking.php';
 require_once __DIR__ . '/includes/catalog-search-context.php';
+require_once __DIR__ . '/includes/catalog-page-navigation.php';
 
 function sv_catalog_root(): string
 {
@@ -199,13 +200,14 @@ function sv_catalog_load(): array
     return $data = svcr_products();
 }
 
-function sv_catalog_products(int $limit, string $query, string $category = '', int $offset = 0): array
+function sv_catalog_products(int $limit, string $query, string $category = '', int $offset = 0, string $sort = 'relevance'): array
 {
     $decoded = sv_ml_rank_products(sv_catalog_load());
     if ($decoded === []) {
         return [];
     }
 
+    $decoded = sv_catalog_sort_rows($decoded, $sort);
     $products = [];
     $skipped = 0;
     foreach ($decoded as $row) {
@@ -485,16 +487,13 @@ function sv_catalog_faq_schema(string $category, string $query): array
 
 $query        = sv_catalog_query();
 $category     = trim((string)($_GET['categoria'] ?? ''));
-$initialSort  = trim((string)($_GET['ordem'] ?? $_GET['sort'] ?? 'relevance')) ?: 'relevance';
-if (!in_array($initialSort, ['relevance', 'price-asc', 'price-desc', 'name'], true)) {
-    $initialSort = 'relevance';
-}
+$initialSort  = sv_catalog_resolve_sort($_GET);
 $perPage      = 20;
 $totalCount   = sv_catalog_count_matching($query, $category);
 $totalPages   = max(1, (int)ceil($totalCount / $perPage));
-$currentPage  = max(1, min($totalPages, (int)($_GET['pagina'] ?? 1)));
+$currentPage  = sv_catalog_resolve_page($_GET, $totalPages);
 $offset       = ($currentPage - 1) * $perPage;
-$products     = sv_catalog_products($perPage, $query, $category, $offset);
+$products     = sv_catalog_products($perPage, $query, $category, $offset, $initialSort);
 $categories   = sv_catalog_categories();
 $totalStr     = $totalCount . ' produto' . ($totalCount === 1 ? '' : 's');
 $statusText = $products
@@ -506,15 +505,6 @@ $catalogEyebrow = $category !== '' ? $category : $searchContext['eyebrow'];
 $catalogHeading = $query !== '' ? $searchContext['heading'] : 'Produtos Vivaliz';
 $catalogLead = $query !== '' && $products ? $searchContext['lead'] : $statusText;
 
-function sv_catalog_page_url(int $page, string $query, string $category): string
-{
-    $params = [];
-    if ($query !== '') $params['q'] = $query;
-    if ($category !== '') $params['categoria'] = $category;
-    if ($page > 1) $params['pagina'] = $page;
-    $qs = http_build_query($params);
-    return '/catalogo/' . ($qs !== '' ? '?' . $qs : '');
-}
 $pageTitle = sv_catalog_page_title($category, $query);
 $metaDescription = sv_catalog_meta_description($category, $query, count($products));
 $canonicalUrl = sv_catalog_canonical_url($category);
@@ -571,7 +561,7 @@ $svNavCurrent = 'catalogo';
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
     <link rel="stylesheet" href="/css/catalog-category-select-v1.css?v=2026-08-17-1">
     <?php if ($query !== ''): ?>
-    <link rel="stylesheet" href="/css/catalog-search-compact-v1.css?v=2026-11-12">
+    <link rel="stylesheet" href="/css/catalog-search-compact-v1.css?v=2026-11-13-1">
     <?php endif; ?>
 </head>
 <body>
@@ -619,11 +609,11 @@ $svNavCurrent = 'catalogo';
                 </label>
             </div>
             <div class="category-filters" role="navigation" aria-label="Filtrar por categoria">
-                <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" data-category="" href="/catalogo">Todos</a>
+                <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" data-category="" href="<?= sv_catalog_esc(sv_catalog_page_url(1, $query, '', $initialSort)) ?>">Todos</a>
                 <?php foreach ($categories as $cat => $count): ?>
                     <a class="cat-filter<?= $category === $cat ? ' active' : '' ?>"
                        data-category="<?= sv_catalog_esc($cat) ?>"
-                       href="/catalogo?categoria=<?= rawurlencode($cat) ?><?= $query !== '' ? '&q=' . rawurlencode($query) : '' ?>">
+                       href="<?= sv_catalog_esc(sv_catalog_page_url(1, $query, $cat, $initialSort)) ?>">
                         <?= sv_catalog_esc($cat) ?> <span class="cat-count"><?= $count ?></span>
                     </a>
                 <?php endforeach; ?>
@@ -710,16 +700,23 @@ $svNavCurrent = 'catalogo';
                     </div>
                 </article>
             <?php endforeach; ?>
+            <?php if (!$products): ?>
+                <div class="sv-catalog-empty" role="status">
+                    <h2>Nenhum produto encontrado</h2>
+                    <p>Experimente outro termo de busca ou consulte as categorias do catálogo.</p>
+                    <a class="btn btn-secondary" href="/catalogo/">Ver todos os produtos</a>
+                </div>
+            <?php endif; ?>
         </section>
 
         <?php if ($totalPages > 1): ?>
         <nav class="container catalog-pagination" aria-label="Paginação do catálogo" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:30px 0;">
             <?php if ($currentPage > 1): ?>
-                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage - 1, $query, $category)) ?>">&laquo; Anterior</a>
+                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage - 1, $query, $category, $initialSort)) ?>">&laquo; Anterior</a>
             <?php endif; ?>
             <span class="muted">Página <?= $currentPage ?> de <?= $totalPages ?></span>
             <?php if ($currentPage < $totalPages): ?>
-                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage + 1, $query, $category)) ?>">Próxima &raquo;</a>
+                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage + 1, $query, $category, $initialSort)) ?>">Próxima &raquo;</a>
             <?php endif; ?>
         </nav>
         <?php endif; ?>
