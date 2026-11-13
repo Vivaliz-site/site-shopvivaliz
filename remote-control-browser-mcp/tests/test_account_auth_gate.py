@@ -312,7 +312,7 @@ class AccountAuthGateTests(unittest.TestCase):
         ):
             self.assertIn(guard, block)
         source = Path(m.__file__).read_text(encoding="utf-8")
-        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
+        self.assertIn('_validate_optional_account_lease(args, "browser_auth_action", session)', source)
         self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
 
     def test_terminal_mfa_continue_retries_only_unique_official_error_button(self):
@@ -412,8 +412,17 @@ class AccountAuthGateTests(unittest.TestCase):
             "runtime_lease_id": "example-lease", "runtime_fencing_token": 1,
         }
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            # Lease is optional (owner decision 2026-11-13): no lease -> login tab opens.
+            with (
+                mock.patch.object(m.base, "run_local_command_with_stdin",
+                                  return_value={"exit_code": 0, "stdout": "synthetic"}) as launch,
+                mock.patch.object(m, "_start_bounded_login_email_watch", return_value={}),
+            ):
+                self.assertTrue(m.browser_auth_open({"session": "atendimento"})["ok"])
+                launch.assert_called_once()
+            # A half-supplied lease is still rejected.
             with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
-                m.browser_auth_open({"session": "atendimento"})
+                m.browser_auth_open({"session": "atendimento", "runtime_lease_id": "example-lease"})
             with self.assertRaisesRegex(ValueError, "account_auth_session_invalid"):
                 m.browser_auth_open({**args, "session": "other"})
             with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",

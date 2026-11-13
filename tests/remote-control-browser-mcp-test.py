@@ -1273,7 +1273,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("if (!validStage(targetUrl)) throw new Error(\"auth_stage_not_allowed\")", script)
         self.assertIn("if(action==='continue'&&u.origin==='https://auth.openai.com'", script)
         source = Path(m.__file__).read_text(encoding="utf-8")
-        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
+        self.assertIn('_validate_optional_account_lease(args, "browser_auth_action", session)', source)
         self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
 
 
@@ -1298,7 +1298,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertTrue(specs["browser_auth_status"]["annotations"]["readOnlyHint"])
         self.assertFalse(specs["browser_profile_home_open"]["annotations"]["readOnlyHint"])
         self.assertEqual(
-            {"session", "runtime_lease_id", "runtime_fencing_token"},
+            {"session"},
             set(specs["browser_profile_home_open"]["inputSchema"]["required"]),
         )
         self.assertIn("fetch('/api/auth/session'", m.CORPORATE_PROFILE_NODE_SCRIPT)
@@ -1393,8 +1393,10 @@ class BrowserMcpTests(unittest.TestCase):
                 m.browser_profile_home_open(args)
             probe.assert_not_called()
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
-            with self.assertRaisesRegex(ValueError, "account_profile_scope_invalid"):
+            # Lease is optional (owner decision 2026-11-13): without it home opens.
+            with mock.patch.object(m, "_corporate_profile_probe", return_value={"ok": True}) as free:
                 m.browser_profile_home_open({"session": "atendimento"})
+                free.assert_called_once()
             with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
                 m.browser_profile_home_open({
                     "session": "atendimento", "runtime_lease_id": "",
@@ -1465,7 +1467,7 @@ class IdempotentOfficialLoginTabTests(unittest.TestCase):
 
     def test_open_reuse_keeps_account_owner_and_lease_guards(self):
         source = Path(m.__file__).read_text(encoding="utf-8")
-        self.assertIn('base.runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")', source)
+        self.assertIn('_validate_optional_account_lease(args, "browser_auth_open", session)', source)
         self.assertIn('"shopvivaliz-account-auth:" + session', source)
         self.assertNotIn("auth_stage_already_open", m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
 

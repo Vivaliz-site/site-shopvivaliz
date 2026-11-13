@@ -836,12 +836,22 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("value_sha256", safe)
         self.assertEqual(len("SYNTHETIC_CODE"), safe["value_length"])
 
-    def test_account_auth_mutation_denies_missing_maintenance_lease(self):
+    def test_account_auth_mutation_lease_is_optional_but_half_lease_is_denied(self):
+        # Owner decision 2026-11-13: account login no longer requires a lease.
         with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            with mock.patch.object(m, "AUTH_TOKEN", ""):
+                # No lease: passes the lease gate and only stops at the missing proxy token.
+                with self.assertRaisesRegex(RuntimeError, "account_auth_browser_proxy_unavailable"):
+                    m.execute_tool(
+                        "browser_auth_action",
+                        {"session": "dev", "tab_id": "synthetic-tab", "action": "continue"},
+                    )
+            # A lease id without a fencing token is still rejected.
             with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
                 m.execute_tool(
                     "browser_auth_action",
-                    {"session": "dev", "tab_id": "synthetic-tab", "action": "continue"},
+                    {"session": "dev", "tab_id": "synthetic-tab", "action": "continue",
+                     "runtime_lease_id": "synthetic-lease"},
                 )
 
     def test_account_auth_proxy_routes_only_to_protected_local_browser_mcp(self):
