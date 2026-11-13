@@ -18,11 +18,12 @@ Somente o proprio proprietario pode **incluir ou agravar novas restricoes**, gat
 <!-- /OWNER_NO_UNAPPROVED_RESTRICTIONS_20261105 -->
 
 ## Topologia e caminho de execucao
+<!-- MCP_ROUTE_CANONICAL_V5_20261106 -->
 <!-- ACTIVE_MARINA_ROUTING_20261029 -->
 Apenas VMs atuais: marina-a1-4c24g = producao web/deploy/banco/workers; always-free-arm-1787907847-26 = backend, controller, navegador corporativo. Windows: Fred-Win e KOCEPSV sao hosts auxiliares. shopvivaliz-free-a1 esta excluida e NUNCA e destino; nomes e IPs legados nao autorizam acesso. Ver docs/knowledge/current-topology-and-access-2026-10-29.md, host-access.md e docs/knowledge/host-routes-matrix.md. Nao editar /home/ubuntu/shopvivaliz-deploy/current nem releases ativas.
 <!-- /ACTIVE_MARINA_ROUTING_20261029 -->
 <!-- OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
-MCP ShopVivaliz Remote Control/Orquestrador primeiro para os quatro hosts, verificando schema, identidade, grant e lease atuais e **executando canario real apropriado** antes de alegar bloqueio. Catalogo/status nao equivalem a execucao. Registrar remote_access_attempts e audit_id/task_id. MCP Marina independente e separado, quando efetivamente autorizado; SSH privado/Tailscale e rotas de recuperacao so em sua finalidade ja aprovada. RDC aposentado como meta, nao obrigatorio. Nao contornar 401/403, MFA, Cloudflare, IAM, RBAC nem recusa expressa por outra rota.
+MCP central shopvivaliz-remote-control e Orquestrador primeiro para os quatro hosts, verificando schema, identidade, grant e lease atuais e **executando canario real apropriado** antes de alegar bloqueio. Catalogo/status nao equivalem a execucao. Verificar MCP/Remote Control e GitHub CLI/API por rotas independentemente autorizadas, preservar lease/fencing e nao contornar MFA, CAPTCHA ou RBAC. Registrar remote_access_attempts e audit_id/task_id. MCP Marina independente e separado, quando efetivamente autorizado; SSH privado/Tailscale e rotas de recuperacao so em sua finalidade ja aprovada. RDC aposentado como meta, nao obrigatorio. Nao contornar 401/403, MFA, Cloudflare, IAM, RBAC nem recusa expressa por outra rota.
 <!-- /OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
 
 ## Continuidade, qualidade e UI
