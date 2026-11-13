@@ -1,3 +1,5 @@
+> **ATUALIZACAO PREVALENTE (13/11/2026, decisao do proprietario):** o login de conta (`browser_auth_open`, `browser_auth_action`, `browser_profile_home_open`) **nao exige mais lease de manutencao** e o `login_email_watch` **le o codigo do e-mail** (nao e mais so metadados). Trechos abaixo que dizem o contrario estao superados. Procedimento vigente: `docs/knowledge/chatgpt-login-sem-lease-20261113.md`.
+
 # ChatGPT na VM — autenticação, senha e TOTP
 
 ## Estado operacional registrado em 2026-10-04
