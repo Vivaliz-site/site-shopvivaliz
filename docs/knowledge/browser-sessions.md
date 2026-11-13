@@ -215,6 +215,27 @@ opt-in versionado, acompanhado de prova de identidade atual e lease.
   presentes: verificar o estado vivo e usar rollback com novo lease
   autorizado somente se realmente necessario.
 
+<!-- DEV_AUX_CONTINUITY_PRECLAIM_20261113 -->
+### Preclaim da continuidade Dev já adotada
+
+O dispatcher GPT e o nudge agora reconhecem a sessão Dev auxiliar **já
+autorizada** (CDP9557) quando a sessão convencional CDP9559 não está
+autenticada, sem solicitar nova senha nem criar perfil. É uma verificação
+**somente leitura**, condicionada à presença dos dois opt-ins instalados
+(`90-verified-dev-aux.conf` do worker e do guardião, ambos fixando
+`SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9557`) e ao retorno verificado
+de `http://127.0.0.1:5583/health` com `session=dev`,
+`account_authenticated=true`, `account_identity_verified=true` e
+`cdp_reachable=true`. Se qualquer prova faltar, o preclaim recusa.
+
+O perfil Atendimento continua exclusivamente no CDP9556; o worker mantém
+as verificações independentes de identidade, conversa, lease/fencing e
+progresso real. Isto apenas corrige falso `bound_session_unavailable`
+para a sessão Dev já logada; não amplia permissão nem prova, por si só,
+`continuity_e2e_pass`.
+
+<!-- /DEV_AUX_CONTINUITY_PRECLAIM_20261113 -->
+
 ## Protecao dos logins corporativos (2026-10-13)
 
 A verificacao E2E apos a recuperacao de MFA confirmou Dev canonico CDP9559,
