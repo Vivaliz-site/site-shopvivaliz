@@ -931,21 +931,10 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("SENSITIVE", json.dumps(result))
         self.assertNotIn("https://", json.dumps(result))
 
-    def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
-        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
-        old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
-        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
-        os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = self.tmp.name
-        try:
-            with mock.patch.object(m, "run_host_command") as runner:
-                with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
-                    m.execute_tool("browser_click_control", {"tab_id": "ABC123", "index": 0})
-            runner.assert_not_called()
-        finally:
-            if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
-            else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
-            if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
-            else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
+    def test_execute_tool_no_longer_applies_generic_runtime_lease_gate(self):
+        # Owner decision 2026-11-13: execute_tool does not call _assert_runtime_mutation.
+        import inspect
+        self.assertNotIn("_assert_runtime_mutation(", inspect.getsource(m.execute_tool))
 
     def test_browser_mutation_requires_conversation_gate_when_handoff_enabled(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
@@ -997,9 +986,8 @@ class RemoteControlMcpTests(unittest.TestCase):
             with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "{}", "stderr": ""}) as runner:
                 m.execute_tool("browser_click_control", args)
             self.assertTrue(runner.called)
-            stale = dict(args); stale["runtime_fencing_token"] = lock["fencing_token"] - 1
-            with self.assertRaisesRegex(ValueError, "runtime_lock_invalid"):
-                m.execute_tool("browser_click_control", stale)
+            # A stale runtime fencing token is no longer rejected by execute_tool
+            # (generic runtime lease gate removed, owner decision 2026-11-13).
         finally:
             if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
             else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
@@ -1863,22 +1851,10 @@ systemctl() {
         self.assertNotIn("private prompt body", raw)
         self.assertNotIn("secret-payload", raw)
 
-    def test_controller_promotion_and_continuity_restart_require_runtime_lock_when_enabled(self):
-        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
-        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
-        try:
-            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
-                m.execute_tool("controller_promote", {"expected_sha": "a" * 40, "timeout": 120})
-            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
-                m.execute_tool("service_action", {
-                    "host": "always-free-arm-1787907847-26",
-                    "service": "shopvivaliz-chatgpt-continuity.service",
-                    "action": "restart",
-                    "timeout": 20,
-                })
-        finally:
-            if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
-            else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
+    def test_controller_promotion_and_continuity_restart_do_not_require_runtime_lock(self):
+        # Covered structurally: execute_tool has no generic runtime-lease gate.
+        import inspect
+        self.assertNotIn("_assert_runtime_mutation(", inspect.getsource(m.execute_tool))
 
     def test_audit_does_not_store_raw_command(self):
         raw = "echo super-sensitive-command-value"

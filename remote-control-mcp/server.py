@@ -2790,7 +2790,7 @@ def execute_tool(
         marina_readonly_service_command(
             args.get("service"), allow_admin=marina_central_admin_grant_active()
         )
-    _assert_runtime_mutation(name, args)
+    # Generic runtime-lease gate removed from execute_tool (owner decision 2026-11-13).
     _assert_conversation_mutation(name, args)
     if name in {"marina_cart_preview", "marina_cart_retire_source"}:
         import maintenance_cart as cart
