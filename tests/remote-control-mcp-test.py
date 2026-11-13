@@ -735,8 +735,10 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertFalse(specs["browser_auth_action"]["annotations"]["readOnlyHint"])
         self.assertTrue(specs["browser_auth_action"]["annotations"]["destructiveHint"])
         props = specs["browser_auth_action"]["inputSchema"]
-        self.assertIn("runtime_lease_id", props["required"])
-        self.assertIn("runtime_fencing_token", props["required"])
+        # Lease is optional since 2026-11-13 (owner decision).
+        self.assertNotIn("runtime_lease_id", props["required"])
+        self.assertNotIn("runtime_fencing_token", props["required"])
+        self.assertIn("runtime_lease_id", props["properties"])
         self.assertEqual(["dev", "atendimento"], props["properties"]["session"]["enum"])
         self.assertEqual(
             {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend",
@@ -751,7 +753,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertTrue(specs["browser_auth_status"]["annotations"]["readOnlyHint"])
         self.assertFalse(specs["browser_profile_home_open"]["annotations"]["readOnlyHint"])
         self.assertEqual(
-            {"session", "runtime_lease_id", "runtime_fencing_token"},
+            {"session"},
             set(specs["browser_profile_home_open"]["inputSchema"]["required"]),
         )
         self.assertEqual(
