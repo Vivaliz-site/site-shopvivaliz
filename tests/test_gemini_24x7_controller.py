@@ -182,21 +182,37 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 1)
         self.assertEqual(result["dispatcher"]["deferred_unbound"], 1)
 
-    def test_unbound_session_and_no_conversation_are_visible_in_health(self) -> None:
+    def test_only_real_gpt_bindings_can_fail_continuity_health(self) -> None:
         controller = load_controller()
+        now = datetime.now(timezone.utc).isoformat()
+        for task, cid in (
+            ("gpt-unbound-conversation", ""),
+            ("gpt-unbound-session", "authenticated-conversation-123"),
+        ):
+            (self.runtime / f"{task}.json").write_text(
+                json.dumps({
+                    "task_id": task, "agent_id": "chatgpt-gpt6", "status": "RUNNING",
+                    "created_at": now, "updated_at": now, "next_action": "continue",
+                    "conversation_id": cid,
+                }),
+                encoding="utf-8",
+            )
         with (
             patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
             patch.object(controller.watchdog, "run_once", return_value={}),
-            patch.object(controller.nudge_dispatcher, "run_once", return_value={"skipped_unbound": 2}),
-            patch.object(controller.dispatcher, "run_once", return_value={"deferred_unbound": 2, "deferred_unbound_session": 1}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"skipped_unbound": 9}),
+            patch.object(controller.dispatcher, "run_once", return_value={
+                "deferred_unbound": 9, "deferred_unbound_session": 2,
+            }),
         ):
-            result = controller.run_once(runtime_dir=self.runtime, owner_id="unbound-counters")
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="gpt-binding-scope")
         self.assertFalse(result["continuity_ready"])
         self.assertIn("chatgpt_resume_unbound_conversation", result["degraded_reasons"])
-        self.assertIn("dispatcher_unbound_conversation", result["degraded_reasons"])
         self.assertIn("dispatcher_unbound_session", result["degraded_reasons"])
-        self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 2)
-        self.assertEqual(result["dispatcher"]["deferred_unbound_session"], 1)
+        self.assertNotIn("dispatcher_unbound_conversation", result["degraded_reasons"])
+        self.assertEqual(result["gpt_scope"]["unbound_active"], 1)
+        self.assertEqual(result["gpt_scope"]["unbound_session"], 1)
+        self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 9)
 
     def test_legacy_handoff_disabled_allows_unbound_fallback_without_false_red(self) -> None:
         controller = load_controller()
