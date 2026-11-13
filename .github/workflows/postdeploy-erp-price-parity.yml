@@ -129,6 +129,7 @@ jobs:
           test ! -L "$report"
           # The same audited local identity runs the read-only probe, without
           # new privileges, broad SSH trust or an extra remote executor.
+          audit_started_epoch="$(date -u +%s)"
           if (cd "$release" && python3 -u scripts/quality/audit-storefront-erp-prices.py \
               --expected-sha "$DEPLOY_SHA" --output "$report"); then
             test -s "$report"
@@ -152,6 +153,29 @@ jobs:
           PY
             install -m 0600 "$report" "$RUNNER_TEMP/price-parity.json"
           else
+            # The real audit writes a JSON report even when commercial prices
+            # diverge. Preserve that RED evidence for review instead of
+            # failing a second time with "No files were found". Never accept
+            # a stale report from an earlier attempt or an unrelated release.
+            if test -s "$report" && test ! -L "$report" \
+                && test "$(stat -c %Y "$report")" -ge "$audit_started_epoch"; then
+              python3 - "$report" "$DEPLOY_SHA" <<'PY'
+          import json,sys
+          from pathlib import Path
+          report=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          expected=sys.argv[2]
+          if not (report.get('status') == 'FAIL'
+                  and report.get('release_sha') == expected
+                  and report.get('published_release_sha') == expected
+                  and report.get('read_only') is True
+                  and report.get('price_list_id') == 991
+                  and isinstance(report.get('issues'), list)
+                  and bool(report['issues'])):
+              raise SystemExit('Failing price parity report has invalid provenance')
+          print('PRICE_PARITY_ARTIFACT=VERIFIED_RED exact_release=true read_only=true')
+          PY
+              install -m 0600 "$report" "$RUNNER_TEMP/price-parity.json"
+            fi
             echo '::error::Post-deploy price parity audit failed; no green evidence' >&2
             exit 1
           fi
