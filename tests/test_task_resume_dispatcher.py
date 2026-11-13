@@ -172,6 +172,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
 
     def test_bound_browser_probe_requires_exact_corporate_identity(self) -> None:
         dispatcher = load_dispatcher()
+        dispatcher.DEV_AUX_CONTINUITY_DROPINS = (self.root / "no-aux-worker", self.root / "no-aux-guardian")
         fixture = self.root / "readonly_browser_probe.py"
         dispatcher.CORPORATE_AUTH_PROBE_MODULE = fixture
         fixture.write_text(
@@ -193,6 +194,57 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertFalse(dispatcher._bound_session_authenticated("atendimento"))
         fixture.unlink()
         self.assertFalse(dispatcher._bound_session_authenticated("dev"))
+
+    def test_dev_aux_continuity_auth_requires_two_optins_and_real_dev_identity(self) -> None:
+        dispatcher = load_dispatcher()
+        worker = self.root / "worker-optin.conf"
+        guardian = self.root / "guardian-optin.conf"
+        dispatcher.CORPORATE_AUTH_PROBE_MODULE = self.root / "missing-canonical-probe.py"
+        dispatcher.DEV_AUX_CONTINUITY_DROPINS = (worker, guardian)
+        optin = "[Service]\nEnvironment=SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9557\n"
+        worker.write_text(optin, encoding="utf-8")
+        guardian.write_text(optin, encoding="utf-8")
+
+        class HealthReply:
+            status = 200
+            def __init__(self, payload):
+                self.payload = payload
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                return False
+            def read(self, *_args):
+                return json.dumps(self.payload).encode("utf-8")
+
+        healthy = {
+            "ok": True, "session": "dev",
+            "account_authenticated": True, "account_identity_verified": True,
+            "cdp_reachable": True,
+        }
+        original_open = dispatcher.urllib.request.urlopen
+        try:
+            dispatcher.urllib.request.urlopen = lambda *_args, **_kwargs: HealthReply(healthy)
+            self.assertTrue(dispatcher._bound_session_authenticated("dev"))
+            self.assertFalse(dispatcher._bound_session_authenticated("atendimento"))
+            self.assertFalse(dispatcher._bound_session_authenticated("fred"))
+            for key, value in (
+                ("session", "atendimento"),
+                ("account_authenticated", False),
+                ("account_identity_verified", False),
+                ("cdp_reachable", False),
+                ("ok", False),
+            ):
+                payload = dict(healthy)
+                payload[key] = value
+                dispatcher.urllib.request.urlopen = lambda *_args, data=payload, **_kwargs: HealthReply(data)
+                self.assertFalse(dispatcher._bound_session_authenticated("dev"), key)
+            dispatcher.urllib.request.urlopen = lambda *_args, **_kwargs: HealthReply(healthy)
+            guardian.unlink()
+            self.assertFalse(dispatcher._bound_session_authenticated("dev"))
+            guardian.write_text("[Service]\nEnvironment=SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9559\n")
+            self.assertFalse(dispatcher._bound_session_authenticated("dev"))
+        finally:
+            dispatcher.urllib.request.urlopen = original_open
 
     def test_durable_handoff_never_claims_logged_out_atendimento(self) -> None:
         dispatcher = load_dispatcher()
