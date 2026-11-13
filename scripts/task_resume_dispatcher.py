@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
@@ -97,40 +98,75 @@ def _durable_handoff_enabled() -> bool:
 
 
 CORPORATE_AUTH_PROBE_MODULE = Path("/opt/shopvivaliz-remote-control-browser/server.py")
+DEV_AUX_CONTINUITY_DROPINS = (
+    Path("/home/ubuntu/.config/systemd/user/shopvivaliz-chatgpt-continuity.service.d/90-verified-dev-aux.conf"),
+    Path("/etc/systemd/system/shopvivaliz-chatgpt-browser-guardian.service.d/90-verified-dev-aux.conf"),
+)
+DEV_AUX_MCP_HEALTH_URL = "http://127.0.0.1:5583/health"
+
+
+def _verified_dev_aux_continuity() -> bool:
+    """Honor the existing owner-approved CDP9557 opt-in and exact MCP Dev identity.
+
+    Read only the official local health endpoint and both versioned opt-in
+    drop-ins. An arbitrary Dev-like tab, fallback profile or absent opt-in
+    never authenticates a checkpoint. The browser worker independently checks
+    the exact bound conversation and current corporate identity again.
+    """
+    expected = "Environment=SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9557"
+    try:
+        for path in DEV_AUX_CONTINUITY_DROPINS:
+            if not path.is_file() or expected not in path.read_text(encoding="utf-8").splitlines():
+                return False
+        with urllib.request.urlopen(DEV_AUX_MCP_HEALTH_URL, timeout=3) as response:
+            if response.status != 200:
+                return False
+            health = json.load(response)
+    except (OSError, ValueError, TypeError, TimeoutError):
+        return False
+    return bool(
+        isinstance(health, dict)
+        and health.get("ok") is True
+        and health.get("session") == "dev"
+        and health.get("account_authenticated") is True
+        and health.get("account_identity_verified") is True
+        and health.get("cdp_reachable") is True
+    )
 
 
 def _bound_session_authenticated(session: str) -> bool:
-    """Verify the bound corporate profile before acquiring any recovery lease.
+    """Verify the exact corporate account, including preapproved Dev CDP9557.
 
-    Aggregate controller browser health may reflect Dev while Atendimento is
-    logged out. The read-only probe checks the exact isolated CDP profile.
-    A historic 'fred' binding must not impersonate either corporate account.
-    The worker still verifies conversation provenance after ownership.
+    Atendimento always uses only its canonical profile. The Dev auxiliary
+    fallback is available solely if its independent continuity opt-in and
+    Dev MCP's exact identity have both been verified. Never copies cookies.
     """
     if session not in {"dev", "atendimento"}:
         return False
+    canonical_verified = False
     try:
         spec = importlib.util.spec_from_file_location(
             "shopvivaliz_corporate_auth_preclaim", CORPORATE_AUTH_PROBE_MODULE,
         )
-        if spec is None or spec.loader is None:
-            return False
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        status = module.browser_auth_status({"session": session})
-        return bool(
-            isinstance(status, dict)
-            and status.get("ok") is True
-            and status.get("session") == session
-            and status.get("state") == "AUTHENTICATED"
-            and status.get("identity_match") is True
-            and status.get("cdp_accessible") is True
-            and status.get("user_present") is True
-            and status.get("session_http") == 200
-        )
+        if spec is not None and spec.loader is not None:
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            status = module.browser_auth_status({"session": session})
+            canonical_verified = bool(
+                isinstance(status, dict)
+                and status.get("ok") is True
+                and status.get("session") == session
+                and status.get("state") == "AUTHENTICATED"
+                and status.get("identity_match") is True
+                and status.get("cdp_accessible") is True
+                and status.get("user_present") is True
+                and status.get("session_http") == 200
+            )
     except Exception:
-        # An unavailable/unverified profile is not proof of login.
-        return False
+        canonical_verified = False
+    if canonical_verified:
+        return True
+    return session == "dev" and _verified_dev_aux_continuity()
 
 
 def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any], *, timeout_seconds: int = 900) -> dict[str, Any] | None:
