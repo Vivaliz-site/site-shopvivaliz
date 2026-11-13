@@ -52,6 +52,22 @@ class PostDeployPriceParityContract(unittest.TestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, workflow)
+    def test_price_mismatch_retains_fresh_red_artifact_without_green(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn('audit_started_epoch="$(date -u +%s)"', workflow)
+        self.assertIn('test "$(stat -c %Y "$report")" -ge "$audit_started_epoch"', workflow)
+        self.assertIn("report.get('status') == 'FAIL'", workflow)
+        self.assertIn("report.get('release_sha') == expected", workflow)
+        self.assertIn("report.get('published_release_sha') == expected", workflow)
+        self.assertIn("report.get('read_only') is True", workflow)
+        self.assertIn("PRICE_PARITY_ARTIFACT=VERIFIED_RED", workflow)
+        self.assertIn('install -m 0600 "$report" "$RUNNER_TEMP/price-parity.json"', workflow)
+        self.assertIn("echo '::error::Post-deploy price parity audit failed; no green evidence' >&2", workflow)
+        self.assertIn('exit 1', workflow)
+        # A failed commercial parity audit remains RED; publication is evidence
+        # of a real discrepancy, never a bypass or successful certification.
+        self.assertIn("if-no-files-found: error", workflow)
+
     def test_live_source_is_verifiably_erp_v3_and_read_only(self):
         code = SCRIPT.read_text(encoding="utf-8")
         for marker in (
