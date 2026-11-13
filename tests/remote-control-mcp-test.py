@@ -838,6 +838,12 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("value_sha256", safe)
         self.assertEqual(len("SYNTHETIC_CODE"), safe["value_length"])
 
+    def test_account_login_tools_are_not_in_generic_runtime_lease_table(self):
+        for name in ("browser_auth_action", "browser_auth_open", "browser_profile_home_open"):
+            self.assertNotIn(name, m.MUTATING_RUNTIME_ACTIONS)
+            with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+                m._assert_runtime_mutation(name, {"session": "dev"})
+
     def test_account_auth_mutation_lease_is_optional_but_half_lease_is_denied(self):
         # Owner decision 2026-11-13: account login no longer requires a lease.
         with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):

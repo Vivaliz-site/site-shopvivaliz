@@ -2558,9 +2558,10 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 MUTATING_RUNTIME_ACTIONS = {
     "controller_promote": "controller_promote",
-    "browser_auth_action": "browser_auth_action",
-    "browser_auth_open": "browser_auth_open",
-    "browser_profile_home_open": "browser_profile_home_open",
+    # Account login tools (browser_auth_action/open, browser_profile_home_open)
+    # are intentionally absent: they no longer require a runtime lease
+    # (owner decision 2026-11-13); a supplied lease is validated by
+    # _validate_optional_account_lease in proxy_account_auth_tool.
     "browser_navigate": "browser_navigate",
     "browser_click": "browser_click",
     "browser_click_control": "browser_click_control",
