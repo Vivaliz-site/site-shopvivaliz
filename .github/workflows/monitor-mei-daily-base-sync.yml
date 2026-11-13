@@ -38,7 +38,7 @@ jobs:
                      order by id desc limit 1
                   """)
                   row=dict(cur.fetchone())
-          print(json.dumps(row,default=str,ensure_ascii=False))
+          print(json.dumps({k: row.get(k) for k in ('id','source_name','status','started_at','finished_at','rows_before','rows_after','rows_added')}, default=str, ensure_ascii=False))
           now=datetime.datetime.now(datetime.timezone.utc)
           finished=row.get('finished_at')
           if finished is None:
