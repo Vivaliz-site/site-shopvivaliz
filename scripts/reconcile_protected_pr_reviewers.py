@@ -7,6 +7,8 @@ Ordinary technical PRs must not be assigned to the human owner for visibility.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -14,6 +16,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 from pathlib import Path
 
 OWNER = "shopvivaliz-human"
@@ -27,6 +30,7 @@ OWNER_OWNED_SITE = {
 REPO_NAME = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 MAX_PAGES = 30
+GENERATED_CATALOG = re.compile(r"^public/dist/js/catalog\.[0-9a-f]{10}\.min\.js$")
 
 
 class GitHubError(Exception):
@@ -92,7 +96,48 @@ def load_site_policy():
     return module
 
 
-def protection_reason(repo: str, files: list[dict], site_policy) -> str | None:
+def github_file_bytes(client, repo: str, path: str, head: str) -> bytes:
+    if not SHA.fullmatch(head):
+        raise GitHubError("SHA de artefato invalido")
+    payload = client.get(
+        f"repos/{repo}/contents/{quote(path, safe='/')}?ref={head}"
+    )
+    if not isinstance(payload, dict) or payload.get("encoding") != "base64":
+        raise GitHubError("Arquivo GitHub nao retornou conteudo base64")
+    try:
+        return base64.b64decode(payload["content"], validate=False)
+    except (ValueError, KeyError, TypeError) as err:
+        raise GitHubError("Arquivo GitHub nao decodificavel") from err
+
+
+def generated_catalog_verified(client, repo: str, path: str, head: str,
+                               paths: set[str], policy) -> bool:
+    """Use the same manifest/source-byte contract as the existing policy."""
+    if "js/catalog.js" not in paths:
+        return False
+    source = github_file_bytes(client, repo, "js/catalog.js", head)
+    actual = github_file_bytes(client, repo, path, head)
+    raw_manifest = github_file_bytes(client, repo, "public/dist/asset-manifest.json", head)
+    try:
+        expected = policy.minify_catalog_source(source.decode("utf-8"))
+        manifest = json.loads(raw_manifest)["assets"]["/js/catalog.js"]
+        digest = hashlib.sha256(expected).hexdigest()[:10]
+        return (
+            actual == expected
+            and path == f"public/dist/js/catalog.{digest}.min.js"
+            and isinstance(manifest, dict)
+            and manifest.get("file") == f"/{path}"
+            and type(manifest.get("bytes")) is int
+            and manifest["bytes"] == len(expected)
+            and type(manifest.get("source_bytes")) is int
+            and manifest["source_bytes"] == len(source)
+        )
+    except (ValueError, KeyError, TypeError, UnicodeError):
+        return False
+
+
+def protection_reason(repo: str, files: list[dict], site_policy,
+                      *, client=None, head: str = "") -> str | None:
     paths = {str(item.get("filename", "")) for item in files}
     if any(p.startswith(GRANT_PREFIX) for p in paths):
         return "grant_explicito"
@@ -105,6 +150,17 @@ def protection_reason(repo: str, files: list[dict], site_policy) -> str | None:
         # Text-only agent docs cannot mutate live prices or stock; GitHub
         # often omits patches for their large changes (AGENTS/CLAUDE mirrors).
         if path.lower().endswith((".md", ".mdx", ".rst", ".txt")):
+            continue
+        # Minified catalog assets can contain coincidental "set ... price"
+        # tokens on one line. The canonical gate exempts only byte-identical
+        # builds with an exact manifest and changed source; mirror that check.
+        if GENERATED_CATALOG.fullmatch(path):
+            if entry.get("status") == "removed":
+                continue
+            if client is None or not generated_catalog_verified(
+                client, repo, path, head, paths, site_policy
+            ):
+                return "comercial_artefato_gerado_nao_validado"
             continue
         if site_policy.sensitive_path(path):
             return "comercial_caminho_protegido"
@@ -154,7 +210,7 @@ def review_one(client, repo: str, pr: dict, *, policy, dry_run: bool = False) ->
     if not SHA.fullmatch(head):
         raise GitHubError("HEAD de PR invalido")
     files = client.pages(f"repos/{repo}/pulls/{number}/files")
-    protected = protection_reason(repo, files, policy)
+    protected = protection_reason(repo, files, policy, client=client, head=head)
     if protected is None:
         return {"pr": label, "action": "ordinary_no_review_required"}
     # Reload the PR after reading its diff to prevent races with merge/push.
