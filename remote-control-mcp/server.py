@@ -2388,6 +2388,25 @@ ACCOUNT_AUTH_ALLOWED_SESSIONS = {"dev", "atendimento"}
 ACCOUNT_AUTH_ALLOWED_ACTIONS = {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
 
 
+def _validate_optional_account_lease(args: dict[str, Any], tool: str, session: str) -> None:
+    """Account login no longer requires a maintenance lease (owner decision 2026-11-13).
+
+    The lease is optional; when supplied it is still validated as before.
+    """
+    lease_id = str(args.get("runtime_lease_id") or "").strip()
+    token = args.get("runtime_fencing_token")
+    if not lease_id and token is None:
+        return
+    if not lease_id or token is None:
+        raise ValueError("account_auth_runtime_lock_required")
+    try:
+        lease = runtime_lock.assert_runtime_lock(lease_id, int(token), tool)
+    except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+        raise ValueError("account_auth_runtime_lock_invalid") from None
+    if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+        raise ValueError("account_auth_maintenance_owner_required")
+
+
 def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Expose the existing browser MCP login gate without weakening its lease.
 
@@ -2404,37 +2423,13 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         if set(args) != {"session"}:
             raise ValueError("account_auth_scope_invalid")
     elif name == "browser_auth_open":
-        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+        if not {"session"} <= set(args) <= {"session", "runtime_lease_id", "runtime_fencing_token"}:
             raise ValueError("account_auth_scope_invalid")
-        # Exact account-specific maintenance lease is sufficient for opening an
-        # official login/neutral tab; generic handoff may be intentionally off.
-        # Keep the scoped lock, owner identity and fencing checks below.
-        lease_id = str(args.get("runtime_lease_id") or "").strip()
-        token = args.get("runtime_fencing_token")
-        if not lease_id or token is None:
-            raise ValueError("account_auth_runtime_lock_required")
-        try:
-            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
-        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
-            raise ValueError("account_auth_runtime_lock_invalid") from None
-        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
-            raise ValueError("account_auth_maintenance_owner_required")
+        _validate_optional_account_lease(args, "browser_auth_open", session)
     elif name == "browser_profile_home_open":
-        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+        if not {"session"} <= set(args) <= {"session", "runtime_lease_id", "runtime_fencing_token"}:
             raise ValueError("account_auth_scope_invalid")
-        # Exact account-specific maintenance lease is sufficient for opening an
-        # official login/neutral tab; generic handoff may be intentionally off.
-        # Keep the scoped lock, owner identity and fencing checks below.
-        lease_id = str(args.get("runtime_lease_id") or "").strip()
-        token = args.get("runtime_fencing_token")
-        if not lease_id or token is None:
-            raise ValueError("account_auth_runtime_lock_required")
-        try:
-            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_profile_home_open")
-        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
-            raise ValueError("account_auth_runtime_lock_invalid") from None
-        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
-            raise ValueError("account_auth_maintenance_owner_required")
+        _validate_optional_account_lease(args, "browser_profile_home_open", session)
     else:
         allowed_keys = {"session", "tab_id", "action", "value", "runtime_lease_id", "runtime_fencing_token"}
         if set(args) - allowed_keys:
@@ -2445,19 +2440,8 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("account_auth_action_invalid")
         if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
             raise ValueError("account_auth_tab_invalid")
-        # Account authentication already has a distinct, exact-session,
-        # maintenance-only runtime lease. The generic background-continuity
-        # handoff flag is unrelated and must not disable this approved route.
-        lease_id = str(args.get("runtime_lease_id") or "").strip()
-        token = args.get("runtime_fencing_token")
-        if not lease_id or token is None:
-            raise ValueError("account_auth_runtime_lock_required")
-        try:
-            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_action")
-        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
-            raise ValueError("account_auth_runtime_lock_invalid") from None
-        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
-            raise ValueError("account_auth_maintenance_owner_required")
+        # Maintenance lease is optional (owner decision 2026-11-13); validated if supplied.
+        _validate_optional_account_lease(args, "browser_auth_action", session)
 
     if not AUTH_TOKEN:
         raise RuntimeError("account_auth_browser_proxy_unavailable")
@@ -3173,17 +3157,17 @@ TOOLS = [
      }, False, False),
     ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
     ("browser_auth_status", "Read exact ChatGPT user.email identity from the dedicated Dev/Atendimento profile via /api/auth/session; return only sanitized booleans, status and counts, never cookies or tokens.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
-    ("browser_profile_home_open", "Reuse or open the neutral ChatGPT home tab in an already authenticated corporate profile with an account-specific maintenance lease. Never copies cookies, conversations, storage or credentials.", {
+    ("browser_profile_home_open", "Reuse or open the neutral ChatGPT home tab in an already authenticated corporate profile with an optional account-specific maintenance lease. Never copies cookies, conversations, storage or credentials.", {
         "session": {"type": "string", "enum": ["dev", "atendimento"]},
         "runtime_lease_id": {"type": "string", "maxLength": 200},
         "runtime_fencing_token": {"type": "integer", "minimum": 1},
     }, False, False),
-    ("browser_auth_open", "Open only a new official ChatGPT sign-in tab in the isolated Dev or Atendimento browser under a valid, owner-matched maintenance runtime lease; never navigates or mutates existing conversations.", {
+    ("browser_auth_open", "Open only a new official ChatGPT sign-in tab in the isolated Dev or Atendimento browser (an owner-matched maintenance runtime lease is optional); never navigates or mutates existing conversations.", {
         "session": {"type": "string", "enum": ["dev", "atendimento"]},
         "runtime_lease_id": {"type": "string", "maxLength": 200},
         "runtime_fencing_token": {"type": "integer", "minimum": 1},
     }, False, False),
-    ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. Requires a live, account-matched maintenance runtime lease. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
+    ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. A maintenance runtime lease is optional. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
         "session": {"type": "string", "enum": ["dev", "atendimento"]},
         "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
         "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
@@ -3236,7 +3220,7 @@ def tool_specs() -> list[dict[str, Any]]:
         optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit", "lease_ttl_seconds", "durable_timeout", "button", "clicks", "press_enter"}
         if name == "browser_navigate":
             optional.add("tab_id")
-        if name == "marina_chatgpt_login":
+        if name in {"marina_chatgpt_login", "browser_auth_open", "browser_profile_home_open", "browser_auth_action"}:
             optional.update({"runtime_lease_id", "runtime_fencing_token"})
         schema_props = dict(props)
         # Advertise Marina only for capabilities whose protected runtime grant
