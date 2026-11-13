@@ -111,3 +111,22 @@ test('a late failure must not erase newer successful results', async () => {
   assert.match(ui.grid.innerHTML, /Vedante Atual/);
   assert.doesNotMatch(ui.status.textContent, /Nao conseguimos|Não conseguimos/);
 });
+
+
+test('empty search results show an accessible route back to the full catalog', async () => {
+  const ui = harness();
+  ui.search('nada-compravel');
+  await resolve(ui.requests[0], []);
+  assert.match(ui.grid.innerHTML, /sv-catalog-empty/);
+  assert.match(ui.grid.innerHTML, /Ver todos os produtos/);
+  assert.match(ui.grid.innerHTML, /role="status"/);
+});
+
+test('failed catalog loads offer a visible retry instead of an empty grid', async () => {
+  const ui = harness();
+  ui.search('falha-temporaria');
+  ui.requests[0].reject(new Error('network down'));
+  await new Promise(done => setImmediate(done));
+  assert.match(ui.grid.innerHTML, /catalog-retry/);
+  assert.match(ui.grid.innerHTML, /Tentar novamente/);
+});
