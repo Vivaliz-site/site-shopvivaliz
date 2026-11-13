@@ -154,6 +154,24 @@ final class SvAmazonTargetMarginPricePlan
         $taxBps=(int)($r['_target_tax_bps']??1400);
         $weight=$r['current_billable_kg']??null;
         $kg=is_numeric($weight)&&is_finite((float)$weight)?(float)$weight:null;
+        // A provisional owner preview must show the upper known tariff before
+        // the approved worker's exact-fee quote. Do not silently raise a price
+        // far above the signed preview because the ERP package is larger.
+        // The worker still refuses unknown or ineligible package sources.
+        if(($r['current_package_conflict']??false)===true) {
+            $amazon=is_array($r['amazon_package']??null)
+                ? SvAmazonCurrentPriceMargin::billable($r['amazon_package']) : null;
+            $erp=is_array($r['erp_package']??null)
+                ? SvAmazonCurrentPriceMargin::billable($r['erp_package']) : null;
+            if($amazon!==null&&$erp!==null
+                &&($amazon['eligible']??false)&&($erp['eligible']??false)) {
+                $kg=max((float)($kg??0),(float)$amazon['billable_kg'],
+                    (float)$erp['billable_kg']);
+                $result['notices'][]='tarifa_conservadora_entre_embalagens_amazon_olist';
+            }else{
+                $result['notices'][]='embalagem_divergente_requer_conciliacao';
+            }
+        }
         $currentCommission=(int)$commission;
         // At 0% margin no price may be inferred from cost alone: use the last
         // official SP-API fee quote as an *explicitly provisional* rate.

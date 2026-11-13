@@ -39,4 +39,44 @@ try {
 } catch (RuntimeException $e) {
     assertEnvelope($e->getMessage()==='package_conflict_unresolved','unknown_still_requires_review');
 }
+
+// The owner's signed preview must already incorporate the upper known tariff;
+// otherwise the P2 worker could increase the price materially after approval.
+require_once __DIR__.'/../../includes/amazon-margin/TargetMarginPricePlan.php';
+$preview=$base;
+$preview['price']=520.39;
+$preview['current_commission_cents']=5724;
+$preview['current_margin_bps']=386;
+$preview['current_billable_kg']=18.92;
+$preview['erp_id']=342715215;
+$preview['erp_sku']='ARM-08';
+$preview['_target_tax_bps']=1400;
+$plan=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>[$preview]],['ARM8DBA'],900,'other');
+$planned=$plan['rows'][0];
+assertEnvelope($planned['state']==='simulated','preview_arm8_simulated');
+assertEnvelope($planned['logistics_cents']===10595,'preview_arm8_upper_tariff');
+assertEnvelope($planned['profit_estimate_cents']*10000 >= 900*$planned['proposed_price_cents'],
+    'preview_arm8_target_9pct_in_cents');
+assertEnvelope($planned['proposed_price_cents']>56094,
+    'preview_arm8_not_understated');
+assertEnvelope(in_array('tarifa_conservadora_entre_embalagens_amazon_olist',
+    $planned['notices'],true),'preview_arm8_upper_tariff_disclosed');
+$petPreview=$pet;
+$petPreview['price']=215.10;
+$petPreview['current_commission_cents']=2581;
+$petPreview['current_margin_bps']=894;
+$petPreview['current_billable_kg']=10.388;
+$petPreview['erp_id']=342374752;
+$petPreview['erp_sku']='ASTRAPET-CASINHA-CACHORRO-AZUL';
+$petPreview['_target_tax_bps']=1400;
+$plan=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>[$petPreview]],['PET/CC2*AZP'],900,'other');
+$planned=$plan['rows'][0];
+assertEnvelope($planned['state']==='simulated','preview_pet_simulated');
+assertEnvelope($planned['logistics_cents']===10595,'preview_pet_upper_tariff');
+assertEnvelope($planned['proposed_price_cents']>21530,'preview_pet_discloses_real_increase');
+assertEnvelope($planned['profit_estimate_cents']*10000 >= 900*$planned['proposed_price_cents'],
+    'preview_pet_target_9pct_in_cents');
+
 echo "PASS conservative dimensions quoted margin: worst tariff, same tariff, unknown blocked\n";
