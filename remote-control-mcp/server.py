@@ -2684,6 +2684,85 @@ def _cart_execute_source_with_signed_stdin(ticket: dict[str, Any], signature: st
             "stdout": redact_text(out.decode("utf-8", errors="replace")),
             "stderr": redact_text(err.decode("utf-8", errors="replace"))}
 
+
+MARINA_CHATGPT_LOGIN_HELPER = (
+    "/home/ubuntu/.local/share/shopvivaliz-marina-chatgpt/marina_chatgpt_login.py"
+)
+MARINA_CHATGPT_LOGIN_ACTIONS = frozenset({
+    "status", "open_login", "fill_email", "continue",
+})
+
+
+def marina_chatgpt_login_tool(args: dict[str, Any],
+                             cancel_check=None) -> dict[str, Any]:
+    """Constrained official login navigation on Marina's Firefox Dev profile.
+
+    The existing account maintenance lease and the Marina admin grant
+    authorize the operation; secrets are never read or entered.
+    """
+    if set(args) - {"session", "action", "runtime_lease_id", "runtime_fencing_token"}:
+        raise ValueError("marina_chatgpt_auth_arguments_invalid")
+    session = str(args.get("session") or "")
+    action = str(args.get("action") or "")
+    if session != "dev" or action not in MARINA_CHATGPT_LOGIN_ACTIONS:
+        raise ValueError("marina_chatgpt_auth_scope_invalid")
+    if not marina_central_admin_grant_active():
+        raise PermissionError("marina_central_admin_route_not_approved")
+    if action != "status":
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        fencing_token = args.get("runtime_fencing_token")
+        if not lease_id or fencing_token is None:
+            raise ValueError("marina_chatgpt_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(
+                lease_id, int(fencing_token), "browser_auth_action"
+            )
+        except (runtime_lock.RuntimeLockConflict, TypeError, ValueError):
+            raise ValueError("marina_chatgpt_auth_runtime_lock_invalid") from None
+        if (lease.get("owner_kind") != "maintenance"
+                or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
+            raise ValueError("marina_chatgpt_auth_maintenance_owner_required")
+    elif "runtime_lease_id" in args or "runtime_fencing_token" in args:
+        raise ValueError("marina_chatgpt_auth_status_arguments_invalid")
+
+    argv = ["/usr/bin/python3", MARINA_CHATGPT_LOGIN_HELPER,
+            "--session", session, "--action", action]
+    output = run_host_command(
+        MARINA_HOST, shlex.join(argv), timeout=20,
+        cancel_check=cancel_check, recover_transport=False, marina_admin=True,
+    )
+    try:
+        child = json.loads(str(output.get("stdout") or ""))
+    except (TypeError, ValueError):
+        child = {}
+    if (not isinstance(child, dict)
+            or child.get("session") != session
+            or child.get("ok") is not (output.get("exit_code") == 0)):
+        return {"ok": False, "host": MARINA_HOST, "session": session,
+                "action": action, "reason": "marina_chatgpt_helper_unavailable"}
+    # Explicit allowlist; never relay arbitrary text from the remote process.
+    allowed_stages = {"unknown", "challenge", "login_or_home", "chatgpt_home", "password", "mfa"}
+    if child.get("ok") is not True:
+        allowed_reasons = {
+            "invalid_account_or_action", "correct_user_required",
+            "dedicated_browser_profile_unavailable",
+            "display_authority_invalid", "unexpected_display",
+            "browser_window_not_unique", "official_browser_unavailable",
+            "official_browser_action_failed", "login_email_stage_required",
+            "official_login_stage_required", "official_login_unavailable",
+        }
+        reason = str(child.get("reason") or "")
+        return {"ok": False, "host": MARINA_HOST, "session": session,
+                "action": action, "reason": reason if reason in allowed_reasons
+                else "marina_chatgpt_helper_failed"}
+    stage = child.get("stage") if action == "status" else child.get("stage_before")
+    if stage not in allowed_stages:
+        return {"ok": False, "host": MARINA_HOST, "session": session,
+                "action": action, "reason": "marina_chatgpt_stage_invalid"}
+    return {"ok": True, "host": MARINA_HOST, "session": session,
+            "action": action, "stage": stage, "identity_verified": False}
+
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
@@ -2691,6 +2770,8 @@ def execute_tool(
 ) -> dict[str, Any]:
     # Stable aliases avoid the host enum cached before Marina was registered.
     # The caller cannot select a host, user, route or command.
+    if name == "marina_chatgpt_login":
+        return marina_chatgpt_login_tool(args, cancel_check)
     if name == "marina_host_health":
         if args:
             raise ValueError("marina_health_arguments_not_allowed")
@@ -3077,6 +3158,19 @@ TOOLS = [
     ("checkpoint_update_atomic", "Update only the non-secret Orquestrador recovery checkpoint metadata with a global state lock, idempotency, observed runtime counters, fsync and independent readback. Never binds chats, completes tasks or changes host settings.", {"request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$"}, "expected_last_checked_at": {"type": "string", "maxLength": 60}, "rules_sha_by_path": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}, "audit_ids": {"type": "array", "maxItems": 32, "items": {"type": "string"}}, "next_action": {"type": "string", "minLength": 10, "maxLength": 1800}}, False, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "browser_session": {"type": "string", "enum": ["dev", "atendimento"]}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("marina_chatgpt_login",
+     "Use the approved dedicated Firefox on Marina for official ChatGPT Dev "
+     "login navigation: status, open_login, fill_email, continue. This tool "
+     "does not read or enter passwords, MFA codes, cookies, or tokens. "
+     "Mutations require an existing Dev account maintenance lease.",
+     {
+         "session": {"type": "string", "enum": ["dev"]},
+         "action": {"type": "string", "enum": [
+             "status", "open_login", "fill_email", "continue",
+         ]},
+         "runtime_lease_id": {"type": "string", "maxLength": 200},
+         "runtime_fencing_token": {"type": "integer", "minimum": 1},
+     }, False, False),
     ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
     ("browser_auth_status", "Read exact ChatGPT user.email identity from the dedicated Dev/Atendimento profile via /api/auth/session; return only sanitized booleans, status and counts, never cookies or tokens.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
     ("browser_profile_home_open", "Reuse or open the neutral ChatGPT home tab in an already authenticated corporate profile with an account-specific maintenance lease. Never copies cookies, conversations, storage or credentials.", {
@@ -3142,6 +3236,8 @@ def tool_specs() -> list[dict[str, Any]]:
         optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit", "lease_ttl_seconds", "durable_timeout", "button", "clicks", "press_enter"}
         if name == "browser_navigate":
             optional.add("tab_id")
+        if name == "marina_chatgpt_login":
+            optional.update({"runtime_lease_id", "runtime_fencing_token"})
         schema_props = dict(props)
         # Advertise Marina only for capabilities whose protected runtime grant
         # is currently valid; the handler repeats the check before execution.
