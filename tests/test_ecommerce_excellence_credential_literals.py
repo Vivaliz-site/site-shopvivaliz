@@ -43,6 +43,25 @@ class CredentialLiteralScannerTest(unittest.TestCase):
         ]
         self.assertEqual([], credential_findings)
 
+    def test_remote_workflow_action_choices_are_scannable(self):
+        # Gitleaks can interpret a long YAML/Python literal containing several
+        # Cloudflare action identifiers as a token. Each existing identifier
+        # must remain its own Python string literal on its own source line.
+        workflow = (
+            pathlib.Path(__file__).parents[1]
+            / ".github/workflows/shopvivaliz-remote-access.yml"
+        ).read_text(encoding="utf-8")
+        lines = workflow.splitlines()
+        starts = [i for i, line in enumerate(lines) if line.strip() == "actions = {"]
+        self.assertEqual(1, len(starts))
+        start = starts[0]
+        end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == "}")
+        entries = [line.strip() for line in lines[start + 1:end] if line.strip()]
+        self.assertGreater(len(entries), 30)
+        for entry in entries:
+            self.assertTrue(entry.startswith('"') and entry.endswith('",'), entry)
+            self.assertEqual(2, entry.count('"'), entry)
+
     def test_complete_synthetic_token_is_blocked(self):
         synthetic = "ghp" + "_" + ("A" * 36)
         report = self._scan(f'VALUE = "{synthetic}"\n')
