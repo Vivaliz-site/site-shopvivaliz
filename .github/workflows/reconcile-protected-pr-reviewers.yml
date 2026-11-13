@@ -1,0 +1,37 @@
+name: Sincronizar revisores de PRs protegidas (sem gate)
+
+# Workflow runs only from the trusted default branch. No pull-request check
+# is introduced, so this notification task cannot hold an unrelated merge.
+on:
+  workflow_run:
+    workflows: ["Mandatory Validation Gate"]
+    types: [requested, completed]
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protected-review-router-${{ github.event.workflow_run.id || 'periodic' }}
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted default branch, not PR code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Reconcile previously mandatory review requests across repositories
+        env:
+          REVIEW_ROUTER_TOKEN: ${{ secrets.SHOPVIVALIZ_GITHUB_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$REVIEW_ROUTER_TOKEN"
+          python3 scripts/reconcile_protected_pr_reviewers.py
