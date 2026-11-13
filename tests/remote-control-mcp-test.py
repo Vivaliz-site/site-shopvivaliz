@@ -912,6 +912,26 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("SENSITIVE", json.dumps(result))
         self.assertNotIn("https://", json.dumps(result))
 
+    def test_account_auth_tabs_pass_through_email_login_code_only_when_valid(self):
+        import io
+        def run(watch):
+            response = {"jsonrpc": "2.0", "id": 1, "result": {"structuredContent": {
+                "ok": True, "session": "dev",
+                "tabs": [{"tab_id": "LOGIN123", "session": "dev", "stage": "/email-verification"}],
+                "email_watch": watch}, "isError": False}}
+            with (
+                mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+                mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())),
+            ):
+                return m.execute_tool("browser_auth_tabs", {"session": "dev"})
+        good = run({"status": "matched", "received_at": 1020, "code": "482913",
+                    "message_id": "SENSITIVE_ID", "body": "SENSITIVE_BODY"})
+        self.assertEqual({"status": "matched", "received_at": 1020, "code": "482913"}, good["email_watch"])
+        self.assertNotIn("SENSITIVE", json.dumps(good))
+        bad = run({"status": "matched", "code": "12ab56"})
+        self.assertNotIn("code", bad["email_watch"])
+        self.assertNotIn("email_watch", run("not-a-dict"))
+
     def test_execute_tool_no_longer_applies_generic_runtime_lease_gate(self):
         # Owner decision 2026-11-13: execute_tool does not call _assert_runtime_mutation.
         import inspect

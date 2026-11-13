@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Bounded Gmail metadata-only watch during official corporate ChatGPT login.
+"""Gmail watch during official corporate ChatGPT login.
 
-No OTP value/body is fetched, transferred or logged. This module is disabled
-unless the backend has its OWN independently authorized Gmail readonly grant.
+When the official OpenAI login-code e-mail arrives, the message body is read
+and the 6-digit code is extracted and returned in the private watch status so
+the agent can complete the login with fill_code (owner decision 2026-11-13:
+the former metadata-only restriction was not approved and was removed).
+Requires a Gmail readonly OAuth grant on the backend.
 """
 
 from __future__ import annotations
 
+import base64
 import email.utils
 import fcntl
 import json
@@ -115,6 +119,27 @@ def match_metadata(message: dict, session: str, start_epoch: int) -> str | None:
     return message_id
 
 
+def extract_code(payload: dict | None) -> str | None:
+    """Return the first standalone 6-digit code found in the message body parts."""
+    stack = [payload] if isinstance(payload, dict) else []
+    while stack:
+        part = stack.pop(0)
+        body = part.get("body") if isinstance(part.get("body"), dict) else {}
+        data = body.get("data")
+        if isinstance(data, str) and data:
+            try:
+                text = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", "replace")
+            except (ValueError, TypeError):
+                text = ""
+            found = re.search(r"(?<![0-9])([0-9]{6})(?![0-9])", re.sub(r"<[^>]+>", " ", text))
+            if found:
+                return found.group(1)
+        for child in part.get("parts") or []:
+            if isinstance(child, dict):
+                stack.append(child)
+    return None
+
+
 def watch_window(
     session: str,
     *,
@@ -143,6 +168,8 @@ def watch_window(
             if found:
                 result = {"status": "matched", "session": session,
                           "message_id": found, "received_at": int(data["internalDate"]) // 1000}
+                if data.get("code"):
+                    result["code"] = str(data["code"])
                 if report is not None:
                     report(result)
                 return result
@@ -174,7 +201,7 @@ def _request_json(url: str, headers: dict[str, str], body: bytes | None = None) 
 
 
 class GmailMetadataReader:
-    """Only list ids and fetch header metadata; never Gmail format=full."""
+    """List matching ids and fetch each message in full to extract the login code."""
     def __init__(self, access_token: str, request_json: Callable = _request_json):
         self._auth = {"Authorization": "Bearer " + access_token,
                       "Accept": "application/json"}
@@ -207,19 +234,17 @@ class GmailMetadataReader:
                 continue
             self._seen.add(message_id)
             headers = urllib.parse.urlencode([
-                ("format", "metadata"),
-                ("metadataHeaders", "From"),
-                ("metadataHeaders", "To"),
-                ("metadataHeaders", "Subject"),
-                ("fields", "id,internalDate,payload/headers"),
+                ("format", "full"),
+                ("fields", "id,internalDate,payload"),
             ])
             endpoint = ("https://gmail.googleapis.com/gmail/v1/users/me/messages/"
                         + message_id + "?" + headers)
-            # Only keys permitted by fields projection; no body/snippet retained.
             raw = self._request_json(endpoint, self._auth)
+            payload = raw.get("payload") or {}
             matches.append({"id": raw.get("id"),
                             "internalDate": raw.get("internalDate"),
-                            "payload": {"headers": (raw.get("payload") or {}).get("headers", [])}})
+                            "payload": {"headers": payload.get("headers", [])},
+                            "code": extract_code(payload)})
         return matches
 
 
@@ -245,7 +270,7 @@ def _write_private_event(event: dict, *, directory: Path = STATE_DIR) -> None:
     session = str(event.get("session", ""))
     if session not in ACCOUNTS:
         raise ValueError("account_scope_invalid")
-    allowed = ("status", "session", "started_at", "deadline_at", "received_at", "message_id")
+    allowed = ("status", "session", "started_at", "deadline_at", "received_at", "message_id", "code")
     safe = {key: event[key] for key in allowed if key in event}
     fd, name = tempfile.mkstemp(prefix=".email-watch-", dir=directory)
     try:
@@ -278,7 +303,7 @@ def read_public_status(session: str, *, directory: Path = STATE_DIR) -> dict | N
         data = json.loads(os.read(fd, 2049))
         if not isinstance(data, dict) or data.get("session") != session:
             return None
-        fields = ("status", "session", "started_at", "deadline_at", "received_at")
+        fields = ("status", "session", "started_at", "deadline_at", "received_at", "code")
         public = {k: data[k] for k in fields if k in data}
         if public.get("status") == "watching" and int(time.time()) > int(public.get("deadline_at", 0)):
             public["status"] = "expired"
