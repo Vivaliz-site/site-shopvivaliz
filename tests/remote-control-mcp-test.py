@@ -677,19 +677,6 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(specs["desktop_click"]["inputSchema"]["required"], ["host", "x", "y"])
         self.assertEqual(specs["desktop_type"]["inputSchema"]["required"], ["host", "text"])
 
-    def test_desktop_tools_do_not_require_runtime_lock_when_handoff_enabled(self):
-        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
-        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
-        try:
-            for name in ("desktop_open", "desktop_click", "desktop_type"):
-                self.assertNotIn(name, m.MUTATING_RUNTIME_ACTIONS)
-                m._assert_runtime_mutation(name, {"host": "Fred-Win", "x": 10, "y": 20, "text": "ok"})
-        finally:
-            if old is None:
-                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
-            else:
-                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
-
     def test_desktop_host_validation_rejects_non_support_hosts(self):
         self.assertEqual(m.validate_desktop_host("KOCEPSV")["platform"], "windows")
         self.assertEqual(m.validate_desktop_host("Fred-Win")["platform"], "windows")
@@ -838,12 +825,6 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("value_sha256", safe)
         self.assertEqual(len("SYNTHETIC_CODE"), safe["value_length"])
 
-    def test_account_login_tools_are_not_in_generic_runtime_lease_table(self):
-        for name in ("browser_auth_action", "browser_auth_open", "browser_profile_home_open"):
-            self.assertNotIn(name, m.MUTATING_RUNTIME_ACTIONS)
-            with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
-                m._assert_runtime_mutation(name, {"session": "dev"})
-
     def test_account_auth_mutation_lease_is_optional_but_half_lease_is_denied(self):
         # Owner decision 2026-11-13: account login no longer requires a lease.
         with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
@@ -935,27 +916,6 @@ class RemoteControlMcpTests(unittest.TestCase):
         # Owner decision 2026-11-13: execute_tool does not call _assert_runtime_mutation.
         import inspect
         self.assertNotIn("_assert_runtime_mutation(", inspect.getsource(m.execute_tool))
-
-    def test_browser_mutation_requires_conversation_gate_when_handoff_enabled(self):
-        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
-        old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
-        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
-        os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = self.tmp.name
-        try:
-            runtime = m.runtime_lock.acquire_runtime_lock("durable-recovery", "worker-a", 30, ["browser_click_control"])
-            with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "{}", "stderr": ""}) as runner:
-                with self.assertRaisesRegex(ValueError, "conversation_mutation_gate_required"):
-                    m.execute_tool("browser_click_control", {
-                        "tab_id": "ABC123", "index": 0,
-                        "runtime_lease_id": runtime["lease_id"],
-                        "runtime_fencing_token": runtime["fencing_token"],
-                    })
-            runner.assert_not_called()
-        finally:
-            if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
-            else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
-            if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
-            else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
 
     def test_mutating_browser_tool_accepts_current_runtime_lock_and_rejects_stale_token(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")

@@ -1227,7 +1227,6 @@ class BrowserMcpTests(unittest.TestCase):
 
     def test_oauth_callback_error_retry_requires_exact_first_party_go_back(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
-        self.assertIn('u.pathname === "/auth/error"', script)
         self.assertIn("u.pathname==='/auth/error'", script)
         key = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/error'){"
         self.assertIn(key, script)

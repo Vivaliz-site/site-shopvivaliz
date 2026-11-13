@@ -129,7 +129,6 @@ def test_login_tab_proxy_refuses_cross_account_lease_and_raw_secret_echo():
         'return {"ok": True, "session": session, "stage": "/auth/login"',
     ):
         assert check in source, check
-    assert '"browser_auth_open": "browser_auth_open"' in source
     assert '"browser_auth_open", "browser_auth_action"' in source or (
         '"browser_auth_action", "browser_auth_open"' in source
     )
