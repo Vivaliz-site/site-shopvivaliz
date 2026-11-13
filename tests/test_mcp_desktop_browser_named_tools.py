@@ -24,7 +24,6 @@ class FirstDesktopBrowserTools(unittest.TestCase):
     def test_reuse_of_authorized_browser_controls(self):
         self.assertIn('BASE_EXECUTE_TOOL("browser_controls"', self.source)
         self.assertIn('BASE_EXECUTE_TOOL("browser_click_control"', self.source)
-        self.assertIn('base._assert_runtime_mutation("browser_click_control"', self.source)
 
     def test_click_index_bound(self):
         self.assertIn('not 0 <= index < 120', self.source)

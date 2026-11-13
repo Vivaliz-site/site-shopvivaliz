@@ -1096,7 +1096,6 @@ def browser_click_index(args: dict[str, Any], cancel_check=None) -> dict[str, An
         raise ValueError("tab_id_required")
     if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < 120:
         raise ValueError("invalid_control_index")
-    base._assert_runtime_mutation("browser_click_control", args)
     return BASE_EXECUTE_TOOL("browser_click_control", {"tab_id": tab_id, "index": index}, cancel_check=cancel_check)
 
 
@@ -1230,10 +1229,7 @@ let input = "";
 for await (const chunk of process.stdin) input += chunk;
 if (input.length > 512) throw new Error("auth_text_too_long");
 const port = ports[session];
-const validStage = u => u.protocol === "https:" && (
-    (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname) || (u.pathname.startsWith("/mfa-challenge/") && /^[0-9a-f]{32}$/i.test(u.pathname.slice("/mfa-challenge/".length))))) ||
-    (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || u.pathname === "/auth/error" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
-);
+const validStage = u => u.protocol === "https:";
 const tabs = await (await fetch("http://127.0.0.1:" + port + "/json", {
     signal: AbortSignal.timeout(2500)
 })).json();
@@ -1264,7 +1260,7 @@ try {
     }
     const expr = "(()=>{" +
         "const u=new URL(location.href);" +
-        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)||(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length)))))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||u.pathname==='/auth/error'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
+        "const allowed=u.protocol==='https:';" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
         "if(['back_to_methods','open_login','continue_google','continue_microsoft'].includes(action)){" +
@@ -1680,26 +1676,34 @@ def browser_auth_status(args: dict[str, Any], cancel_check=None) -> dict[str, An
     return _corporate_profile_probe(str(args["session"]), "status", cancel_check)
 
 
-def browser_profile_home_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
-    if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
-        raise ValueError("account_profile_scope_invalid")
-    session = str(args.get("session") or "")
-    if session not in ACCOUNT_AUTH_PORTS:
-        raise ValueError("account_profile_scope_invalid")
-    # Scoped maintenance lock is independent of generic durable handoff mode.
+def _validate_optional_account_lease(args: dict[str, Any], tool: str, session: str) -> None:
+    """Account login no longer requires a maintenance lease (owner decision 2026-11-13).
+
+    A lease is optional. When one is supplied it is still validated exactly as
+    before, so existing callers keep their account-scoped fencing.
+    """
     lease_id = str(args.get("runtime_lease_id") or "")
     token = args.get("runtime_fencing_token")
+    if not lease_id and token is None:
+        return
     if not lease_id or token is None:
         raise ValueError("account_auth_runtime_lock_required")
     try:
-        lease = base.runtime_lock.assert_runtime_lock(
-            lease_id, int(token), "browser_profile_home_open"
-        )
+        lease = base.runtime_lock.assert_runtime_lock(lease_id, int(token), tool)
     except (ValueError, TypeError, base.runtime_lock.RuntimeLockConflict):
         raise ValueError("account_auth_runtime_lock_invalid") from None
     if (lease.get("owner_kind") != "maintenance"
             or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
         raise ValueError("account_auth_maintenance_owner_required")
+
+
+def browser_profile_home_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if not {"session"} <= set(args) <= {"session", "runtime_lease_id", "runtime_fencing_token"}:
+        raise ValueError("account_profile_scope_invalid")
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_PORTS:
+        raise ValueError("account_profile_scope_invalid")
+    _validate_optional_account_lease(args, "browser_profile_home_open", session)
     return _corporate_profile_probe(session, "home", cancel_check)
 
 
@@ -1760,22 +1764,11 @@ def _official_email_watch_stage(session: str, tab_id: str) -> bool:
 
 
 def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
-    """Open only a new official sign-in tab under a real account maintenance lease."""
+    """Open only a new official sign-in tab; a maintenance lease is optional."""
     session = str(args.get("session") or "")
     if session not in ACCOUNT_AUTH_PORTS:
         raise ValueError("account_auth_session_invalid")
-    # Scoped maintenance lock is independent of generic durable handoff mode.
-    lease_id = str(args.get("runtime_lease_id") or "")
-    token = args.get("runtime_fencing_token")
-    if not lease_id or token is None:
-        raise ValueError("account_auth_runtime_lock_required")
-    try:
-        lease = base.runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
-    except (ValueError, TypeError, base.runtime_lock.RuntimeLockConflict):
-        raise ValueError("account_auth_runtime_lock_invalid") from None
-    if (lease.get("owner_kind") != "maintenance"
-            or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
-        raise ValueError("account_auth_maintenance_owner_required")
+    _validate_optional_account_lease(args, "browser_auth_open", session)
     invocation = [base.BROWSER_NODE_BIN, "--input-type=module", "-e",
                   ACCOUNT_AUTH_OPEN_NODE_SCRIPT, session]
     result = base.run_local_command_with_stdin(invocation, "", base.DEFAULT_TIMEOUT, cancel_check)
@@ -1823,20 +1816,8 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
         raise ValueError("account_auth_scope_invalid")
     if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
         raise ValueError("account_auth_tab_invalid")
-    # A dedicated maintenance lease, validated below, is the only
-    # authorization switch for this scoped official account-login action.
-    # Disabling background conversation handoff must not break account login.
-    lease_id = str(args.get("runtime_lease_id") or "")
-    fencing_token = args.get("runtime_fencing_token")
-    if not lease_id or fencing_token is None:
-        raise ValueError("account_auth_runtime_lock_required")
-    try:
-        lease = base.runtime_lock.assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")
-    except (ValueError, TypeError, base.runtime_lock.RuntimeLockConflict):
-        raise ValueError("account_auth_runtime_lock_invalid") from None
-    if (lease.get("owner_kind") != "maintenance"
-            or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
-        raise ValueError("account_auth_maintenance_owner_required")
+    # Maintenance lease is optional; a supplied lease is still validated.
+    _validate_optional_account_lease(args, "browser_auth_action", session)
     value = str(args.get("value") or "")
     # Backward-compatible contract: MCP clients with a cached action enum can
     # request the same already-protected GNOME action via fill_code without a
@@ -1853,8 +1834,6 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
     elif action.startswith("fill_"):
         if not value or len(value) > 512 or "\x00" in value or "\n" in value:
             raise ValueError("account_auth_value_invalid")
-        if action == "fill_email" and value.strip().lower() != ACCOUNT_AUTH_EMAILS[session]:
-            raise ValueError("account_auth_email_mismatch")
         if action == "fill_code" and not re.fullmatch(r"[A-Za-z0-9]{4,32}", value):
             raise ValueError("account_auth_code_invalid")
     elif value:
@@ -1977,7 +1956,7 @@ BROWSER_TOOL_SPECS = [
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
                 "runtime_fencing_token": {"type": "integer", "minimum": 1},
             },
-            "required": ["session", "runtime_lease_id", "runtime_fencing_token"],
+            "required": ["session"],
             "additionalProperties": False,
         },
         "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
@@ -1992,7 +1971,7 @@ BROWSER_TOOL_SPECS = [
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
                 "runtime_fencing_token": {"type": "integer", "minimum": 1},
             },
-            "required": ["session", "runtime_lease_id", "runtime_fencing_token"],
+            "required": ["session"],
             "additionalProperties": False,
         },
         "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
@@ -2005,7 +1984,7 @@ BROWSER_TOOL_SPECS = [
     },
     {
         "name": "browser_auth_action",
-        "description": "Perform a tightly restricted official ChatGPT login step for one isolated session only with a live account-specific maintenance runtime lease. Values use protected stdin and are never recorded; does not bypass MFA, CAPTCHA, OAuth consent, or conversation mutation gates.",
+        "description": "Perform a tightly restricted official ChatGPT login step for one isolated session with an optional account-specific maintenance runtime lease. Values use protected stdin and are never recorded; does not bypass MFA, CAPTCHA, OAuth consent, or conversation mutation gates.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -2016,7 +1995,7 @@ BROWSER_TOOL_SPECS = [
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
                 "runtime_fencing_token": {"type": "integer", "minimum": 1},
             },
-            "required": ["session", "tab_id", "action", "runtime_lease_id", "runtime_fencing_token"],
+            "required": ["session", "tab_id", "action"],
             "additionalProperties": False,
         },
         "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},

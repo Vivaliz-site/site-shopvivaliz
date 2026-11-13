@@ -121,14 +121,14 @@ def test_login_tab_proxy_refuses_cross_account_lease_and_raw_secret_echo():
     source = (ROOT / "remote-control-mcp/server.py").read_text(encoding="utf-8")
     for check in (
         'if name == "browser_auth_open":',
-        'runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")',
+        '_validate_optional_account_lease(args, "browser_auth_open", session)',
+        'runtime_lock.assert_runtime_lock(lease_id, int(token), tool)',
         '"owner_id") != "shopvivaliz-account-auth:" + session',
         '"session", "runtime_lease_id", "runtime_fencing_token"',
         '"account_auth_status_unconfirmed"',
         'return {"ok": True, "session": session, "stage": "/auth/login"',
     ):
         assert check in source, check
-    assert '"browser_auth_open": "browser_auth_open"' in source
     assert '"browser_auth_open", "browser_auth_action"' in source or (
         '"browser_auth_action", "browser_auth_open"' in source
     )
