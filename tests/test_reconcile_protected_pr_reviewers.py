@@ -202,6 +202,21 @@ class ProtectedReviewerTests(unittest.TestCase):
             {"filename": "js/catalog.js", "patch": "+const x = 1;"},
             {"filename": "public/dist/js/catalog.0123456789.min.js", "status": "added", "patch": "+set x price"},
         ])
+        with self.assertRaises(sync.GitHubError):
+            self.run_one(gh, repo=REPO)
+        self.assertEqual(gh.posts, [])
+
+    def test_invalid_generated_catalog_manifest_requires_protected_review(self):
+        class BadAssetClient(FakeGitHub):
+            def get(self, route):
+                if "/contents/" in route:
+                    return {"encoding": "base64", "content": base64.b64encode(b"invalid").decode()}
+                return super().get(route)
+        gh = BadAssetClient(files=[
+            {"filename": "js/catalog.js", "patch": "+const x = 1;"},
+            {"filename": "public/dist/js/catalog.0123456789.min.js",
+             "status": "added", "patch": "+set x price"},
+        ])
         self.assertEqual(self.run_one(gh, repo=REPO)["action"], "requested_verified")
 
     def test_site_ownership_paths_are_protected(self):
