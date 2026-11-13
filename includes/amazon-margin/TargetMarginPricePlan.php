@@ -147,8 +147,10 @@ final class SvAmazonTargetMarginPricePlan
             $result['notices'][]='dimensoes_erp_amazon_divergentes';
         if(($r['status']??'')==='ambiguous_erp')
             $result['notices'][]='identidade_historica_divergente_do_erp_atual';
-        $bps=(int)($r['current_margin_bps']??-1);
-        if ($bps<0)return self::fail($result,'current_margin_not_calculated');
+        // Margem negativa calculada representa prejuizo, nao dado ausente.
+        $bps=$r['current_margin_bps']??null;
+        if(!is_numeric($bps)||!is_finite((float)$bps))
+            return self::fail($result,'current_margin_not_calculated');
         $taxBps=(int)($r['_target_tax_bps']??1400);
         $weight=$r['current_billable_kg']??null;
         $kg=is_numeric($weight)&&is_finite((float)$weight)?(float)$weight:null;

@@ -70,4 +70,25 @@ assertTarget($cross['rows'][0]['state']==='simulated','tariff_boundary_resolved'
 assertTarget($cross['rows'][0]['proposed_price_cents']>3000,'tariff_boundary_crossed');
 assertTarget($cross['rows'][0]['profit_estimate_cents']*10000>=3000*$cross['rows'][0]['proposed_price_cents'],
     'tariff_boundary_target');
+
+$loss=$sku;$loss['seller_sku']='NEGATIVE_MARGIN';
+$loss['price']=137.00;$loss['last_cost']=99.99;
+$loss['current_margin_bps']=-1167;$loss['current_commission_cents']=1507;
+$loss['current_billable_kg']=1.02;$loss['program']='DBA';
+$loss['erp_id']=353733531;$loss['erp_sku']='Sabatini';
+$lossPlan=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>[$loss]],['NEGATIVE_MARGIN'],900,'se_interior');
+$lossRow=$lossPlan['rows'][0];
+assertTarget($lossRow['state']==='simulated','negative_margin_not_mistaken_for_missing');
+assertTarget($lossRow['proposed_price_cents']>=13700,'negative_margin_price_never_reduced');
+assertTarget($lossRow['profit_estimate_cents']*10000>=900*$lossRow['proposed_price_cents'],
+    'negative_margin_target_nine_percent_in_cents');
+$uncomputed=$loss;$uncomputed['seller_sku']='UNCOMPUTED_MARGIN';
+$uncomputed['current_margin_bps']=null;
+$missingMargin=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>[$uncomputed]],['UNCOMPUTED_MARGIN'],900,'se_interior');
+assertTarget($missingMargin['rows'][0]['state']==='pending'
+    && $missingMargin['rows'][0]['reason']==='current_margin_not_calculated',
+    'null_margin_still_pending');
+
 echo "PASS Amazon target-margin price simulation: cents, tariffs, ERP 991 groups, no writes, projections, missing data\n";
