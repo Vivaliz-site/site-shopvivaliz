@@ -154,6 +154,12 @@ class ProtectedReviewerTests(unittest.TestCase):
         self.assertEqual(self.run_one(gh, dry_run=True)["action"], "would_request")
         self.assertEqual(gh.posts, [])
 
+    def test_large_plaintext_agent_docs_do_not_force_commercial_review(self):
+        gh = FakeGitHub(files=[{"filename": "AGENTS.md", "patch": None},
+                               {"filename": "CLAUDE.md", "patch": None}])
+        self.assertEqual(self.run_one(gh, repo=REPO)["action"], "ordinary_no_review_required")
+        self.assertEqual(gh.posts, [])
+
     def test_site_ownership_paths_are_protected(self):
         for path in sync.OWNER_OWNED_SITE:
             with self.subTest(path=path):
