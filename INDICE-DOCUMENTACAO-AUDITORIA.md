@@ -152,7 +152,6 @@ Se você é novo na situação, leia NESTA ORDEM:
 **Contém**:
 - ✅ Webhooks de status (OK)
 - ✅ Webhooks de sync empresa (OK)
-- ✅ Subscribers Medusa (OK)
 - ✅ Database schema (OK)
 - ✅ OAuth configurado (OK)
 - ✅ Pagamentos (infraestrutura)
@@ -248,7 +247,6 @@ AGORA (< 30 min):
 4. [ ] Confirmar sync com Olist
 
 PRÓXIMAS 24h:
-5. [ ] Medusa retoma (se pausado)
 6. [ ] Auditoria paralela continua
 7. [ ] Issues encontrados são fixados
 8. [ ] Performance é medida

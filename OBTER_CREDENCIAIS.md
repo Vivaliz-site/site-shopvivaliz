@@ -90,51 +90,7 @@ Secrets que procurar:
 
 ---
 
-## 4. Configurar no Medusa
-
-### Arquivo .env (backend)
-
-```bash
-cd claude/medusa/apps/backend
-
-# Copiar template
-cp .env.example .env
-
-# Editar .env com credenciais
-nano .env
-# ou
-code .env
-```
-
-### Variáveis necessárias
-
-```env
-# Database
-DATABASE_URL=postgresql://...
-
-# Marketplaces
-OLIST_CLIENT_ID=
-OLIST_CLIENT_SECRET=
-SHOPEE_API_KEY=
-SHOPEE_API_SECRET=
-AMAZON_ACCESS_KEY=
-AMAZON_SECRET_KEY=
-TINY_TOKEN=
-
-# Pagamentos
-STRIPE_API_KEY=
-STRIPE_PUBLIC_KEY=
-PAYPAL_CLIENT_ID=
-PAYPAL_CLIENT_SECRET=
-
-# EHA
-EHA_WEBHOOK_SECRET=
-MEDUSA_WEBHOOK_URL=
-```
-
----
-
-## 5. Sincronização Automática
+## 4. Sincronização Automática
 
 Depois de configurar credenciais:
 
@@ -151,7 +107,7 @@ php claude/api/sync-amazon-products.php
 
 ---
 
-## 6. Segurança
+## 5. Segurança
 
 ⚠️ **NUNCA**:
 - Commitar `.env` com credenciais reais
@@ -166,7 +122,7 @@ php claude/api/sync-amazon-products.php
 
 ---
 
-## 7. Próximos Passos
+## 6. Próximos Passos
 
 1. ✅ Obter credenciais
 2. ✅ Preencher .env

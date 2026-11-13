@@ -92,7 +92,7 @@ Marcados como **PAUSADO** (não deletados, podem ser reativados):
 - **Git operations:** `auto-git-pull.yml`, `auto-git-push.yml`, `auto-task-generator.yml`, `auto-commit.yml`
 - **Monitoring:** `monitor-chat-responder.yml`, `monitor-chat-responses.yml`, `hourly-status-email.yml`
 - **Setup:** `copy-secrets-to-pipeline.yml`, `setup-branch-protection.yml`, `setup-secrets.yml`, `secret-scan.yml`
-- **Outros:** `ai-agent-review.yml`, `ai-pipeline-full.yml`, `package-v9-2-84.yml`, `diag-tiny-api.yml`, `deploy-olist-proxy.yml`, `deploy-squad-chat.yml`, `medusa-eha-next-step-30min.yml`, `auditoria-vazamento-30min.yml`
+- **Outros:** `ai-agent-review.yml`, `ai-pipeline-full.yml`, `package-v9-2-84.yml`, `diag-tiny-api.yml`, `deploy-olist-proxy.yml`, `deploy-squad-chat.yml`, `auditoria-vazamento-30min.yml`
 
 **Razão:** Todas consolidadas em `master-production-pipeline.yml` ou `autonomous-watchdog.yml`. Liberou ~40% de quota GitHub Actions.
 
