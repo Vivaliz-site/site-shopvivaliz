@@ -2491,7 +2491,19 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
                 stage.startswith("/log-in") or stage.startswith("/auth/login") or stage in {"/email-verification", "/mfa-challenge", "/log-in-or-create-account"}
             ):
                 clean.append({"tab_id": tab_id, "session": session, "stage": stage})
-        return {"ok": True, "session": session, "tabs": clean}
+        shaped = {"ok": True, "session": session, "tabs": clean}
+        # Owner decision 2026-11-13: the login-code watch status, including the
+        # 6-digit e-mail code, is passed through so the agent can fill_code.
+        watch = output.get("email_watch")
+        if isinstance(watch, dict):
+            safe = {k: watch[k] for k in ("status", "received_at", "started_at", "deadline_at")
+                    if isinstance(watch.get(k), (str, int)) and not isinstance(watch.get(k), bool)}
+            code = str(watch.get("code") or "")
+            if re.fullmatch(r"[0-9]{6}", code):
+                safe["code"] = code
+            if safe:
+                shaped["email_watch"] = safe
+        return shaped
 
     if name == "browser_auth_status":
         state = str(output.get("state") or "")

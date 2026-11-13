@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded, credential-safe Gmail metadata watch regression tests."""
+"""Gmail login-code watch regression tests."""
 import importlib.util
 import os
 from pathlib import Path
@@ -86,29 +86,40 @@ class EmailLoginWatchTests(unittest.TestCase):
                                 monotonic=clock.monotonic,sleep=clock.sleep)
         self.assertEqual('timeout',state['status'])
 
-    def test_only_metadata_endpoints_with_header_projection(self):
+    def test_full_message_is_read_and_login_code_extracted(self):
+        import base64
+        def with_body(text):
+            m = message()
+            m['payload']['body'] = {'data': base64.urlsafe_b64encode(text.encode()).decode().rstrip('=')}
+            return m
         class FakeHTTP:
             def __init__(self): self.urls=[]
             def __call__(self,url,headers,body=None):
                 self.urls.append(url)
                 if '/profile' in url: return {'emailAddress':'fredmourao@gmail.com'}
                 if '/messages?' in url: return {'messages':[{'id':'abc123'}]}
-                if '/messages/abc123?' in url: return message()
+                if '/messages/abc123?' in url: return with_body('Your ChatGPT code is 482913. Do not share.')
                 raise AssertionError(url)
         client=FakeHTTP()
         api=watch.GmailMetadataReader('SAFE_TEST_ACCESS_TOKEN',request_json=client)
         self.assertEqual('fredmourao@gmail.com',api.verify_mailbox())
         messages=api.fetch('dev',start_epoch=1000)
         self.assertEqual(1,len(messages))
-        for url in client.urls:
-            self.assertNotIn('format=full',url)
-            self.assertNotIn('body',url)
-        detail=urlsplit(client.urls[-1]); qs=parse_qs(detail.query)
-        self.assertEqual(['metadata'],qs.get('format'))
-        self.assertIn('metadataHeaders',qs)
-        self.assertIn('fields',qs)
-        self.assertNotIn('snippet',str(messages))
-        self.assertNotIn('body',str(messages))
+        qs=parse_qs(urlsplit(client.urls[-1]).query)
+        self.assertEqual(['full'],qs.get('format'))
+        self.assertEqual('482913',messages[0]['code'])
+        # The matched result carries the code through to the private status.
+        result=watch.watch_window('dev',start_epoch=1000,fetch=lambda s,e: messages,
+                                  monotonic=FakeClock().monotonic,sleep=lambda x: None)
+        self.assertEqual('482913',result['code'])
+
+    def test_extract_code_handles_nested_parts_html_and_absence(self):
+        import base64
+        enc=lambda t: base64.urlsafe_b64encode(t.encode()).decode()
+        nested={'parts':[{'parts':[{'body':{'data':enc('<p>Code: <b>135790</b></p>')}}]}]}
+        self.assertEqual('135790',watch.extract_code(nested))
+        self.assertIsNone(watch.extract_code({'body':{'data':enc('no digits here 12345 or 1234567')}}))
+        self.assertIsNone(watch.extract_code(None))
 
     def test_credentials_require_independent_readonly_grant_and_private_file(self):
         with tempfile.TemporaryDirectory() as d:
@@ -129,9 +140,10 @@ class EmailLoginWatchTests(unittest.TestCase):
             directory=Path(d)
             watch._write_private_event({"status":"matched", "session":"dev", "message_id":"abc123",
                                         "received_at":1020, "started_at":1000, "deadline_at":1600,
-                                        "otp":"NEVER_PERSIST","body":"NEVER_PERSIST"},directory=directory)
+                                        "otp":"NEVER_PERSIST","body":"NEVER_PERSIST","code":"482913"},directory=directory)
             self.assertNotIn("NEVER_PERSIST",(directory/"dev.json").read_text())
             status=watch.read_public_status("dev", directory=directory)
+            self.assertEqual("482913",status["code"])
             self.assertEqual("matched",status["status"])
             self.assertNotIn("message_id",status)
             self.assertNotIn("otp",status)

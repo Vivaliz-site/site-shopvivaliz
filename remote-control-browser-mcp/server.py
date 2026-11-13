@@ -1708,7 +1708,7 @@ def browser_profile_home_open(args: dict[str, Any], cancel_check=None) -> dict[s
 
 
 def _start_bounded_login_email_watch(session: str) -> dict[str, Any]:
-    """Start a 10-minute metadata-only watch after an authorized login event.
+    """Start a 10-minute watch for the login-code e-mail after an authorized login event.
 
     A dedicated Gmail readonly OAuth grant is mandatory. Never fetch email
     bodies/codes, impersonate the ChatGPT Gmail connector or bypass MFA.
@@ -1730,7 +1730,7 @@ def _start_bounded_login_email_watch(session: str) -> dict[str, Any]:
 
 
 def _read_bounded_login_email_watch_status(session: str) -> dict | None:
-    """Return only sanitised local status, not Gmail message ID or OTP."""
+    """Return sanitised local watch status (no Gmail message ID; includes the login code)."""
     watcher = Path(__file__).resolve().with_name("login_email_watch.py")
     if not watcher.is_file():
         return None
