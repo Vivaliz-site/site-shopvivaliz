@@ -22,6 +22,7 @@ except ImportError:
     pwd = None  # type: ignore
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -1163,7 +1164,7 @@ ACCOUNT_AUTH_EMAILS = {
     "dev": "dev@shopvivaliz.com.br",
     "atendimento": "atendimento@shopvivaliz.com.br",
 }
-ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_saved_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
 
 ACCOUNT_GNOME_TOTP_PYTHON = r"""
 # This child is invoked ONLY from browser_auth_action with an account-matched
@@ -1808,6 +1809,44 @@ def account_auth_local_totp(session: str) -> str:
     return code
 
 
+SAVED_PASSWORD_DIR = Path(os.environ.get(
+    "SHOPVIVALIZ_ACCOUNT_SECRETS_DIR", "/home/ubuntu/.shopvivaliz/secrets"))
+
+
+def account_auth_saved_password(session: str, directory: Path | None = None) -> str:
+    """Read the provisioned CHATGPT_<SESSION>_PASSWORD file for fill_saved_password.
+
+    The value goes only to the peer's protected stdin; it is never returned,
+    logged or audited. The file must be a regular, non-symlink file that is not
+    accessible by group or others (0600).
+    """
+    if session not in ACCOUNT_AUTH_PORTS:
+        raise ValueError("account_auth_scope_invalid")
+    path = (directory or SAVED_PASSWORD_DIR) / ("CHATGPT_" + session.upper() + "_PASSWORD")
+    try:
+        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        raise ValueError("account_auth_saved_password_missing") from None
+    except OSError:
+        raise ValueError("account_auth_saved_password_unreadable") from None
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077
+                or not 1 <= info.st_size <= 600):
+            raise ValueError("account_auth_saved_password_invalid")
+        raw = os.read(fd, 601)
+    finally:
+        os.close(fd)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("account_auth_saved_password_invalid") from None
+    text = text.rstrip("\r\n")
+    if not text or len(text) > 512 or "\x00" in text or "\n" in text:
+        raise ValueError("account_auth_saved_password_invalid")
+    return text
+
+
 def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
     session = str(args.get("session") or "")
     action = str(args.get("action") or "")
@@ -1823,7 +1862,11 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
     # request the same already-protected GNOME action via fill_code without a
     # value. The current email-code path still requires its explicit value.
     # Both spellings must pass the exact-account lease and official MFA gate.
-    if action == "fill_gnome_totp" or (action == "fill_code" and not value):
+    if action == "fill_saved_password":
+        if value:
+            raise ValueError("account_auth_value_not_allowed")
+        value = account_auth_saved_password(session)
+    elif action == "fill_gnome_totp" or (action == "fill_code" and not value):
         if value:
             raise ValueError("account_auth_value_not_allowed")
         # Fail closed unless the *same account profile* is already at official MFA.
@@ -1845,7 +1888,7 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
     invocation = [
         base.BROWSER_NODE_BIN, "--input-type=module", "-e",
         ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id,
-        "fill_code" if action == "fill_gnome_totp" else action,
+        {"fill_gnome_totp": "fill_code", "fill_saved_password": "fill_password"}.get(action, action),
     ]
     result = base.run_local_command_with_stdin(invocation, value, base.DEFAULT_TIMEOUT, cancel_check)
     result["ok"] = result.get("exit_code") == 0
@@ -1990,7 +2033,7 @@ BROWSER_TOOL_SPECS = [
             "properties": {
                 "session": {"type": "string", "enum": ["dev", "atendimento"]},
                 "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
-                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
+                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_saved_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
                 "value": {"type": "string", "maxLength": 512},
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
                 "runtime_fencing_token": {"type": "integer", "minimum": 1},

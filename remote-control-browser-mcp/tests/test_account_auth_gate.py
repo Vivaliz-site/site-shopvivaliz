@@ -112,6 +112,53 @@ class AccountAuthGateTests(unittest.TestCase):
                 with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake):
                     self.assertTrue(m.browser_auth_action(payload(value="outra.conta@example.invalid"))["ok"])
 
+    def test_saved_password_is_read_from_private_file_and_sent_only_via_stdin(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "CHATGPT_DEV_PASSWORD"
+            f.write_text("synthetic-saved-secret\n", encoding="utf-8")
+            os.chmod(f, 0o600)
+            fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+            with mock.patch.object(m, "SAVED_PASSWORD_DIR", Path(d)), \
+                 mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake) as run:
+                args = {"session": "dev", "tab_id": "example-tab", "action": "fill_saved_password"}
+                result = m.browser_auth_action(args)
+            self.assertTrue(result["ok"])
+            argv, text, *_ = run.call_args.args
+            self.assertEqual("synthetic-saved-secret", text)           # trailing newline stripped
+            self.assertEqual("fill_password", argv[-1])                 # node sees the normal action
+            self.assertNotIn("synthetic-saved-secret", " ".join(argv))
+            self.assertNotIn("synthetic-saved-secret", json.dumps(result))
+
+    def test_saved_password_rejects_value_missing_open_permissions_symlink_and_newline(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            base_dir = Path(d)
+            args = {"session": "dev", "tab_id": "example-tab", "action": "fill_saved_password"}
+            with mock.patch.object(m, "SAVED_PASSWORD_DIR", base_dir):
+                with self.assertRaisesRegex(ValueError, "account_auth_value_not_allowed"):
+                    m.browser_auth_action({**args, "value": "x"})
+                with self.assertRaisesRegex(ValueError, "account_auth_saved_password_missing"):
+                    m.browser_auth_action(args)
+                f = base_dir / "CHATGPT_DEV_PASSWORD"
+                f.write_text("secret", encoding="utf-8"); os.chmod(f, 0o644)
+                with self.assertRaisesRegex(ValueError, "account_auth_saved_password_invalid"):
+                    m.browser_auth_action(args)
+                f.unlink()
+                real = base_dir / "real"; real.write_text("secret", encoding="utf-8"); os.chmod(real, 0o600)
+                try:
+                    f.symlink_to(real)
+                except OSError:
+                    self.skipTest("symlinks unavailable")
+                with self.assertRaisesRegex(ValueError, "account_auth_saved_password_unreadable"):
+                    m.browser_auth_action(args)
+                f.unlink()
+                f.write_text("line1\nline2", encoding="utf-8"); os.chmod(f, 0o600)
+                with self.assertRaisesRegex(ValueError, "account_auth_saved_password_invalid"):
+                    m.browser_auth_action(args)
+                with self.assertRaisesRegex(ValueError, "account_auth_scope_invalid"):
+                    m.account_auth_saved_password("other")
+
     def test_password_and_code_are_stdin_only(self):
         fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
