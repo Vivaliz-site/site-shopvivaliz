@@ -70,3 +70,10 @@
         padding: 10px;
     }
 }
+
+/* Orientacao recuperavel em buscas sem resultados e falhas temporarias. */
+.catalog-page .sv-catalog-empty { grid-column: 1 / -1; padding: 36px 22px; text-align: center; border: 1px dashed #b4c7d7; border-radius: 18px; background: #f8fbfe; }
+.catalog-page .sv-catalog-empty h2 { margin: 0 0 8px; font-size: clamp(18px, 3vw, 23px); color: #07345d; }
+.catalog-page .sv-catalog-empty p { margin: 0 auto 18px; max-width: 46ch; color: #36506b; }
+.catalog-page .sv-catalog-empty .btn { display: inline-flex; align-items: center; justify-content: center; margin: 4px; min-height: 44px; }
+.catalog-page .sv-catalog-empty .btn:focus-visible { outline: 3px solid #35c759; outline-offset: 3px; }

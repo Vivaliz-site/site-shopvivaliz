@@ -49,6 +49,17 @@
     return 'Escolha seus produtos e compre com segurança';
   }
 
+  function catalogEmptyMarkup(isFailure) {
+    const heading = isFailure ? 'Não conseguimos carregar os produtos' : 'Nenhum produto encontrado';
+    const description = isFailure
+      ? 'Confira sua conexão e tente novamente.'
+      : 'Experimente outro termo de busca ou consulte as categorias do catálogo.';
+    return '<div class="sv-catalog-empty" role="status"><h2>' + heading + '</h2><p>' + description
+      + '</p><a class="btn btn-secondary" href="/catalogo/">Ver todos os produtos</a>'
+      + (isFailure ? '<button class="btn btn-secondary" id="catalog-retry" type="button">Tentar novamente</button>' : '')
+      + '</div>';
+  }
+
   function buildCatalogUrl(query, category, sort, page) {
     const next = new URLSearchParams();
     const term = String(query || '').trim();
@@ -334,7 +345,7 @@
         status.textContent = query
           ? 'Não encontramos esse produto. Tente outro nome ou explore as categorias.'
           : 'Novos produtos estarão disponíveis em breve.';
-        grid.innerHTML = '';
+        grid.innerHTML = catalogEmptyMarkup(false);
         const pager = document.getElementById('catalog-grid-pager');
         if (pager) pager.innerHTML = '';
         setCount(0);
@@ -352,7 +363,13 @@
     } catch (error) {
       if (requestSequence !== catalogRequestSequence || (error && error.name === 'AbortError')) return;
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
-      grid.innerHTML = '';
+      grid.innerHTML = catalogEmptyMarkup(true);
+      const retry = document.getElementById('catalog-retry');
+      if (retry) retry.addEventListener('click', function () {
+        loadCatalog(input ? input.value.trim() : '', activeCategory, Number(page || 1));
+      });
+      const pager = document.getElementById('catalog-grid-pager');
+      if (pager) pager.innerHTML = '';
       setCount(0);
       gridTotalPages = 1;
       gridTotalProducts = 0;
@@ -414,7 +431,7 @@
       activeSort = String(nextParams.get('ordem') || nextParams.get('sort') || 'relevance').trim() || 'relevance';
       if (input) input.value = String(nextParams.get('q') || '').trim();
       ensureToolbar();
-      loadCatalog(input ? input.value.trim() : '', activeCategory, Number(nextParams.get('page') || 1));
+      loadCatalog(input ? input.value.trim() : '', activeCategory, Number(nextParams.get('page') || nextParams.get('pagina') || 1));
     });
   }
 
@@ -422,7 +439,8 @@
   // substituir tudo por skeletons no carregamento inicial elimina uma segunda
   // chamada à API e o CLS causado pela expansão/remoção assíncrona do grid.
   setActiveFilter(initialCategory);
-  if (initialSort !== 'relevance') {
-    loadCatalog(input ? input.value.trim() : '', initialCategory, Number(params.get('page') || 1));
+  const requestedPage = Number(params.get('page') || params.get('pagina') || 1);
+  if (initialSort !== 'relevance' || requestedPage > 1) {
+    loadCatalog(input ? input.value.trim() : '', initialCategory, requestedPage);
   }
 })();
