@@ -34,6 +34,17 @@ Aplicavel a Claude, GPT, Codex, Gemini, Ollama, MCP e automacoes: diagnosticar -
 O checklist formal e opcional; sua ausencia nao impede registrar progresso em P0/P1. Checklist ja iniciado e controles independentes seguem exigiveis para conclusao. Nao criar novo gate universal. Fonte: docs/knowledge/agent-rules.md e scripts/agent_task_state.py.
 <!-- /MANDATORY_AGENT_CHECKLIST_V1 -->
 
+## Governanca proporcional e referencias de auditoria
+<!-- SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1 -->
+- P0 (somente leitura/preparacao): executar diagnosticos e validacoes sem nova aprovacao.
+- P1 (mudanca tecnica reversivel): executar pelo grant ja existente, com testes e PR tecnico quando aplicavel, sem aprovacoes ou preflights duplicados.
+- P2 (novo poder/efeito protegido): exige aprovacao formal efetiva do owner quando a protecao vigente determinar, sem agente simular a identidade humana.
+- NoNewPrivileges=yes em determinado processo nao equivale a poder administrativo. Falhas de seguranca, escopo desconhecido e recusas devem permanecer fail-closed, sem contornar MFA/RBAC.
+<!-- /SOLO_OWNER_PROPORTIONAL_GOVERNANCE_V1 -->
+
+**Auditoria V5:** validar o contrato detalhado de docs/quality/AUDIT_ABSOLUTE_GATE_V1.md, docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md, docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md e docs/quality/AUDIT_MERGE_ENFORCEMENT_V1; resultado APTO exige evidencias reais, nao apenas marcadores ou CI.
+***
+
 ## Credenciais e perfis
 <!-- CREDENTIAL_REPROMPT_GATE_V1 -->
 Antes de pedir novamente credenciais ChatGPT Dev/Atendimento, conferir sessao exata e rodar preflight de metadados via MCP, sem ler senha nem exibir secrets: scripts/chatgpt_credential_preflight.py --session dev (ou atendimento). Credencial armazenada nao prova login valido; fluxo oficial deve respeitar MFA/CAPTCHA e identidades separadas. Nunca copiar cookies ou OTP entre perfis.
