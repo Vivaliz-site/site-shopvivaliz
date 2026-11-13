@@ -107,10 +107,10 @@ class AccountAuthGateTests(unittest.TestCase):
             with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("dev")):
                 with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
                     m.browser_auth_action(payload(session="atendimento",value="atendimento@shopvivaliz.com.br"))
-            # Fixed-email binding removed (owner decision 2026-11-13): any email may be typed.
-            fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
-            with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake):
-                self.assertTrue(m.browser_auth_action(payload(value="outra.conta@example.invalid"))["ok"])
+                # Fixed-email binding removed (owner decision 2026-11-13): any email may be typed.
+                fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+                with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake):
+                    self.assertTrue(m.browser_auth_action(payload(value="outra.conta@example.invalid"))["ok"])
 
     def test_password_and_code_are_stdin_only(self):
         fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
