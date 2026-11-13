@@ -1327,7 +1327,6 @@ Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. 
 | `CONVERSA-LIZ-VALIDACAO-2026-07-24.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `CREDENCIAIS-AUDITORIA-2026-07-15.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `CREDENCIAIS_CRIADAS.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `CRIAR_BANCO_AGORA_5MIN.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `CSS-WILDCARD-PREVENTION.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `CUsersusersite-shopvivaliz.env.example` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `CUsersusersite-shopvivaliz.githubworkflowsshopee-sync-diario.yml` | Suporte, configuracao ou artefato de projeto - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -1345,9 +1344,6 @@ Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. 
 | `DEPLOY-TEST-2026-07-09.txt` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `DEPLOY-TROUBLESHOOTING.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `DEPLOYMENT_COMPLETE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `DEPLOYMENT_PLAN_2026.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `DEPLOYMENT_STATUS.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `DEPLOY_CHECKLIST_FINAL.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `DEPLOY_NOW.ps1` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `DESIGN-RESPONSIVO-GUIA.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `DIAGNOSE-AGENTS.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -1395,7 +1391,6 @@ Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. 
 | `IMPLEMENTATION_COMPLETE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `INDICE-DOCUMENTACAO-AUDITORIA.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `INDICE_DOCUMENTACAO_PIPELINE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `INICIO_AQUI.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `INSTRUCOES-DEPLOY-AUTONOMO.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `INSTRUCOES-PARA-AGENTES.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `INSTRUCOES-PAYMENT-REAL.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -1483,11 +1478,9 @@ Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. 
 | `PRODUCTION-STATUS-2026-07-14.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PRODUCTION_DEPLOYMENT.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PROGRESSO-AUDITORIA.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `PROGRESS_REPORT_01JUL.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PROJECT_STRUCTURE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PROXIMAS-ACOES.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PROXIMOS-PASSOS-PRODUCAO.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `PROXIMO_PASSO_AGORA.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PR_RESOLUTION_FINAL.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PR_RESOLUTION_PLAN.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `PR_RESOLUTION_REPORT.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -1530,7 +1523,6 @@ Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. 
 | `RESUMO-SESSAO-2026-07-24.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `RESUMO_EXECUCAO_2026_07_19.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `RESUMO_EXECUTIVO.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `RESUMO_EXECUTIVO.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `RODAR-AGORA.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `ROTEIRO-TESTES-MANUAL-BROWSER.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `RUN-DASHBOARD.ps1` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -1586,7 +1578,6 @@ Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. 
 | `STATUS-IMPLEMENTACAO-FINAL.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `STATUS-MIGRACAO-ERP-2026-07-13.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `STATUS-REAL-PROJETO.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `STATUS_FINAL.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `STATUS_FTP_UPLOAD.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `STATUS_MIGRACAO_2026_07_19_FINAL.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `STATUS_OPERACIONAL.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -1604,7 +1595,6 @@ Gerado deterministicamente a partir de 5637 arquivos versionados no indice Git. 
 | `TEST-AGENT-ACCESS.sh` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `TEST-CHAT-WEBHOOK.md` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `TEST-SUMMARY.md` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `TESTAR_CHECKOUT_AGORA.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `TESTAR_IMAGENS_REAIS.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `TESTE-CHAT-ANTES-DEPLOY.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `TESTE-INTEGRACAO-REAL-2026-07-25.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |

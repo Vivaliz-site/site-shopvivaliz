@@ -26,9 +26,6 @@
 - **docker-compose.yml** – Multi‑container orchestration.
 - **CHANGELOG.md** – Change log of the project.
 - **DEPLOYMENT_COMPLETE.md** – Documentation of completed deployment steps.
-- **DEPLOYMENT_PLAN_2026.md** – Future deployment roadmap.
-- **DEPLOYMENT_STATUS.md** – Current deployment status overview.
-- **DEPLOY_CHECKLIST_FINAL.md** – Final checklist for deployments.
 - **DEPLOY-COMPLETE.md** – Record of completed deployment actions.
 - **DEPLOY-TEST-2026-07-09.txt** – Log of a deployment test.
 - **deploy-log.txt** – General deployment log file.
