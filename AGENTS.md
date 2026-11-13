@@ -63,6 +63,26 @@ A politica AUDIT_POLICY.md determina requisitos por superficie e impede conclusa
 Antes da resposta final, confirmar revisao, testes e efeito persistido. Mudanca versionada so conclui apos integracao e validacao pos-merge; quando ha deploy, verificar ambiente e revisao realmente implantada, executar saude e testes pós-deploy. Falha de deploy ou evidencia pendente exige retomar a correcao, nunca anunciar sucesso sem prova.
 <!-- /FINAL_RESPONSE_DEPLOY_GATE_V1 -->
 
+## Retomada e registro de progresso
+
+<!-- GLOBAL_TASK_CONTINUITY_V8 -->
+<!-- CHECKPOINT_FIRST_V9 -->
+**Antes da primeira** etapa material de uma tarefa, registrar checkpoint com `scripts/agent_task_state.py start`, ref/SHA, identidade, objetivo e fonte das regras. Durante a execucao, usar `scripts/agent_task_state.py progress` com evidencias e proxima acao, sem perder trabalho ja realizado. O registro de estado nao substitui a conclusao real nem cria checklist obrigatorio.
+<!-- /CHECKPOINT_FIRST_V9 -->
+<!-- /GLOBAL_TASK_CONTINUITY_V8 -->
+
+<!-- TASK_CONTINUITY_ENFORCEMENT_V3 -->
+<!-- RESUME_EXECUTION_GATE_V1 -->
+Ao receber **Retome**, Continue, Prossiga ou Siga, fazer preflight `rules_loaded` e executar os proximos passos autorizados, evitando reiniciar do zero, duplicar agentes, reduzir protecoes ou confundir historico com runtime. Somente concluir com `CONCLUIDO` validado; impedimento externo comprovado permanece `BLOCKED_EXTERNAL` com proxima acao precisa.
+<!-- /RESUME_EXECUTION_GATE_V1 -->
+<!-- /TASK_CONTINUITY_ENFORCEMENT_V3 -->
+
+<!-- CODEX_LAST_RESORT_V1 -->
+<!-- CHATGPT_RESUME_ORDER_V5 -->
+Ordem de retomada para a mesma tarefa: ChatGPT comum, ChatGPT Work quando elegivel e necessario; CLI/Codex como ultimo recurso. Em rotinas persistentes usar somente provedores gratuitos aprovados, sem consumo recorrente de IA paga.
+<!-- /CHATGPT_RESUME_ORDER_V5 -->
+<!-- /CODEX_LAST_RESORT_V1 -->
+
 ## Credenciais e perfis
 <!-- CREDENTIAL_REPROMPT_GATE_V1 -->
 Antes de pedir novamente credenciais ChatGPT Dev/Atendimento, conferir sessao exata e rodar preflight de metadados via MCP, sem ler senha nem exibir secrets: scripts/chatgpt_credential_preflight.py --session dev (ou atendimento). Credencial armazenada nao prova login valido; fluxo oficial deve respeitar MFA/CAPTCHA e identidades separadas. Nunca copiar cookies ou OTP entre perfis.
