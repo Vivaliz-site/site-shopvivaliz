@@ -3,17 +3,15 @@
 <!-- /RDC_FORA_DA_META_20261111 -->
 
 <!-- OWNER_ONLY_RESTRICTIONS_20261110 -->
-## Exclusividade do proprietário para criar ou agravar restrições (10/11/2026)
+## Exclusividade do proprietário para novas restrições — revisão de 12/11/2026
 
-**Determinação mais recente do proprietário, válida para TODOS os repositórios, agentes e ambientes ShopVivaliz. Esta regra substitui, neste assunto, a política de dupla aprovação de 08/11/2026.**
-
-- SOMENTE o próprio proprietário pode executar a inclusão, restauração ou ampliação de bloqueios, restrições, travas, gates, exigências de aprovação, negações de acesso ou qualquer regra/configuração que impeça, condicione ou atrase execuções, acessos, operações, comandos, automações, CI/CD, PRs, merge ou deploy.
-- NENHUM agente, bot ou automação (GPT, Claude, Codex, Gemini, Copilot, Ollama, MCP, GitHub Actions, subagentes) pode introduzir tais mudanças, nem por commit, pull request, edição direta, workflow, ruleset, código, infraestrutura, configuração, políticas de acesso ou documento de governança. A mera aprovação, revisão dupla ou autorização de uma PR NÃO transfere ao agente o poder de implementar.
-- Ao identificar uma restrição que considere necessária, o agente deve apresentar ao proprietário justificativa, impactos, riscos, alternativas, **comandos completos para execução pessoal**, validação e reversão. O agente não deve implementar, publicar ou preparar uma PR que contenha a inclusão restritiva.
-- Correções técnicas, refatorações, ajustes de observabilidade e remoções/reduções de travas indevidas seguem o fluxo normal autorizado, desde que não introduzam outra restrição no mesmo diff.
-- Esta decisão não desativa automaticamente MFA, RBAC, regras de plataforma, proteções GitHub, mecanismos de segurança exigidos por terceiros ou aprovações independentes anteriormente existentes.
-- As PRs e comunicações de agentes continuam obrigatoriamente em **português brasileiro (pt-BR)**, preservando termos técnicos, código e caminhos.
-- **Exceção única de implantação:** em 10/11/2026 o proprietário determinou expressamente que GPT aplicasse esta atualização inicial. Isso não autoriza agentes a criar futuras restrições, mesmo se aprovadas.
+- Somente o proprietário, atuando pessoalmente, pode **introduzir novas restrições ou agravar restrições existentes** (bloqueios, gates, regras impeditivas, exigências de aprovação, limitações de acesso/CI/merge/deploy). Nenhum agente pode criar ou preparar PR que acrescente essas restrições; uma aprovação verbal ou de PR não transfere esse poder.
+- **Restauração de baseline protetivo já aprovado não é uma nova restrição.** Pela orientação expressa de 12/11/2026, agente técnico autenticado pode corrigir regressão e restaurar exclusivamente o estado de segurança anterior comprovado, pelas rotas autorizadas e controles de ownership, lease/fencing, auditoria, teste e deploy já vigentes. Não pode aumentar o alcance nem inventar uma proteção diferente.
+- **Amazon Returns:** a restauração do kill switch global ON e das sete ações externas OFF, se comprovadamente correspondente ao baseline previamente aprovado, é correção de regressão permitida após integração formal desta revisão. Não abre SAFE-T, não autoriza recursos/suporte/ERP, não executa outbox e não substitui o grant ou a elegibilidade oficial.
+- O grant #3846 (renovação de #3556, uso único) continua sujeito ao escopo aprovado, readback, autorização real do operador, idempotência e regras da Amazon. Não ampliar allowlist, operar perfil de sete ações habilitadas nem criar grant novo por inferência.
+- MFA, RBAC, revisões humanas formalmente exigidas, branch protection, proteções de terceiros, leases/fencing, CI e segurança existente permanecem válidos. A exceção histórica para implantação inicial da regra em 10/11 não autoriza novas restrições.
+- Correções técnicas, ajustes não restritivos e redução de travas indevidas continuam no fluxo normal. PRs e comunicações de agentes devem ser redigidas em português brasileiro e identificar o agente real.
+- Fonte canônica: `docs/knowledge/owner-only-restrictions-2026-11-10.md`.
 <!-- /OWNER_ONLY_RESTRICTIONS_20261110 -->
 
 <!-- MCP_ROUTE_CANONICAL_V5_20261106 -->

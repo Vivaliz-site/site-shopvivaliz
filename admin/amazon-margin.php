@@ -446,6 +446,24 @@ function refreshMetrics(){
  costEvidence.textContent=currentLinked+' anúncio(s) com custo da associação atual Olist comprovado, mas identidade de vendas históricas divergente; '+
    kitRecorded+' kit(s) com custo positivo cadastrado, mas quantidade ou composição ainda não conciliada. Os valores não certificam lucro histórico.';
 }
+// The current Olist binding can legitimately supply a price projection while
+// a conflicting historical EAN/order identity still prevents certified sales.
+function erpConflictMarkup(r){
+ if(!r.erp_ui_conflict)return '';
+ const current=r.current_product_link_reference;
+ const currentCost=Number(current?.offer_cost);
+ const validatedCurrentCost=current?.status==='offer_cost_verified'
+  &&Number.isFinite(currentCost)&&currentCost>0;
+ const hasProjection=r.current_margin_bps!==null&&r.current_margin_bps!==undefined;
+ const explanation=validatedCurrentCost&&hasProjection
+  ?'Custo do vínculo atual verificado para projeção da margem vigente. Vendas e margem históricas não certificadas.'
+  :validatedCurrentCost
+   ?'Custo do vínculo atual verificado; margem vigente pendente de outras evidências. Vendas históricas não certificadas.'
+   :'Vínculo histórico inconclusivo; custo da unidade vendida e margem histórica não certificados.';
+ return '<span class="cell-note warn">CONFLITO DE IDENTIDADE ERP: interface atual indica '+
+  escapeHtml(r.erp_ui_candidate_sku||current?.erp_sku||'produto não identificado')+'. '+
+  explanation+'</span>';
+}
 function render(){
  refreshMetrics();
  displayed=filtered().sort((a,b)=>(a.current_margin_bps??Number.MAX_SAFE_INTEGER)-(b.current_margin_bps??Number.MAX_SAFE_INTEGER));
@@ -490,7 +508,7 @@ function render(){
      (r.erp_product_tab_verified&&r.erp_match_method!=='OLIST_AUTHENTICATED_PRODUCT_TAB_UI'?'<span class="cell-note">Vínculo corroborado também na aba Anúncios do produto Olist</span>':'')+
      (r.erp_product_tab_crosscheck_pending?'<span class="cell-note warn">Aba Anúncios do produto consultada; divergência anterior ainda requer conciliação</span>':'')+
      (r.erp_ui_verified_same_product?'<span class="cell-note">Anúncio confirmado na interface atual Olist</span>':'')+
-     (r.erp_ui_conflict?'<span class="cell-note warn">CONFLITO ERP: interface atual indica '+escapeHtml(r.erp_ui_candidate_sku||'sem SKU')+'. Custo e margem bloqueados até conciliação.</span>':'')+
+     erpConflictMarkup(r)+
      (r.erp_historical_ui_candidate?'<span class="cell-note warn">Captura antiga da interface Olist, SKU candidato '+escapeHtml(r.erp_historical_ui_candidate.erp_sku||'')+'; sem certificação.</span>':'')+
      (r.erp_historical_product_tab_candidate?'<span class="cell-note warn">Aba Anúncios do produto Olist histórica: SKU candidato '+escapeHtml(r.erp_historical_product_tab_candidate.erp_sku||'')+'. Não certifica custo atual.</span>':'')+
      (r.erp_historical_candidate?'<span class="cell-note warn">Exportação histórica: SKU candidato '+escapeHtml(r.erp_historical_candidate.erp_sku||'')+' ('+escapeHtml(r.erp_historical_candidate.observed_at||'')+'). Sem custo confirmado neste vínculo.</span>':'')+

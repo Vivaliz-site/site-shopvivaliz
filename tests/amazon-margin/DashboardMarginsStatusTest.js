@@ -129,4 +129,29 @@ assert.match(page,/const kitRecorded=base\.filter/);
 
 assert.match(page,/r.current_margin_cost_used\?\?r.last_cost/);
 
+// Live run #22: 17 BUYABLE listings have a verified current Olist cost
+// and projected margin, while historical transactions remain ambiguous.
+const conflictSource=page.match(/function erpConflictMarkup\(r\)\{[\s\S]*?\n\}/);
+assert.ok(conflictSource,'current-vs-historical ERP conflict helper must be present');
+const {erpConflictMarkup}=vm.runInNewContext(
+  conflictSource[0]+'\n({erpConflictMarkup})',
+  {escapeHtml:v=>String(v).replaceAll('<','&lt;')}
+);
+const currentConflict=erpConflictMarkup({
+  erp_ui_conflict:'current_or_historical_ui_disagrees_with_OLIST_AMAZON_ORDER',
+  erp_ui_candidate_sku:'PRODUTO_341440908',current_margin_bps:2980,
+  current_product_link_reference:{status:'offer_cost_verified',offer_cost:12.04}
+});
+assert.match(currentConflict,/Custo do vínculo atual verificado para projeção/);
+assert.match(currentConflict,/Vendas e margem históricas não certificadas/);
+assert.doesNotMatch(currentConflict,/Custo e margem bloqueados até conciliação/);
+const incomplete=erpConflictMarkup({erp_ui_conflict:'conflict',
+ current_margin_bps:null,current_product_link_reference:{status:'offer_cost_verified',offer_cost:12.04}});
+assert.match(incomplete,/margem vigente pendente de outras evidências/);
+const pending=erpConflictMarkup({erp_ui_conflict:'conflict',
+ current_margin_bps:null,current_product_link_reference:{status:'kit_composition_pending',offer_cost:null}});
+assert.match(pending,/custo da unidade vendida e margem histórica não certificados/);
+assert.equal(erpConflictMarkup({erp_ui_conflict:null}),'');
+assert.match(erpConflictMarkup({erp_ui_conflict:'conflict',erp_ui_candidate_sku:'<bad>'}),
+ /&lt;bad>/);
 console.log('PASS dashboard financial status: certified only, weighted margin, partial pending, safe simulation');
