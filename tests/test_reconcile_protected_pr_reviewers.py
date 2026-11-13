@@ -1,7 +1,11 @@
 """Regression tests for selective, non-gating owner-review reconciliation."""
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
+import json
+import re
 import unittest
 from pathlib import Path
 
@@ -18,6 +22,10 @@ GRANT_REPO = "Vivaliz-site/solange-rolla-consultorio"
 
 
 class Policy:
+    @staticmethod
+    def minify_catalog_source(source):
+        return source.strip().encode("utf-8")
+
     @staticmethod
     def sensitive_path(path):
         return path.endswith("PriceWorker.php")
@@ -159,6 +167,42 @@ class ProtectedReviewerTests(unittest.TestCase):
                                {"filename": "CLAUDE.md", "patch": None}])
         self.assertEqual(self.run_one(gh, repo=REPO)["action"], "ordinary_no_review_required")
         self.assertEqual(gh.posts, [])
+
+    def test_generated_catalog_asset_is_validated_against_source_and_manifest(self):
+        source = b"const catalog = 1;"
+        expected = Policy.minify_catalog_source(source.decode())
+        digest = hashlib.sha256(expected).hexdigest()[:10]
+        path = f"public/dist/js/catalog.{digest}.min.js"
+        manifest = {"assets": {"/js/catalog.js": {
+            "file": f"/{path}", "bytes": len(expected), "source_bytes": len(source),
+        }}}
+        class GeneratedClient(FakeGitHub):
+            def get(self, route):
+                if "/contents/" not in route:
+                    return super().get(route)
+                if "/contents/js/catalog.js?" in route:
+                    payload = source
+                elif "/contents/public/dist/asset-manifest.json?" in route:
+                    payload = json.dumps(manifest).encode()
+                elif "/contents/public/dist/js/catalog." in route:
+                    payload = expected
+                else:
+                    raise AssertionError(route)
+                return {"encoding": "base64", "content": base64.b64encode(payload).decode()}
+        gh = GeneratedClient(files=[
+            {"filename": "js/catalog.js", "patch": "+const catalog = 1;"},
+            {"filename": "public/dist/asset-manifest.json", "patch": "+{}"},
+            {"filename": path, "status": "added", "patch": "+set x price"},
+        ])
+        self.assertEqual(self.run_one(gh, repo=REPO)["action"], "ordinary_no_review_required")
+        self.assertEqual(gh.posts, [])
+
+    def test_unverified_generated_asset_does_not_bypass_owner_review(self):
+        gh = FakeGitHub(files=[
+            {"filename": "js/catalog.js", "patch": "+const x = 1;"},
+            {"filename": "public/dist/js/catalog.0123456789.min.js", "status": "added", "patch": "+set x price"},
+        ])
+        self.assertEqual(self.run_one(gh, repo=REPO)["action"], "requested_verified")
 
     def test_site_ownership_paths_are_protected(self):
         for path in sync.OWNER_OWNED_SITE:
