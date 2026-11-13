@@ -34,8 +34,15 @@ const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:955
 const TASK_STATE_DIR = process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR
   || '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state';
 const DURABLE_HANDOFF_ENABLED = ['1','true','yes','on'].includes(String(process.env.SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF || '0').toLowerCase());
+// The installed worker lives under ~/.local/share/shopvivaliz-chatgpt-continuity,
+// not beside scripts/continuity. The backend's already-governed mutation gate
+// is installed under /opt/shopvivaliz-remote-control. Prefer that verified
+// existing location; preserve the repository-local path for tests/development.
+const BACKEND_MUTATION_GATE_PATH = '/opt/shopvivaliz-remote-control/scripts/continuity/mutation_gate.py';
 const MUTATION_GATE_PATH = process.env.SHOPVIVALIZ_CONTINUITY_MUTATION_GATE_PATH
-  || fileURLToPath(new URL('../continuity/mutation_gate.py', import.meta.url));
+  || (fs.existsSync(BACKEND_MUTATION_GATE_PATH)
+    ? BACKEND_MUTATION_GATE_PATH
+    : fileURLToPath(new URL('../continuity/mutation_gate.py', import.meta.url)));
 
 function mutationAuthorizationAllows(result) {
   return result?.authorized === true;
