@@ -85,6 +85,17 @@ function sv_catalog_search_aliases(string $query): array
 {
     $normalized = sv_catalog_search_normalize($query);
     $aliases = [$normalized];
+
+    // Brand and product-type intent is conjunctive, not a broad category synonym.
+    // The API already requires literal matches for these terms. A brand query
+    // must not show unrelated tools, and a cart query must not show pet feeders.
+    if (in_array($normalized, ['FERCAR', 'CARRINHO'], true)) {
+        return $aliases;
+    }
+    if ($normalized === 'CARRINHOS') {
+        return ['CARRINHOS', 'CARRINHO'];
+    }
+
     $rules = [
         // Interpretar termos equivalentes de veda-porta sem ampliar buscas por 'rodo' genérico.
         'VEDANTE' => ['VEDANTE', 'VEDANTES', 'VEDADOR', 'VEDADORES', 'VEDACAO'],
