@@ -307,18 +307,18 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             with controller.daemon_guard(self.runtime) as second:
                 self.assertFalse(second)
 
-    def test_failed_browser_resume_is_not_continuity_ready(self) -> None:
+    def test_mixed_nudge_failure_without_gpt_request_is_only_telemetry(self) -> None:
         controller = load_controller()
         with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
             patch.object(controller.watchdog, "run_once", return_value={}),
             patch.object(controller.nudge_dispatcher, "run_once", return_value={"failed": 1}),
             patch.object(controller.dispatcher, "run_once", return_value={"deferred_chatgpt": 1}),
         ):
-            result = controller.run_once(runtime_dir=self.runtime, owner_id="browser-error")
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="other-agent-browser-error")
         self.assertTrue(result["liveness_ok"])
-        self.assertFalse(result["continuity_ready"])
-        self.assertFalse(result["ok"])
-        self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertNotIn("chatgpt_resume_failed", result["degraded_reasons"])
         self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
 
     def test_unbound_legacy_task_cannot_make_personal_browser_login_required(self) -> None:
