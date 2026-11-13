@@ -66,8 +66,31 @@ const {
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
   mutationAuthorizationAllows,
+  resolveMutationGatePath,
   guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+// Installed backend worker runs outside the repo tree: it must discover the
+// canonical mutation gate instead of silently failing every authorized send.
+// An explicit host configuration still wins, and checkout tests remain portable.
+{
+  const officialGate = '/opt/shopvivaliz-remote-control/scripts/continuity/mutation_gate.py';
+  assert.equal(
+    resolveMutationGatePath('', officialGate, file => file === officialGate),
+    officialGate,
+    'installed worker must select the existing canonical mutation gate',
+  );
+  assert.equal(
+    resolveMutationGatePath('/tmp/test-mutation-gate.py', officialGate, () => true),
+    '/tmp/test-mutation-gate.py',
+    'explicit operator path must win without changing authorization',
+  );
+  assert.match(
+    resolveMutationGatePath('', officialGate, () => false),
+    /scripts[\\/]continuity[\\/]mutation_gate\.py$/,
+    'checkout/development fallback must remain usable without backend installation',
+  );
+}
 
 // A crashed monitor writer may leave temp files, but its janitor must never
 // touch the current process, recent writes, or unrelated artifacts.
@@ -161,6 +184,55 @@ function fakeCdp({
 }
 
 async function run() {
+  // The live ChatGPT ProseMirror composer requires a real CDP insertion.
+  // Typing per-character key events followed by Enter previously claimed
+  // SENT_UNCONFIRMED even though the canonical conversation never changed.
+  {
+    let draft='';
+    const events=[];
+    const cdp={
+      async evaluate(expression){
+        if(expression.includes('stream_status')) return {http_status:200,status:'COMPLETE'};
+        if(expression.includes('continuity-composer-draft-probe')) return {usable:true,text:''};
+        if(expression.includes('continuity-composer-click-target')) return {x:24,y:40};
+        if(expression.includes('continuity-composer-focus')) return true;
+        if(expression.includes('continuity-native-contenteditable-check')) return true;
+        if(expression.includes('continuity-native-contenteditable-readback')) return draft;
+        if(expression.includes('continuity-send-button-target')) return {state:'ready',x:34,y:45};
+        return false;
+      },
+      async send(method,params){
+        events.push(method);
+        if(method==='Input.insertText') draft=params.text;
+      },
+    };
+    assert.equal(await sendContinueMessage(cdp),true);
+    assert.equal(draft,'continue');
+    assert.equal(events.filter(x=>x==='Input.insertText').length,1);
+    assert.ok(events.filter(x=>x==='Input.dispatchMouseEvent').length>=6);
+    assert.equal(events.filter(x=>x==='Input.dispatchKeyEvent').length,0,
+      'contenteditable must not rely on synthetic Enter that can report phantom submission');
+  }
+  {
+    const events=[];
+    const cdp={
+      async evaluate(expression){
+        if(expression.includes('stream_status')) return {http_status:200,status:'COMPLETE'};
+        if(expression.includes('continuity-composer-draft-probe')) return {usable:true,text:''};
+        if(expression.includes('continuity-composer-click-target')) return {x:24,y:40};
+        if(expression.includes('continuity-composer-focus')) return true;
+        if(expression.includes('continuity-native-contenteditable-check')) return true;
+        if(expression.includes('continuity-native-contenteditable-readback')) return '';
+        if(expression.includes('continuity-send-button-target')) return {state:'ready',x:34,y:45};
+        return false;
+      },
+      async send(method){events.push(method);},
+    };
+    assert.equal(await sendContinueMessage(cdp),false,
+      'native insertion without exact composer readback cannot claim a send');
+    assert.equal(events.filter(x=>x==='Input.dispatchMouseEvent').length,3,
+      'only the composer focus click is allowed when native readback failed');
+  }
   {
     const bound = 'conversation_12345678';
     const errorPayload = bridgeResultPayload(

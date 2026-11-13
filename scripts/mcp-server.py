@@ -377,7 +377,8 @@ class MCPTools:
         timeout = params.get("timeout", 30)
 
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 command,
                 shell=True,
                 capture_output=True,

@@ -34,8 +34,21 @@ const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:955
 const TASK_STATE_DIR = process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR
   || '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state';
 const DURABLE_HANDOFF_ENABLED = ['1','true','yes','on'].includes(String(process.env.SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF || '0').toLowerCase());
-const MUTATION_GATE_PATH = process.env.SHOPVIVALIZ_CONTINUITY_MUTATION_GATE_PATH
-  || fileURLToPath(new URL('../continuity/mutation_gate.py', import.meta.url));
+// The installed worker lives under ~/.local/share/shopvivaliz-chatgpt-continuity,
+// not beside scripts/continuity. The backend's already-governed mutation gate
+// is installed under /opt/shopvivaliz-remote-control. Prefer that verified
+// existing location; preserve the repository-local path for tests/development.
+const BACKEND_MUTATION_GATE_PATH = '/opt/shopvivaliz-remote-control/scripts/continuity/mutation_gate.py';
+function resolveMutationGatePath(
+  configured = process.env.SHOPVIVALIZ_CONTINUITY_MUTATION_GATE_PATH || '',
+  backendPath = BACKEND_MUTATION_GATE_PATH,
+  exists = fs.existsSync,
+) {
+  if (configured) return configured;
+  if (exists(backendPath)) return backendPath;
+  return fileURLToPath(new URL('../continuity/mutation_gate.py', import.meta.url));
+}
+const MUTATION_GATE_PATH = resolveMutationGatePath();
 
 function mutationAuthorizationAllows(result) {
   return result?.authorized === true;
@@ -2959,6 +2972,33 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
       return false;
     }
 
+    // The live ProseMirror editor is a contenteditable div, not a textarea.
+    // Production UI proved per-character key events may leave its internal
+    // state empty while raw Enter is accepted but persists no new message.
+    // CDP Input.insertText is the same genuine editor input path already
+    // validated in the corporate MCP; require exact readback and a real Send.
+    const nativeEditable = await cdp.evaluate(`(()=>{
+      /* continuity-native-contenteditable-check */
+      const el=document.querySelector('[data-testid="prompt-textarea"]')
+        || document.querySelector('[role="textbox"][contenteditable="true"]');
+      return !!el && el.isContentEditable && el.getClientRects().length>0;
+    })()`);
+    if (nativeEditable) {
+      if (!existing) {
+        try { await cdp.send('Input.insertText', { text: expected }); }
+        catch { return false; }
+      }
+      await sleep(180);
+      const typedDraft = await cdp.evaluate(`(()=>{
+        /* continuity-native-contenteditable-readback */
+        const el=document.querySelector('[data-testid="prompt-textarea"]')
+          || document.querySelector('[role="textbox"][contenteditable="true"]');
+        return el ? String(el.innerText||el.textContent||'').trim() : '';
+      })()`);
+      if (String(typedDraft || '').trim() !== expected) return false;
+      return await clickTrustedSendButton(cdp, expectedFingerprint);
+    }
+
     // Reset stale DOM/editor state using trusted keyboard events. This is
     // important because DOM text can be visible while ChatGPT's internal
     // editor state still considers the composer empty and keeps Send disabled.
@@ -4237,6 +4277,7 @@ export {
   recoveryStateForOutcome,
   bridgeResultPayload,
   mutationAuthorizationAllows,
+  resolveMutationGatePath,
   guardedRecoveryMutation,
   Cdp,
   selectChatgptTab,
