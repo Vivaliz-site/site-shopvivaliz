@@ -14,6 +14,7 @@ class MeiMonitorBackendRunnerTests(unittest.TestCase):
         self.assertIn("systemctl is-enabled mei-mg-email-base-sync.timer", workflow)
         self.assertIn("HEALTH_FAIL=sincronizacao_nao_executou_nas_ultimas_26h", workflow)
         self.assertIn("HEALTH_FAIL=fonte_mais_antiga_que_48h", workflow)
+        self.assertNotIn("print(json.dumps(row", workflow)
 
     def test_no_cross_tenancy_ssh_or_private_key_in_monitor(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
