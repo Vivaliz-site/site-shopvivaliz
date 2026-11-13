@@ -697,3 +697,21 @@ lista 991 no Olist V3, sem alterar preços reais em teste. O executor
 comercial não deve ser integrado em produção sem revisão nominal
 `shopvivaliz-human`, verificação do provedor e teste E2E UI.
 O módulo P2 não foi executado sobre preços reais durante seu desenvolvimento.
+
+## Cotacao conservadora com medidas Amazon/Olist divergentes (proposta tecnica)
+
+Quando ambas as fontes de embalagem sao verificadas e a divergencia de
+medidas nao invalida a elegibilidade logistica, a simulacao com comissao
+SP-API no novo preco utiliza a **maior tarifa oficial entre Amazon Catalog
+e dimensoes Olist**, reavaliada a cada faixa de preco/peso. Se faltar
+medida, houver pacote fora do programa, modalidade nao confirmada ou
+tarifa sem origem configurada, nenhuma publicacao e autorizada. A medida
+cadastrada nao e sobrescrita. A margem e projetada: custos extraordinarios
+de anuncios, devolucoes e outras despesas permanecem fora desse indicador.
+
+Regressao: `php tests/amazon-margin/TargetMarginConservativePackageTest.php`.
+Esta alteracao de calculo nao e aprovacao de novos Seller SKUs nem permite
+ultrapassar maximum_seller_allowed_price, promocao ativa, divergencia de
+produto ERP ou o fluxo administrativo P2 preexistente. Sao necessarios
+revisao, integracao, publicacao canonica e readback real antes de certificar
+os casos pendentes.

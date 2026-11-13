@@ -144,8 +144,9 @@ final class SvAmazonTargetMarginPriceWorker
         $candidate['last_cost']=(float)$cost;
         if(($candidate['program']??'')==='DBA_CANDIDATE')
             throw new RuntimeException('dba_candidate_not_verified');
-        if(($candidate['current_package_conflict']??false)===true)
-            throw new RuntimeException('package_dimensions_conflict_pending');
+        // Dimension differences are handled by the conservative upper
+        // tariff envelope in TargetMarginPublication::quotedMargin().
+        // Unknown sources and out-of-program packages remain non-publishable.
         for($i=0;$i<7;$i++){
             $candidate['price']=$price/100;
             $quotes=SvAmazonCurrentFeeEstimates::quote($client,[$candidate],$marketplace);

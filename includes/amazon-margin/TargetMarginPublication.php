@@ -195,6 +195,38 @@ final class SvAmazonTargetMarginPublication
         $calculated=SvAmazonCurrentPriceMargin::calculate($atNew,$quote,$taxBps,$region);
         if(!isset($calculated['current_profit_cents'],$calculated['current_margin_bps']))
             throw new RuntimeException((string)($calculated['current_margin_status']??'quote_not_calculable'));
+
+        // The Olist and Amazon packages can disagree without either source
+        // being forged. The 9% target must use the HIGHER official tariff,
+        // including across 0.5/1 kg band boundaries, or remain unpublishable.
+        // This does not revise dimensions, shipping programs or product costs.
+        if(($row['current_package_conflict']??false)===true) {
+            $amazon=is_array($row['amazon_package']??null)
+                ? SvAmazonCurrentPriceMargin::billable($row['amazon_package']) : null;
+            $erp=is_array($row['erp_package']??null)
+                ? SvAmazonCurrentPriceMargin::billable($row['erp_package']) : null;
+            if($amazon===null||$erp===null
+                ||!($amazon['eligible']??false)||!($erp['eligible']??false))
+                throw new RuntimeException('package_conflict_unresolved');
+            $program=(string)($row['program']??'');
+            $amazonTariff=SvAmazonCurrentPriceMargin::logisticsCents(
+                $program,$priceCents,(float)$amazon['billable_kg'],$region);
+            $erpTariff=SvAmazonCurrentPriceMargin::logisticsCents(
+                $program,$priceCents,(float)$erp['billable_kg'],$region);
+            if($amazonTariff===null||$erpTariff===null)
+                throw new RuntimeException('package_conflict_unresolved');
+            $tariff=max((int)$calculated['current_logistics_cents'],
+                $amazonTariff,$erpTariff);
+            $difference=$tariff-(int)$calculated['current_logistics_cents'];
+            $calculated['current_logistics_cents']=$tariff;
+            $calculated['current_profit_cents']-=$difference;
+            $calculated['current_margin_bps']=(int)round(
+                $calculated['current_profit_cents']*10000/$priceCents,0,PHP_ROUND_HALF_UP);
+            $calculated['current_margin_status']='estimated_dimension_conflict_conservative';
+            $calculated['conservative_package_envelope']=true;
+            $calculated['conservative_logistics_amazon_cents']=$amazonTariff;
+            $calculated['conservative_logistics_erp_cents']=$erpTariff;
+        }
         return $calculated;
     }
 }
