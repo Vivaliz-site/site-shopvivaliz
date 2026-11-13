@@ -16,19 +16,13 @@ if ($svCatalogHasSessionCookie && session_status() === PHP_SESSION_NONE) {
     @session_start();
 }
 
-if (!empty($_GET['busca']) && empty($_GET['q'])) {
-    $canonicalQuery = trim((string)$_GET['busca']);
-    if ($canonicalQuery !== '') {
-        $params = ['q' => $canonicalQuery];
-        if (!empty($_GET['categoria'])) {
-            $params['categoria'] = trim((string)$_GET['categoria']);
-        }
-        if (!empty($_GET['pagina'])) {
-            $params['pagina'] = max(1, (int)$_GET['pagina']);
-        }
-        header('Location: /catalogo/?' . http_build_query($params), true, 301);
-        exit;
-    }
+// O redirecionamento da busca legada deve preservar as atribuicoes de anuncios.
+// Isto ocorre antes do HTML/analytics; perder gclid/UTMs aqui perde a origem.
+require_once __DIR__ . '/includes/catalog-page-navigation.php';
+$svCatalogLegacyRedirect = sv_catalog_legacy_search_redirect($_GET);
+if ($svCatalogLegacyRedirect !== null) {
+    header('Location: ' . $svCatalogLegacyRedirect, true, 301);
+    exit;
 }
 
 header('Content-Type: text/html; charset=UTF-8');
@@ -44,7 +38,6 @@ require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/ml-ranking.php';
 require_once __DIR__ . '/includes/catalog-search-context.php';
-require_once __DIR__ . '/includes/catalog-page-navigation.php';
 
 function sv_catalog_root(): string
 {

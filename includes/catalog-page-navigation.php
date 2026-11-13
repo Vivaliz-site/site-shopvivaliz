@@ -50,3 +50,42 @@ function sv_catalog_sort_rows(array $rows, string $sort): array
     });
     return $rows;
 }
+
+/** Preserva atribuicao e estado de navegacao ao canonizar ?busca= para ?q=. */
+function sv_catalog_legacy_search_redirect(array $params): ?string
+{
+    $legacy = $params['busca'] ?? null;
+    $canonical = $params['q'] ?? null;
+    if (!is_scalar($legacy) || (is_scalar($canonical) && trim((string)$canonical) !== '')) {
+        return null;
+    }
+
+    $query = trim((string)$legacy);
+    if ($query === '') return null;
+    $redirect = ['q' => $query];
+    $category = $params['categoria'] ?? null;
+    if (is_scalar($category) && trim((string)$category) !== '') {
+        $redirect['categoria'] = trim((string)$category);
+    }
+    $sort = sv_catalog_resolve_sort($params);
+    if ($sort !== 'relevance') $redirect['ordem'] = $sort;
+    $page = $params['page'] ?? $params['pagina'] ?? null;
+    if (is_scalar($page) && (int)$page > 1) {
+        $redirect['page'] = (int)$page;
+    }
+
+    // Apenas parametros de mensuracao conhecidos. Nunca transferir dados
+    // arbitrarios do URL para a pagina/analytics ou criar identificadores.
+    foreach ([
+        'gclid', 'gbraid', 'wbraid', 'dclid',
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_content',
+        'utm_term', 'utm_id',
+    ] as $key) {
+        $value = $params[$key] ?? null;
+        if (is_scalar($value) && trim((string)$value) !== '') {
+            $redirect[$key] = trim((string)$value);
+        }
+    }
+
+    return '/catalogo/?' . http_build_query($redirect, '', '&', PHP_QUERY_RFC3986);
+}
