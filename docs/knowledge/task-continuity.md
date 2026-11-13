@@ -1,3 +1,29 @@
+<!-- GPT_ONLY_CONTINUITY_SCOPE_20261113 -->
+## Escopo do indicador de continuidade: somente GPT
+
+**Decisão do proprietário (13/11/2026):** a continuidade do **GPT** é
+avaliada somente pelos checkpoints cuja identidade de agente pertence ao
+contrato GPT/ChatGPT de `scripts/agent_task_state.py`. Os perfis Dev e
+Atendimento permanecem independentes, com vinculação de conversa, autenticação
+e `PROGRESS_CONFIRMED` reais. Não atribuir uma conversa GPT a Claude, Gemini,
+Codex ou outros agentes para tentar regularizar o indicador.
+
+O controlador de produção pode continuar apresentando telemetria agregada de
+outros executores por compatibilidade operacional. Esses contadores e a saúde
+do Claude Remote Control **não condicionam `continuity_ready`**, que agora
+representa exclusivamente a continuidade GPT. O resumo `gpt_scope` contém
+apenas checkpoints ativos GPT e falhas de nudge/dispatcher do fingerprint
+corrente de cada um. `completion_sweep`, `dispatcher`, `chatgpt_nudge` e
+`claude_remote_control` continuam disponíveis como diagnósticos globais,
+sem modificar ou encerrar tarefas alheias.
+
+O semáforo `continuity_ready=true` confirma apenas que não há impedimentos
+de saúde **GPT** identificados. Ele não é prova isolada de
+`continuity_e2e_pass`, não certifica outras IAs e não autoriza concluir
+checkpoints sem evidências de execução e validação E2E.
+
+<!-- /GPT_ONLY_CONTINUITY_SCOPE_20261113 -->
+
 <!-- OWNER_CHECKPOINT_PERSISTENCE_BEFORE_AUTH_V1 -->
 ## Persistir tarefa antes de autenticar, nunca reproduzir em conversa errada
 
