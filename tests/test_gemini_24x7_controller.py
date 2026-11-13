@@ -120,7 +120,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         for task_id, status in (("very-old-open", "RUNNING"), ("very-old-done", "CONCLUIDO")):
             (self.runtime / f"{task_id}.json").write_text(
                 json.dumps({
-                    "task_id": task_id, "created_at": old, "updated_at": old,
+                    "task_id": task_id, "agent_id": "gpt", "created_at": old, "updated_at": old,
                     "status": status, "next_action": "preserve original intent",
                 }),
                 encoding="utf-8",
@@ -141,7 +141,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         controller = load_controller()
         (self.runtime / "malformed-active.json").write_text(
             json.dumps({
-                "task_id": "malformed-active", "created_at": "not-a-time",
+                "task_id": "malformed-active", "agent_id": "gpt", "created_at": "not-a-time",
                 "updated_at": "not-a-time", "status": "READY_TO_COMPLETE",
                 "next_action": "verify before finishing",
             }),
@@ -163,7 +163,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         (self.runtime / "unbound-real-task.json").write_text(
             json.dumps({
-                "task_id": "unbound-real-task", "status": "RUNNING",
+                "task_id": "unbound-real-task", "agent_id": "gpt", "status": "RUNNING",
                 "next_action": "finish task", "created_at": now, "updated_at": now,
             }),
             encoding="utf-8",
@@ -182,21 +182,37 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 1)
         self.assertEqual(result["dispatcher"]["deferred_unbound"], 1)
 
-    def test_unbound_session_and_no_conversation_are_visible_in_health(self) -> None:
+    def test_only_real_gpt_bindings_can_fail_continuity_health(self) -> None:
         controller = load_controller()
+        now = datetime.now(timezone.utc).isoformat()
+        for task, cid in (
+            ("gpt-unbound-conversation", ""),
+            ("gpt-unbound-session", "authenticated-conversation-123"),
+        ):
+            (self.runtime / f"{task}.json").write_text(
+                json.dumps({
+                    "task_id": task, "agent_id": "chatgpt-gpt6", "status": "RUNNING",
+                    "created_at": now, "updated_at": now, "next_action": "continue",
+                    "conversation_id": cid,
+                }),
+                encoding="utf-8",
+            )
         with (
             patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
             patch.object(controller.watchdog, "run_once", return_value={}),
-            patch.object(controller.nudge_dispatcher, "run_once", return_value={"skipped_unbound": 2}),
-            patch.object(controller.dispatcher, "run_once", return_value={"deferred_unbound": 2, "deferred_unbound_session": 1}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"skipped_unbound": 9}),
+            patch.object(controller.dispatcher, "run_once", return_value={
+                "deferred_unbound": 9, "deferred_unbound_session": 2,
+            }),
         ):
-            result = controller.run_once(runtime_dir=self.runtime, owner_id="unbound-counters")
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="gpt-binding-scope")
         self.assertFalse(result["continuity_ready"])
         self.assertIn("chatgpt_resume_unbound_conversation", result["degraded_reasons"])
-        self.assertIn("dispatcher_unbound_conversation", result["degraded_reasons"])
         self.assertIn("dispatcher_unbound_session", result["degraded_reasons"])
-        self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 2)
-        self.assertEqual(result["dispatcher"]["deferred_unbound_session"], 1)
+        self.assertNotIn("dispatcher_unbound_conversation", result["degraded_reasons"])
+        self.assertEqual(result["gpt_scope"]["unbound_active"], 1)
+        self.assertEqual(result["gpt_scope"]["unbound_session"], 1)
+        self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 9)
 
     def test_legacy_handoff_disabled_allows_unbound_fallback_without_false_red(self) -> None:
         controller = load_controller()
@@ -291,19 +307,132 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             with controller.daemon_guard(self.runtime) as second:
                 self.assertFalse(second)
 
-    def test_failed_browser_resume_is_not_continuity_ready(self) -> None:
+    def test_mixed_nudge_failure_without_gpt_request_is_only_telemetry(self) -> None:
         controller = load_controller()
         with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
             patch.object(controller.watchdog, "run_once", return_value={}),
             patch.object(controller.nudge_dispatcher, "run_once", return_value={"failed": 1}),
             patch.object(controller.dispatcher, "run_once", return_value={"deferred_chatgpt": 1}),
         ):
-            result = controller.run_once(runtime_dir=self.runtime, owner_id="browser-error")
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="other-agent-browser-error")
         self.assertTrue(result["liveness_ok"])
-        self.assertFalse(result["continuity_ready"])
-        self.assertFalse(result["ok"])
-        self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertNotIn("chatgpt_resume_failed", result["degraded_reasons"])
         self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
+
+    def _fixture_gpt_resume_request(self, controller, task_id: str = "gpt-recovery") -> str:
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        checkpoint = {
+            "task_id": task_id, "agent_id": "chatgpt-gpt6",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "status": "RUNNING", "created_at": now, "updated_at": now,
+            "conversation_id": "6ac2bb7d-67a0-83e9-850d-386f73ed4197",
+            "browser_session": "atendimento",
+            "next_action": "Retomar a tarefa na conversa vinculada",
+        }
+        (self.runtime / f"{task_id}.json").write_text(
+            json.dumps(checkpoint), encoding="utf-8",
+        )
+        fingerprint = controller.watchdog._fingerprint(checkpoint)
+        request = {
+            "id": "resume-gpt-fixture", "task_id": task_id,
+            "preferred_executor": "chatgpt_common", "status": "queued",
+            "repository": checkpoint["repository"], "fingerprint": fingerprint,
+        }
+        (self.runtime / "_resume-requests.jsonl").write_text(
+            json.dumps(request) + "\n", encoding="utf-8",
+        )
+        return fingerprint
+
+    def test_current_gpt_nudge_failure_still_fails_readiness(self) -> None:
+        controller = load_controller()
+        fingerprint = self._fixture_gpt_resume_request(controller)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "task_id": "gpt-recovery", "fingerprint": fingerprint,
+                "bridge_ok": True, "worker_status": "STALLED_NOT_CONFIRMED",
+                "detail_code": "UNCLASSIFIED_RUNTIME_ERROR",
+            }) + "\n", encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"failed": 9}),
+            patch.object(controller.nudge_dispatcher, "resolve_bridge_token", return_value="test-only"),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="gpt-failed-nudge")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
+        self.assertEqual(result["gpt_scope"]["nudge_failed"], 1)
+        self.assertEqual(result["gpt_scope"]["queued_chatgpt"], 1)
+
+    def test_current_gpt_dispatcher_failure_still_fails_readiness(self) -> None:
+        controller = load_controller()
+        fingerprint = self._fixture_gpt_resume_request(controller)
+        (self.runtime / "_resume-executions.jsonl").write_text(
+            json.dumps({"fingerprint": fingerprint, "result": "no_progress"}) + "\n",
+            encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "resolve_bridge_token", return_value="test-only"),
+            patch.object(controller.dispatcher, "run_once", return_value={"no_progress": 99}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="gpt-no-progress")
+        self.assertFalse(result["continuity_ready"])
+        self.assertEqual(result["gpt_scope"]["dispatcher_no_progress"], 1)
+        self.assertIn("dispatcher_no_progress", result["degraded_reasons"])
+
+    def test_non_gpt_old_unbound_tasks_and_claude_failure_do_not_block_gpt(self) -> None:
+        controller = load_controller()
+        old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+        (self.runtime / "claude-unbound.json").write_text(json.dumps({
+            "task_id": "claude-unbound", "agent_id": "claude", "status": "RUNNING",
+            "created_at": old, "updated_at": old, "next_action": "external work",
+        }), encoding="utf-8")
+        self.claude_pointer.unlink()
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={
+                "failed": 9, "skipped_unbound": 9,
+            }),
+            patch.object(controller.dispatcher, "run_once", return_value={
+                "deferred_unbound": 9, "failed": 9, "no_progress": 9,
+            }),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="non-gpt-excluded")
+        self.assertEqual(result["continuity_scope"], "gpt")
+        self.assertTrue(result["continuity_ready"])
+        self.assertEqual(result["gpt_scope"]["active"], 0)
+        self.assertEqual(result["gpt_scope"]["other_agents_active"], 1)
+        self.assertEqual(result["completion_sweep"]["active_outside_lookback"], 1)
+        self.assertFalse(result["claude_remote_control"]["pointer_present"])
+        self.assertEqual(result["degraded_reasons"], [])
+
+    def test_superseded_gpt_nudge_failure_cannot_poison_current_fingerprint(self) -> None:
+        controller = load_controller()
+        self._fixture_gpt_resume_request(controller)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "task_id": "gpt-recovery", "fingerprint": "old-checkpoint-fingerprint",
+                "bridge_ok": False, "worker_status": "ERROR",
+            }) + "\n", encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"failed": 1}),
+            patch.object(controller.nudge_dispatcher, "resolve_bridge_token", return_value="test-only"),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="stale-nudge")
+        self.assertTrue(result["continuity_ready"])
+        self.assertEqual(result["gpt_scope"]["nudge_failed"], 0)
 
     def test_unbound_legacy_task_cannot_make_personal_browser_login_required(self) -> None:
         controller = load_controller()
@@ -333,7 +462,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
     def test_explicit_bound_fred_task_keeps_personal_mfa_required(self) -> None:
         controller = load_controller()
         (self.runtime / "fred.json").write_text(json.dumps({
-            "task_id": "fred", "status": "RUNNING", "browser_session": "fred",
+            "task_id": "fred", "agent_id": "gpt", "status": "RUNNING", "browser_session": "fred",
             "conversation_id": "legacyBoundConversation1",
         }), encoding="utf-8")
         with (
@@ -557,8 +686,8 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         ):
             result = controller.run_once(runtime_dir=self.runtime, owner_id="missing-claude-pointer")
 
-        self.assertFalse(result["continuity_ready"])
-        self.assertIn("claude_remote_control_pointer_missing", result["degraded_reasons"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertNotIn("claude_remote_control_pointer_missing", result["degraded_reasons"])
         self.assertFalse(result["claude_remote_control"]["pointer_present"])
 
     def test_dead_claude_remote_control_process_fails_readiness_closed(self) -> None:
@@ -573,8 +702,8 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         ):
             result = controller.run_once(runtime_dir=self.runtime, owner_id="dead-claude-process")
 
-        self.assertFalse(result["continuity_ready"])
-        self.assertIn("claude_remote_control_process_missing", result["degraded_reasons"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertNotIn("claude_remote_control_process_missing", result["degraded_reasons"])
         self.assertFalse(result["claude_remote_control"]["process_alive"])
 
     def test_stale_claude_pointer_fails_readiness_closed(self) -> None:
@@ -589,8 +718,8 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         ):
             result = controller.run_once(runtime_dir=self.runtime, owner_id="stale-claude-pointer")
 
-        self.assertFalse(result["continuity_ready"])
-        self.assertIn("claude_remote_control_pointer_stale", result["degraded_reasons"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertNotIn("claude_remote_control_pointer_stale", result["degraded_reasons"])
         self.assertTrue(result["claude_remote_control"]["process_alive"])
         self.assertFalse(result["claude_remote_control"]["identity_match"])
 
@@ -750,8 +879,8 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         ):
             result = controller.run_once(runtime_dir=self.runtime, owner_id="worker-failure-owner")
 
-        self.assertFalse(result["continuity_ready"])
-        self.assertIn("dispatcher_failed", result["degraded_reasons"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertNotIn("dispatcher_failed", result["degraded_reasons"])
         self.assertTrue(result["generated_at"])
         self.assertEqual(result["dispatcher"]["reconciled"], 1)
 
@@ -787,11 +916,11 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         ):
             result = controller.run_once(runtime_dir=self.runtime, owner_id="no-progress-owner")
 
-        self.assertFalse(result["ok"])
+        self.assertTrue(result["ok"])
         self.assertTrue(result["liveness_ok"])
-        self.assertFalse(result["continuity_ready"])
-        self.assertTrue(result["degraded"])
-        self.assertEqual(result["degraded_reasons"], ["dispatcher_no_progress"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertFalse(result["degraded"])
+        self.assertEqual(result["degraded_reasons"], [])
 
     def test_failed_cycle_is_not_continuity_ready(self) -> None:
         controller = load_controller()
@@ -825,10 +954,10 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         ):
             result = controller.run_once(runtime_dir=self.runtime, owner_id="failed-owner")
 
-        self.assertFalse(result["ok"])
+        self.assertTrue(result["ok"])
         self.assertTrue(result["liveness_ok"])
-        self.assertFalse(result["continuity_ready"])
-        self.assertEqual(result["degraded_reasons"], ["dispatcher_failed"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertEqual(result["degraded_reasons"], [])
 
     def test_material_cycle_keeps_forensic_event(self) -> None:
         controller = load_controller()

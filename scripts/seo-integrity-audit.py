@@ -109,9 +109,13 @@ def is_discovery_page(url: str, base: str) -> bool:
     if parts.path not in {"/catalogo/", "/blog/"}:
         return False
     params = urllib.parse.parse_qs(parts.query, keep_blank_values=True)
-    if set(params) != {"pagina"}:
+    # Catalog pagination now uses page=; keep pagina= for legacy catalog URLs
+    # and blog pagination. Only pure pagination URLs are discovery targets:
+    # do not crawl arbitrary search/sort combinations.
+    key = "page" if parts.path == "/catalogo/" and "page" in params else "pagina"
+    if set(params) != {key}:
         return False
-    values = params.get("pagina") or []
+    values = params.get(key) or []
     return len(values) == 1 and values[0].isdigit() and int(values[0]) >= 2
 
 

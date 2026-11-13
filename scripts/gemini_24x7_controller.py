@@ -595,6 +595,115 @@ def _has_material_activity(
 
 
 
+def _gpt_checkpoint(payload: dict[str, Any]) -> bool:
+    """Use the canonical agent identity; never infer a GPT chat from its title."""
+    agent_id = str(payload.get("agent_id") or "").strip()
+    return bool(agent_id and task_state.CHATGPT_AGENT_ID_RE.search(agent_id))
+
+
+def _gpt_continuity_scope(root: Path) -> dict[str, int]:
+    """Measure GPT-only readiness without changing other agents' queues."""
+    summary = {
+        "active": 0, "active_recent": 0, "other_agents_active": 0,
+        "active_outside_lookback": 0, "active_invalid_timestamp": 0,
+        "unbound_active": 0, "unbound_session": 0,
+        "queued_chatgpt": 0, "nudge_failed": 0,
+        "nudge_attempt_limit": 0, "bound_session_unavailable": 0,
+        "dispatcher_no_progress": 0, "dispatcher_failed": 0,
+    }
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=max(1, int(getattr(watchdog, "DEFAULT_LOOKBACK_DAYS", 10)))
+    )
+    active: dict[str, dict[str, Any]] = {}
+    for path in root.glob("*.json"):
+        if path.name.startswith("_") or not path.is_file():
+            continue
+        payload = _read_json(path)
+        if payload.get("status") not in {"RUNNING", "READY_TO_COMPLETE"}:
+            continue
+        if not _gpt_checkpoint(payload):
+            summary["other_agents_active"] += 1
+            continue
+        summary["active"] += 1
+        created = _parse_utc(payload.get("created_at"))
+        if created is None:
+            summary["active_invalid_timestamp"] += 1
+            continue
+        if created < cutoff:
+            summary["active_outside_lookback"] += 1
+            continue
+        summary["active_recent"] += 1
+        conversation_id = str(payload.get("conversation_id") or "").strip()
+        session = str(payload.get("browser_session") or "").strip()
+        if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", conversation_id) is None:
+            summary["unbound_active"] += 1
+        elif session not in {"dev", "atendimento", "fred"}:
+            summary["unbound_session"] += 1
+        task_id = str(payload.get("task_id") or "").strip()
+        if task_id and path.name == task_id + ".json":
+            active[task_id] = payload
+
+    # Dispatcher and nudge counters are global. Match only current GPT
+    # checkpoint fingerprints to prevent non-GPT failures from poisoning SLA.
+    requests: dict[str, dict[str, Any]] = {}
+    for request in watchdog.read_requests(root):
+        if request.get("status") != "queued":
+            continue
+        task_id = str(request.get("task_id") or "").strip()
+        payload = active.get(task_id)
+        if payload is None:
+            continue
+        fingerprint = str(request.get("fingerprint") or "").strip()
+        if fingerprint and fingerprint == watchdog._fingerprint(payload):
+            requests[fingerprint] = request
+
+    outcomes = nudge_dispatcher._read_ledger(root)
+    max_attempts = max(1, int(os.getenv("CHATGPT_CONTINUITY_MAX_WEB_ATTEMPTS", "2")))
+    for fingerprint, request in requests.items():
+        if request.get("preferred_executor") != "chatgpt_common":
+            continue
+        summary["queued_chatgpt"] += 1
+        outcome = outcomes.get(fingerprint)
+        if not outcome:
+            continue
+        status = str(outcome.get("worker_status") or "").strip().upper()
+        detail = str(outcome.get("detail_code") or "").strip().upper()
+        if outcome.get("bridge_ok") is not True or status not in {
+            "", "PENDING", "CLAIMED", "PROGRESS_CONFIRMED"
+        }:
+            summary["nudge_failed"] += 1
+        if detail == "BOUND_SESSION_IDENTITY_MISMATCH":
+            summary["bound_session_unavailable"] += 1
+        try:
+            attempts = int(outcome.get("send_attempt_count") or 0)
+        except (TypeError, ValueError):
+            attempts = 0
+        if attempts >= max_attempts and status != "PROGRESS_CONFIRMED":
+            summary["nudge_attempt_limit"] += 1
+
+    executions = root / dispatcher.EXECUTIONS_FILE
+    if executions.is_file() and requests:
+        last: dict[str, str] = {}
+        with executions.open(encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                fingerprint = str(row.get("fingerprint") or "").strip()
+                if fingerprint in requests:
+                    last[fingerprint] = str(row.get("result") or "").strip().lower()
+        summary["dispatcher_no_progress"] = sum(
+            result == "no_progress" for result in last.values()
+        )
+        summary["dispatcher_failed"] = sum(
+            result == "failed" for result in last.values()
+        )
+    return summary
+
+
 def _personal_browser_required(root: Path) -> bool:
     """Only an explicitly bound RUNNING Fred task needs personal CDP health.
 
@@ -610,7 +719,7 @@ def _personal_browser_required(root: Path) -> bool:
             continue
         if not isinstance(payload, dict) or payload.get("status") not in ("RUNNING", "READY_TO_COMPLETE"):
             continue
-        if payload.get("browser_session") != "fred":
+        if payload.get("browser_session") != "fred" or not _gpt_checkpoint(payload):
             continue
         if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", str(payload.get("conversation_id") or "")):
             return True
@@ -649,50 +758,38 @@ def run_once(
         # The dispatcher only enqueues/reconciles durable work. Provider execution
         # runs in the independent resume worker and must never block this cycle.
         resumed = dispatcher.run_once(runtime_dir=root, timeout_seconds=max(1, int(timeout_seconds)))
-        no_progress = int(resumed.get("no_progress") or 0)
-        failed = int(resumed.get("failed") or 0)
+        gpt_scope = _gpt_continuity_scope(root)
         monitor = _chatgpt_monitor_health(root)
         monitor_required = os.environ.get("CHATGPT_CONTINUITY_MONITOR_REQUIRED", "1").strip().lower() not in {"0", "false", "no", "off"}
         monitor["required"] = monitor_required
         browser_health = _chatgpt_browser_health(root)
-        # With durable fencing, the Fred monitor is strictly for explicit Fred
-        # tasks. Missing legacy provenance cannot make a logged-out personal
-        # browser a prerequisite for corporate Dev/Atendimento recovery.
+        # Legacy Fred health only applies to a bound GPT checkpoint.
         personal_browser_required = (not durable_handoff_enabled or _personal_browser_required(root))
-        claude_health = _claude_remote_control_health()
+        claude_health = _claude_remote_control_health()  # informational only
         degraded_reasons: list[str] = []
-        if int(route_recovery.get("failed") or 0) > 0:
+        if int(route_recovery.get("failed") or 0) and gpt_scope["unbound_active"]:
             degraded_reasons.append("conversation_route_recovery_failed")
-        if no_progress > 0:
+        if gpt_scope["dispatcher_no_progress"]:
             degraded_reasons.append("dispatcher_no_progress")
-        if failed > 0:
+        if gpt_scope["dispatcher_failed"]:
             degraded_reasons.append("dispatcher_failed")
-        if int(completion_sweep.get("failed") or 0) > 0:
-            degraded_reasons.append("completion_sweep_failed")
-        if int(completion_sweep.get("active_outside_lookback") or 0) > 0:
+        if gpt_scope["active_outside_lookback"]:
             degraded_reasons.append("active_checkpoint_outside_recovery_window")
-        if int(completion_sweep.get("active_invalid_timestamp") or 0) > 0:
+        if gpt_scope["active_invalid_timestamp"]:
             degraded_reasons.append("active_checkpoint_invalid_timestamp")
-        if durable_handoff_enabled and int(completion_sweep.get("unbound_active") or 0) > 0:
+        if durable_handoff_enabled and gpt_scope["unbound_active"]:
             degraded_reasons.append("active_checkpoint_unbound")
-        if int(completion_sweep.get("deferred_unbound_session") or 0) > 0:
+            degraded_reasons.append("chatgpt_resume_unbound_conversation")
+        if durable_handoff_enabled and gpt_scope["unbound_session"]:
             degraded_reasons.append("completion_sweep_unbound_session")
-        if int(nudge.get("failed") or 0) > 0:
+            degraded_reasons.append("dispatcher_unbound_session")
+        if gpt_scope["nudge_failed"]:
             degraded_reasons.append("chatgpt_resume_failed")
-        # Without durable handoff, the legacy detached fallback is allowed to
-        # progress without a browser binding; do not misclassify it as unhealthy.
-        if durable_handoff_enabled:
-            if int(nudge.get("skipped_unbound") or 0) > 0:
-                degraded_reasons.append("chatgpt_resume_unbound_conversation")
-            if int(resumed.get("deferred_unbound") or 0) > 0:
-                degraded_reasons.append("dispatcher_unbound_conversation")
-            if int(resumed.get("deferred_unbound_session") or 0) > 0:
-                degraded_reasons.append("dispatcher_unbound_session")
-        if int(nudge.get("skipped_no_token") or 0) > 0:
+        if gpt_scope["queued_chatgpt"] and not nudge_dispatcher.resolve_bridge_token():
             degraded_reasons.append("chatgpt_resume_missing_token")
-        if int(nudge.get("skipped_attempt_limit") or 0) > 0:
+        if gpt_scope["nudge_attempt_limit"]:
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
-        if int(nudge.get("skipped_session_unavailable") or 0) > 0:
+        if gpt_scope["bound_session_unavailable"]:
             degraded_reasons.append("chatgpt_bound_session_unavailable")
         if monitor_required and monitor.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_monitor_stale")
@@ -712,14 +809,6 @@ def run_once(
                 degraded_reasons.append("chatgpt_browser_not_authenticated")
             else:
                 degraded_reasons.append("chatgpt_browser_auth_unknown")
-        if claude_health.get("pointer_present") is not True:
-            degraded_reasons.append("claude_remote_control_pointer_missing")
-        elif claude_health.get("process_alive") is not True:
-            degraded_reasons.append("claude_remote_control_process_missing")
-        elif claude_health.get("identity_match") is not True:
-            degraded_reasons.append("claude_remote_control_pointer_stale")
-        elif claude_health.get("connected") is not True:
-            degraded_reasons.append("claude_remote_control_not_connected")
         continuity_ready = not degraded_reasons
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
@@ -728,6 +817,8 @@ def run_once(
             "ok": continuity_ready,
             "liveness_ok": True,
             "continuity_ready": continuity_ready,
+            "continuity_scope": "gpt",
+            "gpt_scope": gpt_scope,
             "degraded": not continuity_ready,
             "degraded_reasons": degraded_reasons,
             "owner_id": owner,
