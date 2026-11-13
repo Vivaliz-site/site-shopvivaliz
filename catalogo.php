@@ -636,6 +636,7 @@ $svNavCurrent = 'catalogo';
         </section>
 
         <section class="container product-grid" id="product-grid" aria-live="polite">
+            <?php $hasCatalogHeroImage = false; ?>
             <?php foreach ($products as $product): ?>
                 <?php
                 // ShopVivaliz nao opera com pre-venda/"consulte o valor": produto
@@ -663,8 +664,9 @@ $svNavCurrent = 'catalogo';
                 ?>
                 <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_catalog_esc($product['sku']) ?>" data-product-id="<?= sv_catalog_esc($productIdAttr) ?>">
                     <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
+                    <?php $isHeroImage = !$hasCatalogHeroImage; $hasCatalogHeroImage = true; ?>
                     <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>" data-sku="<?= sv_catalog_esc($product['sku']) ?>" data-product-id="<?= sv_catalog_esc($productIdAttr) ?>">
-                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_catalog_default_image() ?>'">
+                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" width="400" height="400" loading="<?= $isHeroImage ? 'eager' : 'lazy' ?>" <?= $isHeroImage ? 'fetchpriority="high"' : '' ?> decoding="async" onerror="this.src='<?= sv_catalog_default_image() ?>'">
                         <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                     </a>
                     <div class="product-info">

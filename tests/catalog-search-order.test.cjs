@@ -130,3 +130,18 @@ test('failed catalog loads offer a visible retry instead of an empty grid', asyn
   assert.match(ui.grid.innerHTML, /catalog-retry/);
   assert.match(ui.grid.innerHTML, /Tentar novamente/);
 });
+
+test('lead product image should not be lazy and cards must reserve image dimensions', async () => {
+  const ui = harness();
+  ui.search('vaso');
+  await resolve(ui.requests[0], [product('Vaso Um'), product('Vaso Dois')]);
+  const tags = [...ui.grid.innerHTML.matchAll(/<img\b[^>]*>/g)].map(match => match[0]);
+  assert.equal(tags.length, 2);
+  assert.match(tags[0], /loading="eager"/);
+  assert.match(tags[0], /fetchpriority="high"/);
+  assert.match(tags[0], /width="400" height="400"/);
+  assert.match(tags[0], /decoding="async"/);
+  assert.match(tags[1], /loading="lazy"/);
+  assert.doesNotMatch(tags[1], /fetchpriority="high"/);
+  assert.match(tags[1], /width="400" height="400"/);
+});

@@ -34,6 +34,10 @@ check_catalog(array_column(sv_catalog_sort_rows($rows, 'price-desc'), 'name') ==
 check_catalog(array_column(sv_catalog_sort_rows($rows, 'name'), 'name') === ['Alfa', 'Beta', 'Zebra'], 'Name ordering must be rendered by the backend.');
 check_catalog(sv_catalog_sort_rows($rows, 'relevance') === $rows, 'Relevance ranking must be preserved.');
 
+$markup = (string)file_get_contents(dirname(__DIR__) . '/catalogo.php');
+check_catalog(str_contains($markup, 'loading="<?= $isHeroImage ? \'eager\' : \'lazy\' ?>"'), 'Lead SSR image should not defer LCP behind lazy loading.');
+check_catalog(str_contains($markup, '$isHeroImage ? \'fetchpriority="high"\' : \'\''), 'SSR should prioritize only the lead catalog image.');
+
 $template = (string)file_get_contents(dirname(__DIR__) . '/catalogo.php');
 $client = (string)file_get_contents(dirname(__DIR__) . '/js/catalog.js');
 check_catalog(str_contains($template, 'sv_catalog_resolve_page($_GET, $totalPages)'), 'SSR must parse page consistently.');

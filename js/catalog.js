@@ -211,7 +211,7 @@
     return (base + '-' + skuPart).replace(/^-+|-+$/g, '') || skuPart;
   }
 
-  function card(product) {
+  function card(product, index) {
     const image = product.image_url || '/images/logo-vivaliz-square-v2.png';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
     const category = String(product.category || '').trim();
@@ -242,7 +242,7 @@
     return `
       <article class="product-card${stock <= 0 ? ' is-out-of-stock' : ''}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
         <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
-          <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
+          <img src="${esc(image)}" alt="${esc(product.name)}" width="400" height="400" loading="${index === 0 ? 'eager' : 'lazy'}" ${index === 0 ? 'fetchpriority="high"' : ''} decoding="async" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
           ${stock <= 0 ? '<span class="out-of-stock-badge">Esgotado</span>' : ''}
         </a>
         <div class="product-info">
