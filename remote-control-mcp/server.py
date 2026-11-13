@@ -2268,11 +2268,40 @@ await Promise.race([
   new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
 ]);
 const c=new Cdp(ws);
-const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted&&e.form){const u=new URL(e.form.action,location.href);if(['chatgpt.com','auth.openai.com','openai.com'].includes(location.hostname.toLowerCase())&&/(?:^|\\/)(?:log[-_]?out|sign[-_]?out)(?:\\/|$)/i.test(u.pathname))throw new Error('corporate_logout_guard_denied');}if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
-const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
-if(r.exceptionDetails) throw new Error('browser_runtime_exception');
-if(c.close)c.close();
-console.log(JSON.stringify(r.result?.value ?? null));
+const selected=JSON.stringify(selector);
+const focusExpr="(()=>{const e=document.querySelector("+selected+");if(!e)throw new Error('selector_not_found');e.focus();return{contenteditable:!!e.isContentEditable,content_length:Number(e.textContent?.length||0)}})()";
+const focused=await c.send('Runtime.evaluate',{expression:focusExpr,returnByValue:true,awaitPromise:true});
+if(focused.exceptionDetails||!focused.result?.value) throw new Error('browser_runtime_exception');
+if(focused.result.value.contenteditable){
+  // ProseMirror/Tiptap editors do not expose a native .value setter.  A
+  // CDP text-insertion event drives the same real editable pipeline as typing,
+  // without replacing the editor DOM or leaking the typed text into logs.
+  await c.send('Input.insertText',{text:secret});
+  const expectedLength=focused.result.value.content_length+secret.length;
+  const verifyExpr="(()=>{const e=document.querySelector("+selected+");return !!e&&e.isContentEditable&&Number(e.textContent?.length||0)>="+String(expectedLength)+"})()";
+  const verified=await c.send('Runtime.evaluate',{expression:verifyExpr,returnByValue:true,awaitPromise:true});
+  if(verified.exceptionDetails||verified.result?.value!==true) throw new Error('browser_contenteditable_text_not_applied');
+  let submitted=false;
+  if(submitRaw==='1'){
+    await new Promise(resolve=>setTimeout(resolve,250));
+    // A click on the actual enabled send control, not a synthetic form
+    // submission, is required for modern ChatGPT contenteditable composers.
+    const sendExpr="(()=>{const b=document.querySelector('button[data-testid=\"send-button\"]');if(!b||b.disabled||!b.getClientRects().length)return false;b.click();return true})()";
+    const sent=await c.send('Runtime.evaluate',{expression:sendExpr,returnByValue:true,awaitPromise:true});
+    if(sent.exceptionDetails||sent.result?.value!==true) throw new Error('browser_contenteditable_submit_unavailable');
+    submitted=true;
+  }
+  if(c.close)c.close();
+  console.log(JSON.stringify({typed:true,submitted}));
+}else{
+  // Preserve the existing behavior for native form controls, including the
+  // corporate logout guard and normal form submission semantics.
+  const expression="(()=>{const e=document.querySelector("+selected+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted&&e.form){const u=new URL(e.form.action,location.href);if(['chatgpt.com','auth.openai.com','openai.com'].includes(location.hostname.toLowerCase())&&/(?:^|\\\/)(?:log[-_]?out|sign[-_]?out)(?:\\\/|$)/i.test(u.pathname))throw new Error('corporate_logout_guard_denied');}if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
+  const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+  if(r.exceptionDetails) throw new Error('browser_runtime_exception');
+  if(c.close)c.close();
+  console.log(JSON.stringify(r.result?.value ?? null));
+}
 """
 
 
