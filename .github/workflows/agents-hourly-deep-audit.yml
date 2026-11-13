@@ -27,8 +27,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: agents-hourly-deep-audit-${{ github.ref }}
-  cancel-in-progress: false
+  group: agents-hourly-deep-audit-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   audit:
