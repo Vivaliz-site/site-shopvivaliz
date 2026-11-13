@@ -321,6 +321,119 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertNotIn("chatgpt_resume_failed", result["degraded_reasons"])
         self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
 
+    def _fixture_gpt_resume_request(self, controller, task_id: str = "gpt-recovery") -> str:
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        checkpoint = {
+            "task_id": task_id, "agent_id": "chatgpt-gpt6",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "status": "RUNNING", "created_at": now, "updated_at": now,
+            "conversation_id": "6ac2bb7d-67a0-83e9-850d-386f73ed4197",
+            "browser_session": "atendimento",
+            "next_action": "Retomar a tarefa na conversa vinculada",
+        }
+        (self.runtime / f"{task_id}.json").write_text(
+            json.dumps(checkpoint), encoding="utf-8",
+        )
+        fingerprint = controller.watchdog._fingerprint(checkpoint)
+        request = {
+            "id": "resume-gpt-fixture", "task_id": task_id,
+            "preferred_executor": "chatgpt_common", "status": "queued",
+            "repository": checkpoint["repository"], "fingerprint": fingerprint,
+        }
+        (self.runtime / "_resume-requests.jsonl").write_text(
+            json.dumps(request) + "\n", encoding="utf-8",
+        )
+        return fingerprint
+
+    def test_current_gpt_nudge_failure_still_fails_readiness(self) -> None:
+        controller = load_controller()
+        fingerprint = self._fixture_gpt_resume_request(controller)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "task_id": "gpt-recovery", "fingerprint": fingerprint,
+                "bridge_ok": True, "worker_status": "STALLED_NOT_CONFIRMED",
+                "detail_code": "UNCLASSIFIED_RUNTIME_ERROR",
+            }) + "\n", encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"failed": 9}),
+            patch.object(controller.nudge_dispatcher, "resolve_bridge_token", return_value="test-only"),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="gpt-failed-nudge")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
+        self.assertEqual(result["gpt_scope"]["nudge_failed"], 1)
+        self.assertEqual(result["gpt_scope"]["queued_chatgpt"], 1)
+
+    def test_current_gpt_dispatcher_failure_still_fails_readiness(self) -> None:
+        controller = load_controller()
+        fingerprint = self._fixture_gpt_resume_request(controller)
+        (self.runtime / "_resume-executions.jsonl").write_text(
+            json.dumps({"fingerprint": fingerprint, "result": "no_progress"}) + "\n",
+            encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "resolve_bridge_token", return_value="test-only"),
+            patch.object(controller.dispatcher, "run_once", return_value={"no_progress": 99}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="gpt-no-progress")
+        self.assertFalse(result["continuity_ready"])
+        self.assertEqual(result["gpt_scope"]["dispatcher_no_progress"], 1)
+        self.assertIn("dispatcher_no_progress", result["degraded_reasons"])
+
+    def test_non_gpt_old_unbound_tasks_and_claude_failure_do_not_block_gpt(self) -> None:
+        controller = load_controller()
+        old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+        (self.runtime / "claude-unbound.json").write_text(json.dumps({
+            "task_id": "claude-unbound", "agent_id": "claude", "status": "RUNNING",
+            "created_at": old, "updated_at": old, "next_action": "external work",
+        }), encoding="utf-8")
+        self.claude_pointer.unlink()
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={
+                "failed": 9, "skipped_unbound": 9,
+            }),
+            patch.object(controller.dispatcher, "run_once", return_value={
+                "deferred_unbound": 9, "failed": 9, "no_progress": 9,
+            }),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="non-gpt-excluded")
+        self.assertEqual(result["continuity_scope"], "gpt")
+        self.assertTrue(result["continuity_ready"])
+        self.assertEqual(result["gpt_scope"]["active"], 0)
+        self.assertEqual(result["gpt_scope"]["other_agents_active"], 1)
+        self.assertEqual(result["completion_sweep"]["active_outside_lookback"], 1)
+        self.assertFalse(result["claude_remote_control"]["pointer_present"])
+        self.assertEqual(result["degraded_reasons"], [])
+
+    def test_superseded_gpt_nudge_failure_cannot_poison_current_fingerprint(self) -> None:
+        controller = load_controller()
+        self._fixture_gpt_resume_request(controller)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "task_id": "gpt-recovery", "fingerprint": "old-checkpoint-fingerprint",
+                "bridge_ok": False, "worker_status": "ERROR",
+            }) + "\n", encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"failed": 1}),
+            patch.object(controller.nudge_dispatcher, "resolve_bridge_token", return_value="test-only"),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="stale-nudge")
+        self.assertTrue(result["continuity_ready"])
+        self.assertEqual(result["gpt_scope"]["nudge_failed"], 0)
+
     def test_unbound_legacy_task_cannot_make_personal_browser_login_required(self) -> None:
         controller = load_controller()
         (self.runtime / "orphan.json").write_text(json.dumps({
