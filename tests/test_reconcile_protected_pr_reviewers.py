@@ -232,15 +232,17 @@ class ProtectedReviewerTests(unittest.TestCase):
             REPO, [{"filename": "docs/security/suggestions.md", "patch": "+note"}], Policy
         ))
 
-    def test_workflow_never_executes_pr_code_or_admin_pat_on_pr_events(self):
+    def test_workflow_uses_trusted_main_without_creating_a_pr_check(self):
         workflow = (ROOT / ".github/workflows/reconcile-protected-pr-reviewers.yml").read_text()
-        self.assertIn("pull_request_target:", workflow)
-        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("workflow_run:", workflow)
+        self.assertIn("schedule:", workflow)
         self.assertIn("ref: main", workflow)
-        self.assertIn("github.token", workflow)
         self.assertIn("SHOPVIVALIZ_GITHUB_ADMIN_TOKEN", workflow)
-        self.assertNotIn("ref: " + "$" + "{{ github.event.pull_request.head.sha }}", workflow)
+        self.assertNotIn("continue-on-error", workflow)
+        self.assertNotIn("pull_request_target:", workflow)
         self.assertNotIn("pull_request:", workflow)
+        self.assertNotIn("pull-requests: write", workflow)
+        self.assertNotIn("ref: " + "$" + "{{ github.event.pull_request.head.sha }}", workflow)
 
 
 if __name__ == "__main__":
