@@ -242,7 +242,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                     fale no WhatsApp antes de concluir
                 </a>
             </div>
-            <div id="checkout-status" class="checkout-status-msg"></div>
+            <div id="checkout-status" class="checkout-status-msg" role="status" aria-live="polite" aria-atomic="true"></div>
         </form>
     </section>
 
@@ -256,7 +256,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
             <button type="button" id="coupon-apply-btn" class="btn btn-secondary" style="flex:1; min-height:44px!important;">Aplicar</button>
             <button type="button" id="coupon-remove-btn" class="btn btn-secondary" style="flex:1; min-height:44px!important;" hidden>Remover</button>
         </div>
-        <div id="coupon-status" class="sv-checkout-note" hidden></div>
+        <div id="coupon-status" class="sv-checkout-note" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
         <div class="summary-totals">
             <div class="summary-row">
@@ -271,7 +271,7 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
                 <span>Frete</span>
                 <strong id="cart-shipping">A calcular</strong>
             </div>
-            <div id="checkout-shipping-status" class="sv-checkout-note" hidden></div>
+            <div id="checkout-shipping-status" class="sv-checkout-note" role="status" aria-live="polite" aria-atomic="true" hidden></div>
             <div class="summary-row summary-total">
                 <span>Total estimado</span>
                 <strong id="cart-total">—</strong>
