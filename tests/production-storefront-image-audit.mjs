@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { safeImageFailure } from './production-image-audit-telemetry.mjs';
 import { chromium } from 'playwright';
 
 const baseUrl = (process.env.BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
@@ -123,6 +124,9 @@ try {
 
   metrics.imageHttpFailureCount = imageHttpFailures.length;
   metrics.imageRequestFailureCount = requestFailures.length;
+  // The verdict remains strict. Capture redacted, reproducible diagnostics for a failed request.
+  metrics.imageHttpFailureDetails = imageHttpFailures.map(safeImageFailure);
+  metrics.imageRequestFailureDetails = requestFailures.map(safeImageFailure);
   metrics.checkedAt = new Date().toISOString();
 
   await page.screenshot({

@@ -20,7 +20,7 @@ jobs:
   production-images:
     name: Verify real product images in production browser
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
 
     steps:
@@ -41,7 +41,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           npm ci
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
 
       - name: Audit production catalog images
         shell: bash
@@ -50,6 +50,7 @@ jobs:
           OUTPUT_DIR: test-results/production-image-audit
         run: |
           set -Eeuo pipefail
+          node --test tests/production-image-audit-telemetry.test.mjs
           node tests/production-storefront-image-audit.mjs
 
       - name: Upload production evidence
