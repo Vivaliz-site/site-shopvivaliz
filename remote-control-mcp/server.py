@@ -2556,73 +2556,8 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "session": session, "action": action, status_key: status}
 
 
-MUTATING_RUNTIME_ACTIONS = {
-    "controller_promote": "controller_promote",
-    # Account login tools (browser_auth_action/open, browser_profile_home_open)
-    # are intentionally absent: they no longer require a runtime lease
-    # (owner decision 2026-11-13); a supplied lease is validated by
-    # _validate_optional_account_lease in proxy_account_auth_tool.
-    "browser_navigate": "browser_navigate",
-    "browser_click": "browser_click",
-    "browser_click_control": "browser_click_control",
-    "browser_type": "browser_type",
-    "service_action": "service_action",
-}
-
 def _durable_handoff_enabled() -> bool:
     return os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
-
-def _assert_runtime_mutation(name: str, args: dict[str, Any]) -> None:
-    action = MUTATING_RUNTIME_ACTIONS.get(name)
-    if not action or not _durable_handoff_enabled():
-        return
-    lease_id = str(args.get("runtime_lease_id") or "").strip()
-    token = args.get("runtime_fencing_token")
-    if not lease_id or token is None:
-        raise ValueError("runtime_lock_required")
-    try:
-        runtime_lock.assert_runtime_lock(lease_id, int(token), action)
-    except (runtime_lock.RuntimeLockConflict, TypeError, ValueError) as exc:
-        raise ValueError("runtime_lock_invalid") from exc
-
-BROWSER_CONVERSATION_MUTATIONS = {
-    "browser_navigate": "browser_navigate",
-    "browser_click": "browser_click",
-    "browser_click_control": "browser_click_control",
-    "browser_type": "browser_type",
-}
-
-def _assert_conversation_mutation(name: str, args: dict[str, Any]) -> None:
-    action = BROWSER_CONVERSATION_MUTATIONS.get(name)
-    if not action or not _durable_handoff_enabled():
-        return
-    required = {
-        "task_id": str(args.get("task_id") or "").strip(),
-        "conversation_id": str(args.get("conversation_id") or "").strip(),
-        "session_identity": str(args.get("session_identity") or "").strip(),
-        "conversation_lease_id": str(args.get("conversation_lease_id") or "").strip(),
-        "runtime_lease_id": str(args.get("runtime_lease_id") or "").strip(),
-    }
-    checkpoint_version = args.get("checkpoint_version")
-    conversation_token = args.get("conversation_fencing_token")
-    runtime_token = args.get("runtime_fencing_token")
-    if not all(required.values()) or checkpoint_version is None or conversation_token is None or runtime_token is None:
-        raise ValueError("conversation_mutation_gate_required")
-    conversation_id = _validate_conversation_id(required["conversation_id"])
-    try:
-        conversation_lease.assert_conversation_lease(
-            conversation_id, required["conversation_lease_id"], int(conversation_token), action
-        )
-        outcome = mutation_gate.authorize_current(
-            required["task_id"], conversation_id, int(checkpoint_version), action, required["session_identity"],
-            required["conversation_lease_id"], int(conversation_token), required["runtime_lease_id"], int(runtime_token),
-        )
-    except (conversation_lease.LeaseConflict, TypeError, ValueError, OSError) as exc:
-        raise ValueError("conversation_mutation_gate_invalid") from exc
-    if not outcome.get("authorized"):
-        raise ValueError(f"conversation_mutation_gate:{outcome.get('reason', 'rejected')}")
-
-
 
 # Operator-signed cart maintenance uses a separate approval authority; generic
 # MCP bearer tokens, GitHub permissions and conversation leases are NOT grants.
@@ -2790,8 +2725,7 @@ def execute_tool(
         marina_readonly_service_command(
             args.get("service"), allow_admin=marina_central_admin_grant_active()
         )
-    # Generic runtime-lease gate removed from execute_tool (owner decision 2026-11-13).
-    _assert_conversation_mutation(name, args)
+    # Runtime-lease and conversation mutation gates removed (owner decision 2026-11-13).
     if name in {"marina_cart_preview", "marina_cart_retire_source"}:
         import maintenance_cart as cart
         if cart.SOURCE_HOST in RETIRED_HOSTS:
@@ -3241,20 +3175,6 @@ def tool_specs() -> list[dict[str, Any]]:
             schema_props["host"] = {"type": "string", "enum": [
                 host for host in allowed_hosts
             ]}
-        if name in MUTATING_RUNTIME_ACTIONS:
-            schema_props.update({
-                "runtime_lease_id": {"type": "string", "maxLength": 200},
-                "runtime_fencing_token": {"type": "integer", "minimum": 1},
-            })
-        if name in BROWSER_CONVERSATION_MUTATIONS:
-            schema_props.update({
-                "task_id": {"type": "string", "maxLength": 200},
-                "conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"},
-                "checkpoint_version": {"type": "integer", "minimum": 1},
-                "session_identity": {"type": "string", "maxLength": 200},
-                "conversation_lease_id": {"type": "string", "maxLength": 200},
-                "conversation_fencing_token": {"type": "integer", "minimum": 1},
-            })
         specs.append({
             "name": name,
             "description": desc,

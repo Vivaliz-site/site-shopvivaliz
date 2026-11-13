@@ -1096,7 +1096,6 @@ def browser_click_index(args: dict[str, Any], cancel_check=None) -> dict[str, An
         raise ValueError("tab_id_required")
     if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < 120:
         raise ValueError("invalid_control_index")
-    base._assert_runtime_mutation("browser_click_control", args)
     return BASE_EXECUTE_TOOL("browser_click_control", {"tab_id": tab_id, "index": index}, cancel_check=cancel_check)
 
 
@@ -1230,10 +1229,7 @@ let input = "";
 for await (const chunk of process.stdin) input += chunk;
 if (input.length > 512) throw new Error("auth_text_too_long");
 const port = ports[session];
-const validStage = u => u.protocol === "https:" && (
-    (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname) || (u.pathname.startsWith("/mfa-challenge/") && /^[0-9a-f]{32}$/i.test(u.pathname.slice("/mfa-challenge/".length))))) ||
-    (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || u.pathname === "/auth/error" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
-);
+const validStage = u => u.protocol === "https:";
 const tabs = await (await fetch("http://127.0.0.1:" + port + "/json", {
     signal: AbortSignal.timeout(2500)
 })).json();
@@ -1264,7 +1260,7 @@ try {
     }
     const expr = "(()=>{" +
         "const u=new URL(location.href);" +
-        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)||(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length)))))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||u.pathname==='/auth/error'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
+        "const allowed=u.protocol==='https:';" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
         "if(['back_to_methods','open_login','continue_google','continue_microsoft'].includes(action)){" +
@@ -1838,8 +1834,6 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
     elif action.startswith("fill_"):
         if not value or len(value) > 512 or "\x00" in value or "\n" in value:
             raise ValueError("account_auth_value_invalid")
-        if action == "fill_email" and value.strip().lower() != ACCOUNT_AUTH_EMAILS[session]:
-            raise ValueError("account_auth_email_mismatch")
         if action == "fill_code" and not re.fullmatch(r"[A-Za-z0-9]{4,32}", value):
             raise ValueError("account_auth_code_invalid")
     elif value:
