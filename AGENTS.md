@@ -59,6 +59,10 @@ A politica AUDIT_POLICY.md determina requisitos por superficie e impede conclusa
 <!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->Diagnostico isolado nao equivale a correcao; validar ciclo inteiro no runtime pertinente.<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->Em sistema com interface, auditoria exige interacao no navegador permitido; screenshot ou API isolados nao validam UI.<!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 
+<!-- FINAL_RESPONSE_DEPLOY_GATE_V1 -->
+Antes da resposta final, confirmar revisao, testes e efeito persistido. Mudanca versionada so conclui apos integracao e validacao pos-merge; quando ha deploy, verificar ambiente e revisao realmente implantada, executar saude e testes pós-deploy. Falha de deploy ou evidencia pendente exige retomar a correcao, nunca anunciar sucesso sem prova.
+<!-- /FINAL_RESPONSE_DEPLOY_GATE_V1 -->
+
 ## Credenciais e perfis
 <!-- CREDENTIAL_REPROMPT_GATE_V1 -->
 Antes de pedir novamente credenciais ChatGPT Dev/Atendimento, conferir sessao exata e rodar preflight de metadados via MCP, sem ler senha nem exibir secrets: scripts/chatgpt_credential_preflight.py --session dev (ou atendimento). Credencial armazenada nao prova login valido; fluxo oficial deve respeitar MFA/CAPTCHA e identidades separadas. Nunca copiar cookies ou OTP entre perfis.
