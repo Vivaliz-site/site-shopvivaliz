@@ -102,6 +102,10 @@ def protection_reason(repo: str, files: list[dict], site_policy) -> str | None:
         return "superficie_owner_codeowners"
     for entry in files:
         path = str(entry.get("filename", ""))
+        # Text-only agent docs cannot mutate live prices or stock; GitHub
+        # often omits patches for their large changes (AGENTS/CLAUDE mirrors).
+        if path.lower().endswith((".md", ".mdx", ".rst", ".txt")):
+            continue
         if site_policy.sensitive_path(path):
             return "comercial_caminho_protegido"
         if site_policy.should_scan_content(path):
