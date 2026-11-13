@@ -3,6 +3,10 @@ name: Agents Hourly Deep Audit
 on:
   schedule:
     - cron: '17 * * * *' # canonical cadence; file refreshed after watchdog detected stale schedule delivery
+  workflow_run:
+    workflows: ['Hourly Summary Report']
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
   push:
     branches:
@@ -23,13 +27,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: agents-hourly-deep-audit-${{ github.ref }}
+  group: agents-hourly-deep-audit-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   audit:
     name: Audit agents with evidence
-    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-audit]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   summarize:
     name: Generate Hourly Summary
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-audit]
     timeout-minutes: 10
 
     steps:
