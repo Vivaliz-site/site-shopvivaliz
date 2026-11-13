@@ -932,6 +932,12 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("code", bad["email_watch"])
         self.assertNotIn("email_watch", run("not-a-dict"))
 
+    def test_saved_password_action_is_exposed_by_central_and_browser_schemas(self):
+        self.assertIn("fill_saved_password", m.ACCOUNT_AUTH_ALLOWED_ACTIONS)
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("fill_saved_password",
+                      specs["browser_auth_action"]["inputSchema"]["properties"]["action"]["enum"])
+
     def test_execute_tool_no_longer_applies_generic_runtime_lease_gate(self):
         # Owner decision 2026-11-13: execute_tool does not call _assert_runtime_mutation.
         import inspect
