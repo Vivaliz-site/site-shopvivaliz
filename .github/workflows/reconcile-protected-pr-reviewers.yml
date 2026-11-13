@@ -1,0 +1,59 @@
+name: Sincronizar revisores de PRs protegidas (sem gate)
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+# This only routes an already-required review; it does not create a merge gate.
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: protected-review-router-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  review-current-repo:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted default branch, not PR code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Request previously mandatory review on the exact open PR
+        continue-on-error: true
+        env:
+          REVIEW_ROUTER_TOKEN: ${{ github.token }}
+          PR_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python3 scripts/reconcile_protected_pr_reviewers.py --repo "$PR_REPO" --pr "$PR_NUMBER"
+
+  review-organization:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Reconcile the existing protected review rule across repositories
+        continue-on-error: true
+        env:
+          REVIEW_ROUTER_TOKEN: ${{ secrets.SHOPVIVALIZ_GITHUB_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$REVIEW_ROUTER_TOKEN"
+          python3 scripts/reconcile_protected_pr_reviewers.py
