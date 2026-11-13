@@ -2972,6 +2972,33 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
       return false;
     }
 
+    // The live ProseMirror editor is a contenteditable div, not a textarea.
+    // Production UI proved per-character key events may leave its internal
+    // state empty while raw Enter is accepted but persists no new message.
+    // CDP Input.insertText is the same genuine editor input path already
+    // validated in the corporate MCP; require exact readback and a real Send.
+    const nativeEditable = await cdp.evaluate(`(()=>{
+      /* continuity-native-contenteditable-check */
+      const el=document.querySelector('[data-testid="prompt-textarea"]')
+        || document.querySelector('[role="textbox"][contenteditable="true"]');
+      return !!el && el.isContentEditable && el.getClientRects().length>0;
+    })()`);
+    if (nativeEditable) {
+      if (!existing) {
+        try { await cdp.send('Input.insertText', { text: expected }); }
+        catch { return false; }
+      }
+      await sleep(180);
+      const typedDraft = await cdp.evaluate(`(()=>{
+        /* continuity-native-contenteditable-readback */
+        const el=document.querySelector('[data-testid="prompt-textarea"]')
+          || document.querySelector('[role="textbox"][contenteditable="true"]');
+        return el ? String(el.innerText||el.textContent||'').trim() : '';
+      })()`);
+      if (String(typedDraft || '').trim() !== expected) return false;
+      return await clickTrustedSendButton(cdp, expectedFingerprint);
+    }
+
     // Reset stale DOM/editor state using trusted keyboard events. This is
     // important because DOM text can be visible while ChatGPT's internal
     // editor state still considers the composer empty and keeps Send disabled.

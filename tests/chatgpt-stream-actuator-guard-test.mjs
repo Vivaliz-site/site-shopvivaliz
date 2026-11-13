@@ -22,6 +22,8 @@ function transport(options = {}) {
       if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: state.draft };
       if (source.includes('continuity-composer-click-target')) return { x: 100, y: 200 };
       if (source.includes('continuity-composer-focus')) return options.focused !== false;
+      if (source.includes('continuity-native-contenteditable-check')) return options.contenteditable === true;
+      if (source.includes('continuity-native-contenteditable-readback')) return state.draft;
       if (source.includes('continuity-composer-draft-after-trusted-insert')) return state.draft;
       if (source.includes('continuity-send-button-target')) {
         if (options.activateOnSendTarget) state.becameActive = true;
@@ -73,7 +75,7 @@ function transport(options = {}) {
     close() { state.closed = true; },
   };
   if (options.trusted) cdp.send = async (method, params = {}) => {
-    if (method === 'Input.insertText') state.draft += String(params.text || '');
+    if (method === 'Input.insertText' && !options.nativeInsertNoop) state.draft += String(params.text || '');
     if (method === 'Input.dispatchKeyEvent') {
       if (params.type === 'rawKeyDown' && params.key === 'Backspace') state.draft = '';
       if (params.type === 'char') state.draft += String(params.text || '');
@@ -237,6 +239,14 @@ export async function runStreamActuatorGuardTests(api, directory) {
     ['direct Retry rechecks after target discovery', {
       kind: 'retry', trusted: true, activateOnRetryTarget: true,
       stream: state => state.becameActive ? active : complete,
+    }],
+    ['confirmed COMPLETE sends through native ProseMirror insertion', {
+      kind: 'primitive', trusted: true, contenteditable: true, stream: complete,
+      wantSubmitted: true, wantAttempts: 1, wantEnter: 0,
+    }],
+    ['native ProseMirror refuses a missing exact readback', {
+      kind: 'primitive', trusted: true, contenteditable: true, nativeInsertNoop: true,
+      stream: complete, wantSubmitted: false, wantAttempts: 0, wantEnter: 0,
     }],
     ['confirmed COMPLETE preserves trusted pointer submission', {
       kind: 'primitive', trusted: true, stream: complete, wantSubmitted: true, wantAttempts: 1,
