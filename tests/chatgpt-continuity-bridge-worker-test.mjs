@@ -66,8 +66,31 @@ const {
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
   mutationAuthorizationAllows,
+  resolveMutationGatePath,
   guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+// Installed backend worker runs outside the repo tree: it must discover the
+// canonical mutation gate instead of silently failing every authorized send.
+// An explicit host configuration still wins, and checkout tests remain portable.
+{
+  const officialGate = '/opt/shopvivaliz-remote-control/scripts/continuity/mutation_gate.py';
+  assert.equal(
+    resolveMutationGatePath('', officialGate, file => file === officialGate),
+    officialGate,
+    'installed worker must select the existing canonical mutation gate',
+  );
+  assert.equal(
+    resolveMutationGatePath('/tmp/test-mutation-gate.py', officialGate, () => true),
+    '/tmp/test-mutation-gate.py',
+    'explicit operator path must win without changing authorization',
+  );
+  assert.match(
+    resolveMutationGatePath('', officialGate, () => false),
+    /scripts[\\/]continuity[\\/]mutation_gate\.py$/,
+    'checkout/development fallback must remain usable without backend installation',
+  );
+}
 
 // A crashed monitor writer may leave temp files, but its janitor must never
 // touch the current process, recent writes, or unrelated artifacts.
