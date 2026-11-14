@@ -79,6 +79,24 @@ DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/b
 LEGACY_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 DEFAULT_MAX_WEB_ATTEMPTS = 2
+# The production E2E probe times out in 300s. If its browser worker has NOT
+# submitted a message, use a bounded shorter retry opportunity within that
+# probe window. Every retry still reacquires the normal identity/lease/fence
+# checks and is never a duplicate confirmed send.
+SYNTHETIC_E2E_NO_SEND_STALL_RETRY_SECONDS = 90
+
+
+def retry_seconds_for_checkpoint(task_id: str, worker_status: str, send_attempts: int, retry_seconds: int) -> int:
+    normal = max(1, int(retry_seconds))
+    if (
+        re.fullmatch(r"continuity-e2e-[A-Za-z0-9_-]{8,120}", str(task_id or ""))
+        and str(worker_status or "").upper() == "STALLED_NOT_CONFIRMED"
+        and int(send_attempts or 0) == 0
+    ):
+        return min(normal, SYNTHETIC_E2E_NO_SEND_STALL_RETRY_SECONDS)
+    return normal
+
+
 WORKER_ATTEMPT_TERMINAL_STATUSES = frozenset({
     "PROGRESS_CONFIRMED",
     "SENT",
@@ -651,8 +669,6 @@ def _run_once_locked(
             # means the click did not produce observable assistant progress.
             # Both remain retryable after the bounded cooldown, but never
             # indefinitely for the same unchanged checkpoint.
-            if attempted_at is not None and (current - attempted_at).total_seconds() < retry_seconds:
-                continue
             previous_attempts = int(previous.get("attempt_count") or 1)
             previous_send_attempts = int(previous.get("send_attempt_count") or 0)
             if (
@@ -660,6 +676,11 @@ def _run_once_locked(
                 and worker_status in {"SENT", "SENT_UNCONFIRMED"}
             ):
                 previous_send_attempts = previous_attempts
+            effective_retry_seconds = retry_seconds_for_checkpoint(
+                task_id, worker_status, previous_send_attempts, retry_seconds,
+            )
+            if attempted_at is not None and (current - attempted_at).total_seconds() < effective_retry_seconds:
+                continue
 
             if worker_status in {"SENT", "SENT_UNCONFIRMED"}:
                 # The bounded Web budget is a send budget, not a generic
