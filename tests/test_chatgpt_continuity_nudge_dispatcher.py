@@ -475,6 +475,50 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(retried["dispatched"], 1)
         self.assertEqual(len(self.calls), 2)
 
+    def test_shorter_e2e_stall_retry_does_not_change_commercial_chat_cooldown(self) -> None:
+        helper = self.dispatcher.retry_seconds_for_checkpoint
+        synthetic = "continuity-e2e-synthetic-checkpoint-20261114"
+        self.assertEqual(helper(synthetic, "STALLED_NOT_CONFIRMED", 0, 300), 90)
+        self.assertEqual(helper(synthetic, "STALLED_NOT_CONFIRMED", 0, 45), 45)
+        self.assertEqual(helper(synthetic, "SENT_UNCONFIRMED", 1, 300), 300)
+        self.assertEqual(helper(synthetic, "STALLED_NOT_CONFIRMED", 1, 300), 300)
+        self.assertEqual(helper("ordinary-business-task", "STALLED_NOT_CONFIRMED", 0, 300), 300)
+        self.assertEqual(helper("continuity-e2e-short", "STALLED_NOT_CONFIRMED", 0, 300), 300)
+
+    def test_synthetic_e2e_stalled_without_send_retries_before_probe_deadline(self) -> None:
+        # The official E2E window is 300s. A no-send stalled result should be
+        # re-observed after one bounded cooldown, not only after the window ends.
+        task_id = "continuity-e2e-cooldown-test-20261114"
+        self._stale_checkpoint_and_request(task_id=task_id)
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        dispatched_at = (datetime.now(timezone.utc) - timedelta(seconds=125)).replace(
+            microsecond=0,
+        ).isoformat().replace("+00:00", "Z")
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        ledger.write_text(json.dumps({
+            "fingerprint": fingerprint,
+            "task_id": task_id,
+            "repository": state.DEFAULT_REPOSITORY,
+            "dispatched_at": dispatched_at,
+            "bridge_ok": True,
+            "http_status": 200,
+            "worker_status": "STALLED_NOT_CONFIRMED",
+            "attempt_count": 1,
+            "send_attempt_count": 0,
+        }) + "\n", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"CHATGPT_CONTINUITY_BRIDGE_RETRY_SECONDS": "300"}):
+            result = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+        self.assertEqual(result["retry_attempted"], 1)
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(len(self.calls), 1)
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(rows[-1]["send_attempt_count"], 0)
+
     def test_stalled_not_confirmed_does_not_consume_real_send_budget(self) -> None:
         self._stale_checkpoint_and_request()
         fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
