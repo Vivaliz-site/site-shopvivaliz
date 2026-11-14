@@ -83,3 +83,8 @@ def test_service_unit_isolation_untouched():
     assert "LoadCredential=gemini-free-tier.json:" in fragment
     assert "ReadWritePaths=/var/lib/shopvivaliz-okx-paper" in unit
     assert "Environment=GEMINI_API_KEY" not in fragment
+
+
+def test_default_primary_model_is_free_tier_gemini_35_flash_lite():
+    # The live-validated default must remain on Google's documented free tier.
+    assert GeminiFreeProvider().model == "gemini-3.5-flash-lite"

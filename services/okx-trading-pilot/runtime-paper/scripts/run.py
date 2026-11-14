@@ -44,7 +44,7 @@ def main():
     p.add_argument('--decision-url',default='http://127.0.0.1:17656/v1/respond')
     p.add_argument('--decision-model',default='gpt-6-luna')
     p.add_argument('--decision-effort',default='medium',choices=('low','medium','high','xhigh'))
-    p.add_argument('--gemini-model',default='gemini-3.1-flash-lite')
+    p.add_argument('--gemini-model',default='gemini-3.5-flash-lite')
     p.add_argument('--ollama-model',default='qwen2.5:3b')
     args=p.parse_args()
     if args.cycles<0 or not 1<=args.interval<=3600: p.error('invalid cycles/interval')
