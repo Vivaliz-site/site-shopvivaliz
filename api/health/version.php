@@ -100,9 +100,46 @@ function refreshOpcacheForRelease(?string $sha): bool
     return $reset;
 }
 
+/**
+ * Expose the operational release used by the Amazon Returns worker without
+ * changing the legacy top-level site release contract.
+ */
+function resolveAmazonReturnsHealth(): array
+{
+    $marker = trim((string) getenv('AMAZON_RETURNS_RELEASE_SHA_FILE'));
+    if ($marker === '') {
+        $marker = '/home/ubuntu/amazon-returns-deploy/current/.release-sha';
+    }
+
+    $sha = null;
+    if (is_readable($marker)) {
+        $value = trim((string) @file_get_contents($marker));
+        if (preg_match('/^[a-f0-9]{40}$/i', $value)) {
+            $sha = strtolower($value);
+        }
+    }
+
+    $serviceState = 'unknown';
+    if (function_exists('shell_exec')) {
+        $output = @shell_exec('systemctl show amazon-returns-safet.service -p ActiveState --value 2>/dev/null');
+        $candidate = trim((string) $output);
+        if ($candidate !== '') {
+            $serviceState = $candidate;
+        }
+    }
+
+    return [
+        'ok' => $sha !== null && $serviceState === 'active',
+        'release_sha' => $sha,
+        'release_source' => $sha === null ? 'unavailable' : 'marker',
+        'service_state' => $serviceState,
+    ];
+}
+
 $projectRoot = dirname(__DIR__, 2);
 [$sha, $source] = resolveReleaseSha($projectRoot);
 $opcacheRefreshed = refreshOpcacheForRelease($sha);
+$amazonReturns = resolveAmazonReturnsHealth();
 
 $payload = [
     'ok' => $sha !== null,
@@ -110,6 +147,9 @@ $payload = [
     'release_sha' => $sha,
     'release_source' => $source,
     'opcache_refreshed' => $opcacheRefreshed,
+    'components' => [
+        'amazon_returns' => $amazonReturns,
+    ],
     'checked_at' => gmdate('c'),
 ];
 

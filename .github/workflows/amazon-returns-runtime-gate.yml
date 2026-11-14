@@ -1,0 +1,44 @@
+name: Amazon Returns Runtime Gate
+
+on:
+  pull_request:
+    paths:
+      - 'api/health/version.php'
+      - 'includes/amazon-returns/**'
+      - 'workers/amazon-returns/**'
+      - 'scripts/quality/amazon-returns-runtime-gate.py'
+      - 'tests/amazon-returns-safet-decision-test.php'
+      - 'tests/amazon-returns-health-contract-test.php'
+      - 'tests/test_amazon_returns_runtime_gate.py'
+      - '.github/workflows/amazon-returns-runtime-gate.yml'
+  workflow_run:
+    workflows: ['Master Production Pipeline']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Decision regression
+        run: php tests/amazon-returns-safet-decision-test.php
+      - name: Reliability regression
+        run: php tests/amazon-returns-reliability-test.php
+      - name: Domain regression
+        run: php tests/amazon-returns-domain-test.php
+      - name: Health contract
+        run: php tests/amazon-returns-health-contract-test.php
+      - name: Runtime gate unit tests
+        run: python3 -m unittest tests/test_amazon_returns_runtime_gate.py
+      - name: Runtime parity against production
+        if: github.event_name != 'pull_request' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+        run: python3 scripts/quality/amazon-returns-runtime-gate.py
