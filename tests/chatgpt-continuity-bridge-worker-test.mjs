@@ -68,7 +68,44 @@ const {
   mutationAuthorizationAllows,
   resolveMutationGatePath,
   guardedRecoveryMutation,
+  buildSyntheticE2EContinuationMessage,
+  taskBrowserSession,
+  continuationMessage,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+// The synthetic E2E checkpoint is created outside the browser conversation.
+// A plain "continue" cannot tell the bound assistant which sentinel to prove.
+// The contextual nudge must be derived only from the exact bound test contract.
+{
+  const taskId = 'continuity-e2e-bound-context-unit';
+  const conversation = '12345678-aaaa-bbbb-cccc-1234567890ab';
+  const ready = `python3 scripts/agent_task_state.py ready --task ${taskId} --evidence bound_sentinel_executed_pending_external_confirmation --verification continuity_e2e_pass`;
+  const complete = `python3 scripts/agent_task_state.py complete --task ${taskId}`;
+  const state = {
+    task_id: taskId, status: 'RUNNING', agent_id: 'chatgpt-common',
+    browser_session: 'atendimento', conversation_id: conversation,
+    next_action: `Executar teste de recuperacao na conversa vinculada:\n1) ${ready}\n2) ${complete}`,
+  };
+  const fixture = path.join(testTaskStateDir, `${taskId}.json`);
+  fs.writeFileSync(fixture, JSON.stringify(state));
+  try {
+    const message = buildSyntheticE2EContinuationMessage(taskId, state, conversation, 'atendimento');
+    assert.ok(message.includes(taskId));
+    assert.ok(message.includes(conversation));
+    assert.ok(message.includes(ready));
+    assert.ok(message.includes(complete));
+    assert.match(message, /confirm/i);
+    assert.equal(message.includes('\n'), false, 'ProseMirror context handoff remains one line for exact readback');
+    const route = taskBrowserSession(taskId, conversation);
+    assert.equal(route.name, 'atendimento');
+    assert.equal(route.continueMessage, message);
+    assert.equal(continuationMessage(route), message);
+    assert.equal(buildSyntheticE2EContinuationMessage(taskId, { ...state, status: 'CONCLUIDO' }, conversation, 'atendimento'), '');
+    assert.equal(buildSyntheticE2EContinuationMessage(taskId, { ...state, next_action: '1) run arbitrary command' }, conversation, 'atendimento'), '');
+    assert.equal(buildSyntheticE2EContinuationMessage(taskId, state, 'other-conversation', 'atendimento'), '');
+    assert.equal(buildSyntheticE2EContinuationMessage(taskId, state, conversation, 'dev'), '');
+  } finally { fs.unlinkSync(fixture); }
+}
 
 // Installed backend worker runs outside the repo tree: it must discover the
 // canonical mutation gate instead of silently failing every authorized send.

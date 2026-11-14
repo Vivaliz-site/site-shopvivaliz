@@ -106,6 +106,36 @@ function boundDevCdpBase() {
 function browserCdpBase() {
   return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;
 }
+function buildSyntheticE2EContinuationMessage(taskId, checkpoint, conversationId, browserSession) {
+  // The synthetic probe is created outside its browser thread. A generic
+  // "continue" does not give that assistant the checkpoint context. Only the
+  // exact, already-bound E2E sentinel can receive this bounded handoff.
+  const id = String(taskId || '');
+  if (!/^continuity-e2e-[A-Za-z0-9_-]{8,120}$/.test(id)) return '';
+  const bound = safeConversationId(conversationId);
+  if (!bound || !['dev', 'atendimento'].includes(browserSession)
+      || checkpoint?.task_id !== id
+      || checkpoint?.status !== 'RUNNING'
+      || checkpoint?.agent_id !== 'chatgpt-common'
+      || checkpoint?.browser_session !== browserSession
+      || safeConversationId(checkpoint?.conversation_id) !== bound) return '';
+  const ready = `python3 scripts/agent_task_state.py ready --task ${id} --evidence bound_sentinel_executed_pending_external_confirmation --verification continuity_e2e_pass`;
+  const complete = `python3 scripts/agent_task_state.py complete --task ${id}`;
+  const commands = String(checkpoint?.next_action || '').split(/\r?\n/)
+    .map(line => line.trim()).filter(line => /^[12]\) /.test(line))
+    .map(line => line.slice(3));
+  if (commands.length !== 2 || commands[0] !== ready || commands[1] !== complete) return '';
+  return [
+    'Retome o teste sintetico de continuidade E2E vinculado a ESTA conversa ChatGPT.',
+    `Sessao corporativa: ${browserSession}. Conversa: ${bound}. Checkpoint: ${id}.`,
+    'Antes de qualquer mutacao, confira no MCP ShopVivaliz a identidade, o estado RUNNING, a titularidade e o lease/fencing vigentes. Se a comprovacao falhar, nao execute nem fabrique progresso; registre o bloqueio.',
+    'Se o mecanismo oficial autorizar a execucao nesta conversa, rode somente estes dois comandos na ordem, pelo host autorizado:',
+    `1) ${ready}`,
+    `2) ${complete}`,
+    'Confirme pelo readback real o checkpoint CONCLUIDO e a verificacao continuity_e2e_pass. Nunca execute compra, operacao financeira ou acao em conversa de outra conta.',
+  ].join(' ');
+}
+
 function taskBrowserSession(taskId, requestedConversationId = '') {
   if (!/^[A-Za-z0-9._-]{1,160}$/.test(String(taskId)) || String(taskId).includes('..')) {
     throw new Error('invalid browser session checkpoint identity');
@@ -126,8 +156,10 @@ function taskBrowserSession(taskId, requestedConversationId = '') {
       || (requestedConversationId && requestedConversationId !== bound)) {
     throw new Error('browser session checkpoint conversation mismatch or terminal state');
   }
+  const contextualMessage = buildSyntheticE2EContinuationMessage(taskId, checkpoint, bound, name);
   return Object.freeze({ ...BROWSER_SESSIONS[name],
     ...(name === 'dev' ? { cdpBase: boundDevCdpBase() } : {}),
+    ...(contextualMessage ? { continueMessage: contextualMessage } : {}),
     conversationId: bound, name });
 }
 
@@ -157,6 +189,10 @@ const REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS = Math.max(
   Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS || 5 * 60_000),
 );
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
+function continuationMessage(session = BROWSER_SESSION_CONTEXT.getStore()) {
+  const contextual = typeof session?.continueMessage === 'string' ? session.continueMessage.trim() : '';
+  return contextual || CONTINUE_MESSAGE;
+}
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
 const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
 const PASSIVE_REATTACH_CONFIRM_MS = Math.max(
@@ -1746,7 +1782,7 @@ function canonicalSubmissionOutcome(progressed, submissionState) {
 async function canonicalContinuationSubmissionState(
   cdp,
   beforeTurn,
-  expectedMessage = CONTINUE_MESSAGE,
+  expectedMessage = continuationMessage(),
 ) {
   const beforeStatus = Number(beforeTurn?.http_status || 0);
   const baselineNodeId = String(beforeTurn?.node_id || '').trim();
@@ -2845,6 +2881,8 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
   if (!(await conversationStreamComplete(cdp))) return false;
   if (await recoverableFailureReason(cdp) === 'additional_checks') return false;
+  const expected = String(continuationMessage() || '').trim();
+  if (!expected) return false;
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
         /* continuity-composer-draft-probe */
@@ -2860,7 +2898,6 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
     if (!trustedProbe.usable) return false;
 
     const existing = String(trustedProbe.text || '').trim();
-    const expected = String(CONTINUE_MESSAGE || '').trim();
     if (!expected) return false;
 
     // Never overwrite a real draft. The only non-empty value safe to replace
@@ -3101,11 +3138,11 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
     el.focus();
     const isContentEditable = el.getAttribute('contenteditable') === 'true';
     if (isContentEditable) {
-      document.execCommand('insertText', false, ${JSON.stringify(CONTINUE_MESSAGE)});
+      document.execCommand('insertText', false, ${JSON.stringify(expected)});
     } else {
       const proto = HTMLTextAreaElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(CONTINUE_MESSAGE)});
-      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(CONTINUE_MESSAGE)} }));
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(expected)});
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(expected)} }));
     }
     return true;
   })()`);
@@ -4274,6 +4311,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export {
+  buildSyntheticE2EContinuationMessage,
+  taskBrowserSession,
+  continuationMessage,
   recoveryStateForOutcome,
   bridgeResultPayload,
   mutationAuthorizationAllows,
