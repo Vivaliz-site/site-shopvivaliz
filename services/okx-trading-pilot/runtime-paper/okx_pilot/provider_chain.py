@@ -179,7 +179,7 @@ def _expand_compact(result: dict, snapshot):
 
 class GeminiFreeProvider:
     name = "gemini"
-    def __init__(self, *, model="gemini-3.1-flash-lite", env_path=GEMINI_ENV,
+    def __init__(self, *, model="gemini-3.5-flash-lite", env_path=GEMINI_ENV,
                  proof_path=GEMINI_PROOF, transport=_post_json):
         self.model = model
         # systemd LoadCredential copies root-protected source files into a
