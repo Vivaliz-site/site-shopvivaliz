@@ -43,6 +43,13 @@
 > **FONTE DE VERDADE:** [Contrato MCP primeiro](docs/ops/mcp-first-agent-execution-2026-11-05.md). Vale para ChatGPT dev/atendimento, Codex, Claude Code, Gemini e subagentes; sessoes abertas precisam carregar estas instrucoes ou verificar sua versao atual.
 <!-- /OWNER_MCP_FIRST_EXECUTION_V2_20261105 -->
 
+<!-- MCP_ADMIN_CAPABILITY_BEFORE_BLOCK_20261114 -->
+### Nao confundir login do painel com ausencia do MCP administrativo
+Para todos os agentes ShopVivaliz: quando a GUI pedir login ou uma sessao de navegador falhar, consultar primeiro o MCP administrativo efetivamente publicado e autorizado no host. Tentar operacao REAL com `admin_command_run` ou `task_submit` + `task_status`; na Marina, testar tambem `marina_admin_shell` via MCP independente, com `as_user=ubuntu` quando o grant vigente permitir. Nao basta enumerar ferramentas.
+O agente deve procurar e executar o fluxo oficial existente que corresponda a tarefa antes de afirmar `BLOCKED_EXTERNAL` ou exigir acao manual do proprietario. Registrar separadamente `host_admin`, `app_auth`, `commercial_grant`, `job_state` e `readback`. Para a Amazon, um navegador redirecionado a `/auth/login.php` nao invalida o acesso MCP; `commercial_request: empty` confirma somente que nao ha pedido de publicacao registrado. O MCP nao substitui autenticacao/CSRF da aplicacao nem aprovacoes P2: nao criar jobs diretamente em SQL, forjar sessao ou publicar precos por fora do journal oficial.
+Consultar `docs/ops/mcp-first-agent-execution-2026-11-05.md` para passos, exemplo real, status e limites. Esta e a aplicacao concreta da diretriz MCP-primeiro ja vigente, sem ampliar privilegios ou restricoes.
+<!-- /MCP_ADMIN_CAPABILITY_BEFORE_BLOCK_20261114 -->
+
 > **PRIORIDADE MCP DO OWNER: tentar de verdade, NAO apenas listar.** Antes de recorrer a RDC, SSH ou declarar bloqueio de uma tarefa ShopVivaliz, chamar a ferramenta administrativa MCP disponivel e autorizada na sessao atual. Nos quatro hosts, inclusive Marina, tentar a rota administrativa MCP central quando explicitamente publicada e autorizada (`admin_command_run` ou `task_submit` e depois `task_status`); o MCP independente da Marina complementa a central. Registrar resultado real em `remote_access_attempts`; nao confundir `claude mcp list`/`codex mcp list` com uma tentativa. Se o MCP estiver ausente, registrar `MCP_NOT_EXPOSED`, investigar e seguir por alternativa legitimamente autorizada. Ver `docs/ops/mcp-first-agent-execution-2026-11-05.md`.
 
 <!-- AGENT_NATIVE_MCP_ADMIN_ROUTE_V1 -->
