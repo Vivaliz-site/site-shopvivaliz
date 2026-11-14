@@ -718,6 +718,10 @@ os casos pendentes.
 
 ## Regra de publicação do preço mínimo e máximo Amazon (14/11/2026)
 
+A margem inicial da prévia administrativa para itens atualmente abaixo da
+meta é **9%**, como definido pelo proprietário, sem redução de preços já
+acima desse patamar.
+
 Ao publicar um preço de venda aprovado, `our_price` e
 `minimum_seller_allowed_price` recebem exatamente o mesmo valor. Se o
 preço de venda ultrapassar o `maximum_seller_allowed_price` vigente, o

@@ -5,7 +5,7 @@ const base=__dirname+'/../../';
 const html=fs.readFileSync(base+'admin/amazon-margin.php','utf8');
 const api=fs.readFileSync(base+'api/admin/amazon-margin.php','utf8');
 const plan=fs.readFileSync(base+'includes/amazon-margin/TargetMarginPricePlan.php','utf8');
-assert.match(html,/id="target-margin-percent"/);
+assert.match(html,/id="target-margin-percent"[^\n]*value="9"/);
 assert.match(html,/id="target-margin-preview"/);
 assert.match(html,/id="target-margin-apply" type="button" disabled/);
 assert.match(html,/id="target-margin-rows"/);

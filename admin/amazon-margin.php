@@ -109,7 +109,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
       nos anúncios do mesmo produto ERP.</p>
     <div class="controls" style="margin-top:12px">
       <label for="target-margin-percent">Margem desejada (%)</label>
-      <input type="number" id="target-margin-percent" min="0.01" max="99.99" step="0.01" value="10"
+      <input type="number" id="target-margin-percent" min="0.01" max="99.99" step="0.01" value="9"
         inputmode="decimal" style="max-width:110px">
       <button id="target-margin-preview" type="button" class="primary" disabled>Calcular selecionados</button>
       <button id="target-margin-export" type="button" disabled>Exportar prévia CSV</button>
