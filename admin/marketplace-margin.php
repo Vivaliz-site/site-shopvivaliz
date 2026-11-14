@@ -2,10 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__.'/../includes/admin-guard.php';
 $channel=(string)($_GET['channel']??'');
-if(!in_array($channel,['shopee','tiktok'],true)){http_response_code(404);exit('Canal inexistente');}
+if(!in_array($channel,['mercadolivre','shopee','tiktok'],true)){http_response_code(404);exit('Canal inexistente');}
 if(empty($_SESSION['sv_marketplace_margin_csrf']))$_SESSION['sv_marketplace_margin_csrf']=bin2hex(random_bytes(32));
 $csrf=(string)$_SESSION['sv_marketplace_margin_csrf'];
-$label=$channel==='shopee'?'Shopee':'TikTok Shop';
+$label=['mercadolivre'=>'Mercado Livre','shopee'=>'Shopee','tiktok'=>'TikTok Shop'][$channel];
 ?>
 <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
