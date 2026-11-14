@@ -178,9 +178,16 @@ final class SvAmazonTargetMarginPriceJobs
             $db->prepare("UPDATE amazon_margin_target_price_requests
                 SET state='running',started_at=COALESCE(started_at,UTC_TIMESTAMP()),
                     heartbeat_at=UTC_TIMESTAMP() WHERE id=?")->execute([$id]);
+            // Reconcile recoverable in-flight writes first, then start queued
+            // SKUs before polling Amazon's eventual-consistency readbacks.
+            // Every SKU remains in this request; no journal stage is skipped.
             $item=$db->prepare("SELECT * FROM amazon_margin_target_price_items
                 WHERE request_id=? AND state NOT IN ('done','manual_review','rejected')
-                ORDER BY id LIMIT 1 FOR UPDATE");
+                ORDER BY CASE state
+                  WHEN 'running' THEN 0
+                  WHEN 'queued' THEN 1
+                  WHEN 'awaiting_readback' THEN 2 ELSE 3 END,id
+                LIMIT 1 FOR UPDATE");
             $item->execute([$id]);$next=$item->fetch(PDO::FETCH_ASSOC);
             if(!$next){
                 $db->prepare("UPDATE amazon_margin_target_price_requests
