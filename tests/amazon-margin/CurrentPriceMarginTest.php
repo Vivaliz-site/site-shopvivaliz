@@ -24,11 +24,12 @@ $row=['seller_sku'=>'C08BR','amazon_status'=>['BUYABLE'],'program'=>'FBA_ONSITE'
  'confirmed_units'=>0,'margin_weighted_bps'=>null];
 $q=['price_cents'=>154900,'commission_cents'=>17039];
 $r=SvAmazonCurrentPriceMargin::calculate($row,$q);
-same($r['current_profit_cents'],11985,'profit based on current selling price');
-same($r['current_margin_bps'],774,'margin bps');
+same($r['current_profit_cents'],11585,'profit uses the HIGHER freight (Olist 29.966 kg, not Amazon 28.78 kg)');
+same($r['current_margin_bps'],748,'margin bps');
+same($r['current_package_source'],'OLIST_V3_REGISTERED_PACKAGE','larger billable package rules when both are eligible');
 same($r['current_package_conflict'],true,'must surface 19.8kg Amazon vs 28.5kg Olist weight');
 same($r['current_margin_status'],'estimated_dimension_conflict','not certified with conflicting measures');
-same($r['current_logistics_cents'],14190,'Onsite current freight');
+same($r['current_logistics_cents'],14590,'Onsite freight at the higher billable weight');
 same($r['current_tax_cents'],21686,'tax on current price');
 $row['program']='DBA_CANDIDATE';$row['amazon_package']=null;
 $z=SvAmazonCurrentPriceMargin::calculate($row,['price_cents'=>154900,'commission_cents'=>16490],1400,'se_interior');
@@ -49,4 +50,17 @@ $antiqueCalc=SvAmazonCurrentPriceMargin::calculate($antique55,['price_cents'=>35
 same($antiqueCalc['current_package_source'],'OLIST_V3_REGISTERED_PACKAGE','fallback to valid ERP package when Amazon package is outside program limits');
 same($antiqueCalc['current_billable_kg'],26.2367,'ERP package billable weight used');
 same($antiqueCalc['current_package_conflict'],true,'conflict still flagged for catalog sync');
+// ARM8DBA (cost unchanged): Amazon 18.92 kg vs ERP 19.22 kg cross a tariff band;
+// the current margin must use the higher freight, like the price simulation.
+$arm=['seller_sku'=>'ARM8DBA','amazon_status'=>['BUYABLE'],'program'=>'DBA','price'=>520.39,
+ 'last_cost'=>268.27,'kit_cost_multiplier'=>1,
+ 'amazon_package'=>['weight_kg'=>7.7,'length_cm'=>30,'width_cm'=>60,'height_cm'=>63],
+ 'erp_package'=>['weight_kg'=>8.99,'length_cm'=>64,'width_cm'=>60,'height_cm'=>30]];
+$armQ=['price_cents'=>52039,'commission_cents'=>5724];
+$armCalc=SvAmazonCurrentPriceMargin::calculate($arm,$armQ,1400,'se_interior');
+$amazonOnly=SvAmazonCurrentPriceMargin::logisticsCents('DBA',52039,18.92,'se_interior');
+$erpFreight=SvAmazonCurrentPriceMargin::logisticsCents('DBA',52039,19.2167,'se_interior');
+same($erpFreight>$amazonOnly,true,'ERP package crosses a tariff band');
+same($armCalc['current_logistics_cents'],$erpFreight,'current margin uses the higher freight');
+same($armCalc['current_package_source'],'OLIST_V3_REGISTERED_PACKAGE','higher-freight package named as source');
 echo "PASS current-price-margin: C08, DBA without sales, ERP/Amazon physical conflict, ERP package fallback, missing cost, fee mismatch, inactive\n";
