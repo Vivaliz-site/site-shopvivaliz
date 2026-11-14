@@ -104,6 +104,8 @@ def create_synthetic_task(
             task_id,
             "--goal",
             "Prove the detached continuity recovery pipeline end-to-end",
+            "--next-action",
+            build_sentinel_next_action(task_id),
             "--agent",
             "chatgpt-common",
             "--repository",
@@ -117,24 +119,9 @@ def create_synthetic_task(
         env=env,
         timeout=30,
     )
-    # This probe intentionally has no optional checklist; browser proof is
-    # independently required by the response certifier.
-    runner(
-        [
-            sys.executable,
-            str(agent_task_state_script),
-            "progress",
-            "--task",
-            task_id,
-            "--next-action",
-            build_sentinel_next_action(task_id),
-            "--evidence",
-            "continuity e2e checkpoint created",
-        ],
-        check=True,
-        env=env,
-        timeout=30,
-    )
+    # One atomic start makes the final sentinel visible on the first write.
+    # A separate progress would allow the watchdog to enqueue the placeholder
+    # and produce an obsolete fingerprint before the real action is stored.
 
 
 def poll_for_terminal_evidence(
