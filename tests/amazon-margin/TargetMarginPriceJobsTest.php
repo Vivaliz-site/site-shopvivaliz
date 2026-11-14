@@ -9,11 +9,23 @@ class LocalPriceQueueDb extends PDO
     public function __construct(){parent::__construct('sqlite::memory:');
         $this->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
         $this->sqliteCreateFunction('UTC_TIMESTAMP',static fn():string=>gmdate('Y-m-d H:i:s'));
+        $this->sqliteCreateFunction('FIELD',static function($value,...$choices):int {
+            $index=array_search($value,$choices,true);
+            return $index===false?0:$index+1;
+        },-1);
+
     }
     public function exec(string $statement):int|false {
         if(str_starts_with($statement,'CREATE TABLE IF NOT EXISTS amazon_margin_target_price_'))
             return 0; // SQLite fixtures below model existing MySQL tables.
         return parent::exec($statement);
+    }
+    public function query(string $query,?int $fetchMode=null,mixed ...$fetchModeArgs):PDOStatement|false {
+        $sql=str_replace(' FOR UPDATE','',$query);
+        return $fetchMode===null ? parent::query($sql) : parent::query($sql,$fetchMode,...$fetchModeArgs);
+    }
+    public function prepare(string $query,array $options=[]):PDOStatement|false {
+        return parent::prepare(str_replace(' FOR UPDATE','',$query),$options);
     }
 }
 $db=new LocalPriceQueueDb();
@@ -92,4 +104,24 @@ catch(RuntimeException $e){qassert($e->getMessage()==='price_preview_changed_rec
     'stale_preview_fails');}
 qassert((int)$db->query('SELECT COUNT(*) FROM amazon_margin_target_price_requests')->fetchColumn()===1,
     'no_duplicate_or_invalid_commercial_request');
+// The first Amazon Pricing API readback can lag for minutes. It must not
+// prevent later, already-approved SKUs from progressing through the journal.
+SvAmazonTargetMarginPriceJobs::transition($db,$firstId,'awaiting_readback','awaiting_readback',3100);
+$chosen=SvAmazonTargetMarginPriceJobs::next($db);
+qassert(is_array($chosen)&&$chosen['seller_sku']==='SKUB',
+    'queued_second_sku_not_blocked_by_first_awaiting_readback');
+$secondId=(int)$chosen['id'];
+SvAmazonTargetMarginPriceJobs::transition($db,$secondId,'awaiting_readback','awaiting_readback',8500);
+$chosen=SvAmazonTargetMarginPriceJobs::next($db);
+qassert(is_array($chosen)&&$chosen['seller_sku']==='SKUA',
+    'readback_still_runs_once_no_queued_items_remain');
+SvAmazonTargetMarginPriceJobs::transition($db,$firstId,'done','verified_both',3100);
+$chosen=SvAmazonTargetMarginPriceJobs::next($db);
+qassert(is_array($chosen)&&$chosen['seller_sku']==='SKUB',
+    'second_awaiting_readback_still_reconciled');
+SvAmazonTargetMarginPriceJobs::transition($db,$secondId,'done','verified_both',8500);
+qassert(SvAmazonTargetMarginPriceJobs::next($db)===null,
+    'request_completes_after_all_skus_verified');
+qassert($db->query('SELECT state FROM amazon_margin_target_price_requests')->fetchColumn()==='finished',
+    'request_finished_after_readbacks');
 echo "PASS durable owner-initiated price queue: SQLite red/green, operator scope, CAS digest, idempotency, journal, readback staging\n";

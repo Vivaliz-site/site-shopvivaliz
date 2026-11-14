@@ -678,6 +678,17 @@ da oferta com `purchasable_offer.our_price` e
 `purchasable_offer.minimum_seller_allowed_price` igual ao preço de venda,
 sem desabilitar campanhas, alterar estoque ou mudar outros campos.
 
+**Progresso da fila sem bloqueio em cadeia (14/11/2026):** cada chamada
+`run.php --next` continua consumindo somente um SKU de uma solicitacao
+administrativa ja aprovada e sob o lock MySQL. Dentro dessa solicitacao,
+o proximo item prioriza estagios `running` (recuperacao de operacao
+iniciada), depois `queued` e por ultimo `awaiting_readback` da Amazon.
+Assim, a propagacao tardia do preco efetivo de um anuncio nao retarda
+a publicacao dos demais SKUs aprovados. Cada readback pendente continua
+registrado e obrigatoriamente sera reconciliado antes do fechamento:
+nenhum PUT/PATCH incerto se repete, nem o estado de ausencia de readback
+vira sucesso. Teste: `php tests/amazon-margin/TargetMarginPriceJobsTest.php`.
+
 A operação nunca repete PUT/PATCH de resultado incerto sem ler novamente
 as APIs, por meio dos estágios `erp_submit_started`,
 `amazon_submit_started` e `awaiting_readback`. Um retorno HTTP
