@@ -138,7 +138,34 @@ final class SvAmazonTargetMarginPricePlan
             'notices'=>[],'erp_id'=>null,'related_seller_skus'=>[]];
     }
 
+    /**
+     * Tool carts are SIMULATED so the owner can see the margin and price they
+     * would need, but they stay `excluded` with NO proposed/minimum price: the
+     * queue skips them and the worker refuses them, so nothing is published.
+     */
     private static function planRow(array $r,int $targetBps,?string $region): array
+    {
+        $sim=self::planRowCore($r,$targetBps,$region);
+        if(!self::isToolCart($r))return $sim;
+        $result=self::empty((string)($r['seller_sku']??''),'carrinho_ferramentas_excecao');
+        foreach(['title','asin','program','current_margin_bps','current_price_cents'] as $k)
+            $result[$k]=$sim[$k]??null;
+        $result['state']='excluded';
+        $result['reason']='carrinho_ferramentas_excecao';
+        if(($sim['state']??'')==='simulated'){
+            $result['simulation']=array_intersect_key($sim,array_flip([
+                'price_cents','cost_cents','commission_estimate_cents','logistics_cents',
+                'tax_cents','wms_cents','profit_estimate_cents','margin_estimate_bps',
+                'margin_estimate_percent','change_cents','target_margin_bps']));
+            $result['simulation']['published']=false;
+            $result['notices']=array_values($sim['notices']??[]);
+        }else{
+            $result['simulation_unavailable_reason']=$sim['reason']??'not_eligible_for_simulation';
+        }
+        return $result;
+    }
+
+    private static function planRowCore(array $r,int $targetBps,?string $region): array
     {
         $sku=(string)($r['seller_sku']??'');
         $result=self::empty($sku,'not_eligible_for_simulation');
@@ -148,11 +175,6 @@ final class SvAmazonTargetMarginPricePlan
         $result['current_margin_bps']=$r['current_margin_bps']??null;
         $result['current_price_cents']=null;
         $result['notices']=[];
-        if(self::isToolCart($r)){
-            $result['state']='excluded';
-            $result['reason']='carrinho_ferramentas_excecao';
-            return $result;
-        }
         if (!in_array('BUYABLE',is_array($r['amazon_status']??null)?$r['amazon_status']:[],true))
             return self::fail($result,'offer_not_buyable');
         $price=$r['price']??null;

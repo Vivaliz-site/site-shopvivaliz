@@ -587,7 +587,7 @@ function targetProblems(r){
   dimensoes_erp_amazon_divergentes:'Dimensões ERP/Amazon divergentes',
   identidade_historica_divergente_do_erp_atual:'Vínculo histórico divergente',
   skus_mesmo_produto_erp_precos_diferentes:'Conflito: SKUs mesmo produto ERP requerem preços distintos',
-  carrinho_ferramentas_excecao:'Carrinho de ferramentas isento: venda, mínimo e máximo preservados'
+  carrinho_ferramentas_excecao:'Carrinho de ferramentas: simulado, mas NÃO será publicado (venda, mínimo e máximo preservados)'
  };
  const issues=[r.reason,...(r.notices||[])].filter(Boolean).map(x=>dictionary[x]||x);
  if(!r.erp_id)issues.push('ID do produto ERP não certificado');
@@ -613,11 +613,12 @@ async function previewTarget(){
    '<td>'+escapeHtml(r.title||'—')+'<span class="cell-note">ERP '+escapeHtml(r.erp_id??'—')+' • '+escapeHtml(r.erp_sku||'—')+'</span></td>'+
    '<td>'+escapeHtml(r.program||'—')+'</td>'+
    '<td class="right">'+targetMoney(r.current_price_cents)+'</td>'+
-   '<td class="right">'+targetMoney(r.cost_cents)+'</td>'+
-   '<td class="right">'+targetMoney(r.proposed_price_cents)+'</td>'+
+   '<td class="right">'+targetMoney(r.cost_cents??r.simulation?.cost_cents)+'</td>'+
+   '<td class="right">'+(r.simulation?targetMoney(r.simulation.price_cents)+
+     '<span class="cell-note">simulado · não será publicado</span>':targetMoney(r.proposed_price_cents))+'</td>'+
    '<td class="right">'+targetMoney(r.minimum_price_cents)+'</td>'+
-   '<td class="right">'+(r.margin_estimate_percent===undefined?'—':
-    Number(r.margin_estimate_percent).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4})+'%')+'</td>'+
+   '<td class="right">'+((r.margin_estimate_percent??r.simulation?.margin_estimate_percent)===undefined?'—':
+    Number(r.margin_estimate_percent??r.simulation.margin_estimate_percent).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4})+'%')+'</td>'+
    '<td class="small">'+escapeHtml(targetProblems(r))+'</td></tr>'
   ).join('')||'<tr><td colspan="9">Nenhuma oferta selecionada.</td></tr>';
   el('target-margin-state').textContent='Auditoria #'+json.audit_run_id+' · '+json.preview.simulated+
@@ -698,7 +699,7 @@ async function applyTarget(){
 function exportTarget(){
  if(!targetPlan||targetPlanKey!==selectedTargetKey())return;
  const columns=['Seller SKU','Descrição','SKU ERP','ERP ID','Programa','Margem desejada (%)',
-  'Preço atual (R$)','Preço proposto ERP e Amazon (R$)','Mínimo Amazon (R$)',
+  'Preço atual (R$)','Preço proposto ERP e Amazon (R$)','Mínimo Amazon (R$)','Preço simulado, não publicado (R$)',
   'Custo (R$)','Comissão simulada (R$)','Logística simulada (R$)','Imposto (R$)',
   'Lucro simulado (R$)','Margem simulada (%)','Outros SKUs do produto ERP','Ressalvas'];
  const safe=v=>{let s=String(v??'');if(/^[\s]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
@@ -706,12 +707,13 @@ function exportTarget(){
   r.seller_sku,r.title,r.erp_sku,r.erp_id,r.program,targetPlan.preview.target_percent,
   r.current_price_cents/100,r.proposed_price_cents===null?'':r.proposed_price_cents/100,
   r.minimum_price_cents===null?'':r.minimum_price_cents/100,
-  r.cost_cents===undefined?'':r.cost_cents/100,
-  r.commission_estimate_cents===undefined?'':r.commission_estimate_cents/100,
-  r.logistics_cents===undefined?'':r.logistics_cents/100,
-  r.tax_cents===undefined?'':r.tax_cents/100,
-  r.profit_estimate_cents===undefined?'':r.profit_estimate_cents/100,
-  r.margin_estimate_percent,r.related_seller_skus?.join(' | ')||'',targetProblems(r)
+  r.simulation?r.simulation.price_cents/100:'',
+  (r.cost_cents??r.simulation?.cost_cents)===undefined?'':(r.cost_cents??r.simulation.cost_cents)/100,
+  (r.commission_estimate_cents??r.simulation?.commission_estimate_cents)===undefined?'':(r.commission_estimate_cents??r.simulation.commission_estimate_cents)/100,
+  (r.logistics_cents??r.simulation?.logistics_cents)===undefined?'':(r.logistics_cents??r.simulation.logistics_cents)/100,
+  (r.tax_cents??r.simulation?.tax_cents)===undefined?'':(r.tax_cents??r.simulation.tax_cents)/100,
+  (r.profit_estimate_cents??r.simulation?.profit_estimate_cents)===undefined?'':(r.profit_estimate_cents??r.simulation.profit_estimate_cents)/100,
+  r.margin_estimate_percent??r.simulation?.margin_estimate_percent,r.related_seller_skus?.join(' | ')||'',targetProblems(r)
  ]);
  const csv=[columns,...records].map(row=>row.map(safe).join(';')).join('\r\n');
  const href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
