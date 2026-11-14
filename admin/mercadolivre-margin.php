@@ -45,7 +45,7 @@ progress{width:100%;height:15px;margin-top:12px;accent-color:var(--sea)}
 <body>
 <header>
  <div><h1>Auditoria de Margens · Mercado Livre</h1><div class="small">ShopVivaliz · API oficial Mercado Livre + Olist/Tiny</div></div>
- <a href="/admin/mercadolivre.php">Voltar ao Mercado Livre</a>
+ <a href="/admin/margens-marketplaces.php">Voltar à Central de Margens</a>
 </header>
 <main>
  <div class="notice card">
