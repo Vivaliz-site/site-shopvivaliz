@@ -860,15 +860,24 @@ state_path.write_text(json.dumps(state))
         self.assertEqual(result["executed"], 1)
         self.assertEqual(result["progressed"], 1)
 
+    def test_browser_e2e_probe_generated_sentinel_is_recognized(self) -> None:
+        from task_continuity_e2e import build_sentinel_next_action
+        dispatcher = load_dispatcher()
+        task_id = "continuity-e2e-real-generator"
+        state = {
+            "task_id": task_id,
+            "agent_id": "chatgpt-common",
+            "conversation_id": "12345678-2222-3333-4444-555555555555",
+            "next_action": build_sentinel_next_action(task_id),
+        }
+        request = {"preferred_executor": "chatgpt_common"}
+        self.assertTrue(dispatcher._browser_only_e2e_probe(request, state))
+
     def test_browser_e2e_probe_never_falls_through_to_detached_executor(self) -> None:
         dispatcher = load_dispatcher()
         task_id = "continuity-e2e-browser-only"
-        next_action = (
-            "Esta tarefa e um probe de continuidade automatica; nao ha edicao de codigo real necessaria. "
-            "Rode exatamente estes dois comandos, nesta ordem, e nada mais:\n"
-            f"1) python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass\n"
-            f"2) python3 scripts/agent_task_state.py complete --task {task_id}"
-        )
+        from task_continuity_e2e import build_sentinel_next_action
+        next_action = build_sentinel_next_action(task_id)
         state = self._state(next_action=next_action)
         (self.runtime / "resume-e2e.json").unlink()
         state["task_id"] = task_id
