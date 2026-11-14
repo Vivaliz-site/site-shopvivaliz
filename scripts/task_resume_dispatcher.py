@@ -497,7 +497,9 @@ def _browser_only_e2e_probe(request: dict[str, Any], state: dict[str, Any]) -> b
         if line.startswith(("1) ", "2) ")) and ") " in line
     ]
     return commands == [
-        f"python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass",
+        f"python3 scripts/agent_task_state.py ready --task {task_id} "
+        "--evidence bound_sentinel_executed_pending_external_confirmation "
+        "--verification continuity_e2e_pass",
         f"python3 scripts/agent_task_state.py complete --task {task_id}",
     ]
 
