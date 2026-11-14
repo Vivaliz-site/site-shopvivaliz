@@ -66,7 +66,9 @@ function svais_failure_class(Throwable $e): string
         || str_contains($message, 'usage_limit')
         || str_contains($message, 'credit balance')
         || str_contains($message, 'weighted tokens')
-        || str_contains($message, 'provider_http_429')) return 'quota';
+        || str_contains($message, 'provider_http_429')
+        || str_contains($message, 'resource_exhausted')
+        || preg_match('/\b429\b/', $message) === 1) return 'quota';
     if (str_contains($message, 'auth')
         || str_contains($message, 'unauthorized')
         || str_contains($message, 'token expired')) return 'auth';
