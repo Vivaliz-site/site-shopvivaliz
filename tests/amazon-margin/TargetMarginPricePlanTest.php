@@ -127,6 +127,13 @@ foreach($toolPlan['rows'] as $cartRow){
         &&$cartRow['proposed_price_cents']===null
         &&$cartRow['minimum_price_cents']===null,
         'tool_cart_has_no_sale_minimum_or_maximum_proposal');
+    // Owner decision 14/11/2026: carts ARE simulated (price/margin visible) but
+    // never publishable: excluded, no proposed/minimum price, flagged unpublished.
+    assertTarget(is_array($cartRow['simulation']??null)
+        &&(int)$cartRow['simulation']['price_cents']>0
+        &&($cartRow['simulation']['published']??null)===false
+        &&(int)$cartRow['simulation']['margin_estimate_bps']>=900,
+        'tool_cart_is_simulated_but_never_published');
 }
 $futureCart=$toolCarts[0];
 $futureCart['seller_sku']='NEW-TOOL-CART';

@@ -21,6 +21,9 @@ assert.match(html,/amazon_maximum_price_cents/);
 assert.match(html,/10% acima do preço de venda/);
 assert.match(html,/nenhum limite será criado/);
 assert.match(html,/carrinho_ferramentas_excecao/);
+assert.match(html,/r\.simulation\?targetMoney\(r\.simulation\.price_cents\)/); // cart shows simulated price
+assert.match(html,/não será publicado/);
+assert.doesNotMatch(html,/r\.simulation\.price_cents\)\s*\)\s*:\s*targetMoney\(r\.proposed_price_cents\)\s*\)\s*\+\s*'<\/td>'\s*\+\s*'<td class="right">'\+targetMoney\(r\.minimum/); // minimum never from simulation
 assert.match(html,/Number\(targetPlan\.preview\.simulated\)>0/);
 assert.match(html,/escapeHtml\(targetProblems\(r\)\)/);
 assert.match(api,/sv_margin_api_selected\(\$body\['skus'\]/);
