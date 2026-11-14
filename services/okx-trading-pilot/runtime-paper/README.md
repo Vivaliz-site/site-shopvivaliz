@@ -2,9 +2,15 @@
 
 Public market data and simulated accounting only. No live execution or credential access.
 
+## Capital PAPER autorizado em 14/11/2026
+
+O proprietário solicitou **US$ 2.500 de capital-base simulado** para a execução contínua. A referência de US$ 100 descrita historicamente nesta documentação corresponde à configuração original do piloto, não ao novo capital aprovado. O incremento de US$ 2.400 constitui ajuste de capital da simulação, **não rentabilidade**. O histórico das cinco operações já encerradas e o PnL acumulado de aproximadamente US$ 1,81 foram preservados na mudança. A execução segue exclusivamente `PAPER`, com ordens reais desativadas.
+
+A partir da correção da PR #3964, o verificador confronta o capital reportado com o ledger persistido, sem impor a referência histórica fixa de US$ 100. Uma reversão operacional concorrente para o valor original foi identificada em 14/11 e é tratada separadamente da decisão atual do proprietário.
+
 ## Scope
 
-Discover active spot instruments quoted in USD/USDT/USDC and linear SWAP/FUTURES settled in those currencies. No asset whitelist. Retain at most 12 liquidity-ranked candidates, fairly interleaved between instrument classes, and consider every retained candidate rather than only two. Positions are subject to margin/risk budgets, not a fixed position count. Metadata supplies contract face value, size increments and minimum size. Inverse contracts, options and ambiguous multipliers are rejected. Futures within 24 hours plus five minutes of expiry are not eligible for new positions; maximum holding time is 24 hours per position, not a limit on service uptime.
+Discover active spot instruments quoted in USD/USDT/USDC and linear SWAP/FUTURES settled in those currencies. No asset whitelist. Retain at most 12 liquidity-ranked candidates, fairly interleaved between instrument classes, and consider every retained candidate rather than only two. Because unattended model inference is limited to one call per five minutes, asynchronous selection rotates across the current ranked candidates on each admitted call (skipping open/pending instruments); otherwise the first ranked symbol could monopolize every AI slot. The rotation cursor is ephemeral and restarts from the top after service restart; it neither forces trades nor changes risk limits. Positions are subject to margin/risk budgets, not a fixed position count. Metadata supplies contract face value, size increments and minimum size. Inverse contracts, options and ambiguous multipliers are rejected. Futures within 24 hours plus five minutes of expiry are not eligible for new positions; maximum holding time is 24 hours per position, not a limit on service uptime.
 
 ## Simulation boundary and limitations
 
