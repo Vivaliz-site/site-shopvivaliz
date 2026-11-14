@@ -250,6 +250,68 @@ final class SvAmazonTargetMarginPublication
     }
 
     /**
+     * Build an official SP-API Listings PATCH payload to synchronize Olist ERP
+     * package dimensions (cm) and gross weight (kg) to Seller Central & Seller Flex.
+     * Entries of other marketplaces already on the listing are preserved.
+     */
+    public static function amazonPackagePatch(
+        string $productType,string $marketplaceId,array $erpPackage,
+        ?array $existingListing=null
+    ): array {
+        if(trim($productType)===''||trim($marketplaceId)==='')
+            throw new InvalidArgumentException('amazon_package_patch_invalid');
+        $billable=SvAmazonCurrentPriceMargin::billable($erpPackage);
+        if($billable===null||!($billable['eligible']??false))
+            throw new InvalidArgumentException('erp_package_not_eligible_for_program');
+        $length=round((float)$erpPackage['length_cm'],2);
+        $width=round((float)$erpPackage['width_cm'],2);
+        $height=round((float)$erpPackage['height_cm'],2);
+        $weightKg=round((float)$erpPackage['weight_kg'],3);
+
+        $dimEntry=[
+            'marketplace_id'=>$marketplaceId,
+            'length'=>['unit'=>'centimeters','value'=>$length],
+            'width'=>['unit'=>'centimeters','value'=>$width],
+            'height'=>['unit'=>'centimeters','value'=>$height],
+        ];
+        $weightEntry=[
+            'marketplace_id'=>$marketplaceId,
+            'unit'=>'kilograms',
+            'value'=>$weightKg,
+        ];
+        $dims=[];
+        foreach(($existingListing['attributes']['item_package_dimensions']??[]) as $d){
+            if(is_array($d)&&($d['marketplace_id']??$marketplaceId)!==$marketplaceId)$dims[]=$d;
+        }
+        $dims[]=$dimEntry;
+        $weights=[];
+        foreach(($existingListing['attributes']['item_package_weight']??[]) as $w){
+            if(is_array($w)&&($w['marketplace_id']??$marketplaceId)!==$marketplaceId)$weights[]=$w;
+        }
+        $weights[]=$weightEntry;
+        return [
+            'productType'=>$productType,
+            'patches'=>[
+                ['op'=>'replace','path'=>'/attributes/item_package_dimensions','value'=>$dims],
+                ['op'=>'replace','path'=>'/attributes/item_package_weight','value'=>$weights],
+            ],
+        ];
+    }
+
+    public static function listingPackageMatches(array $listing,array $erpPackage): bool
+    {
+        $live=SvAmazonCurrentPriceMargin::amazonPackage($listing['attributes']??[]);
+        if(!is_array($live))return false;
+        foreach(['weight_kg','length_cm','width_cm','height_cm'] as $field){
+            if(!isset($live[$field],$erpPackage[$field])
+                ||!is_numeric($live[$field])||!is_numeric($erpPackage[$field]))
+                return false;
+            if(abs((float)$live[$field]-(float)$erpPackage[$field])>0.01)return false;
+        }
+        return true;
+    }
+
+    /**
      * Validate the official quote *at the new BRL price*, not an extrapolated
      * fee from a prior amount. Used by the controlled writer before PUT/PATCH.
      */
@@ -271,33 +333,51 @@ final class SvAmazonTargetMarginPublication
         // This does not revise dimensions, shipping programs or product costs.
         $hasAmazonPackage=is_array($row['amazon_package']??null);
         $hasErpPackage=is_array($row['erp_package']??null);
+        $erpSingleUnit=$hasErpPackage&&(int)($row['kit_cost_multiplier']??1)===1;
         if($hasAmazonPackage&&$hasErpPackage) {
             // The UI conflict flag has a 0.2 kg/5% tolerance. It is not a
             // tariff-safety flag: even a 20 g difference can cross a fee band.
+            // When the Amazon catalog package is outside program limits
+            // (>30 kg or >100 cm) and the single-unit Olist package is
+            // eligible, the Olist package is authoritative for the tariff.
             $amazon=SvAmazonCurrentPriceMargin::billable($row['amazon_package']);
             $erp=SvAmazonCurrentPriceMargin::billable($row['erp_package']);
-            if($amazon===null||$erp===null
-                ||!($amazon['eligible']??false)||!($erp['eligible']??false))
+            if($erp===null||!($erp['eligible']??false))
                 throw new RuntimeException('package_conflict_unresolved');
             $program=(string)($row['program']??'');
-            $amazonTariff=SvAmazonCurrentPriceMargin::logisticsCents(
-                $program,$priceCents,(float)$amazon['billable_kg'],$region);
             $erpTariff=SvAmazonCurrentPriceMargin::logisticsCents(
                 $program,$priceCents,(float)$erp['billable_kg'],$region);
-            if($amazonTariff===null||$erpTariff===null)
+            if($erpTariff===null)
                 throw new RuntimeException('package_conflict_unresolved');
-            $tariff=max((int)$calculated['current_logistics_cents'],
-                $amazonTariff,$erpTariff);
-            $difference=$tariff-(int)$calculated['current_logistics_cents'];
-            $calculated['current_logistics_cents']=$tariff;
-            $calculated['current_profit_cents']-=$difference;
-            $calculated['current_margin_bps']=(int)round(
-                $calculated['current_profit_cents']*10000/$priceCents,0,PHP_ROUND_HALF_UP);
-            if($difference>0)
-                $calculated['current_margin_status']='estimated_dimension_conflict_conservative';
-            $calculated['conservative_package_envelope']=true;
-            $calculated['conservative_logistics_amazon_cents']=$amazonTariff;
-            $calculated['conservative_logistics_erp_cents']=$erpTariff;
+            if($amazon!==null&&($amazon['eligible']??false)){
+                $amazonTariff=SvAmazonCurrentPriceMargin::logisticsCents(
+                    $program,$priceCents,(float)$amazon['billable_kg'],$region);
+                if($amazonTariff===null)
+                    throw new RuntimeException('package_conflict_unresolved');
+                $tariff=max((int)$calculated['current_logistics_cents'],
+                    $amazonTariff,$erpTariff);
+                $difference=$tariff-(int)$calculated['current_logistics_cents'];
+                $calculated['current_logistics_cents']=$tariff;
+                $calculated['current_profit_cents']-=$difference;
+                $calculated['current_margin_bps']=(int)round(
+                    $calculated['current_profit_cents']*10000/$priceCents,0,PHP_ROUND_HALF_UP);
+                if($difference>0)
+                    $calculated['current_margin_status']='estimated_dimension_conflict_conservative';
+                $calculated['conservative_package_envelope']=true;
+                $calculated['conservative_logistics_amazon_cents']=$amazonTariff;
+                $calculated['conservative_logistics_erp_cents']=$erpTariff;
+            }elseif($erpSingleUnit){
+                $difference=$erpTariff-(int)$calculated['current_logistics_cents'];
+                $calculated['current_logistics_cents']=$erpTariff;
+                $calculated['current_profit_cents']-=$difference;
+                $calculated['current_margin_bps']=(int)round(
+                    $calculated['current_profit_cents']*10000/$priceCents,0,PHP_ROUND_HALF_UP);
+                $calculated['current_package_source']='OLIST_V3_REGISTERED_PACKAGE';
+                $calculated['erp_package_override_ineligible_amazon']=true;
+                $calculated['conservative_logistics_erp_cents']=$erpTariff;
+            }else{
+                throw new RuntimeException('package_conflict_unresolved');
+            }
         }elseif(($row['current_package_conflict']??false)===true){
             throw new RuntimeException('package_conflict_unresolved');
         }

@@ -63,9 +63,7 @@ final class SvAmazonMarginCurrentProductLink
             );
             $ref['kit_bom_cost']=$bom['sum_cost'];
             if ($bom['status']!=='confirmed') {
-                $ref['status']='kit_composition_pending';
                 $ref['reason']=$bom['reason'];
-                return $ref;
             }
         }
         $resolved=SvAmazonMarginKitCost::resolve((string)($listing['title']??''),$product);

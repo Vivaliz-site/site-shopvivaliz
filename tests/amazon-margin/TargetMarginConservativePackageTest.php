@@ -122,4 +122,49 @@ assertEnvelope($boundaryRow['logistics_cents']===max($amazonFee,$erpFee),
 assertEnvelope(in_array('tarifa_conservadora_entre_embalagens_amazon_olist',
     $boundaryRow['notices'],true),'sub_tolerance_preview_discloses_envelope');
 
-echo "PASS conservative dimensions quoted margin: worst tariff, same tariff, unknown blocked\n";
+// Amazon catalog package outside program limits (height 90 cm) + valid single-unit
+// ERP package: the ERP package is authoritative for the tariff.
+$overweightAmz=$base;
+$overweightAmz['seller_sku']='JVAQCQ55';
+$overweightAmz['program']='FBA_ONSITE';
+$overweightAmz['last_cost']=148.00;
+$overweightAmz['kit_cost_multiplier']=1;
+$overweightAmz['amazon_package']=['weight_kg'=>3.3,'length_cm'=>55,'width_cm'=>55,'height_cm'=>90];
+$overweightAmz['erp_package']=['weight_kg'=>3.3,'length_cm'=>55,'width_cm'=>55,'height_cm'=>52];
+$overweightMargin=SvAmazonTargetMarginPublication::quotedMargin(
+    $overweightAmz,38500,['price_cents'=>38500,'commission_cents'=>5775],1400,null);
+assertEnvelope(($overweightMargin['erp_package_override_ineligible_amazon']??false)===true,
+    'overweight_amazon_uses_valid_erp_package');
+assertEnvelope($overweightMargin['current_package_source']==='OLIST_V3_REGISTERED_PACKAGE',
+    'overweight_amazon_package_source_is_erp');
+$multiKit=$overweightAmz;$multiKit['kit_cost_multiplier']=2;
+$blocked=false;
+try{SvAmazonTargetMarginPublication::quotedMargin(
+    $multiKit,38500,['price_cents'=>38500,'commission_cents'=>5775],1400,null);}
+catch(RuntimeException $e){$blocked=true;} // fail-closed, whichever guard trips first
+assertEnvelope($blocked,'multi_unit_kit_never_uses_single_unit_erp_package');
+
+$pkgPatch=SvAmazonTargetMarginPublication::amazonPackagePatch(
+    'PLANTER','A2Q3Y263D00KWC',$overweightAmz['erp_package'],[
+        'attributes'=>[
+            'item_package_dimensions'=>[['marketplace_id'=>'A2Q3Y263D00KWC',
+                'length'=>['unit'=>'centimeters','value'=>55],
+                'width'=>['unit'=>'centimeters','value'=>55],
+                'height'=>['unit'=>'centimeters','value'=>90]]],
+            'item_package_weight'=>[['marketplace_id'=>'A2Q3Y263D00KWC',
+                'unit'=>'kilograms','value'=>3.3]],
+        ],
+    ]);
+assertEnvelope($pkgPatch['productType']==='PLANTER'
+    && count($pkgPatch['patches'])===2
+    && $pkgPatch['patches'][0]['value'][0]['height']['value']===52.0
+    && $pkgPatch['patches'][1]['value'][0]['value']===3.3,
+    'amazon_package_patch_builds_valid_spapi_payload');
+$updatedListing=['attributes'=>[
+    'item_package_dimensions'=>$pkgPatch['patches'][0]['value'],
+    'item_package_weight'=>$pkgPatch['patches'][1]['value'],
+]];
+assertEnvelope(SvAmazonTargetMarginPublication::listingPackageMatches(
+    $updatedListing,$overweightAmz['erp_package'])===true,'listing_package_matches_verifies_readback');
+
+echo "PASS conservative dimensions quoted margin: worst tariff, same tariff, ERP override for out-of-limit Amazon package, SP-API package patch, unknown blocked\n";

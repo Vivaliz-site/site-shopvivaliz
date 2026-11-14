@@ -148,23 +148,30 @@ final class SvAmazonCurrentPriceMargin
         $out['current_commission_cents']=(int)$quote['commission_cents'];
         $out['current_fee_source']='AMAZON_SP_API_PRODUCT_FEES_CURRENT_PRICE';
         $amazon=$row['amazon_package']??null;$erp=$row['erp_package']??null;
-        $pkg=null;
-        if(is_array($amazon)){$pkg=$amazon;$out['current_package_source']='AMAZON_CATALOG_PACKAGE';}
-        elseif(is_array($erp)&&(int)($row['kit_cost_multiplier']??1)===1){
-            $pkg=$erp;$out['current_package_source']='OLIST_V3_REGISTERED_PACKAGE';
+        $erpSingleUnit=is_array($erp)&&(int)($row['kit_cost_multiplier']??1)===1;
+        $aa=is_array($amazon)?self::billable($amazon):null;
+        $bb=$erpSingleUnit?self::billable($erp):null;
+        $pkg=null;$weight=null;
+        if(is_array($amazon)&&($aa['eligible']??false)){
+            $pkg=$amazon;$weight=$aa;$out['current_package_source']='AMAZON_CATALOG_PACKAGE';
+        }elseif($erpSingleUnit&&($bb['eligible']??false)){
+            $pkg=$erp;$weight=$bb;$out['current_package_source']='OLIST_V3_REGISTERED_PACKAGE';
+        }elseif(is_array($amazon)){
+            $pkg=$amazon;$weight=$aa;$out['current_package_source']='AMAZON_CATALOG_PACKAGE';
+        }elseif($erpSingleUnit){
+            $pkg=$erp;$weight=$bb;$out['current_package_source']='OLIST_V3_REGISTERED_PACKAGE';
         }
-        $weight=is_array($pkg)?self::billable($pkg):null;
         if($weight!==null){
             $out['current_weight_kg']=round($weight['actual_kg'],4);
             $out['current_dimensional_kg']=round($weight['dimensional_kg'],4);
             $out['current_billable_kg']=round($weight['billable_kg'],4);
         }
         if(is_array($amazon)&&is_array($erp)){
-            $aa=self::billable($amazon);$bb=self::billable($erp);
-            if($aa!==null&&$bb!==null){
+            $erpAll=self::billable($erp);
+            if($aa!==null&&$erpAll!==null){
                 $out['current_package_conflict']=
-                    abs($aa['billable_kg']-$bb['billable_kg']) > max(0.2,0.05*$aa['billable_kg'])
-                    || abs($aa['actual_kg']-$bb['actual_kg']) > max(0.2,0.05*$aa['actual_kg']);
+                    abs($aa['billable_kg']-$erpAll['billable_kg']) > max(0.2,0.05*$aa['billable_kg'])
+                    || abs($aa['actual_kg']-$erpAll['actual_kg']) > max(0.2,0.05*$aa['actual_kg']);
             }
         }
         if($weight!==null&&!$weight['eligible']){

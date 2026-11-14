@@ -736,10 +736,8 @@ final class SvAmazonMarginCollector
                 unset($prod['erp_kit_components']); // No raw BOM in persisted report.
                 $row = self::mergeProductForOffer($row,$prod);
                 if (($prod['erp_product_type']??'')==='K') {
-                    // A complete Olist K is NOT multiplied again, but its
-                    // recorded price history must match the verified LIVE
-                    // composition. The same BOM can exist under multiple
-                    // ERP records with conflicting historical kit costs.
+                    // Use the ERP kit's registered cost as authoritative while
+                    // still recording BOM diagnostics for reconciliation visibility.
                     $bom=SvAmazonMarginKitCost::checkBillOfMaterials(
                         (int)$prod['erp_id'],$kitComponents,
                         (float)($prod['last_cost']??0),
@@ -748,14 +746,7 @@ final class SvAmazonMarginCollector
                     $row['erp_kit_bom_cost']=$bom['sum_cost'];
                     $row['erp_kit_bom_total_units']=$bom['total_units'];
                     if ($bom['status']!=='confirmed') {
-                        $row['erp_base_cost']=$prod['last_cost'];
-                        $row['last_cost']=null;
-                        $row['kit_cost_multiplier']=null;
-                        $row['kit_cost_basis']='OLIST_KIT_BOM_COST_UNVERIFIED';
                         $row['kit_cost_issue']=$bom['reason'];
-                        $row['status']='kit_cost_unverified';
-                        $rows[]=$row;
-                        continue;
                     }
                 }
             } catch (Throwable $e) {
