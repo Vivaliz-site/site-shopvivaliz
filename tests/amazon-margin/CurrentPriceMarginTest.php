@@ -39,4 +39,14 @@ same(SvAmazonCurrentPriceMargin::calculate($row,null,1400,'se_interior')['curren
 same(SvAmazonCurrentPriceMargin::calculate($row,['price_cents'=>141779,'commission_cents'=>16490],1400,'se_interior')['current_margin_status'],'fee_quote_price_mismatch','historical quoted price rejected');
 $row['last_cost']=null;same(SvAmazonCurrentPriceMargin::calculate($row,$q,1400,'se_interior')['current_margin_bps'],null,'unknown kit cost must stay null');
 $row['last_cost']=900;$row['amazon_status']=['DISCOVERABLE'];same(SvAmazonCurrentPriceMargin::calculate($row,$q,1400,'se_interior')['current_margin_status'],'not_buyable','inactive excluded');
-echo "PASS current-price-margin: C08, DBA without sales, ERP/Amazon physical conflict, missing cost, fee mismatch, inactive\n";
+$antique55=[
+ 'seller_sku'=>'JVAQCQ55','amazon_status'=>['BUYABLE'],'program'=>'FBA_ONSITE',
+ 'price'=>352.90,'last_cost'=>148.00,'kit_cost_multiplier'=>1,
+ 'amazon_package'=>['weight_kg'=>3.3,'length_cm'=>55,'width_cm'=>55,'height_cm'=>90],
+ 'erp_package'=>['weight_kg'=>3.3,'length_cm'=>55,'width_cm'=>55,'height_cm'=>52],
+];
+$antiqueCalc=SvAmazonCurrentPriceMargin::calculate($antique55,['price_cents'=>35290,'commission_cents'=>5294],1400);
+same($antiqueCalc['current_package_source'],'OLIST_V3_REGISTERED_PACKAGE','fallback to valid ERP package when Amazon package is outside program limits');
+same($antiqueCalc['current_billable_kg'],26.2367,'ERP package billable weight used');
+same($antiqueCalc['current_package_conflict'],true,'conflict still flagged for catalog sync');
+echo "PASS current-price-margin: C08, DBA without sales, ERP/Amazon physical conflict, ERP package fallback, missing cost, fee mismatch, inactive\n";

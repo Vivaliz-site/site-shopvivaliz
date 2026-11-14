@@ -745,3 +745,24 @@ mesmo quando selecionadas junto com itens permitidos. O worker também
 reconcilia a identidade do SKU com o snapshot original imediatamente
 antes de qualquer nova operação externa. Um lote somente de carrinhos
 não gera solicitação comercial.
+
+## Custo do kit ERP como autoridade e embalagem do ERP (14/11/2026)
+
+Decisão do proprietário: o **custo registrado do kit `tipo=K` no ERP Olist é a
+autoridade** (`ERP_COMPLETE_KIT_COST`), por exemplo `KIT-RODIZIOS-50MM-GEL` a
+R$ 33,08, mesmo quando a soma dos componentes (R$ 14,94) diverge. A divergência
+continua exposta como diagnóstico (`erp_kit_bom_cost`, `kit_cost_issue`,
+`reason` na referência de vínculo), mas **não bloqueia mais** custo, lucro e
+margem. Isso substitui a retenção descrita no "Achado real 06/11/2026".
+
+Embalagem: quando o pacote do catálogo Amazon ultrapassa os limites do programa
+(30 kg tarifáveis ou 100 cm) e o pacote Olist de **uma unidade**
+(`kit_cost_multiplier=1`) é elegível, a tarifa usa o pacote do ERP
+(`OLIST_V3_REGISTERED_PACKAGE`). Kits com multiplicador diferente de 1 continuam
+bloqueados. O pacote do Amazon elegível segue sob a regra conservadora
+(maior tarifa entre as duas fontes).
+
+`scripts/amazon-margin/sync-erp-packages.php` sincroniza o pacote do ERP para a
+listagem Amazon via SP-API Listings PATCH. O padrão é `--preview`
+(`VALIDATION_PREVIEW`, sem escrita); `--apply` escreve de fato e confere por
+leitura posterior. A meta de margem da publicação permanece **9%**.

@@ -55,12 +55,16 @@ checkLink(($margin['current_margin_status']??'')==='estimated','current_estimate
 
 $badBOM=SvAmazonMarginCurrentProductLink::reference($listing,$link,$product,
     static fn(int $id):array=>array_replace($readPart($id),['last_cost'=>3.02]));
-checkLink(($badBOM['status']??'')==='kit_composition_pending'
+// Owner decision 14/11/2026: the registered ERP kit cost is authoritative;
+// the BOM mismatch stays visible as a diagnostic but no longer blocks the cost.
+checkLink(($badBOM['status']??'')==='offer_cost_verified'
     && ($badBOM['recorded_cost']??null)===15.05
-    && ($badBOM['offer_cost']??null)===null,'registered_cost_not_false_absent');
-$unverified=SvAmazonMarginCurrentProductLink::projectionInput(
+    && ($badBOM['offer_cost']??null)===15.05
+    && ($badBOM['reason']??'')==='kit_registered_cost_disagrees_with_component_costs',
+    'erp_kit_cost_authoritative_with_bom_diagnostic');
+$verifiedFromErpKit=SvAmazonMarginCurrentProductLink::projectionInput(
     array_replace($old,['current_product_link_reference'=>$badBOM]));
-checkLink($unverified['last_cost']===null,'unverified_kit_never_projects');
+checkLink($verifiedFromErpKit['last_cost']===15.05,'erp_kit_cost_projects_directly');
 
 $simple=array_replace($product,[
     'erp_product_type'=>'S','erp_description'=>'Rodizio 35 mm',

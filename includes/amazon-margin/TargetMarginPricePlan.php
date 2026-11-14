@@ -191,16 +191,23 @@ final class SvAmazonTargetMarginPricePlan
         // The worker still refuses unknown or ineligible package sources.
         $hasAmazonPackage=is_array($r['amazon_package']??null);
         $hasErpPackage=is_array($r['erp_package']??null);
+        $erpSingleUnit=$hasErpPackage&&(int)($r['kit_cost_multiplier']??1)===1;
         if($hasAmazonPackage&&$hasErpPackage) {
             $amazon=SvAmazonCurrentPriceMargin::billable($r['amazon_package']);
             $erp=SvAmazonCurrentPriceMargin::billable($r['erp_package']);
-            if($amazon===null||$erp===null
-                ||!($amazon['eligible']??false)||!($erp['eligible']??false))
+            if($erp===null||!($erp['eligible']??false))
                 return self::fail($result,'package_conflict_unresolved');
-            $kg=max((float)($kg??0),(float)$amazon['billable_kg'],
-                (float)$erp['billable_kg']);
-            if(abs((float)$amazon['billable_kg']-(float)$erp['billable_kg'])>0.0000001)
-                $result['notices'][]='tarifa_conservadora_entre_embalagens_amazon_olist';
+            if($amazon!==null&&($amazon['eligible']??false)){
+                $kg=max((float)($kg??0),(float)$amazon['billable_kg'],
+                    (float)$erp['billable_kg']);
+                if(abs((float)$amazon['billable_kg']-(float)$erp['billable_kg'])>0.0000001)
+                    $result['notices'][]='tarifa_conservadora_entre_embalagens_amazon_olist';
+            }elseif($erpSingleUnit){
+                $kg=(float)$erp['billable_kg'];
+                $result['notices'][]='embalagem_erp_aplicada_catalogo_amazon_fora_do_limite';
+            }else{
+                return self::fail($result,'package_conflict_unresolved');
+            }
         }elseif(($r['current_package_conflict']??false)===true){
             return self::fail($result,'package_conflict_unresolved');
         }
