@@ -45,7 +45,7 @@ th{background:#f0f5fa;font-size:12px;color:#526680}tr:hover{background:#f6faff}
 <button id="refresh" type="button">Atualizar</button>
 <button id="pdf" type="button" disabled>Exportar PDF</button>
 <button id="xlsx" type="button" disabled>Exportar Excel</button>
-</div><div id="feedback" aria-live="polite" role="status"></div>
+</div><p id="sync-note" class="muted">Sincronização ainda não solicitada.</p><div id="feedback" aria-live="polite" role="status"></div>
 </section>
 <section class="card"><h2>Simular preço (sem publicação)</h2>
 <p class="muted">Selecione um anúncio e informe preço em reais. A prévia não reutiliza cotação de outra faixa como se fosse tarifa oficial.</p>
@@ -57,6 +57,7 @@ th{background:#f0f5fa;font-size:12px;color:#526680}tr:hover{background:#f6faff}
 <label><input type="checkbox" id="active" checked> Somente ativos</label>
 <span id="selection" class="muted">0 selecionados</span>
 </div>
+<div class="row"><span id="shown-count" class="muted"></span><button id="show-more" type="button" hidden>Mostrar mais 200 anúncios</button></div>
 <div class="scroll"><table><thead><tr><th>Selecionar</th><th>ID</th><th>SKU</th><th>Título</th><th>Situação</th><th>Preço (R$)</th><th>Custo (R$)</th><th>Imposto (R$)</th><th>Taxas (R$)</th><th>Frete (R$)</th><th>Lucro (R$)</th><th>Margem</th><th>Detalhe</th></tr></thead><tbody id="rows"><tr><td colspan="13">Carregando...</td></tr></tbody></table></div></section>
 </main>
 <script>
@@ -64,7 +65,7 @@ th{background:#f0f5fa;font-size:12px;color:#526680}tr:hover{background:#f6faff}
 const CHANNEL=<?=json_encode($channel,JSON_HEX_TAG|JSON_HEX_AMP|JSON_THROW_ON_ERROR)?>;
 const CSRF=<?=json_encode($csrf,JSON_HEX_TAG|JSON_HEX_AMP|JSON_THROW_ON_ERROR)?>;
 const el=id=>document.getElementById(id);
-const state={listings:[],results:new Map(),selected:new Set(),audit:null,busy:false};
+const state={listings:[],results:new Map(),selected:new Set(),audit:null,busy:false,sync:null,visibleLimit:200,lastSyncApplied:null};
 const money=c=>Number.isInteger(c)?(c/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
 const pct=b=>Number.isInteger(b)?(b/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%':'—';
 const active=r=>['active','live','buyable','published'].includes(String(r.status||'').toLowerCase());
@@ -93,9 +94,12 @@ function render(){
  el('selection').textContent=state.selected.size+' selecionado(s)';
  el('run-all').disabled=state.busy||!listed.length;
  el('run-selected').disabled=state.busy||!state.selected.size;
- el('sync').disabled=state.busy;
+ el('sync').disabled=state.busy||['QUEUED','RUNNING'].includes(state.sync?.status);
  const body=el('rows');body.replaceChildren();
- for(const x of filtered().slice(0,500)){
+ const matched=filtered();
+ el('shown-count').textContent=matched.length+' anúncios encontrados';
+ el('show-more').hidden=matched.length<=state.visibleLimit;
+ for(const x of matched.slice(0,state.visibleLimit)){ 
   const r=state.results.get(x.listing_id), tr=document.createElement('tr');
   const td=document.createElement('td'),check=document.createElement('input');
   check.type='checkbox';check.checked=state.selected.has(x.listing_id);
@@ -124,6 +128,23 @@ async function refresh(){
  try{const data=await request('listings');state.listings=data.listings||[];await latest();feedback('Catálogo atualizado.');render();}
  catch(e){feedback('API indisponível: '+e.message,true);render()}
 }
+async function refreshSync() {
+ const result=await request('sync-status');
+ const sync=result.sync||null;
+ state.sync=sync;
+ let note='Nenhuma sincronização oficial registrada.';
+ if(sync){
+  if(['QUEUED','RUNNING'].includes(sync.status))note='Sincronizando catálogo oficial · ID '+sync.id+' · consulta em andamento.';
+  else if(sync.status==='COMPLETE')note='Última sincronização concluída: '+sync.imported+' anúncios recebidos · '+(sync.finished_at||'');
+  else note='Última sincronização falhou: '+(sync.error_code||'PROVIDER_SYNC_FAILED')+' · catálogo anterior preservado.';
+ }
+ el('sync-note').textContent=note;
+ render();
+ if(sync?.status==='COMPLETE'&&state.lastSyncApplied!==sync.id){
+  state.lastSyncApplied=sync.id;
+  await refresh();
+ }
+}
 async function run(scope){
  state.busy=true;render();feedback('Auditoria enfileirada...');
  try{
@@ -134,12 +155,21 @@ async function run(scope){
  }catch(e){feedback(e.message,true)}finally{state.busy=false;render()}
 }
 el('refresh').addEventListener('click',refresh);
-el('sync').addEventListener('click',async()=>{state.busy=true;render();feedback('Consultando API oficial...');try{const r=await request('sync',{body:{}});feedback(r.imported+' anúncios sincronizados');await refresh()}catch(e){feedback('Sincronização não concluída: '+e.message,true)}finally{state.busy=false;render()}});
+el('sync').addEventListener('click',async()=>{
+ state.busy=true;render();feedback('Solicitando sincronização oficial...');
+ try{
+  const result=await request('sync',{body:{}});
+  feedback(result.already_running?'Sincronização já em andamento; acompanhando execução.':'Sincronização enfileirada: '+result.sync_id);
+  await refreshSync();
+ }catch(e){feedback('Não foi possível iniciar sincronização: '+e.message,true)}
+ finally{state.busy=false;render()}
+});
 el('run-all').addEventListener('click',()=>run('ALL'));
 el('run-selected').addEventListener('click',()=>run('SELECTED'));
 el('search').addEventListener('input',render);
 el('filter').addEventListener('change',render);
 el('active').addEventListener('change',render);
+el('show-more').addEventListener('click',()=>{state.visibleLimit+=200;render()});
 el('preview').addEventListener('click',async()=>{
  const raw=el('target-price').value.trim().replace(',','.');
  if(state.selected.size!==1||!/^[0-9]{1,7}(?:\.[0-9]{1,2})?$/.test(raw)){
@@ -157,4 +187,6 @@ for(const fmt of ['pdf','xlsx'])el(fmt).addEventListener('click',()=>{
  location.href=u;
 });
 refresh();
+refreshSync().catch(e=>{el('sync-note').textContent='Estado da sincronização indisponível: '+e.message;});
+setInterval(()=>{refreshSync().catch(()=>{});},4000);
 </script></body></html>
