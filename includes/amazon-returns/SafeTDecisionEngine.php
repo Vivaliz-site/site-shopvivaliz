@@ -52,6 +52,31 @@ final class SvAmazonSafeTDecisionEngine
                 }
                 $analysis = $this->denialAnalyzer->analyze($analysisCase, $latestText);
                 $fingerprint = $analysis['fingerprint'];
+                if ($state === SvAmazonReturnStates::APPEAL_DENIED_FINAL) {
+                    if ($this->hasActiveSupportCase($case)) {
+                        if (($case['new_support_fact'] ?? false) === true) {
+                            return [
+                                'action' => 'SELLER_SUPPORT_UPDATE',
+                                'reason' => 'APPEAL_DENIED_FINAL_REVIEW_NEW_FACT',
+                                'support_case_id' => (string)$case['support_case_id'],
+                                'denial_fingerprint' => $fingerprint,
+                                'idempotency_key' => hash('sha256', 'final-review-update|' . (string)$case['support_case_id'] . '|' . $fingerprint . '|' . (string)($case['support_fact_hash'] ?? 'new-fact')),
+                            ];
+                        }
+                        return [
+                            'action' => 'WAIT',
+                            'reason' => 'FINAL_REVIEW_ALREADY_ACTIVE',
+                            'support_case_id' => (string)$case['support_case_id'],
+                            'denial_fingerprint' => $fingerprint,
+                        ];
+                    }
+                    return [
+                        'action' => 'SELLER_SUPPORT_OPEN',
+                        'reason' => 'APPEAL_DENIED_REQUIRES_DETAILED_EMAIL_REVIEW',
+                        'denial_fingerprint' => $fingerprint,
+                        'idempotency_key' => hash('sha256', 'final-review|' . $safeTId . '|' . $fingerprint),
+                    ];
+                }
                 if ($analysis['repeated'] && $analysis['non_substantive']) {
                     if ($this->hasActiveSupportCase($case)) {
                         if (($case['new_support_fact'] ?? false) === true) {

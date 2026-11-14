@@ -97,6 +97,12 @@ $newDenial['latest_denial_text'] = 'Negada porque o rastreio mostra entrega ao v
 $appeal = $engine->nextAction($newDenial, [], $eligiblePolicy);
 sdSame('SAFE_T_APPEAL', $appeal['action'], 'Substantively new denial must receive adapted SAFE-T appeal, not automatic Help escalation.');
 
+$finalDenied = $newDenial;
+$finalDenied['state'] = 'APPEAL_DENIED_FINAL';
+$finalReview = $engine->nextAction($finalDenied, [], $eligiblePolicy);
+sdSame('SELLER_SUPPORT_OPEN', $finalReview['action'], 'Final appeal denial must go to the detailed final review route, never reopen a SAFE-T appeal.');
+sdSame('APPEAL_DENIED_REQUIRES_DETAILED_EMAIL_REVIEW', $finalReview['reason'], 'Final appeal denial must preserve the final email-review reason.');
+
 $info = eligibleCase(['safe_t_id'=>'81342-77571-9071754','state'=>'SAFE_T_INFO_REQUESTED','refund_initiator'=>'UNKNOWN','seller_debit_at'=>null]);
 sdSame('SAFE_T_APPEAL', $engine->nextAction($info, [], ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED'])['action'], 'Information request on an existing claim must generate a SAFE-T response independent of initial eligibility facts.');
 

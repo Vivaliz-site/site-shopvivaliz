@@ -36,6 +36,10 @@ APTO significa que o fluxo executou sua última ação e registrou o desfecho. N
 
 O motor gera `SAFE_T_EMAIL_REVIEW` para a revisão detalhada de uma negativa final. O scheduler pode normalizar essa ação para `SELLER_SUPPORT_OPEN` ou `SELLER_SUPPORT_UPDATE`, porque a comunicação operacional com a Amazon é feita pelo Seller Central. Portanto, a ausência de um novo e-mail Gmail isolado não prova falha quando existe evidência equivalente de Seller Support.
 
+### Invariante contra regressão
+
+Uma decisão `APPEAL_DENIED_FINAL` **nunca pode voltar para `SAFE_T_APPEAL`**. Ela deve abrir ou atualizar a revisão detalhada por Seller Support, que é a rota operacional equivalente ao e-mail final. Essa regra é coberta por `tests/amazon-returns-safet-decision-test.php` e deve permanecer verde em qualquer alteração feita por outro agente.
+
 O fluxo não deve:
 
 - reabrir cegamente um SAFE-T já existente;
