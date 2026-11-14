@@ -36,6 +36,8 @@ class PilotOrchestrator:
         self._provider_retry_not_before = 0.0
         self._provider_retry_delay_seconds = 60.0
         self._pending = {}
+        # Fairly rotate scarce asynchronous inference slots across ranked candidates.
+        self._candidate_cursor = 0
         self._decision_pool = None
         if getattr(decision_provider, "async_mode", False):
             workers = max(1, min(int(getattr(decision_provider, "max_concurrency", 2)), 2))
@@ -242,13 +244,19 @@ class PilotOrchestrator:
                 if getattr(self.decision_provider, "context_builder", None)
                 else {}
             )
-            for snap in candidates:
+            # Snapshot the cursor once: changing it during enumeration would
+            # skip symbols when multiple workers are available.
+            start_cursor = self._candidate_cursor
+            for offset in range(len(candidates)):
                 if available <= 0:
                     break
+                index = (start_cursor + offset) % len(candidates)
+                snap = candidates[index]
                 if snap.instrument in self.paper_broker.positions or snap.instrument in self._pending:
                     continue
                 future = self._decision_pool.submit(self.decision_provider.analyze, snap, base_context)
                 self._pending[snap.instrument] = (snap, future)
+                self._candidate_cursor = (index + 1) % len(candidates)
                 self._audit({
                     "event": "DECISION_SUBMITTED",
                     "instrument": snap.instrument,
