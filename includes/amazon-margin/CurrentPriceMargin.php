@@ -154,6 +154,12 @@ final class SvAmazonCurrentPriceMargin
         $pkg=null;$weight=null;
         if(is_array($amazon)&&($aa['eligible']??false)){
             $pkg=$amazon;$weight=$aa;$out['current_package_source']='AMAZON_CATALOG_PACKAGE';
+            // Both eligible packages known: the HIGHER billable weight (hence the
+            // higher official tariff) rules, so this margin matches the price
+            // simulation and publication, which already take the larger freight.
+            if($erpSingleUnit&&($bb['eligible']??false)&&$bb['billable_kg']>$aa['billable_kg']){
+                $pkg=$erp;$weight=$bb;$out['current_package_source']='OLIST_V3_REGISTERED_PACKAGE';
+            }
         }elseif($erpSingleUnit&&($bb['eligible']??false)){
             $pkg=$erp;$weight=$bb;$out['current_package_source']='OLIST_V3_REGISTERED_PACKAGE';
         }elseif(is_array($amazon)){
