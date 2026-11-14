@@ -2,12 +2,18 @@
 """Bounded read-only operational check; never places even a paper order."""
 import json
 from datetime import datetime,timezone
+from decimal import Decimal
 from pathlib import Path
 import subprocess
 
 ROOT=Path('/opt/shopvivaliz-okx-paper/current')
 STATE=Path('/var/lib/shopvivaliz-okx-paper/paper-state-v3.json')
 STATUS=Path('/var/lib/shopvivaliz-okx-paper/paper-status-v3.json')
+
+def validate_state_baseline(report, ledger):
+    assert report['run_id']==ledger['run_id'], 'run_id_mismatch'
+    assert Decimal(str(report['initial_equity']))==Decimal(str(ledger['starting_equity'])), 'initial_capital_mismatch'
+
 
 def main():
     subprocess.run(['/usr/bin/systemctl','is-active','--quiet','shopvivaliz-okx-paper.service'],check=True,timeout=10)
@@ -22,7 +28,7 @@ def main():
     assert report.get('ai_20_layers_configured') is True
     assert report.get('ai_20_layers_active') is True, 'ai_20_layers_not_active'
     assert report.get('decision_model')=='gpt-6-luna', 'wrong_decision_model'
-    assert report['run_id']==ledger['run_id'] and ledger['starting_equity']=='100'
+    validate_state_baseline(report, ledger)
     assert report['errors']==[] and not report['entries_blocked'], 'market_data_not_ready'
     assert all(report['markets'].get(x,0)>0 for x in ('SPOT','SWAP','FUTURES'))
     assert Path(report['release'])==ROOT.resolve(), 'release_mismatch'
