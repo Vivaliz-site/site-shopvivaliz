@@ -29,6 +29,7 @@ $routes=[
  'export'=>['GET','/v1/audits/'],
  'start'=>['POST','/v1/audits'],
  'sync'=>['POST','/v1/sync'],
+ 'sync-status'=>['GET','/v1/sync/status'],
  'preview'=>['POST','/v1/preview'],
 ];
 if(!isset($routes[$action]))margin_reply(404,'unknown_action');
