@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/../../includes/admin-guard.php';
 require_once __DIR__.'/../../includes/amazon-margin/AuditStore.php';
+require_once __DIR__.'/../../includes/amazon-margin/ApiErrors.php';
 require_once __DIR__.'/../../includes/amazon-margin/TargetMarginPricePlan.php';
 require_once __DIR__.'/../../includes/amazon-margin/TargetMarginPriceJobs.php';
 require_once __DIR__.'/../../includes/amazon-margin/ReportExport.php';
@@ -208,10 +209,8 @@ try {
     $requests=SvAmazonMarginStore::requests($db);
     sv_margin_api_json(200,['ok'=>true,'latest'=>$latest,'requests'=>$requests,
         'price_updates_enabled'=>true]);
-} catch(InvalidArgumentException|JsonException $e) {
-    sv_margin_api_json(400,['ok'=>false,'error'=>'invalid_input']);
 } catch(Throwable $e) {
-    error_log('amazon_margin_admin_api_failure: '.get_class($e));
-    sv_margin_api_json(503,['ok'=>false,'error'=>'audit_storage_unavailable',
-        'detail'=>'Awaiting first audited snapshot or schema deployment.']);
+    $failure=SvAmazonMarginApiErrors::map($e);
+    if ($failure['log']!==null) error_log($failure['log']);
+    sv_margin_api_json($failure['status'],$failure['body']);
 }

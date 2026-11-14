@@ -225,12 +225,24 @@ function dateUtc(value){
  const d=new Date(String(value).replace(' ','T')+(String(value).includes('Z')?'':'Z'));
  return Number.isNaN(+d)?String(value):d.toLocaleString('pt-BR');
 }
+const apiErrorText={
+ audit_updated_recalculate_first:'Há uma auditoria mais nova. Calcule os selecionados de novo antes de aplicar.',
+ explicit_site_impact_confirmation_required:'Confirme o impacto no site e em outros SKUs para aplicar.',
+ price_preview_changed_recalculate:'A simulação mudou desde o cálculo. Calcule os selecionados de novo.',
+ price_proposal_not_ready_for_publication:'Há SKU sem proposta publicável (pendente, sem ID ERP ou em conflito). Revise a simulação.',
+ price_request_erp_shared_id_conflict:'SKUs do mesmo produto ERP exigem o mesmo preço. Selecione-os juntos.',
+ price_skus_empty_after_cart_exclusion:'Só há carrinhos de ferramentas na seleção; eles não são publicados.',
+ owner_tool_cart_price_exception:'Carrinhos de ferramentas não podem ser publicados.',
+ csrf_denied:'Sessão inválida. Atualize a página.',
+ no_audit_snapshot:'Ainda não há auditoria concluída.',
+ audit_storage_unavailable:'Armazenamento da auditoria indisponível. Tente novamente em instantes.'
+};
 async function readJson(res){
  const type=res.headers.get('content-type')||'';
  if(res.redirected||!type.includes('application/json'))
    throw new Error('Sessão administrativa expirada. Atualize a página e faça login novamente.');
  const j=await res.json();
- if(!res.ok||!j.ok)throw new Error(j.error||'Falha da API de auditoria');
+ if(!res.ok||!j.ok)throw new Error(apiErrorText[j.code||j.error]||j.error||'Falha da API de auditoria');
  return j;
 }
 function queueDisplay(requests,meta){

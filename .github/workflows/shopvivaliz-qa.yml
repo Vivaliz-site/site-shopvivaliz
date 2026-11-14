@@ -232,6 +232,7 @@ jobs:
           php tests/amazon-margin/OlistUiCaptureTest.php
           php tests/amazon-margin/KitCostTest.php
           php tests/amazon-margin/KitBomCostTest.php
+          php tests/amazon-margin/ApiErrorMappingTest.php
           php tests/amazon-margin/SyncErpPackagesSnapshotTest.php
           php tests/amazon-margin/KitCostReportTest.php
           php tests/amazon-margin/ReportExportTest.php
