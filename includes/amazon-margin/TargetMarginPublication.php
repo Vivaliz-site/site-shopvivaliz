@@ -101,6 +101,58 @@ final class SvAmazonTargetMarginPublication
         }catch(Throwable){return false;}
     }
 
+    /** Round upward to a cent so the configured maximum is never below +10%. */
+    private static function tenPercentAboveCents(int $cents):int
+    {
+        if($cents<=0||$cents>intdiv(PHP_INT_MAX-99,110))
+            throw new InvalidArgumentException('amazon_maximum_price_target_invalid');
+        return intdiv($cents*110+99,100);
+    }
+
+    /** @return array{current:?int,target:?int,entry:?array,schedule_row:?array} */
+    private static function maximumPriceDetails(array $offer,int $saleCents):array
+    {
+        $values=$offer['maximum_seller_allowed_price']??null;
+        if($values===null||$values===[])
+            return ['current'=>null,'target'=>null,'entry'=>null,'schedule_row'=>null];
+        if(!is_array($values)||count($values)!==1||!is_array($values[0]))
+            throw new RuntimeException('amazon_maximum_price_shape_unverified');
+        $entry=$values[0];
+        $schedule=$entry['schedule']??null;
+        if(!is_array($schedule)||count($schedule)!==1||!is_array($schedule[0]))
+            throw new RuntimeException('amazon_scheduled_maximum_price_requires_reconciliation');
+        $row=$schedule[0];
+        if(array_key_exists('start_at',$row)||array_key_exists('end_at',$row))
+            throw new RuntimeException('amazon_scheduled_maximum_price_requires_reconciliation');
+        $raw=$row['value_with_tax']??null;
+        if(!is_numeric($raw)||!is_finite((float)$raw)||(float)$raw<=0)
+            throw new RuntimeException('amazon_maximum_price_value_unverified');
+        $current=(int)round((float)$raw*100,0,PHP_ROUND_HALF_UP);
+        if($current<=0)throw new RuntimeException('amazon_maximum_price_value_unverified');
+        $target=$current<$saleCents
+            ?self::tenPercentAboveCents($saleCents):$current;
+        return ['current'=>$current,'target'=>$target,'entry'=>$entry,'schedule_row'=>$row];
+    }
+
+    /** Expected Seller Central maximum after applying the owner's price rule. */
+    public static function targetMaximumSellerAllowedPriceCents(
+        array $listing,string $marketplaceId,int $saleCents
+    ):?int {
+        if(trim($marketplaceId)===''||$saleCents<=0)
+            throw new InvalidArgumentException('amazon_maximum_price_target_invalid');
+        $offers=$listing['attributes']['purchasable_offer']??[];
+        if(!is_array($offers))throw new RuntimeException('purchasable_offer_not_available');
+        $matched=null;
+        foreach($offers as $offer){
+            if(!is_array($offer)||($offer['marketplace_id']??'')!==$marketplaceId
+                ||($offer['audience']??'ALL')!=='ALL')continue;
+            if($matched!==null)throw new RuntimeException('duplicate_marketplace_purchasable_offer');
+            $matched=$offer;
+        }
+        if($matched===null)throw new RuntimeException('amazon_existing_offer_not_found');
+        return self::maximumPriceDetails($matched,$saleCents)['target'];
+    }
+
     /**
      * Replace only the purchasable_offer attribute using the complete latest
      * GET snapshot, preserving unrelated audiences/offers and all other
@@ -131,10 +183,15 @@ final class SvAmazonTargetMarginPublication
             // the desired margin must describe the effective offer.
             if(isset($offer['discounted_price'])||isset($offer['sale_price']))
                 throw new RuntimeException('amazon_promotion_requires_reconciliation');
-            $max=$offer['maximum_seller_allowed_price'][0]['schedule'][0]['value_with_tax']??null;
-            if(is_numeric($max)&&((float)$max)>0
-                &&(int)round((float)$max*100)<$cents)
-                throw new RuntimeException('amazon_existing_max_price_below_target');
+            $maximum=self::maximumPriceDetails($offer,$cents);
+            if($maximum['current']!==null
+                &&$maximum['target']!==$maximum['current']){
+                $entry=$maximum['entry'];
+                $scheduleRow=$maximum['schedule_row'];
+                $scheduleRow['value_with_tax']=$maximum['target']/100;
+                $entry['schedule']=[$scheduleRow];
+                $offer['maximum_seller_allowed_price']=[$entry];
+            }
             foreach(['our_price','minimum_seller_allowed_price'] as $field){
                 $previous=$offer[$field][0]['schedule']??[];
                 if(count($previous)>1||isset($previous[0]['start_at'])
@@ -162,7 +219,9 @@ final class SvAmazonTargetMarginPublication
         ];
     }
 
-    public static function listingPricesMatch(array $listing,string $marketplaceId,int $cents): bool
+    public static function listingPricesMatch(
+        array $listing,string $marketplaceId,int $cents,?int $expectedMaximumCents=null
+    ): bool
     {
         $offers=$listing['attributes']['purchasable_offer']??[];
         if(!is_array($offers))return false;
@@ -174,6 +233,16 @@ final class SvAmazonTargetMarginPublication
                 $value=$offer[$field][0]['schedule'][0]['value_with_tax']??null;
                 if(!is_numeric($value)||!is_finite((float)$value)
                     ||(int)round((float)$value*100)!==$cents)continue 2;
+            }
+            $maximum=$offer['maximum_seller_allowed_price']??null;
+            if($expectedMaximumCents!==null){
+                try{$details=self::maximumPriceDetails($offer,$cents);}
+                catch(Throwable){continue;}
+                if($details['current']!==$expectedMaximumCents)continue;
+            }elseif($maximum!==null&&$maximum!==[]){
+                try{$details=self::maximumPriceDetails($offer,$cents);}
+                catch(Throwable){continue;}
+                if($details['current']!==null&&$details['current']<$cents)continue;
             }
             return true;
         }
@@ -200,11 +269,13 @@ final class SvAmazonTargetMarginPublication
         // being forged. The 9% target must use the HIGHER official tariff,
         // including across 0.5/1 kg band boundaries, or remain unpublishable.
         // This does not revise dimensions, shipping programs or product costs.
-        if(($row['current_package_conflict']??false)===true) {
-            $amazon=is_array($row['amazon_package']??null)
-                ? SvAmazonCurrentPriceMargin::billable($row['amazon_package']) : null;
-            $erp=is_array($row['erp_package']??null)
-                ? SvAmazonCurrentPriceMargin::billable($row['erp_package']) : null;
+        $hasAmazonPackage=is_array($row['amazon_package']??null);
+        $hasErpPackage=is_array($row['erp_package']??null);
+        if($hasAmazonPackage&&$hasErpPackage) {
+            // The UI conflict flag has a 0.2 kg/5% tolerance. It is not a
+            // tariff-safety flag: even a 20 g difference can cross a fee band.
+            $amazon=SvAmazonCurrentPriceMargin::billable($row['amazon_package']);
+            $erp=SvAmazonCurrentPriceMargin::billable($row['erp_package']);
             if($amazon===null||$erp===null
                 ||!($amazon['eligible']??false)||!($erp['eligible']??false))
                 throw new RuntimeException('package_conflict_unresolved');
@@ -222,10 +293,13 @@ final class SvAmazonTargetMarginPublication
             $calculated['current_profit_cents']-=$difference;
             $calculated['current_margin_bps']=(int)round(
                 $calculated['current_profit_cents']*10000/$priceCents,0,PHP_ROUND_HALF_UP);
-            $calculated['current_margin_status']='estimated_dimension_conflict_conservative';
+            if($difference>0)
+                $calculated['current_margin_status']='estimated_dimension_conflict_conservative';
             $calculated['conservative_package_envelope']=true;
             $calculated['conservative_logistics_amazon_cents']=$amazonTariff;
             $calculated['conservative_logistics_erp_cents']=$erpTariff;
+        }elseif(($row['current_package_conflict']??false)===true){
+            throw new RuntimeException('package_conflict_unresolved');
         }
         return $calculated;
     }

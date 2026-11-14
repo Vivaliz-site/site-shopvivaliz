@@ -91,4 +91,60 @@ assertTarget($missingMargin['rows'][0]['state']==='pending'
     && $missingMargin['rows'][0]['reason']==='current_margin_not_calculated',
     'null_margin_still_pending');
 
+
+// The owner explicitly excludes every Fercar tool cart from price changes.
+// Ten live Seller SKUs span six ERP products; one title omits "ferramenta",
+// so the stable ERP identity/SKU exclusion is also required.
+$toolCarts=[
+ ['seller_sku'=>'C08BR','erp_id'=>353735815,'erp_sku'=>'C08BR','title'=>'Carrinho Fechado Branco com 6 Gavetas-FERCAR-C08BR'],
+ ['seller_sku'=>'C08TPTDBA','erp_id'=>391762755,'erp_sku'=>'C08TPT','title'=>'Fercar Carrinho para Ferramentas C08 Grande Preto'],
+ ['seller_sku'=>'1C7Q-LKUT-WWJG','erp_id'=>353735815,'erp_sku'=>'C08BR','title'=>'Carrinho Fechado Branco com 6 Gavetas-FERCAR-C08BR'],
+ ['seller_sku'=>'1C7Q-LKVG-DZE9','erp_id'=>388941857,'erp_sku'=>'C06TPT','title'=>'Carrinho de Ferramentas Fercar com 3 Gavetas'],
+ ['seller_sku'=>'1C7Q-LKWG-IFOH','erp_id'=>353736291,'erp_sku'=>'C08VM','title'=>'Carrinho para Ferramentas com 6 Gavetas Vermelho'],
+ ['seller_sku'=>'1C7Q-LKWT-GPYR','erp_id'=>373539622,'erp_sku'=>'C06CZ','title'=>'Fercar Carrinho Fechado para Ferramentas com 03 Gavetas'],
+ ['seller_sku'=>'C08TPTONSITE','erp_id'=>391762755,'erp_sku'=>'C08TPT','title'=>'Fercar Carrinho para Ferramentas C08 Grande Preto'],
+ ['seller_sku'=>'C08TVMDBA','erp_id'=>353735022,'erp_sku'=>'C08TVM','title'=>'Fercar Carrinho para Ferramentas C08 Grande Vermelho'],
+ ['seller_sku'=>'C08TVMONSITE','erp_id'=>353735022,'erp_sku'=>'C08TVM','title'=>'Fercar Carrinho para Ferramentas C08 Grande Vermelho'],
+ ['seller_sku'=>'LN-C6RF-O1VB','erp_id'=>353736291,'erp_sku'=>'C08VM','title'=>'Carrinho para Ferramentas com 6 Gavetas Vermelho e Cinza'],
+];
+foreach($toolCarts as &$cart){
+    $cart['amazon_status']=['BUYABLE'];$cart['program']='FBA_ONSITE';
+    $cart['price']=1549.00;$cart['last_cost']=1000.00;
+    $cart['current_margin_cost_used']=1000.00;$cart['current_margin_bps']=774;
+    $cart['current_commission_cents']=23235;$cart['current_logistics_cents']=1000;
+    $cart['current_billable_kg']=1.3;
+}
+unset($cart);
+$toolSkus=array_column($toolCarts,'seller_sku');
+$toolPlan=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>$toolCarts],$toolSkus,900,'other');
+assertTarget($toolPlan['selected']===10&&$toolPlan['excluded']===10
+    &&$toolPlan['simulated']===0&&$toolPlan['pending']===0,
+    'all_ten_tool_cart_offers_excluded');
+foreach($toolPlan['rows'] as $cartRow){
+    assertTarget($cartRow['state']==='excluded'
+        &&$cartRow['reason']==='carrinho_ferramentas_excecao'
+        &&$cartRow['proposed_price_cents']===null
+        &&$cartRow['minimum_price_cents']===null,
+        'tool_cart_has_no_sale_minimum_or_maximum_proposal');
+}
+$futureCart=$toolCarts[0];
+$futureCart['seller_sku']='NEW-TOOL-CART';
+$futureCart['erp_id']=999001;$futureCart['erp_sku']='NEW-CART';
+$futureCart['title']='Carrinho para Ferramentas Oficina Modelo Novo';
+$futurePlan=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>[$futureCart]],['NEW-TOOL-CART'],900,'other');
+assertTarget($futurePlan['excluded']===1
+    &&$futurePlan['rows'][0]['state']==='excluded',
+    'future_tool_cart_title_pattern_excluded');
+$armory=$sku;$armory['seller_sku']='ARMORY-08';
+$armory['erp_id']=342715215;$armory['erp_sku']='ARM-08';
+$armory['title']='Armário em Aço com 1 Prateleira ARM-08 Ferramix';
+$armoryPlan=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>[$armory]],['ARMORY-08'],900,'other');
+assertTarget($armoryPlan['excluded']===0&&$armoryPlan['simulated']===1,
+    'armory_is_not_misclassified_as_tool_cart');
+assertTarget($toolPlan['cart_exception_rule']==='exclude_tool_carts_by_current_erp_identity_and_title',
+    'cart_exception_rule_is_explicit_in_preview');
+
 echo "PASS Amazon target-margin price simulation: cents, tariffs, ERP 991 groups, no writes, projections, missing data\n";

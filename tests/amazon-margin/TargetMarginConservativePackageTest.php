@@ -79,4 +79,47 @@ assertEnvelope($planned['proposed_price_cents']>21530,'preview_pet_discloses_rea
 assertEnvelope($planned['profit_estimate_cents']*10000 >= 900*$planned['proposed_price_cents'],
     'preview_pet_target_9pct_in_cents');
 
+
+// A 20 g package delta is below the display-conflict tolerance, but it
+// crosses the 0.5 kg official DBA tariff band. The upper tariff must still
+// be used for both the signed preview and the exact SP-API quote.
+$nearBoundary=$base;
+$nearBoundary['seller_sku']='DBA-NEAR-TARIFF-BOUNDARY';
+$nearBoundary['last_cost']=50.00;
+$nearBoundary['current_package_conflict']=false;
+$nearBoundary['amazon_package']=[
+    'weight_kg'=>0.47,'length_cm'=>10,'width_cm'=>10,'height_cm'=>10,
+];
+$nearBoundary['erp_package']=[
+    'weight_kg'=>0.49,'length_cm'=>10,'width_cm'=>10,'height_cm'=>10,
+];
+$amazonBillable=SvAmazonCurrentPriceMargin::billable($nearBoundary['amazon_package']);
+$erpBillable=SvAmazonCurrentPriceMargin::billable($nearBoundary['erp_package']);
+assertEnvelope($amazonBillable['billable_kg']===0.49
+    &&$erpBillable['billable_kg']===0.51,'sub_tolerance_packages_straddle_half_kg');
+$amazonFee=SvAmazonCurrentPriceMargin::logisticsCents(
+    'DBA',12000,$amazonBillable['billable_kg'],'other');
+$erpFee=SvAmazonCurrentPriceMargin::logisticsCents(
+    'DBA',12000,$erpBillable['billable_kg'],'other');
+assertEnvelope($amazonFee!==$erpFee,'boundary_changes_official_tariff');
+$boundaryMargin=SvAmazonTargetMarginPublication::quotedMargin(
+    $nearBoundary,12000,['price_cents'=>12000,'commission_cents'=>1800],1400,'other');
+assertEnvelope($boundaryMargin['current_logistics_cents']===max($amazonFee,$erpFee),
+    'sub_tolerance_quote_uses_upper_tariff');
+$nearBoundary['price']=120.00;
+$nearBoundary['current_commission_cents']=1800;
+$nearBoundary['current_margin_bps']=1504;
+$nearBoundary['current_billable_kg']=$amazonBillable['billable_kg'];
+$nearBoundary['erp_id']=99001;
+$nearBoundary['erp_sku']='DBA-NEAR';
+$nearBoundary['_target_tax_bps']=1400;
+$boundaryPlan=SvAmazonTargetMarginPricePlan::prepare(
+    ['rows'=>[$nearBoundary]],['DBA-NEAR-TARIFF-BOUNDARY'],900,'other');
+$boundaryRow=$boundaryPlan['rows'][0];
+assertEnvelope($boundaryRow['state']==='simulated','sub_tolerance_preview_simulated');
+assertEnvelope($boundaryRow['logistics_cents']===max($amazonFee,$erpFee),
+    'sub_tolerance_preview_uses_upper_tariff');
+assertEnvelope(in_array('tarifa_conservadora_entre_embalagens_amazon_olist',
+    $boundaryRow['notices'],true),'sub_tolerance_preview_discloses_envelope');
+
 echo "PASS conservative dimensions quoted margin: worst tariff, same tariff, unknown blocked\n";

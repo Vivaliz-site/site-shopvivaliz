@@ -14,6 +14,29 @@ require_once __DIR__.'/CurrentPriceMargin.php';
  */
 final class SvAmazonTargetMarginPricePlan
 {
+    /**
+     * Owner's commercial exemption: tool carts retain all original prices.
+     *
+     * The six ERP product identities are cross-checked against the latest
+     * authenticated Olist/Amazon catalog (ten buyable Seller SKUs). The
+     * descriptive fallback covers newly published tool-cart products.
+     */
+    public static function isToolCart(array $row):bool
+    {
+        $erpId=(int)($row['erp_id']??
+            $row['current_product_link_reference']['erp_id']??0);
+        if(in_array($erpId,[353735815,391762755,388941857,
+            353736291,373539622,353735022],true))return true;
+        $erpSku=strtoupper(trim((string)($row['erp_sku']??
+            $row['current_product_link_reference']['erp_sku']??'')));
+        if(in_array($erpSku,['C08BR','C08TPT','C06TPT','C08VM','C06CZ','C08TVM'],true))
+            return true;
+        $title=strtolower((string)($row['title']??''));
+        return str_contains($title,'carrinho')
+            && (str_contains($title,'ferrament')||str_contains($title,'fercar')
+                ||str_contains($title,'gaveta')||str_contains($title,'oficina'));
+    }
+
     public static function targetBps(mixed $percent): int
     {
         if (!is_int($percent) && !is_float($percent) && !is_string($percent))
@@ -43,7 +66,7 @@ final class SvAmazonTargetMarginPricePlan
             if ($id!==null)$erpProducts[$id][]=$sku;
         }
         $selected=array_values(array_unique($skus));
-        $rows=[];$ready=0;$pending=0;$grossCents=0;
+        $rows=[];$ready=0;$pending=0;$excluded=0;$grossCents=0;
         foreach ($selected as $sku) {
             $r=$indexed[$sku]??null;
             if (!is_array($r)) {
@@ -67,7 +90,8 @@ final class SvAmazonTargetMarginPricePlan
             if ($planned['state']==='simulated') {
                 $ready++;
                 $grossCents+=(int)$planned['proposed_price_cents'];
-            } else $pending++;
+            }elseif($planned['state']==='excluded')$excluded++;
+            else $pending++;
             $rows[]=$planned;
         }
         $byProduct=[];
@@ -85,10 +109,12 @@ final class SvAmazonTargetMarginPricePlan
         return [
             'target_margin_bps'=>$targetBps,'target_percent'=>$targetBps/100,
             'currency'=>'BRL','erp_price_list_id'=>991,
-            'amazon_price_fields'=>['our_price','minimum_seller_allowed_price'],
+            'amazon_price_fields'=>['our_price','minimum_seller_allowed_price','maximum_seller_allowed_price'],
+            'amazon_maximum_price_rule'=>'raise_to_110_percent_only_when_sale_exceeds_existing_maximum',
+            'cart_exception_rule'=>'exclude_tool_carts_by_current_erp_identity_and_title',
             'method'=>'current_fee_rate_estimate_only','authoritative_quote_at_target'=>false,
             'modifies_prices'=>false,'selected'=>count($selected),
-            'simulated'=>$ready,'pending'=>$pending,
+            'simulated'=>$ready,'pending'=>$pending,'excluded'=>$excluded,
             'total_simulated_prices_cents'=>$grossCents,'rows'=>$rows
         ];
     }
@@ -122,6 +148,11 @@ final class SvAmazonTargetMarginPricePlan
         $result['current_margin_bps']=$r['current_margin_bps']??null;
         $result['current_price_cents']=null;
         $result['notices']=[];
+        if(self::isToolCart($r)){
+            $result['state']='excluded';
+            $result['reason']='carrinho_ferramentas_excecao';
+            return $result;
+        }
         if (!in_array('BUYABLE',is_array($r['amazon_status']??null)?$r['amazon_status']:[],true))
             return self::fail($result,'offer_not_buyable');
         $price=$r['price']??null;
@@ -158,19 +189,20 @@ final class SvAmazonTargetMarginPricePlan
         // the approved worker's exact-fee quote. Do not silently raise a price
         // far above the signed preview because the ERP package is larger.
         // The worker still refuses unknown or ineligible package sources.
-        if(($r['current_package_conflict']??false)===true) {
-            $amazon=is_array($r['amazon_package']??null)
-                ? SvAmazonCurrentPriceMargin::billable($r['amazon_package']) : null;
-            $erp=is_array($r['erp_package']??null)
-                ? SvAmazonCurrentPriceMargin::billable($r['erp_package']) : null;
-            if($amazon!==null&&$erp!==null
-                &&($amazon['eligible']??false)&&($erp['eligible']??false)) {
-                $kg=max((float)($kg??0),(float)$amazon['billable_kg'],
-                    (float)$erp['billable_kg']);
+        $hasAmazonPackage=is_array($r['amazon_package']??null);
+        $hasErpPackage=is_array($r['erp_package']??null);
+        if($hasAmazonPackage&&$hasErpPackage) {
+            $amazon=SvAmazonCurrentPriceMargin::billable($r['amazon_package']);
+            $erp=SvAmazonCurrentPriceMargin::billable($r['erp_package']);
+            if($amazon===null||$erp===null
+                ||!($amazon['eligible']??false)||!($erp['eligible']??false))
+                return self::fail($result,'package_conflict_unresolved');
+            $kg=max((float)($kg??0),(float)$amazon['billable_kg'],
+                (float)$erp['billable_kg']);
+            if(abs((float)$amazon['billable_kg']-(float)$erp['billable_kg'])>0.0000001)
                 $result['notices'][]='tarifa_conservadora_entre_embalagens_amazon_olist';
-            }else{
-                $result['notices'][]='embalagem_divergente_requer_conciliacao';
-            }
+        }elseif(($r['current_package_conflict']??false)===true){
+            return self::fail($result,'package_conflict_unresolved');
         }
         $currentCommission=(int)$commission;
         // At 0% margin no price may be inferred from cost alone: use the last

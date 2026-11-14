@@ -715,3 +715,29 @@ ultrapassar maximum_seller_allowed_price, promocao ativa, divergencia de
 produto ERP ou o fluxo administrativo P2 preexistente. Sao necessarios
 revisao, integracao, publicacao canonica e readback real antes de certificar
 os casos pendentes.
+
+## Regra de publicação do preço mínimo e máximo Amazon (14/11/2026)
+
+Ao publicar um preço de venda aprovado, `our_price` e
+`minimum_seller_allowed_price` recebem exatamente o mesmo valor. Se o
+preço de venda ultrapassar o `maximum_seller_allowed_price` vigente, o
+máximo passa para pelo menos 110% do preço de venda, arredondado para cima
+ao centavo. Se o máximo já estiver acima do preço de venda, ele permanece
+inalterado. Se não houver máximo cadastrado, não se inventa um limite.
+Ofertas B2B e demais audiências não selecionadas são preservadas.
+
+Máximos com mais de um período ou agendamento exigem reconciliação manual;
+a automação não sobrescreve cronogramas. O valor máximo esperado é
+persistido no journal por Seller SKU e conferido no readback assíncrono
+da Seller Central, junto com venda, mínimo e tabela ERP 991. O schema do
+journal recebe upgrade idempotente para `amazon_maximum_price_cents`.
+
+Carrinhos de ferramentas permanecem fora da publicação e não podem ter
+preço de venda, mínimo ou máximo alterados por esta rotina. A classificação
+é sustentada pelos seis produtos Olist dos dez Seller SKUs atualmente
+identificados, além de padrões de título para novos produtos. O motor de
+prévia marca `state=excluded`, e a fila comercial ignora linhas isentas
+mesmo quando selecionadas junto com itens permitidos. O worker também
+reconcilia a identidade do SKU com o snapshot original imediatamente
+antes de qualquer nova operação externa. Um lote somente de carrinhos
+não gera solicitação comercial.
