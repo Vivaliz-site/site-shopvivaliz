@@ -61,7 +61,7 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
 <body>
 <header>
   <div><h1>Auditoria de Margens Amazon</h1><div class="small">ShopVivaliz · Olist/Tiny + SP-API</div></div>
-  <a href="/admin/">Voltar ao Admin</a>
+  <a href="/admin/margens-marketplaces.php">Voltar à Central de Margens</a>
 </header>
 <main>
   <div class="alert">Primeira fase: <strong>auditoria e relatórios somente leitura</strong>. Alterações de preço serão liberadas apenas após validação da sincronização individual Amazon/ERP e do impacto no site.</div>

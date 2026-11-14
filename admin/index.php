@@ -36,7 +36,7 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/buscador.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(37,99,235,0.35);">🔎 Buscador</a>
                 <a href="/admin/squad-chat.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(14,165,233,0.28);">💬 Squad Chat</a>
                 <a href="/admin/marina-maintenance.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(15,118,110,0.45);">🛡️ Manutenção Marina</a>
-                <a href="/admin/amazon-margin.php" style="color: white; text-decoration: none; padding: 0.5rem; border-radius: 4px; background: #0f766e;">📊 Margens Amazon</a>
+                <a href="/admin/margens-marketplaces.php" style="color: white; text-decoration: none; padding: 0.5rem; border-radius: 4px; background: #0f766e;">📊 Margens Marketplaces</a>
                 <a href="/admin/connections.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🔐 Conexões</a>
                 <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
