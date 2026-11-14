@@ -53,6 +53,18 @@ function sv_amazon_manufacturer_package_overrides(): array
     ];
 }
 
+/**
+ * Rows of the latest persisted audit. SvAmazonMarginStore::latest() returns the
+ * report under 'snapshot' (not 'payload'); an empty list means "no audit yet".
+ *
+ * @return list<array<string,mixed>>
+ */
+function sv_amazon_latest_snapshot_rows(?array $latest): array
+{
+    $rows = $latest['snapshot']['rows'] ?? null;
+    return is_array($rows) ? array_values($rows) : [];
+}
+
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
     $options = getopt('', ['preview', 'apply', 'skus:', 'export-sellerflex:']);
     $apply = array_key_exists('apply', $options);
@@ -76,7 +88,8 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
     }
     SvAmazonMarginStore::ensureSchema($db);
     $latest = SvAmazonMarginStore::latest($db);
-    if (!is_array($latest) || !is_array($latest['payload']['rows'] ?? null)) {
+    $auditRows = sv_amazon_latest_snapshot_rows($latest);
+    if ($auditRows === []) {
         fwrite(STDERR, json_encode(['state' => 'failed', 'reason' => 'latest_audit_snapshot_missing']) . "\n");
         exit(2);
     }
@@ -87,7 +100,7 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
     $sellerId = $client->sellerId();
 
     $candidates = [];
-    foreach ($latest['payload']['rows'] as $row) {
+    foreach ($auditRows as $row) {
         $sku = (string)($row['seller_sku'] ?? '');
         if ($sku === '') continue;
         if ($selectedSkus !== [] && !in_array($sku, $selectedSkus, true)) continue;
