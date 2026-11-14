@@ -777,3 +777,11 @@ bloqueados. O pacote do Amazon elegível segue sob a regra conservadora
 listagem Amazon via SP-API Listings PATCH. O padrão é `--preview`
 (`VALIDATION_PREVIEW`, sem escrita); `--apply` escreve de fato e confere por
 leitura posterior. A meta de margem da publicação permanece **9%**.
+
+**Maior frete na margem atual (14/11/2026):** quando o pacote do catálogo Amazon e o
+pacote Olist de uma unidade são ambos elegíveis, a margem atual da auditoria
+(`SvAmazonCurrentPriceMargin::calculate`) usa o pacote de **maior peso tarifável**,
+isto é, o **maior frete**. Antes ela usava só o pacote da Amazon e divergia da
+simulação e da publicação de preço, que já usavam o maior. O custo não muda: a
+diferença vem só da faixa de tarifa (exemplo `ARM8DBA`: 18,92 kg contra 19,22 kg,
+R$ 101,95 contra R$ 105,95 de frete). `current_package_source` indica qual pacote prevaleceu.
