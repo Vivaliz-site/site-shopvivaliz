@@ -637,7 +637,7 @@ def complete_checklist_step(task_id: str, *, step_id: int, evidence: str, verifi
 
 
 @_serialized_transition
-def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = (), conversation_id: str = "", browser_session: str = "") -> dict[str, Any]:
+def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = (), conversation_id: str = "", browser_session: str = "", next_action: str = "") -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
     goal_text = str(goal).strip()
     if not goal_text:
@@ -693,7 +693,7 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         "repository": repository_name,
         "goal": goal_text,
         "status": "RUNNING",
-        "next_action": "determine and execute the next safe action required by the original goal",
+        "next_action": str(next_action).strip() or "determine and execute the next safe action required by the original goal",
         "evidence": [],
         "verification": None,
         "blocker": None,
@@ -1440,6 +1440,7 @@ def _parser() -> argparse.ArgumentParser:
     start = sub.add_parser("start")
     start.add_argument("--task", required=True)
     start.add_argument("--goal", required=True)
+    start.add_argument("--next-action", default="", help="Optional first action saved atomically with start")
     start.add_argument("--agent", default="")
     start.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
     start.add_argument("--completion-check", action="append", default=[], help="Pinned JSON argv check, rerun at ready and complete; never include secrets")
@@ -1545,7 +1546,7 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         if args.command == "start":
-            payload = start_task(args.task, args.goal, args.agent, args.repository, completion_checks=args.completion_check, conversation_id=args.conversation_id, browser_session=args.browser_session)
+            payload = start_task(args.task, args.goal, args.agent, args.repository, completion_checks=args.completion_check, conversation_id=args.conversation_id, browser_session=args.browser_session, next_action=args.next_action)
         elif args.command == "successor":
             payload = start_successor_task(
                 args.task,

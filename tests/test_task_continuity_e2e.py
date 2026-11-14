@@ -340,7 +340,33 @@ class ProbeEvaluationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 probe.quarantine_failed_probe(runtime_dir=Path(tmp), task_id="real-production-task")
 
-    def test_create_synthetic_task_binds_before_progress(self) -> None:
+    def test_probe_publishes_final_sentinel_action_atomically(self) -> None:
+        # RED: the watchdog must never observe a synthetic RUNNING checkpoint
+        # with the placeholder action before the browser-only sentinel exists.
+        probe = load_probe()
+        calls = []
+
+        def fake_runner(argv, **kwargs):
+            calls.append(list(argv))
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            probe.create_synthetic_task(
+                runtime_dir=Path(tmp),
+                task_id="continuity-e2e-atomic-origin",
+                repository="Vivaliz-site/site-shopvivaliz",
+                agent_task_state_script=Path("scripts/agent_task_state.py"),
+                conversation_id=self.CONVERSATION_ID,
+                runner=fake_runner,
+            )
+        self.assertEqual(len(calls), 1, "synthetic checkpoint must have one atomic start")
+        self.assertEqual(calls[0][2], "start")
+        self.assertEqual(
+            calls[0][calls[0].index("--next-action") + 1],
+            probe.build_sentinel_next_action("continuity-e2e-atomic-origin"),
+        )
+
+    def test_create_synthetic_task_binds_final_action_on_first_write(self) -> None:
         probe = load_probe()
         calls = []
 
@@ -358,9 +384,9 @@ class ProbeEvaluationTests(unittest.TestCase):
                 runner=fake_runner,
             )
         commands = [call[2] for call in calls]
-        self.assertEqual(commands, ["start", "progress"])
+        self.assertEqual(commands, ["start"])
         self.assertNotIn("plan-checklist", commands)
-        self.assertIn("--next-action", calls[1])
+        self.assertIn("--next-action", calls[0])
         self.assertIn("--conversation-id", calls[0])
         self.assertIn(self.CONVERSATION_ID, calls[0])
         self.assertIn("--browser-session", calls[0])
@@ -388,6 +414,7 @@ class ProbeEvaluationTests(unittest.TestCase):
             self.assertEqual(checkpoint["conversation_id"], self.CONVERSATION_ID)
             self.assertEqual(checkpoint["browser_session"], "atendimento")
             self.assertEqual(checkpoint["status"], "RUNNING")
+            self.assertEqual(checkpoint["next_action"], probe.build_sentinel_next_action(task_id))
             self.assertEqual(checkpoint.get("checklist", {}).get("items", []), [])
             self.assertEqual(
                 len([x for x in checkpoint["next_action"].splitlines() if x.startswith(("1) ", "2) "))]),
@@ -449,6 +476,7 @@ class ProbeEvaluationTests(unittest.TestCase):
             self.assertEqual(checkpoint["browser_session"], "atendimento")
             self.assertEqual(checkpoint["status"], "RUNNING")
             self.assertEqual(checkpoint["history"][0]["event"], "started")
+            self.assertEqual(checkpoint["next_action"], probe.build_sentinel_next_action("continuity-e2e-atomic-crash"))
 
 
 class DurableHandoffDisconnectE2ETest(unittest.TestCase):
