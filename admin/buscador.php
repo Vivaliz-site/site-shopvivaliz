@@ -152,6 +152,7 @@ const CSRF=<?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;
 const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini'};
 const transportNames={codex_chatgpt:'via ChatGPT/Codex',claude_code:'via Claude Code',vertex_oauth:'via Vertex OAuth',direct:'API direta',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
 let running=false;
+let cycleFinished=false;
 let count=0;
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -267,7 +268,7 @@ function setRunning(v){
   document.getElementById('profile').disabled=v;
   document.getElementById('mode').disabled=v;
   document.querySelector('.panel')?.classList.toggle('running',v);
-  if(!v)document.querySelector('#progress span').style.width='100%';
+  if(!v)document.querySelector('#progress span').style.width=cycleFinished?'100%':'0%';
 }
 
 function handleEvent(e){
@@ -294,6 +295,7 @@ function handleEvent(e){
   }else if(e.type==='consensus'){
     document.getElementById('consensus').textContent=e.text||'Consenso vazio.';
   }else if(e.type==='cycle_finished'){
+    cycleFinished=true;
     document.getElementById('duration').textContent=fmtMs(e.duration_ms);
     const complete=e.ok===true&&e.complete_provider_coverage===true&&e.consensus_available===true;
     const feed=document.getElementById('feed');
@@ -344,6 +346,7 @@ async function run(){
   if(running)return;
   const message=document.getElementById('message').value.trim();
   if(!message){document.getElementById('message').focus();return;}
+  cycleFinished=false;
   document.getElementById('feed').innerHTML='';
   document.getElementById('consensus').textContent='Aguardando debate…';
   document.querySelector('#progress span').style.width='0';
@@ -369,8 +372,14 @@ async function run(){
         try{handleEvent(JSON.parse(line));}catch(_){}
       }
     }
+    buf+=decoder.decode();
     if(buf.trim()){try{handleEvent(JSON.parse(buf));}catch(_){}}
+    if(!cycleFinished)throw new Error('Fluxo encerrado antes da confirmação de conclusão; os resultados são parciais.');
   }catch(err){
+    if(!cycleFinished){
+      document.getElementById('phase').textContent='Interrompido';
+      document.getElementById('consensus').textContent='Fluxo interrompido: resultado incompleto, sem consenso confirmado.';
+    }
     addMessage({provider:'system',ok:false,text:'Falha ao executar o ciclo: '+String(err.message||err)});
   }finally{
     setRunning(false);
