@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/TargetMarginPricePlan.php';
 
 /**
  * Durable commercial requests initiated by an authenticated admin action.
@@ -36,6 +37,7 @@ final class SvAmazonTargetMarginPriceJobs
             state VARCHAR(32) NOT NULL DEFAULT 'queued',
             stage VARCHAR(64) NOT NULL DEFAULT 'queued',
             result_price_cents BIGINT UNSIGNED NULL,
+            amazon_maximum_price_cents BIGINT UNSIGNED NULL,
             original_table_json LONGTEXT NULL,
             errors_json LONGTEXT NULL,
             amazon_request_id VARCHAR(100) NULL,
@@ -44,6 +46,31 @@ final class SvAmazonTargetMarginPriceJobs
             UNIQUE KEY price_request_sku (request_id,seller_sku),
             KEY price_job_item_state (request_id,state)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        self::ensureMaximumPriceColumn($db);
+    }
+
+    private static function ensureMaximumPriceColumn(PDO $db):void
+    {
+        $driver=(string)$db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if($driver==='mysql'){
+            $probe=$db->prepare("SELECT 1 FROM information_schema.columns
+                WHERE table_schema=DATABASE() AND table_name=? AND column_name=? LIMIT 1");
+            $probe->execute(['amazon_margin_target_price_items','amazon_maximum_price_cents']);
+            if(!$probe->fetchColumn()){
+                try{$db->exec("ALTER TABLE amazon_margin_target_price_items ADD COLUMN amazon_maximum_price_cents BIGINT UNSIGNED NULL");}
+                catch(PDOException $e){if((int)($e->errorInfo[1]??0)!==1060)throw $e;}
+            }
+            return;
+        }
+        if($driver==='sqlite'){
+            $columns=$db->query("PRAGMA table_info(amazon_margin_target_price_items)")
+                ->fetchAll(PDO::FETCH_ASSOC);
+            foreach($columns as $column)
+                if(($column['name']??'')==='amazon_maximum_price_cents')return;
+            $db->exec("ALTER TABLE amazon_margin_target_price_items ADD COLUMN amazon_maximum_price_cents INTEGER NULL");
+            return;
+        }
+        throw new RuntimeException('price_queue_schema_driver_unsupported');
     }
 
     /** Deterministic digest of data actually approved in the owner's preview. */
@@ -55,7 +82,11 @@ final class SvAmazonTargetMarginPriceJobs
                 (int)($r['current_price_cents']??0),(int)($r['proposed_price_cents']??0),
                 (string)($r['state']??''),(bool)($r['price_list_shared_product_conflict']??false)];
         }
-        return hash('sha256',json_encode([$runId,(int)$plan['target_margin_bps'],$items],JSON_THROW_ON_ERROR));
+        $maximumRule=(string)($plan['amazon_maximum_price_rule']??'');
+        $cartRule=(string)($plan['cart_exception_rule']??'');
+        return hash('sha256',json_encode([
+            $runId,(int)$plan['target_margin_bps'],$maximumRule,$cartRule,$items
+        ],JSON_THROW_ON_ERROR));
     }
 
     /** @return array{request_id:int,reused:bool,state:string} */
@@ -70,6 +101,11 @@ final class SvAmazonTargetMarginPriceJobs
         if(!is_array($rows)||$rows===[])throw new InvalidArgumentException('price_skus_empty');
         $perSku=[];$erpPrice=[];
         foreach($rows as $r){
+            $cart=SvAmazonTargetMarginPricePlan::isToolCart($r);
+            if(($r['state']??'')==='excluded'
+                &&($r['reason']??'')==='carrinho_ferramentas_excecao'
+                &&$cart&&($r['proposed_price_cents']??null)===null)continue;
+            if($cart)throw new RuntimeException('owner_tool_cart_price_exception');
             if(($r['state']??'')!=='simulated'
                 ||(int)($r['erp_id']??0)<=0
                 ||(int)($r['proposed_price_cents']??0)<=0
@@ -87,6 +123,7 @@ final class SvAmazonTargetMarginPriceJobs
                 'proposal_price_cents'=>$price,
             ];
         }
+        if($perSku===[])throw new RuntimeException('price_skus_empty_after_cart_exclusion');
         self::schema($db);
         $key=hash('sha256',$requestNonce.'|'.$adminUserId.'|'.$digest);
         $db->beginTransaction();
@@ -119,7 +156,7 @@ final class SvAmazonTargetMarginPriceJobs
         $q->execute([$requestId,$userId]);$request=$q->fetch(PDO::FETCH_ASSOC);
         if(!$request)return null;
         $items=$db->prepare('SELECT seller_sku,erp_id,old_price_cents,proposal_price_cents,
-            result_price_cents,state,stage,errors_json,updated_at
+            result_price_cents,amazon_maximum_price_cents,state,stage,errors_json,updated_at
             FROM amazon_margin_target_price_items WHERE request_id=? ORDER BY id');
         $items->execute([$requestId]);
         $request['items']=$items->fetchAll(PDO::FETCH_ASSOC);
@@ -156,18 +193,21 @@ final class SvAmazonTargetMarginPriceJobs
 
     public static function transition(PDO $db,int $itemId,string $state,
         string $stage,?int $resultPrice=null,?string $code=null,
-        ?string $amazonRequestId=null,?array $originalTable=null):void
+        ?string $amazonRequestId=null,?array $originalTable=null,
+        ?int $amazonMaximumPriceCents=null):void
     {
         if(!in_array($state,['queued','running','awaiting_readback','done','manual_review','rejected'],true))
             throw new InvalidArgumentException('price_item_state_invalid');
         $q=$db->prepare("UPDATE amazon_margin_target_price_items
             SET state=?,stage=?,result_price_cents=COALESCE(?,result_price_cents),
+                amazon_maximum_price_cents=COALESCE(?,amazon_maximum_price_cents),
                 errors_json=COALESCE(?,errors_json),
                 amazon_request_id=COALESCE(?,amazon_request_id),
                 submitted_at=CASE WHEN ?='amazon_submit_started' THEN COALESCE(submitted_at,UTC_TIMESTAMP()) ELSE submitted_at END,
                 original_table_json=COALESCE(?,original_table_json)
             WHERE id=?");
-        $q->execute([$state,$stage,$resultPrice,$code===null?null:json_encode(['code'=>$code],JSON_THROW_ON_ERROR),
+        $q->execute([$state,$stage,$resultPrice,$amazonMaximumPriceCents,
+            $code===null?null:json_encode(['code'=>$code],JSON_THROW_ON_ERROR),
             $amazonRequestId,$stage,$originalTable===null?null:json_encode($originalTable,JSON_THROW_ON_ERROR),$itemId]);
     }
 }

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__.'/TargetMarginPriceJobs.php';
 require_once __DIR__.'/TargetMarginPublication.php';
+require_once __DIR__.'/TargetMarginPricePlan.php';
 require_once __DIR__.'/CurrentFeeEstimates.php';
 require_once __DIR__.'/AuditStore.php';
 require_once __DIR__.'/AuditCollector.php';
@@ -201,7 +202,10 @@ final class SvAmazonTargetMarginPriceWorker
         if(in_array($stage,['amazon_submit_started','awaiting_readback'],true)){
             $after=self::readListing($client,$sku);
             $erp=self::readOlist($token);
-            $priceOk=SvAmazonTargetMarginPublication::listingPricesMatch($after,$marketplace,$target);
+            $expectedMaximum=isset($item['amazon_maximum_price_cents'])
+                ?(int)$item['amazon_maximum_price_cents']:null;
+            $priceOk=SvAmazonTargetMarginPublication::listingPricesMatch(
+                $after,$marketplace,$target,$expectedMaximum);
             $pricing=self::readPricing($client,$sku);
             $priceOk=$priceOk&&(int)round((float)$pricing['price']*100)===$target;
             $erpOk=is_array($erp) && isset(sveap_parse_table($erp)['exceptions'][(string)$item['erp_id']])
@@ -220,6 +224,21 @@ final class SvAmazonTargetMarginPriceWorker
                 $target,'amazon_or_erp_eventual_consistency');
             return 'awaiting_readback';
         }
+        if($stage==='erp_submit_started'){
+            // PUT outcome is unknown after a crash; do not repeat blindly.
+            SvAmazonTargetMarginPriceJobs::transition($db,$id,'manual_review','uncertain_erp_submit',
+                $target,'requires_exact_erp_readback_and_operator_reconciliation');
+            return 'manual_review';
+        }
+        $row=self::snapshotItem($db,$item);
+        if(SvAmazonTargetMarginPricePlan::isToolCart($row)){
+            // Independent last-mile check for legacy/stale queued work. Never
+            // submit a new ERP PUT or Amazon PATCH for an exempt tool cart.
+            SvAmazonTargetMarginPriceJobs::transition(
+                $db,$id,'manual_review','tool_cart_excluded_no_write',
+                $target,'owner_tool_cart_price_exception');
+            return 'manual_review';
+        }
         if($stage==='erp_verified'){
             // ERP was written and its readback confirmed. Do NOT repeat PUT.
             $erp=self::readOlist($token);
@@ -234,13 +253,6 @@ final class SvAmazonTargetMarginPriceWorker
             return self::submitAmazon($db,$id,$sku,$client,$target,
                 $token,$original,(int)$item['erp_id']);
         }
-        if($stage==='erp_submit_started'){
-            // PUT outcome is unknown after a crash; do not repeat blindly.
-            SvAmazonTargetMarginPriceJobs::transition($db,$id,'manual_review','uncertain_erp_submit',
-                $target,'requires_exact_erp_readback_and_operator_reconciliation');
-            return 'manual_review';
-        }
-        $row=self::snapshotItem($db,$item);
         SvAmazonTargetMarginPriceJobs::transition($db,$id,'running','pricing_quote');
         $proposal=self::quotePrice($client,$row,$target,(int)$item['target_bps']);
         $target=(int)$proposal['cents'];
@@ -307,11 +319,14 @@ final class SvAmazonTargetMarginPriceWorker
         // using it with replace could erase updated B2B offers or metadata.
         $currentListing=self::readListing($client,$sku);
         $productType=self::productType($currentListing);
+        $expectedMaximum=SvAmazonTargetMarginPublication::targetMaximumSellerAllowedPriceCents(
+            $currentListing,$marketplace,$priceCents);
         $patch=SvAmazonTargetMarginPublication::amazonPricePatch(
             $productType,$marketplace,$priceCents,$currentListing);
         // Persist BEFORE PATCH; on uncertainty only GET/readback is allowed.
         SvAmazonTargetMarginPriceJobs::transition(
-            $db,$itemId,'running','amazon_submit_started',$priceCents);
+            $db,$itemId,'running','amazon_submit_started',$priceCents,
+            null,null,null,$expectedMaximum);
         try {
             $result=$client->request('PATCH','/listings/2021-08-01/items/'.
                 rawurlencode($client->sellerId()).'/'.rawurlencode($sku),[

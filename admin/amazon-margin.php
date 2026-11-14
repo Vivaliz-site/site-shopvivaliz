@@ -101,12 +101,15 @@ td strong{display:block}td code{font-size:.83rem;color:#284965}
     <h2>Margem líquida desejada dos anúncios selecionados</h2>
     <p class="note">Marque os anúncios na lista abaixo e informe a margem líquida desejada. A prévia calcula
       o preço de venda e o mínimo propostos na Amazon, além da exceção de preço na
-      <strong>tabela Amazon 991 do ERP Olist</strong>. A comissão desta simulação usa a taxa da cotação vigente;
+      <strong>tabela Amazon 991 do ERP Olist</strong>. Na publicação, o preço mínimo será igual ao preço
+      de venda; se a venda ultrapassar o máximo vigente, o máximo será elevado para pelo menos 10% acima.
+      Máximos que já estiverem acima do preço de venda serão preservados. Se não houver máximo cadastrado,
+      nenhum limite será criado. A comissão desta simulação usa a taxa da cotação vigente;
       para publicar será necessária a cotação oficial no novo preço e a validação do impacto no site e
       nos anúncios do mesmo produto ERP.</p>
     <div class="controls" style="margin-top:12px">
       <label for="target-margin-percent">Margem desejada (%)</label>
-      <input type="number" id="target-margin-percent" min="0.01" max="99.99" step="0.01" value="10"
+      <input type="number" id="target-margin-percent" min="0.01" max="99.99" step="0.01" value="9"
         inputmode="decimal" style="max-width:110px">
       <button id="target-margin-preview" type="button" class="primary" disabled>Calcular selecionados</button>
       <button id="target-margin-export" type="button" disabled>Exportar prévia CSV</button>
@@ -200,9 +203,10 @@ function updateTargetControls(){
  el('target-margin-preview').disabled=targetBusy||selected.size===0||!Number.isFinite(target)||target<=0||target>=100;
  el('target-margin-export').disabled=!targetPlan||targetPlanKey!==selectedTargetKey();
  const canApply=!!targetPlan&&targetPlanKey===selectedTargetKey()&&
-  Number(targetPlan.preview.pending)===0&&
-  (targetPlan.preview.rows||[]).every(r=>r.state==='simulated'&&
-   Number(r.erp_id)>0&&!r.price_list_shared_product_conflict);
+  Number(targetPlan.preview.pending)===0&&Number(targetPlan.preview.simulated)>0&&
+  (targetPlan.preview.rows||[]).every(r=>
+   (r.state==='simulated'&&Number(r.erp_id)>0&&!r.price_list_shared_product_conflict)||
+   (r.state==='excluded'&&r.reason==='carrinho_ferramentas_excecao'));
  el('target-margin-apply').disabled=targetBusy||!canApply;
 }
 
@@ -582,7 +586,8 @@ function targetProblems(r){
   programa_dba_ainda_candidato:'DBA ainda não certificado',
   dimensoes_erp_amazon_divergentes:'Dimensões ERP/Amazon divergentes',
   identidade_historica_divergente_do_erp_atual:'Vínculo histórico divergente',
-  skus_mesmo_produto_erp_precos_diferentes:'Conflito: SKUs mesmo produto ERP requerem preços distintos'
+  skus_mesmo_produto_erp_precos_diferentes:'Conflito: SKUs mesmo produto ERP requerem preços distintos',
+  carrinho_ferramentas_excecao:'Carrinho de ferramentas isento: venda, mínimo e máximo preservados'
  };
  const issues=[r.reason,...(r.notices||[])].filter(Boolean).map(x=>dictionary[x]||x);
  if(!r.erp_id)issues.push('ID do produto ERP não certificado');
@@ -616,7 +621,8 @@ async function previewTarget(){
    '<td class="small">'+escapeHtml(targetProblems(r))+'</td></tr>'
   ).join('')||'<tr><td colspan="9">Nenhuma oferta selecionada.</td></tr>';
   el('target-margin-state').textContent='Auditoria #'+json.audit_run_id+' · '+json.preview.simulated+
-   ' preço(s) calculado(s) · '+json.preview.pending+' pendente(s) · margem desejada '+
+   ' preço(s) calculado(s) · '+(json.preview.excluded||0)+' carrinho(s) preservado(s) · '+
+   json.preview.pending+' pendente(s) · margem desejada '+
    Number(json.preview.target_percent).toLocaleString('pt-BR')+
    '%. SIMULAÇÃO: nenhum preço foi gravado. Cotação oficial e execução comercial ainda necessárias.';
  }catch(err){el('target-margin-state').textContent='Falha de simulação: '+String(err.message||err).slice(0,190);}
@@ -631,9 +637,14 @@ async function refreshTargetPublication(requestId){
   const items=status.items||[];
   const done=items.filter(i=>i.state==='done').length,
    attention=items.filter(i=>['manual_review','rejected'].includes(i.state)).length;
+  const maximumVerified=items.filter(i=>i.amazon_maximum_price_cents!==null
+   &&i.amazon_maximum_price_cents!==undefined).length;
+  const maximumNote=maximumVerified
+   ?' · Máximo Seller Central previsto em '+maximumVerified+' anúncio(s)'
+   :' · Nenhum máximo Seller Central cadastrado para elevar';
   el('target-margin-state').textContent='Publicação #'+requestId+' · '+done+'/'+items.length+
    ' confirmado(s) no ERP e na Amazon · '+attention+
-   ' com necessidade de conferência · estado '+status.state+
+   ' com necessidade de conferência · estado '+status.state+maximumNote+
    '. O preço só conta como aplicado depois do readback dos dois canais.';
   if(status.state!=='finished'&&targetPublicationPoll===requestId){
    setTimeout(()=>refreshTargetPublication(requestId),8000);
@@ -646,10 +657,14 @@ async function refreshTargetPublication(requestId){
 async function applyTarget(){
  if(el('target-margin-apply').disabled||!targetPlan)return;
  const plan=targetPlan.preview;
- const affected=plan.rows.reduce((a,r)=>a+(r.related_unselected_skus||[]).length,0);
- const message='ATENÇÃO: esta operação alterará PREÇOS REAIS dos '+plan.rows.length+
+ const affected=plan.rows.filter(r=>r.state==='simulated')
+  .reduce((a,r)=>a+(r.related_unselected_skus||[]).length,0);
+ const message='ATENÇÃO: esta operação alterará PREÇOS REAIS dos '+plan.simulated+
+  ' Seller SKUs permitidos ('+(plan.excluded||0)+' carrinhos de ferramentas preservados). '+
   ' Seller SKUs selecionados, tanto na lista Amazon 991 do ERP Olist quanto na Amazon '+
-  '(preço de venda e preço mínimo iguais). O site usa a tabela ERP e poderá ser afetado. '+
+  '(preço de venda e preço mínimo iguais). Se a venda ultrapassar o máximo vigente, '+
+  'o máximo será elevado para pelo menos 10% acima do preço de venda; se já estiver acima, será preservado. '+
+  'Se não houver máximo cadastrado, nenhum limite será criado. O site usa a tabela ERP e poderá ser afetado. '+
   (affected?'Há '+affected+' referência(s) a outros Seller SKUs compartilhando produtos ERP. ':'')+
   'O valor final pode ser MAIOR que a prévia, porque a comissão será recotada pela Amazon '+
   'no preço real proposto antes da gravação. As alterações serão registradas e só serão '+
